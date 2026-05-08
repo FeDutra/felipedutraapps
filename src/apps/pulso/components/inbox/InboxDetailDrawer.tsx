@@ -32,7 +32,12 @@ export const InboxDetailDrawer = ({
     originChannel: 'Manual'
   });
 
-  // Reset form when opening in create mode
+  const [editData, setEditData] = React.useState<{ name: string, body: string }>({
+    name: '',
+    body: ''
+  });
+
+  // Reset form when opening in create mode or update editData when item changes
   React.useEffect(() => {
     if (isCreating) {
       setFormData({
@@ -43,8 +48,13 @@ export const InboxDetailDrawer = ({
         confidence: 'medium',
         originChannel: 'Manual'
       });
+    } else if (item) {
+      setEditData({
+        name: item.name || '',
+        body: item.body || ''
+      });
     }
-  }, [isCreating]);
+  }, [isCreating, item]);
 
   if (!item && !isCreating) return null;
 
@@ -113,18 +123,30 @@ export const InboxDetailDrawer = ({
               autoFocus
               className="w-full bg-white/5 border border-white/5 rounded-2xl text-lg font-bold text-white focus:ring-1 focus:ring-blue-500/50 p-4 mb-6 placeholder:text-white/10 outline-none transition-all"
               placeholder="O que você quer registrar?"
-              value={isCreating ? formData.name : item?.name}
-              onChange={(e) => isCreating ? setFormData({ ...formData, name: e.target.value }) : null}
-              onBlur={(e) => !isCreating && item ? onUpdate(item.id, { name: e.target.value }) : null}
+              value={isCreating ? formData.name : editData.name}
+              onChange={(e) => isCreating 
+                ? setFormData({ ...formData, name: e.target.value }) 
+                : setEditData({ ...editData, name: e.target.value })
+              }
+              onBlur={(e) => !isCreating && item && editData.name !== item.name 
+                ? onUpdate(item.id, { name: e.target.value }) 
+                : null
+              }
             />
             
             <h2 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Descrição</h2>
             <textarea 
               className="w-full bg-white/5 border border-white/5 rounded-2xl text-sm text-white/60 focus:ring-1 focus:ring-blue-500/50 p-4 min-h-[160px] resize-none leading-relaxed outline-none transition-all"
               placeholder="Adicione detalhes, contexto ou links..."
-              value={isCreating ? formData.body : item?.body}
-              onChange={(e) => isCreating ? setFormData({ ...formData, body: e.target.value }) : null}
-              onBlur={(e) => !isCreating && item ? onUpdate(item.id, { body: e.target.value }) : null}
+              value={isCreating ? formData.body : editData.body}
+              onChange={(e) => isCreating 
+                ? setFormData({ ...formData, body: e.target.value }) 
+                : setEditData({ ...editData, body: e.target.value })
+              }
+              onBlur={(e) => !isCreating && item && editData.body !== item.body 
+                ? onUpdate(item.id, { body: e.target.value }) 
+                : null
+              }
             />
           </div>
 
@@ -229,7 +251,11 @@ export const InboxDetailDrawer = ({
               <div className="mt-auto pt-8 border-t border-white/5 flex items-center gap-3">
                 {item.status === 'new' && (
                   <button 
-                    onClick={() => onUpdate(item.id, { status: 'triaged' })}
+                    onClick={() => onUpdate(item.id, { 
+                      status: 'triaged',
+                      name: editData.name,
+                      body: editData.body
+                    })}
                     className="flex-1 py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-emerald-500/20 transition-all"
                   >
                     Triar Item

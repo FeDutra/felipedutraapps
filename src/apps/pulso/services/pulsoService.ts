@@ -110,9 +110,9 @@ export const inboxService = {
       name: item.name,
       status: 'active' as Status,
       importance: item.priority,
-      areaRef: item.areaRef,
-      projectRef: item.projectRef,
-      body: item.body,
+      areaRef: item.areaRef || null,
+      projectRef: item.projectRef || null,
+      body: item.body || '',
       originInboxRef: item.id
     };
 

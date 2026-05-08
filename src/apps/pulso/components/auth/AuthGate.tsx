@@ -22,10 +22,15 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     // Check if we are in firestore mode
     const mode = process.env.NEXT_PUBLIC_PULSO_DATA_MODE;
     const isFS = mode === 'firestore';
-    setIsFirestore(isFS);
+    
+    // Check for temporary bypass via URL
+    const searchParams = new URLSearchParams(window.location.search);
+    const bypass = searchParams.get('bypass') === 'true';
+    
+    setIsFirestore(isFS && !bypass);
     setHasConfig(isFirebaseConfigured);
 
-    if (!isFirebaseConfigured && isFS) {
+    if ((!isFirebaseConfigured && isFS) || bypass) {
       setLoading(false);
       return;
     }
