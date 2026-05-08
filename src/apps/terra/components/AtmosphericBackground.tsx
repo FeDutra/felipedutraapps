@@ -9,14 +9,18 @@ interface AtmosphericBackgroundProps {
 }
 
 const AtmosphericBackground: React.FC<AtmosphericBackgroundProps> = ({ condition: propCondition, children }) => {
-  const [currentTime, setCurrentTime] = React.useState(new Date());
+  const [mounted, setMounted] = React.useState(false);
+  const [currentTime, setCurrentTime] = React.useState<Date | null>(null);
 
   React.useEffect(() => {
+    setMounted(true);
+    setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
   const getAutoCondition = () => {
+    if (!currentTime) return 'morning'; // Default stable condition for SSR
     const hour = currentTime.getHours();
     if (hour >= 6 && hour < 12) return 'morning';
     if (hour >= 12 && hour < 18) return 'afternoon';
@@ -90,29 +94,38 @@ const AtmosphericBackground: React.FC<AtmosphericBackgroundProps> = ({ condition
         />
       )}
       
-      {(condition === 'night' || condition === 'clear_night' || condition === 'night_lua') && (
+      {(mounted && (condition === 'night' || condition === 'clear_night' || condition === 'night_lua')) && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 120 }).map((_, i) => (
-            <motion.div 
-              key={i} 
-              className="absolute bg-white rounded-full" 
-              style={{ 
-                width: `${Math.random() * 2 + 1}px`, 
-                height: `${Math.random() * 2 + 1}px`, 
-                top: `${Math.random() * 100}%`, 
-                left: `${Math.random() * 100}%`,
-              }}
-              animate={{ 
-                opacity: [0.1, Math.random() * 0.8 + 0.2, 0.1],
-                scale: [1, Math.random() * 0.5 + 1, 1]
-              }}
-              transition={{ 
-                duration: 3 + Math.random() * 5, 
-                repeat: Infinity,
-                delay: Math.random() * 5
-              }}
-            />
-          ))}
+          {Array.from({ length: 80 }).map((_, i) => {
+            const size = (i * 7.7) % 2 + 1;
+            const top = (i * 13.3) % 100;
+            const left = (i * 17.7) % 100;
+            const delay = (i * 0.5) % 5;
+            const duration = 3 + (i % 5);
+            const opacityMax = 0.2 + (i % 8) / 10;
+
+            return (
+              <motion.div 
+                key={i} 
+                className="absolute bg-white rounded-full" 
+                style={{ 
+                  width: `${size}px`, 
+                  height: `${size}px`, 
+                  top: `${top}%`, 
+                  left: `${left}%`,
+                }}
+                animate={{ 
+                  opacity: [0.1, opacityMax, 0.1],
+                  scale: [1, 1.2, 1]
+                }}
+                transition={{ 
+                  duration, 
+                  repeat: Infinity,
+                  delay
+                }}
+              />
+            );
+          })}
           {/* Subtle moon glow */}
           <motion.div 
             className="absolute top-20 right-20 w-32 h-32 bg-indigo-300/10 rounded-full blur-[60px]"
@@ -122,16 +135,16 @@ const AtmosphericBackground: React.FC<AtmosphericBackgroundProps> = ({ condition
         </div>
       )}
 
-      {condition === 'rainy' && (
+      {(mounted && condition === 'rainy') && (
         <div className="rain-container">
           {Array.from({ length: 50 }).map((_, i) => (
             <div 
               key={i} 
               className="rain-drop" 
               style={{ 
-                left: `${Math.random() * 100}%`, 
-                animationDuration: `${0.5 + Math.random() * 0.5}s`,
-                animationDelay: `${Math.random() * 2}s`
+                left: `${(i * 7.1) % 100}%`, 
+                animationDuration: `${0.5 + (i % 10) / 20}s`,
+                animationDelay: `${(i % 20) / 10}s`
               }} 
             />
           ))}

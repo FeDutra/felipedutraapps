@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Activity, LayoutDashboard, Inbox } from 'lucide-react';
+import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe } from 'lucide-react';
 
 export default function PulsoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,6 +14,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { href: '/pulso', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Globe },
     { href: '/pulso/inbox', label: 'Inbox', icon: Inbox },
   ];
 

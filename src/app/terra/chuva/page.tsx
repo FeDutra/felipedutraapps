@@ -16,6 +16,12 @@ import { mockRainLogs } from '@/shared/mocks/data';
 import { motion } from 'framer-motion';
 
 export default function ChuvaPage() {
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div className="w-full pb-10">
       <header className="mb-12 text-center md:text-left">
@@ -83,30 +89,32 @@ export default function ChuvaPage() {
            </div>
 
            <div className="h-64 w-full">
-             <ResponsiveContainer width="100%" height="100%">
-               <BarChart data={mockRainLogs} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:stroke-white/5" />
-                 <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 700 }} 
-                    dy={12}
-                 />
-                 <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 700 }}
-                 />
-                 <Tooltip 
-                    cursor={{ fill: 'var(--chart-secondary)' }}
-                    contentStyle={{ backgroundColor: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', backdropFilter: 'blur(10px)', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}
-                    itemStyle={{ color: 'var(--text-primary)' }}
-                 />
-                 <Bar dataKey="forecast" fill="var(--text-muted)" opacity={0.2} radius={[6, 6, 0, 0]} barSize={12} />
-                 <Bar dataKey="reality" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={12} />
-               </BarChart>
-             </ResponsiveContainer>
+             {mounted && (
+               <ResponsiveContainer width="100%" height="100%">
+                 <BarChart data={mockRainLogs} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
+                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:stroke-white/5" />
+                   <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 700 }} 
+                      dy={12}
+                   />
+                   <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 700 }}
+                   />
+                   <Tooltip 
+                      cursor={{ fill: 'var(--chart-secondary)' }}
+                      contentStyle={{ backgroundColor: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', backdropFilter: 'blur(10px)', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}
+                      itemStyle={{ color: 'var(--text-primary)' }}
+                   />
+                   <Bar dataKey="forecast" fill="var(--text-muted)" opacity={0.2} radius={[6, 6, 0, 0]} barSize={12} />
+                   <Bar dataKey="reality" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={12} />
+                 </BarChart>
+               </ResponsiveContainer>
+             )}
            </div>
         </GlassCard>
 

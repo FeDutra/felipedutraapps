@@ -18,7 +18,8 @@ import {
   RecentMovementList, 
   MetabolismPreview 
 } from '../components/DashboardCards';
-import { AlertCircle, Inbox, Layers, CheckSquare, Activity } from 'lucide-react';
+import { AlertCircle, Inbox, Layers, CheckSquare, Activity, ArrowRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 /**
  * @file DashboardPage.tsx
@@ -26,6 +27,7 @@ import { AlertCircle, Inbox, Layers, CheckSquare, Activity } from 'lucide-react'
  */
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [state, setState] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -179,8 +181,12 @@ export default function DashboardPage() {
             <p className="text-[10px] text-white/40 mb-4 px-4 leading-relaxed">
               Capture uma tarefa, semente ou decisão instantaneamente.
             </p>
-            <button className="w-full py-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-500/20 transition-all backdrop-blur-sm">
+            <button 
+              onClick={() => router.push('/pulso/inbox')}
+              className="w-full py-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-500/20 transition-all backdrop-blur-sm flex items-center justify-center gap-2 group"
+            >
               Abrir Inbox
+              <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
             </button>
           </div>
         </div>

@@ -10,16 +10,43 @@ import { PriorityBadge } from '../BaseComponents';
 
 export const InboxDetailDrawer = ({ 
   item, 
+  isCreating,
   onClose, 
   onUpdate,
-  onConvert
+  onConvert,
+  onCreate
 }: { 
   item: InboxItem | null, 
+  isCreating?: boolean,
   onClose: () => void,
   onUpdate: (id: string, data: Partial<InboxItem>) => void,
-  onConvert: (id: string, type: string) => void
+  onConvert: (id: string, type: string) => void,
+  onCreate: (data: Partial<InboxItem>) => void
 }) => {
-  if (!item) return null;
+  const [formData, setFormData] = React.useState<Partial<InboxItem>>({
+    name: '',
+    body: '',
+    type: 'task',
+    priority: 'medium',
+    confidence: 'medium',
+    originChannel: 'Manual'
+  });
+
+  // Reset form when opening in create mode
+  React.useEffect(() => {
+    if (isCreating) {
+      setFormData({
+        name: '',
+        body: '',
+        type: 'task',
+        priority: 'medium',
+        confidence: 'medium',
+        originChannel: 'Manual'
+      });
+    }
+  }, [isCreating]);
+
+  if (!item && !isCreating) return null;
 
   const conversionTypes = [
     { id: 'task', label: 'Tarefa', icon: Check, color: 'text-emerald-400' },
@@ -28,6 +55,11 @@ export const InboxDetailDrawer = ({
     { id: 'meeting', label: 'Reunião', icon: Users, color: 'text-purple-400' },
     { id: 'potential_project', label: 'Projeto Potencial', icon: Briefcase, color: 'text-indigo-400' },
   ];
+
+  const handleSave = () => {
+    if (!formData.name) return;
+    onCreate(formData);
+  };
 
   return (
     <AnimatePresence>
@@ -47,15 +79,24 @@ export const InboxDetailDrawer = ({
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-lg bg-slate-900 border-l border-white/10 h-full overflow-y-auto pointer-events-auto p-8 shadow-2xl"
+          className="relative w-full max-w-lg bg-slate-950 border-l border-white/10 h-full overflow-y-auto pointer-events-auto p-8 shadow-2xl flex flex-col"
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
-              <InboxTypeBadge type={item.type} />
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/20">
-                {item.id}
-              </span>
+              {isCreating ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/60">Novo Registro</span>
+                </div>
+              ) : item && (
+                <>
+                  <InboxTypeBadge type={item.type} />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/20">
+                    {item.id}
+                  </span>
+                </>
+              )}
             </div>
             <button 
               onClick={onClose}
@@ -67,87 +108,150 @@ export const InboxDetailDrawer = ({
 
           {/* Title & Body */}
           <div className="mb-10">
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Título</h2>
             <input 
-              className="w-full bg-transparent border-none text-2xl font-black text-white focus:ring-0 p-0 mb-4 placeholder:text-white/10"
-              defaultValue={item.name}
-              onBlur={(e) => onUpdate(item.id, { name: e.target.value })}
+              autoFocus
+              className="w-full bg-white/5 border border-white/5 rounded-2xl text-lg font-bold text-white focus:ring-1 focus:ring-blue-500/50 p-4 mb-6 placeholder:text-white/10 outline-none transition-all"
+              placeholder="O que você quer registrar?"
+              value={isCreating ? formData.name : item?.name}
+              onChange={(e) => isCreating ? setFormData({ ...formData, name: e.target.value }) : null}
+              onBlur={(e) => !isCreating && item ? onUpdate(item.id, { name: e.target.value }) : null}
             />
+            
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Descrição</h2>
             <textarea 
-              className="w-full bg-transparent border-none text-sm text-white/60 focus:ring-0 p-0 min-h-[120px] resize-none leading-relaxed"
-              defaultValue={item.body}
-              placeholder="Adicione uma descrição detalhada..."
-              onBlur={(e) => onUpdate(item.id, { body: e.target.value })}
+              className="w-full bg-white/5 border border-white/5 rounded-2xl text-sm text-white/60 focus:ring-1 focus:ring-blue-500/50 p-4 min-h-[160px] resize-none leading-relaxed outline-none transition-all"
+              placeholder="Adicione detalhes, contexto ou links..."
+              value={isCreating ? formData.body : item?.body}
+              onChange={(e) => isCreating ? setFormData({ ...formData, body: e.target.value }) : null}
+              onBlur={(e) => !isCreating && item ? onUpdate(item.id, { body: e.target.value }) : null}
             />
           </div>
 
-          {/* Meta Grid */}
-          <div className="grid grid-cols-2 gap-6 mb-12">
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Status</p>
-              <div className="flex items-center gap-2 text-white/60 text-xs font-bold">
-                <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'new' ? 'bg-blue-400' : 'bg-white/20'}`} />
-                {getStatusLabel(item.status)}
-              </div>
+          {/* Fields Grid */}
+          <div className="grid grid-cols-2 gap-4 mb-10">
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Tipo</p>
+              <select 
+                className="w-full bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white/80 p-3 outline-none"
+                value={isCreating ? formData.type : item?.type}
+                onChange={(e) => isCreating ? setFormData({ ...formData, type: e.target.value as any }) : item && onUpdate(item.id, { type: e.target.value as any })}
+              >
+                <option value="task">Tarefa</option>
+                <option value="decision">Decisão</option>
+                <option value="note">Nota</option>
+                <option value="meeting">Reunião</option>
+                <option value="potential_project">Projeto</option>
+              </select>
             </div>
-            <div className="space-y-1">
+            
+            <div className="space-y-2">
               <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Prioridade</p>
-              <PriorityBadge priority={item.priority} />
+              <select 
+                className="w-full bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white/80 p-3 outline-none"
+                value={isCreating ? formData.priority : item?.priority}
+                onChange={(e) => isCreating ? setFormData({ ...formData, priority: e.target.value as any }) : item && onUpdate(item.id, { priority: e.target.value as any })}
+              >
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+                <option value="critical">Crítica</option>
+              </select>
             </div>
-            <div className="space-y-1">
+
+            <div className="space-y-2">
               <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Confiança</p>
-              <ConfidenceBadge confidence={item.confidence as any || 'medium'} />
+              <select 
+                className="w-full bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white/80 p-3 outline-none"
+                value={isCreating ? formData.confidence : item?.confidence}
+                onChange={(e) => isCreating ? setFormData({ ...formData, confidence: e.target.value as any }) : item && onUpdate(item.id, { confidence: e.target.value as any })}
+              >
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+              </select>
             </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Origem</p>
-              <p className="text-xs font-bold text-white/60">{item.originChannel || 'Manual'}</p>
-            </div>
+
+            {!isCreating && item && (
+               <div className="space-y-2">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Status</p>
+                 <div className="flex items-center gap-2 text-white/60 text-xs font-bold p-3">
+                   <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'new' ? 'bg-blue-400' : 'bg-white/20'}`} />
+                   {getStatusLabel(item.status)}
+                 </div>
+               </div>
+            )}
           </div>
 
-          {/* Promotion / Conversion */}
-          <div className="mb-12">
-            <h5 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-4">Promover Item</h5>
-            <div className="grid grid-cols-1 gap-2">
-              {conversionTypes.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => onConvert(item.id, type.id)}
-                  className="flex items-center justify-between p-4 bg-white/2 border border-white/5 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg bg-white/5 border border-white/5 ${type.color}`}>
-                      <type.icon size={16} />
-                    </div>
-                    <span className="text-xs font-bold text-white/80 group-hover:text-white">{type.label}</span>
+          {isCreating ? (
+            <div className="mt-auto pt-8 border-t border-white/5 flex gap-3">
+              <button 
+                onClick={onClose}
+                className="flex-1 py-4 bg-white/5 border border-white/5 text-white/40 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={!formData.name}
+                className="flex-[2] py-4 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 transition-all"
+              >
+                Salvar no Inbox
+              </button>
+            </div>
+          ) : item && (
+            <>
+              {/* Promotion / Conversion */}
+              {item.status !== 'converted' && (
+                <div className="mb-12">
+                  <h5 className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-4">Promover Item</h5>
+                  <div className="grid grid-cols-1 gap-2">
+                    {conversionTypes.map((type) => (
+                      <button
+                        key={type.id}
+                        onClick={() => onConvert(item.id, type.id)}
+                        className="flex items-center justify-between p-4 bg-white/2 border border-white/5 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg bg-white/5 border border-white/5 ${type.color}`}>
+                            <type.icon size={16} />
+                          </div>
+                          <span className="text-xs font-bold text-white/80 group-hover:text-white">{type.label}</span>
+                        </div>
+                        <Share2 size={14} className="text-white/10 group-hover:text-white/30" />
+                      </button>
+                    ))}
                   </div>
-                  <Share2 size={14} className="text-white/10 group-hover:text-white/30" />
-                </button>
-              ))}
-            </div>
-          </div>
+                </div>
+              )}
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 border-t border-white/5 pt-8">
-            <button 
-              onClick={() => onUpdate(item.id, { status: 'triaged' })}
-              className="flex-1 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-500/20 transition-all"
-            >
-              Triar Item
-            </button>
-            <button 
-              onClick={() => onUpdate(item.id, { status: 'archived' })}
-              className="p-3 bg-white/5 border border-white/5 text-white/40 rounded-xl hover:bg-white/10 transition-all"
-              title="Arquivar"
-            >
-              <Archive size={18} />
-            </button>
-            <button 
-              onClick={() => onUpdate(item.id, { status: 'discarded' })}
-              className="p-3 bg-red-500/5 border border-red-500/10 text-red-500/40 rounded-xl hover:bg-red-500/10 transition-all"
-              title="Descartar"
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
+              {/* Actions */}
+              <div className="mt-auto pt-8 border-t border-white/5 flex items-center gap-3">
+                {item.status === 'new' && (
+                  <button 
+                    onClick={() => onUpdate(item.id, { status: 'triaged' })}
+                    className="flex-1 py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-emerald-500/20 transition-all"
+                  >
+                    Triar Item
+                  </button>
+                )}
+                <button 
+                  onClick={() => onUpdate(item.id, { status: 'archived' })}
+                  className="p-4 bg-white/5 border border-white/5 text-white/40 rounded-2xl hover:bg-white/10 transition-all"
+                  title="Arquivar"
+                >
+                  <Archive size={20} />
+                </button>
+                <button 
+                  onClick={() => onUpdate(item.id, { status: 'discarded' })}
+                  className="p-4 bg-red-500/5 border border-red-500/10 text-red-500/40 rounded-2xl hover:bg-red-500/10 transition-all"
+                  title="Descartar"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
+            </>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>

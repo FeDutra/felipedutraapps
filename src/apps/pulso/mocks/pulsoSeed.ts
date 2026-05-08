@@ -18,7 +18,7 @@ import {
  * @description Comprehensive mock data for PULSO ecosystem based on current inventory.
  */
 
-const NOW = new Date();
+const NOW = new Date('2026-05-08T08:00:00Z');
 
 // --- AREAS ---
 export const seedAreas: Area[] = [

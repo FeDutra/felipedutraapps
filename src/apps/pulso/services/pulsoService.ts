@@ -1,17 +1,4 @@
 import { 
-  seedAreas, 
-  seedProjects, 
-  seedInboxItems, 
-  seedTasks, 
-  seedDecisions, 
-  seedRoutines, 
-  seedAgents, 
-  seedSources, 
-  seedAlerts, 
-  seedLogs,
-  seedPeople
-} from "../mocks/pulsoSeed";
-import { 
   Area, 
   Project, 
   InboxItem, 
@@ -25,86 +12,98 @@ import {
   Person,
   Status
 } from "../types/pulso.types";
-
+import { IPulsoRepository } from "./pulsoRepository";
+import { MockPulsoRepository } from "./mockPulsoRepository";
 /**
  * @file pulsoService.ts
  * @description Main service orchestration for PULSO ecosystem.
- * Currently uses mock data, prepared for Firestore integration.
+ * Toggles between Firestore and Mock data modes.
  */
 
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+// 1. Data Mode Configuration
+const DATA_MODE = process.env.NEXT_PUBLIC_PULSO_DATA_MODE || 'mock';
 
+// 2. Repository Instance (Singleton-like)
+let repository: IPulsoRepository;
+
+const getRepository = (): IPulsoRepository => {
+  if (repository) return repository;
+  
+  if (DATA_MODE === 'firestore' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    console.log('PULSO: Modo Firestore Ativo');
+    // Using require to avoid side-effects from top-level import during build
+    const { FirestorePulsoRepository } = require("./firestorePulsoRepository");
+    repository = new FirestorePulsoRepository();
+  } else {
+    console.log('PULSO: Modo Mock Ativo');
+    repository = new MockPulsoRepository();
+  }
+  return repository;
+};
+
+// Export repository for advanced usage or seed
+export const pulsoRepository = getRepository();
+
+// 3. Service Definitions
 export const areasService = {
-  getAll: async (): Promise<Area[]> => {
-    await delay(300); // Simulate network
-    return seedAreas;
-  },
-  getById: async (id: string): Promise<Area | undefined> => {
-    return seedAreas.find(a => a.id === id);
+  getAll: () => getRepository().getAreas(),
+  getById: (id: string) => getRepository().getAreaById(id),
+  getStats: async (id: string) => {
+    const [projects, inbox, alerts] = await Promise.all([
+      projectsService.getByArea(id),
+      inboxService.getByArea(id),
+      healthService.getAlertsByArea(id)
+    ]);
+    return {
+      projectsCount: projects.length,
+      pendingInboxCount: inbox.filter(i => i.status === 'new').length,
+      alertsCount: alerts.length
+    };
   }
 };
 
 export const projectsService = {
-  getAll: async (): Promise<Project[]> => {
-    await delay(300);
-    return seedProjects;
+  getAll: () => getRepository().getProjects(),
+  getById: (id: string) => getRepository().getProjectById(id),
+  getByArea: async (areaId: string) => {
+    const all = await getRepository().getProjects();
+    return all.filter(p => p.areaRef === areaId);
   },
-  getById: async (id: string): Promise<Project | undefined> => {
-    return seedProjects.find(p => p.id === id);
+  create: (data: Partial<Project>) => getRepository().saveProject(data)
+};
+
+export const sourcesService = {
+  getAll: () => getRepository().getSources(),
+  getByArea: async (areaId: string) => {
+    const all = await getRepository().getSources();
+    return all.filter(s => s.areaRef === areaId);
   },
-  getByArea: async (areaId: string): Promise<Project[]> => {
-    return seedProjects.filter(p => p.areaRef === areaId);
-  },
-  create: async (data: Partial<Project>): Promise<Project> => {
-    const newProject = { ...data, id: data.id || `proj_${Date.now()}` } as Project;
-    seedProjects.unshift(newProject);
-    return newProject;
+  getByProject: async (projectId: string) => {
+    const all = await getRepository().getSources();
+    return all.filter(s => s.projectRef === projectId);
   }
 };
 
 export const inboxService = {
-  getAll: async (): Promise<InboxItem[]> => {
-    return seedInboxItems;
+  getAll: () => getRepository().getInboxItems(),
+  getById: (id: string) => getRepository().getInboxItemById(id),
+  create: (data: Partial<InboxItem>) => getRepository().saveInboxItem(data),
+  update: (id: string, data: Partial<InboxItem>) => getRepository().updateInboxItem(id, data),
+  triage: (id: string) => inboxService.update(id, { status: 'triaged' }),
+  archive: (id: string) => inboxService.update(id, { status: 'archived' }),
+  discard: (id: string) => inboxService.update(id, { status: 'discarded' }),
+  getByArea: async (areaId: string) => {
+    const all = await getRepository().getInboxItems();
+    return all.filter(i => i.areaRef === areaId);
   },
-  getById: async (id: string): Promise<InboxItem | undefined> => {
-    return seedInboxItems.find(i => i.id === id);
-  },
-  create: async (data: Partial<InboxItem>): Promise<InboxItem> => {
-    const newItem: InboxItem = {
-      id: `inbox_${Date.now()}`,
-      slug: `inbox-${Date.now()}`,
-      name: data.name || 'Sem título',
-      type: data.type || 'task',
-      status: 'new',
-      priority: data.priority || 'medium',
-      body: data.body || '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      ...data
-    } as InboxItem;
-    seedInboxItems.unshift(newItem);
-    return newItem;
-  },
-  update: async (id: string, data: Partial<InboxItem>): Promise<InboxItem> => {
-    const index = seedInboxItems.findIndex(i => i.id === id);
-    if (index === -1) throw new Error('Item não encontrado');
-    seedInboxItems[index] = { ...seedInboxItems[index], ...data, updatedAt: new Date() };
-    return seedInboxItems[index];
-  },
-  triage: async (id: string): Promise<InboxItem> => {
-    return inboxService.update(id, { status: 'triaged' });
-  },
-  archive: async (id: string): Promise<InboxItem> => {
-    return inboxService.update(id, { status: 'archived' });
-  },
-  discard: async (id: string): Promise<InboxItem> => {
-    return inboxService.update(id, { status: 'discarded' });
+  getByProject: async (projectId: string) => {
+    const all = await getRepository().getInboxItems();
+    return all.filter(i => i.projectRef === projectId);
   },
   convertTo: async (id: string, targetType: string): Promise<{ item: InboxItem, entity: any }> => {
     const item = await inboxService.getById(id);
     if (!item) throw new Error('Item não encontrado');
 
-    let entity: any;
     const baseEntity = {
       id: `${targetType}_${Date.now()}`,
       slug: `${targetType}-${Date.now()}`,
@@ -114,122 +113,102 @@ export const inboxService = {
       areaRef: item.areaRef,
       projectRef: item.projectRef,
       body: item.body,
-      createdAt: new Date(),
-      updatedAt: new Date(),
       originInboxRef: item.id
     };
 
+    let entity: any;
     switch (targetType) {
       case 'task':
-        entity = await tasksService.create({ ...baseEntity, status: 'open', ownerRefs: [] });
+        entity = { ...baseEntity, status: 'open', ownerRefs: [] };
         break;
       case 'decision':
-        entity = await decisionsService.create({ ...baseEntity, takenByRefs: [], decision: item.name });
+        entity = { ...baseEntity, takenByRefs: [], decision: item.name };
         break;
       case 'note':
-        entity = await notesService.create({ ...baseEntity, type: 'analysis' });
+        entity = { ...baseEntity, type: 'analysis' };
         break;
       case 'meeting':
-        entity = await meetingsService.create({ ...baseEntity, date: new Date(), participantsRefs: [] });
+        entity = { ...baseEntity, date: new Date(), participantsRefs: [] };
         break;
       case 'potential_project':
-        entity = await projectsService.create({ ...baseEntity, status: 'maintenance' });
+        entity = { ...baseEntity, status: 'maintenance' };
         break;
       default:
         throw new Error('Tipo de destino inválido');
     }
 
-    const updatedItem = await inboxService.update(id, { 
-      status: 'converted', 
-      convertedToRef: entity.id, 
-      convertedToType: targetType 
-    });
-
-    return { item: updatedItem, entity };
+    return getRepository().convertInboxItem(id, targetType, entity);
   },
-  getByStatus: async (status: string): Promise<InboxItem[]> => {
-    return seedInboxItems.filter(i => i.status === status);
+  getByStatus: async (status: string) => {
+    const all = await getRepository().getInboxItems();
+    return all.filter(i => i.status === status);
   }
 };
 
 export const tasksService = {
-  getAll: async (): Promise<Task[]> => {
-    await delay(300);
-    return seedTasks;
+  getAll: () => getRepository().getTasks(),
+  getByProject: async (projectId: string) => {
+    const all = await getRepository().getTasks();
+    return all.filter(t => t.projectRef === projectId);
   },
-  getByProject: async (projectId: string): Promise<Task[]> => {
-    return seedTasks.filter(t => t.projectRef === projectId);
+  getByArea: async (areaId: string) => {
+    const all = await getRepository().getTasks();
+    return all.filter(t => t.areaRef === areaId);
   },
-  create: async (data: Partial<Task>): Promise<Task> => {
-    const newTask = { ...data, id: data.id || `task_${Date.now()}` } as Task;
-    seedTasks.unshift(newTask);
-    return newTask;
-  }
+  create: (data: Partial<Task>) => getRepository().saveTask(data)
 };
 
 export const decisionsService = {
-  getAll: async (): Promise<Decision[]> => {
-    await delay(300);
-    return seedDecisions;
+  getAll: () => getRepository().getDecisions(),
+  getByProject: async (projectId: string) => {
+    const all = await getRepository().getDecisions();
+    return all.filter(d => d.projectRef === projectId);
   },
-  getByProject: async (projectId: string): Promise<Decision[]> => {
-    return seedDecisions.filter(d => d.projectRef === projectId);
+  getByArea: async (areaId: string) => {
+    const all = await getRepository().getDecisions();
+    return all.filter(d => d.areaRef === areaId);
   },
-  create: async (data: Partial<Decision>): Promise<Decision> => {
-    const newDecision = { ...data, id: data.id || `decision_${Date.now()}` } as Decision;
-    seedDecisions.unshift(newDecision);
-    return newDecision;
-  }
+  create: (data: Partial<Decision>) => getRepository().saveDecision(data)
 };
 
 export const notesService = {
-  create: async (data: Partial<any>): Promise<any> => {
-    return { ...data, id: data.id || `note_${Date.now()}` };
-  }
-};
-
-export const meetingsService = {
-  create: async (data: Partial<any>): Promise<any> => {
-    return { ...data, id: data.id || `meeting_${Date.now()}` };
+  create: (data: Partial<any>) => getRepository().saveNote(data),
+  getByProject: async (projectId: string) => {
+     // Notes/Meetings don't have dedicated list methods in current repository
+     // but we can simulate them by filtering all if needed, 
+     // or just wait for real implementation. 
+     // For now, return empty as they are less frequent.
+     return [];
   }
 };
 
 export const routinesService = {
-  getAll: async (): Promise<Routine[]> => {
-    await delay(300);
-    return seedRoutines;
-  }
+  getAll: () => getRepository().getRoutines()
 };
 
 export const agentsService = {
-  getAll: async (): Promise<Agent[]> => {
-    await delay(300);
-    return seedAgents;
-  }
-};
-
-export const sourcesService = {
-  getAll: async (): Promise<Source[]> => {
-    await delay(300);
-    return seedSources;
-  }
-};
-
-export const healthService = {
-  getAlerts: async (): Promise<Alert[]> => {
-    await delay(300);
-    return seedAlerts;
-  },
-  getLogs: async (limit = 10): Promise<Log[]> => {
-    return seedLogs.slice(0, limit);
-  }
+  getAll: () => getRepository().getAgents()
 };
 
 export const peopleService = {
-  getAll: async (): Promise<Person[]> => {
-    await delay(300);
-    return seedPeople;
-  }
+  getAll: () => getRepository().getPeople()
+};
+
+export const meetingsService = {
+  create: (data: Partial<any>) => getRepository().saveMeeting(data)
+};
+
+export const healthService = {
+  getAlerts: () => getRepository().getAlerts(),
+  getAlertsByArea: async (areaId: string) => {
+    const all = await getRepository().getAlerts();
+    return all.filter(a => a.areaRef === areaId);
+  },
+  getAlertsByProject: async (projectId: string) => {
+    const all = await getRepository().getAlerts();
+    return all.filter(a => a.projectRef === projectId);
+  },
+  getLogs: (limit = 10) => getRepository().getLogs(limit)
 };
 
 // Main Pulso Service for Global State
@@ -250,5 +229,8 @@ export const pulsoService = {
       pendingInbox: inbox.filter(i => i.status === 'new'),
       activeAlerts: alerts.filter(a => a.status === 'open')
     };
-  }
+  },
+  
+  // Data Mode Info
+  getDataMode: () => DATA_MODE
 };

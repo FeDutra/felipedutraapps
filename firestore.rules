@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regra básica de MVP: Exige autenticação para qualquer leitura ou escrita.
+    // Pendência: Restringir acesso apenas ao UID do dono (Felipe Dutra).
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Regras específicas para o workspace do PULSO
+    match /workspaces/{workspaceId}/pulso/{collectionName}/{documentId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
