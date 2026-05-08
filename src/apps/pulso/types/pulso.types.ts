@@ -3,7 +3,7 @@
  * @description Core ontology and type definitions for the PULSO ecosystem.
  */
 
-export type Status = 'active' | 'in_progress' | 'maintenance' | 'paused' | 'archived' | 'completed' | 'blocked' | 'broken' | 'incerto' | 'open' | 'acknowledged' | 'resolved' | 'ignored' | 'new' | 'triaged' | 'converted' | 'discarded';
+export type Status = 'active' | 'in_progress' | 'maintenance' | 'paused' | 'archived' | 'completed' | 'blocked' | 'broken' | 'incerto' | 'open' | 'acknowledged' | 'resolved' | 'ignored' | 'new' | 'triaged' | 'converted' | 'discarded' | 'pending' | 'running' | 'success' | 'failed';
 
 export type Priority = 'critical' | 'high' | 'medium' | 'low' | 'incerto';
 
@@ -159,6 +159,7 @@ export interface Routine extends BaseEntity {
   lastRunAt?: Date;
   nextRunAt?: Date;
   riskSummary?: string;
+  outputExpected?: string;
 }
 
 export interface RoutineRun {
@@ -180,6 +181,7 @@ export interface Agent extends BaseEntity {
   frequency?: string;
   limitations?: string[];
   suggestedImprovements?: string[];
+  lastActivityAt?: Date;
 }
 
 export interface Metric extends BaseEntity {
@@ -210,7 +212,18 @@ export interface Log {
   routineRef?: string;
   agentRef?: string;
   sourceRef?: string;
+  syncJobRef?: string;
   createdAt: Date;
+}
+
+export interface SyncJob extends BaseEntity {
+  originSystem: string;
+  targetSystem: string;
+  status: 'pending' | 'running' | 'success' | 'failed' | 'paused';
+  lastRunAt?: Date;
+  nextRunAt?: Date;
+  errorMessage?: string;
+  recordsProcessed?: number;
 }
 
 export interface Tag {

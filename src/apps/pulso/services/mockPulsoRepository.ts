@@ -6,7 +6,7 @@ import {
 } from "../mocks/pulsoSeed";
 import { 
   Area, Project, InboxItem, Task, Decision, 
-  Routine, Agent, Source, Alert, Log, Person, Status 
+  Routine, Agent, Source, Alert, Log, Person, Status, SyncJob 
 } from "../types/pulso.types";
 
 /**
@@ -102,16 +102,24 @@ export class MockPulsoRepository implements IPulsoRepository {
 
   async getAlerts() { return seedAlerts; }
   async getLogs(limitCount = 10) { return seedLogs.slice(0, limitCount); }
+  async getSyncJobs() { return []; } // No mock sync jobs for now
   async saveAlert(alert: Partial<Alert>) {
     const newAlert = { ...alert, id: alert.id || `alert_${Date.now()}` } as Alert;
     seedAlerts.unshift(newAlert);
     return newAlert;
+  }
+  async updateAlert(id: string, data: Partial<Alert>) {
+    const index = seedAlerts.findIndex(a => a.id === id);
+    if (index !== -1) seedAlerts[index] = { ...seedAlerts[index], ...data, updatedAt: new Date() };
+    return seedAlerts[index];
   }
   async saveLog(log: Partial<Log>) {
     const newLog = { ...log, id: log.id || `log_${Date.now()}` } as Log;
     seedLogs.unshift(newLog);
     return newLog;
   }
+  async saveSyncJob(job: Partial<SyncJob>) { return job as SyncJob; }
+  async updateSyncJob(id: string, data: Partial<SyncJob>) { return data as SyncJob; }
 
   async getRoutines() { return seedRoutines; }
   async getAgents() { return seedAgents; }
@@ -120,10 +128,20 @@ export class MockPulsoRepository implements IPulsoRepository {
     seedRoutines.unshift(newRoutine);
     return newRoutine;
   }
+  async updateRoutine(id: string, data: Partial<Routine>) {
+    const index = seedRoutines.findIndex(r => r.id === id);
+    if (index !== -1) seedRoutines[index] = { ...seedRoutines[index], ...data, updatedAt: new Date() };
+    return seedRoutines[index];
+  }
   async saveAgent(agent: Partial<Agent>) {
     const newAgent = { ...agent, id: agent.id || `agent_${Date.now()}` } as Agent;
     seedAgents.unshift(newAgent);
     return newAgent;
+  }
+  async updateAgent(id: string, data: Partial<Agent>) {
+    const index = seedAgents.findIndex(a => a.id === id);
+    if (index !== -1) seedAgents[index] = { ...seedAgents[index], ...data, updatedAt: new Date() };
+    return seedAgents[index];
   }
 
   async getPeople() { return seedPeople; }

@@ -46,6 +46,9 @@ export const firestorePaths = {
   people: () => `${BASE_PATH}/pulso_people`,
   person: (id: string) => `${BASE_PATH}/pulso_people/${id}`,
 
+  syncJobs: () => `${BASE_PATH}/pulso_sync_jobs`,
+  syncJob: (id: string) => `${BASE_PATH}/pulso_sync_jobs/${id}`,
+
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`
 };

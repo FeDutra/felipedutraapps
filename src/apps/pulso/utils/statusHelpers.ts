@@ -23,7 +23,11 @@ export const getStatusLabel = (status: Status): string => {
     new: 'Novo',
     triaged: 'Triado',
     converted: 'Convertido',
-    discarded: 'Descartado'
+    discarded: 'Descartado',
+    pending: 'Pendente',
+    running: 'Executando',
+    success: 'Sucesso',
+    failed: 'Falhou'
   };
   return labels[status] || status;
 };

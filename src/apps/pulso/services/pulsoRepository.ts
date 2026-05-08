@@ -9,7 +9,8 @@ import {
   Source, 
   Alert, 
   Log,
-  Person
+  Person,
+  SyncJob
 } from "../types/pulso.types";
 
 /**
@@ -48,14 +49,20 @@ export interface IPulsoRepository {
   // Health & Monitoring
   getAlerts(): Promise<Alert[]>;
   getLogs(limitCount?: number): Promise<Log[]>;
+  getSyncJobs(): Promise<SyncJob[]>;
   saveAlert(alert: Partial<Alert>): Promise<Alert>;
+  updateAlert(id: string, data: Partial<Alert>): Promise<Alert>;
   saveLog(log: Partial<Log>): Promise<Log>;
+  saveSyncJob(job: Partial<SyncJob>): Promise<SyncJob>;
+  updateSyncJob(id: string, data: Partial<SyncJob>): Promise<SyncJob>;
   
   // Metabolism
   getRoutines(): Promise<Routine[]>;
   getAgents(): Promise<Agent[]>;
   saveRoutine(routine: Partial<Routine>): Promise<Routine>;
+  updateRoutine(id: string, data: Partial<Routine>): Promise<Routine>;
   saveAgent(agent: Partial<Agent>): Promise<Agent>;
+  updateAgent(id: string, data: Partial<Agent>): Promise<Agent>;
   
   // People & Sources
   getPeople(): Promise<Person[]>;

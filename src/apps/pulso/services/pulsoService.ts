@@ -10,7 +10,8 @@ import {
   Alert, 
   Log,
   Person,
-  Status
+  Status,
+  SyncJob
 } from "../types/pulso.types";
 import { IPulsoRepository } from "./pulsoRepository";
 import { MockPulsoRepository } from "./mockPulsoRepository";
@@ -183,11 +184,16 @@ export const notesService = {
 };
 
 export const routinesService = {
-  getAll: () => getRepository().getRoutines()
+  getAll: () => getRepository().getRoutines(),
+  update: (id: string, data: Partial<Routine>) => getRepository().updateRoutine(id, data),
+  pause: (id: string) => getRepository().updateRoutine(id, { status: 'paused' }),
+  resume: (id: string) => getRepository().updateRoutine(id, { status: 'active' }),
+  markBroken: (id: string) => getRepository().updateRoutine(id, { status: 'broken' }),
 };
 
 export const agentsService = {
-  getAll: () => getRepository().getAgents()
+  getAll: () => getRepository().getAgents(),
+  update: (id: string, data: Partial<Agent>) => getRepository().updateAgent(id, data),
 };
 
 export const peopleService = {
@@ -208,7 +214,15 @@ export const healthService = {
     const all = await getRepository().getAlerts();
     return all.filter(a => a.projectRef === projectId);
   },
-  getLogs: (limit = 10) => getRepository().getLogs(limit)
+  getLogs: (limit = 10) => getRepository().getLogs(limit),
+  acknowledgeAlert: (id: string) => getRepository().updateAlert(id, { status: 'acknowledged' }),
+  resolveAlert: (id: string) => getRepository().updateAlert(id, { status: 'resolved', resolvedAt: new Date() }),
+  ignoreAlert: (id: string) => getRepository().updateAlert(id, { status: 'ignored' }),
+};
+
+export const syncJobsService = {
+  getAll: () => getRepository().getSyncJobs(),
+  update: (id: string, data: Partial<SyncJob>) => getRepository().updateSyncJob(id, data),
 };
 
 // Main Pulso Service for Global State

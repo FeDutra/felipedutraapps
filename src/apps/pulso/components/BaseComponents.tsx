@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Status, Priority, Severity } from '../types/pulso.types';
 import { getStatusTheme, getPriorityTheme, getSeverityTheme } from '../utils/pulsoUIHelpers';
 import { getStatusLabel, getPriorityLabel } from '../utils/statusHelpers';
@@ -38,15 +39,15 @@ export const PulsoHeader = ({ title = 'PULSO', subtitle = 'central viva do ecoss
         <p className="text-sm text-white/40 font-medium tracking-tight mt-1">{subtitle}</p>
       </div>
       
-      <div className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 backdrop-blur-md">
+      <Link href="/pulso/health" className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 backdrop-blur-md hover:bg-white/10 transition-all group">
         <div className="text-right">
           <p className="text-[10px] font-black uppercase tracking-widest text-white/30">System Status</p>
           <p className="text-xs font-bold text-emerald-400">{systemStatus}</p>
         </div>
-        <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center bg-white/5">
+        <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center bg-white/5 group-hover:border-emerald-500/50 transition-all">
           <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
         </div>
-      </div>
+      </Link>
     </div>
   </header>
 );

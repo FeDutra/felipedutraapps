@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, HeartPulse, Zap } from 'lucide-react';
 import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
 import { authService } from '@/shared/services/authService';
 import { User } from 'firebase/auth';
@@ -26,6 +26,8 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     { href: '/pulso', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Globe },
     { href: '/pulso/inbox', label: 'Inbox', icon: Inbox },
+    { href: '/pulso/health', label: 'Health', icon: HeartPulse },
+    { href: '/pulso/metabolismo', label: 'Metabolismo', icon: Zap },
   ];
 
   return (

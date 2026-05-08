@@ -17,7 +17,7 @@ import { IPulsoRepository } from "./pulsoRepository";
 import { firestorePaths } from "./firestorePaths";
 import { 
   Area, Project, InboxItem, Task, Decision, 
-  Routine, Agent, Source, Alert, Log, Person 
+  Routine, Agent, Source, Alert, Log, Person, SyncJob 
 } from "../types/pulso.types";
 
 /**
@@ -169,6 +169,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return snap.docs.map(d => this.toData<Log>(d));
   }
 
+  async getSyncJobs() {
+    const snap = await getDocs(collection(db!, firestorePaths.syncJobs()));
+    return snap.docs.map(d => this.toData<SyncJob>(d));
+  }
+
   async saveAlert(alert: Partial<Alert>) {
     const id = alert.id || `alert_${Date.now()}`;
     const data = { 
@@ -181,11 +186,32 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return { ...data, createdAt: new Date(), updatedAt: new Date() } as any;
   }
 
+  async updateAlert(id: string, data: Partial<Alert>) {
+    const ref = doc(db!, firestorePaths.alert(id));
+    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<Alert>(snap);
+  }
+
   async saveLog(log: Partial<Log>) {
     const id = log.id || `log_${Date.now()}`;
     const data = { ...log, id, createdAt: serverTimestamp() };
     await setDoc(doc(db!, firestorePaths.log(id)), data);
     return { ...data, createdAt: new Date() } as any;
+  }
+
+  async saveSyncJob(job: Partial<SyncJob>) {
+    const id = job.id || `sync_${Date.now()}`;
+    const data = { ...job, id, updatedAt: serverTimestamp() };
+    await setDoc(doc(db!, firestorePaths.syncJob(id)), data, { merge: true });
+    return { ...data, updatedAt: new Date() } as any;
+  }
+
+  async updateSyncJob(id: string, data: Partial<SyncJob>) {
+    const ref = doc(db!, firestorePaths.syncJob(id));
+    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<SyncJob>(snap);
   }
 
   async getRoutines() {
@@ -204,10 +230,24 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return { ...routine, id } as any;
   }
 
+  async updateRoutine(id: string, data: Partial<Routine>) {
+    const ref = doc(db!, firestorePaths.routine(id));
+    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<Routine>(snap);
+  }
+
   async saveAgent(agent: Partial<Agent>) {
     const id = agent.id || `agent_${Date.now()}`;
     await setDoc(doc(db!, firestorePaths.agent(id)), { ...agent, id, updatedAt: serverTimestamp() }, { merge: true });
     return { ...agent, id } as any;
+  }
+
+  async updateAgent(id: string, data: Partial<Agent>) {
+    const ref = doc(db!, firestorePaths.agent(id));
+    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<Agent>(snap);
   }
 
   async getPeople() {
