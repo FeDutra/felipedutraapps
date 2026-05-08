@@ -18,6 +18,7 @@ import {
 import { InboxTypeBadge } from '../inbox/InboxBadges';
 import { PriorityBadge } from '../BaseComponents';
 import { getStatusLabel } from '../../utils/statusHelpers';
+import { getEntityTypeLabel, getInboxTypeLabel } from '../../utils/translationHelpers';
 
 export const EntityDetailDrawer = ({ 
   type, 
@@ -121,7 +122,7 @@ export const EntityDetailDrawer = ({
                      {type === 'area' ? <Hash size={24} /> : <Layers size={24} />}
                    </div>
                    <div>
-                     <p className="text-[10px] font-black uppercase tracking-widest text-white/20">{type}</p>
+                     <p className="text-[10px] font-black uppercase tracking-widest text-white/20">{getEntityTypeLabel(type)}</p>
                      <h2 className="text-2xl font-black text-white">{data.name}</h2>
                    </div>
                 </div>
@@ -230,10 +231,13 @@ export const EntityDetailDrawer = ({
                     <div className="space-y-2">
                       {relations.inbox.slice(0, 5).map((i: any) => (
                         <div key={i.id} className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl group cursor-pointer hover:bg-amber-500/10 transition-colors">
-                          <div className="flex items-center justify-between mb-1">
-                             <span className="text-xs font-bold text-white/80">{i.name}</span>
-                             <InboxTypeBadge type={i.type} />
-                          </div>
+                           <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white/80">{i.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black text-amber-400/60 uppercase tracking-tight">{getInboxTypeLabel(i.type)}</span>
+                                <InboxTypeBadge type={i.type} />
+                              </div>
+                           </div>
                           <p className="text-[10px] text-white/30 line-clamp-1">{i.body}</p>
                         </div>
                       ))}

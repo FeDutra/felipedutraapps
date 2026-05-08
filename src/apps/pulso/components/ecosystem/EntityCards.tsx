@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Area, Project, Source, Person } from '../../types/pulso.types';
 import { PriorityBadge } from '../BaseComponents';
+import { getStageLabel, getSyncModeLabel, getSourceTypeLabel } from '../../utils/translationHelpers';
 
 // --- AREA CARD ---
 export const AreaCard = ({ area, stats, onClick }: { area: Area, stats?: any, onClick: () => void }) => {
@@ -47,14 +48,7 @@ export const AreaCard = ({ area, stats, onClick }: { area: Area, stats?: any, on
 };
 
 // --- PROJECT CARD ---
-export const ProjectCard = ({ project, onClick }: { project: Project, onClick: () => void }) => {
-  const stageLabels: any = {
-    'seed': 'Semente',
-    'front': 'Front',
-    'project': 'Projeto',
-    'operation': 'Operação',
-    'maintenance': 'Manutenção'
-  };
+export const ProjectCard = ({ project, areaName, onClick }: { project: Project, areaName?: string, onClick: () => void }) => {
 
   return (
     <motion.div 
@@ -67,7 +61,7 @@ export const ProjectCard = ({ project, onClick }: { project: Project, onClick: (
           <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
             <Layers size={16} className="text-blue-400" />
           </div>
-          <span className="text-[9px] font-black uppercase tracking-widest text-white/20">{stageLabels[project.stage] || project.stage}</span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-white/20">{getStageLabel(project.stage)}</span>
         </div>
         <PriorityBadge priority={project.priority} />
       </div>
@@ -79,7 +73,7 @@ export const ProjectCard = ({ project, onClick }: { project: Project, onClick: (
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
              <Target size={12} className="text-white/20" />
-             <span className="text-[10px] font-bold text-white/40">{project.areaRef?.replace('area_', '') || 'N/A'}</span>
+             <span className="text-[10px] font-bold text-white/40">{areaName || 'Sem Área'}</span>
           </div>
         </div>
         <ArrowRight size={14} className="text-white/10 group-hover:text-blue-400 transition-all group-hover:translate-x-1" />
@@ -114,7 +108,9 @@ export const SourceCard = ({ source, onClick }: { source: Source, onClick: () =>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[9px] font-black text-white/20 uppercase tracking-widest">{source.system}</span>
           <div className="w-1 h-1 rounded-full bg-white/10" />
-          <span className="text-[9px] font-bold text-white/40">{source.syncMode}</span>
+          <span className="text-[9px] font-bold text-white/40">{getSyncModeLabel(source.syncMode)}</span>
+          <div className="w-1 h-1 rounded-full bg-white/10" />
+          <span className="text-[9px] font-bold text-purple-400/60 tracking-tight">{getSourceTypeLabel(source.type)}</span>
         </div>
       </div>
       <Share2 size={14} className="text-white/10 group-hover:text-white/40" />

@@ -124,7 +124,12 @@ export default function EcosystemPage() {
               <AreaCard key={a.id} area={a} stats={areaStats[a.id]} onClick={() => setSelectedEntity({ type: 'area', id: a.id })} />
             ))}
             {activeTab === 'projects' && filteredData.map((p: any) => (
-              <ProjectCard key={p.id} project={p} onClick={() => setSelectedEntity({ type: 'project', id: p.id })} />
+              <ProjectCard 
+                key={p.id} 
+                project={p} 
+                areaName={areas.find(a => a.id === p.areaRef)?.name}
+                onClick={() => setSelectedEntity({ type: 'project', id: p.id })} 
+              />
             ))}
             {activeTab === 'sources' && filteredData.map((s: any) => (
               <SourceCard key={s.id} source={s} onClick={() => setSelectedEntity({ type: 'source', id: s.id })} />
