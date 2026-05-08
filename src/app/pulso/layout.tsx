@@ -3,13 +3,23 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe } from 'lucide-react';
+import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, User as UserIcon } from 'lucide-react';
+import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
+import { authService } from '@/shared/services/authService';
+import { User } from 'firebase/auth';
 
 export default function PulsoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [user, setUser] = React.useState<User | null>(null);
 
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark');
+    
+    // Listen to user state for the header
+    const unsubscribe = authService.onAuthStateChange((u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
   }, []);
 
   const navItems = [
@@ -63,6 +73,21 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
         </div>
         
         <div className="flex items-center gap-4">
+          {user && (
+            <div className="flex items-center gap-3 pr-4 border-r border-white/5">
+              <div className="hidden md:block text-right">
+                <p className="text-[10px] font-black text-white/80 leading-none mb-1">{user.displayName}</p>
+                <p className="text-[8px] font-medium text-white/20 leading-none">{user.email}</p>
+              </div>
+              <button 
+                onClick={() => authService.logout()}
+                className="p-2.5 bg-white/2 border border-white/5 rounded-xl text-white/20 hover:text-red-400 hover:bg-red-400/5 hover:border-red-400/20 transition-all group"
+                title="Sair"
+              >
+                <LogOut size={14} className="group-hover:scale-110 transition-transform" />
+              </button>
+            </div>
+          )}
           <span className="hidden xs:inline-block px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[9px] font-black uppercase tracking-widest text-blue-400">
             PULSO v0.1
           </span>
@@ -70,7 +95,9 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
       </nav>
 
       <main className="min-h-screen">
-        {children}
+        <AuthGate>
+          {children}
+        </AuthGate>
       </main>
     </div>
   );
