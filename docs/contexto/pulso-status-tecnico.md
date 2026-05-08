@@ -1,45 +1,65 @@
 # Status Técnico: Projeto PULSO
 
-## 📊 Estado Atual
-- **Frontend**: Etapas 1, 2 e 3 implementadas com sucesso.
-- **Lógica**: Orquestração via services e helpers concluída.
-- **Dados**: Operando 100% com dados mockados (Seed).
-- **Estética**: Dark Premium com Framer Motion.
+## 🚀 Versão Atual: PULSO v0.1 Produção
+**Estado**: Online, autenticado, persistent e funcional.
 
-## 🚀 Etapas Implementadas
-1. **Fundação**: Definição de ontologia (types), mocks detalhados e helpers de relacionamento.
-2. **Dashboard**: Cockpit estratégico com State Radar, Cards de Estado e Listas de Sinais/Movimentos.
-3. **Inbox Universal**: Sistema de captura, triagem e conversão de entidades (Task, Decision, Note, Meeting, Potential Project).
+- **Data do Deploy**: 2026-05-08
+- **Domínio Publicado**: [https://felipedutraapps.web.app](https://felipedutraapps.web.app)
+- **Projeto Firebase**: `felipedutraapps`
+- **Commit em Produção**: `cca6e9d`
 
-## 🛣️ Rotas Existentes
-- `/pulso`: Dashboard principal (Cockpit).
-- `/pulso/inbox`: Central de captura e triagem.
+### 🛣️ Rotas Online
+- `/pulso`: Dashboard principal (Cockpit estratégico).
+- `/pulso/inbox`: Central de captura, triagem e persistência.
+- `/pulso/ecossistema`: Visualização orgânica de Áreas, Projetos, Fontes e Pessoas.
 
-## 🧩 Componentes Principais
-- `PulseRadar`: Visualização radial de estados do ecossistema.
-- `InboxDetailDrawer`: Interface lateral para triagem e conversão.
-- `StateCard` / `AreaPulseCard`: Cards de monitoramento em tempo real.
-- `InboxFilters` / `InboxItemCard`: Gestão de itens de entrada.
+---
 
-## ⚙️ Services & Types
-- `pulsoService.ts`: Centraliza acesso a dados de áreas, projetos, tarefas e inbox.
-- `pulso.types.ts`: Define a ontologia ÉDEN (Status, Priority, InboxType, etc).
-- `inboxHelpers.ts`: Filtros, buscas e estatísticas do Inbox.
+## 🛠️ Infraestrutura & Segurança
+- **Hospedagem**: Firebase Hosting.
+- **Autenticação**: Firebase Auth (Google Provider) via `AuthGate`.
+- **Banco de Dados**: Google Firestore (Modo Real).
+- **Security Rules**: Acesso restrito (`request.auth != null`).
+- **Data Mode**: `firestore` (configurado via `.env.local`).
+- **Workspace ID**: `felipe_dutra`.
 
-## 🧪 Estrutura de Seed/Mock
-- Localizada em `src/apps/pulso/mocks/pulsoSeed.ts`.
-- Contém dados realistas para simular o ecossistema antes da integração.
+### Status dos Módulos
+- **Auth**: ✅ Funcionando (Gate de segurança ativo).
+- **Firestore**: ✅ Inicializado e sincronizado.
+- **Rules**: ✅ Seguras e deployadas.
+- **Inbox**: ✅ Criando, editando e persistindo registros reais.
+- **Dashboard**: ✅ Lendo métricas reais do Firestore.
+- **Ecossistema**: ✅ Lendo estruturas reais (Áreas/Projetos).
 
-## 🛠️ Pendências Técnicas
-- [ ] Implementar persistência real no Firestore (Stage 4).
-- [ ] Sincronizar criação de itens no Inbox com o banco de dados.
-- [ ] Corrigir pequenos avisos de hidratação e Recharts (Stage 3.5).
-- [ ] Preencher documentação detalhada de contexto em `docs/contexto/`.
+---
 
-## ⚠️ Riscos antes da Integração Real
-- Complexidade na migração de IDs mockados para IDs do Firestore.
-- Necessidade de garantir atomicidade nas operações de conversão (ex: converter inbox para task + atualizar status do inbox).
-- Possíveis conflitos de tipos entre o que o Firebase retorna e a ontologia atual.
+## 📋 Checklist de Uso Real (Validação Contínua)
+Para os próximos dias de operação:
+- [ ] Criar registros reais no Inbox (captura instantânea).
+- [ ] Editar registros (validar se mudanças no título/descrição persistem).
+- [ ] Triar itens (mudar status para `triaged`).
+- [ ] Converter itens em Notas ou Tarefas (validar status `converted`).
+- [ ] Revisar Áreas e Projetos no Ecossistema.
+- [ ] Testar navegação em desktop (foco em UX/Performance).
+- [ ] Observar possíveis bugs de interface ou lentidão em rede.
+
+---
 
 ## 📅 Próximo Passo Recomendado
-- **Stage 4: Integração Real**: Começar pela configuração do Firestore e salvar novos itens do Inbox no banco.
+- **Stage 5: Expansão de Features**: Iniciar a integração de Fontes Externas (Google Sheets/Drive) ou a primeira camada de Automação.
+
+---
+
+## 🎯 Direção Estratégica Futura: OpenClaw
+
+O PULSO não deve depender de alimentação manual como fluxo principal a longo prazo.
+
+**A alimentação manual existe para validação, correção e uso emergencial, mas o objetivo estrutural do sistema é ser alimentado por agentes, rotinas e integrações.**
+
+A arquitetura futura deve considerar um fluxo bidirecional com o **OpenClaw** (C-L-A-W):
+
+- **OpenClaw → PULSO**: O OpenClaw captura sinais, organiza dados e envia registros estruturados para o Inbox ou entidades do PULSO.
+- **PULSO → OpenClaw**: O PULSO serve como a camada de visualização, persistência e barramento de eventos. O OpenClaw deve poder ler eventos de mudança e novos registros manuais para atualizar sua própria inteligência operacional.
+
+---
+**Registro de Checkpoint de Produção v0.1**
