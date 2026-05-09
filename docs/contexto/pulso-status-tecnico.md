@@ -12,6 +12,9 @@
 - `/pulso`: Dashboard principal (Cockpit estratégico).
 - `/pulso/inbox`: Central de captura, triagem e persistência.
 - `/pulso/ecossistema`: Visualização orgânica de Áreas, Projetos, Fontes e Pessoas.
+- `/pulso/health`: Monitoramento de integridade sistêmica e técnica.
+- `/pulso/metabolismo`: Gestão de agentes (Lótus/Watchdog) e rotinas (Crons).
+- `/pulso/eventos`: Barramento de auditoria e sincronização (Outbox).
 
 ---
 
@@ -30,6 +33,8 @@
 - **Inbox**: ✅ Criando, editando e persistindo registros reais.
 - **Dashboard**: ✅ Lendo métricas reais do Firestore.
 - **Ecossistema**: ✅ Lendo estruturas reais (Áreas/Projetos).
+- **Health/Metabolismo**: ✅ Monitoramento de integridade e agentes ativos (Stage 5).
+- **Eventos/Outbox**: ✅ Protocolo de comunicação bidirecional pronto (Stage 6).
 
 ---
 
@@ -50,16 +55,33 @@ Para os próximos dias de operação:
 
 ---
 
-## 🎯 Direção Estratégica Futura: OpenClaw
+---
 
-O PULSO não deve depender de alimentação manual como fluxo principal a longo prazo.
+## 🏗️ Stage 6: Protocolo de Ingestão + Eventos + Outbox (EM CURSO)
 
-**A alimentação manual existe para validação, correção e uso emergencial, mas o objetivo estrutural do sistema é ser alimentado por agentes, rotinas e integrações.**
+### Objetivo
+Criar a infraestrutura para que o PULSO receba, registre e exponha eventos de forma organizada, preparando a integração bidirecional com a Lótus no OpenClaw.
 
-A arquitetura futura deve considerar um fluxo bidirecional com o **OpenClaw** (C-L-A-W):
+### Coleções Criadas
+- `pulso_ingestion_events`: Registros brutos de entrada externa.
+- `pulso_events`: Log oficial de mudanças de estado (Outbox).
 
-- **OpenClaw → PULSO**: O OpenClaw captura sinais, organiza dados e envia registros estruturados para o Inbox ou entidades do PULSO.
-- **PULSO → OpenClaw**: O PULSO serve como a camada de visualização, persistência e barramento de eventos. O OpenClaw deve poder ler eventos de mudança e novos registros manuais para atualizar sua própria inteligência operacional.
+### Fluxos Instrumentados
+- **Inbox**: Criação, edição, triagem e conversão geram eventos automáticos.
+- **Health**: Reconhecimento e resolução de alertas geram eventos.
+- **Metabolismo**: Pausa e reativação de rotinas geram eventos.
 
 ---
-**Registro de Checkpoint de Produção v0.1**
+
+## 🛤️ Roadmap Futuro
+
+### Stage 7: Conectividade
+- Endpoint seguro de ingestão para OpenClaw/Lótus.
+- Leitura de Outbox pelo OpenClaw.
+
+### Stage 8: Fontes Externas (Real)
+- Conectores com Google Sheets, Drive, Notion e Obsidian.
+- Monitoramento de Sync Jobs reais no Health Center.
+
+---
+**Registro de Checkpoint de Produção v0.2** (Incluindo Saúde e Eventos)

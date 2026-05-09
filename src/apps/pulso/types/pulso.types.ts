@@ -3,7 +3,7 @@
  * @description Core ontology and type definitions for the PULSO ecosystem.
  */
 
-export type Status = 'active' | 'in_progress' | 'maintenance' | 'paused' | 'archived' | 'completed' | 'blocked' | 'broken' | 'incerto' | 'open' | 'acknowledged' | 'resolved' | 'ignored' | 'new' | 'triaged' | 'converted' | 'discarded' | 'pending' | 'running' | 'success' | 'failed';
+export type Status = 'active' | 'in_progress' | 'maintenance' | 'paused' | 'archived' | 'completed' | 'blocked' | 'broken' | 'incerto' | 'open' | 'acknowledged' | 'resolved' | 'ignored' | 'new' | 'triaged' | 'converted' | 'discarded' | 'pending' | 'running' | 'success' | 'failed' | 'received' | 'validated' | 'rejected' | 'converted_to_inbox' | 'processing' | 'processed';
 
 export type Priority = 'critical' | 'high' | 'medium' | 'low' | 'incerto';
 
@@ -47,8 +47,38 @@ export type InboxType =
   | 'insight' 
   | 'potential_project' 
   | 'summary' 
-  | 'pending_request' 
+  | 'pending_request'
+  | 'ingestion'
+  | 'system_update'
   | 'context_update';
+
+export type EventType = 
+  | 'inbox_item_created'
+  | 'inbox_item_updated'
+  | 'inbox_item_triaged'
+  | 'inbox_item_converted'
+  | 'task_created'
+  | 'decision_created'
+  | 'note_created'
+  | 'meeting_created'
+  | 'project_created'
+  | 'project_updated'
+  | 'alert_acknowledged'
+  | 'alert_resolved'
+  | 'routine_paused'
+  | 'routine_reactivated'
+  | 'agent_updated'
+  | 'source_updated'
+  | 'ingestion_received'
+  | 'ingestion_failed';
+
+export type ActorType = 'user' | 'agent' | 'system';
+
+export type EventOrigin = 'manual' | 'openclaw' | 'firestore' | 'system' | 'seed';
+
+export type IngestionStatus = 'received' | 'validated' | 'rejected' | 'converted_to_inbox' | 'failed';
+
+export type OutboxStatus = 'pending' | 'processing' | 'processed' | 'ignored' | 'failed';
 
 export type LateralityState = 'captured' | 'recurring' | 'clustered' | 'validated_signal' | 'promoted';
 
@@ -114,6 +144,8 @@ export interface InboxItem extends BaseEntity {
   attachments?: string[];
   convertedToRef?: string;
   convertedToType?: string;
+  originLabel?: string;
+  originAgentRef?: string;
 }
 
 export interface Task extends BaseEntity {
@@ -224,6 +256,40 @@ export interface SyncJob extends BaseEntity {
   nextRunAt?: Date;
   errorMessage?: string;
   recordsProcessed?: number;
+}
+
+export interface IngestionEvent extends BaseEntity {
+  type: InboxType;
+  rawInput: any;
+  summary?: string;
+  areaRef?: string;
+  projectRef?: string;
+  sourceRefs?: string[];
+  peopleRefs?: string[];
+  originLabel?: string;
+  originAgentRef?: string;
+  confidence?: Confidence;
+  tags?: string[];
+  ingestionStatus: IngestionStatus;
+  errorMessage?: string;
+}
+
+export interface PulsoEvent {
+  id: string;
+  eventType: EventType;
+  entityType: InboxType | string;
+  entityRef: string;
+  areaRef?: string;
+  projectRef?: string;
+  sourceRefs?: string[];
+  actorType: ActorType;
+  actorRef?: string;
+  origin: EventOrigin;
+  payloadSummary?: string;
+  payloadSnapshot?: any;
+  createdAt: Date;
+  processedByAgents?: string[];
+  outboxStatus: OutboxStatus;
 }
 
 export interface Tag {

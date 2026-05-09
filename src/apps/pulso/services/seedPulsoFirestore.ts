@@ -7,6 +7,7 @@ import {
   seedAgentsV2, seedRoutinesV2, seedAlertsV2, 
   seedSyncJobsV2, seedLogsV2 
 } from "../mocks/healthSeed";
+import { seedIngestionEvents, seedPulsoEvents } from "../mocks/eventSeed";
 import { pulsoRepository } from "./pulsoService";
 import { FirestorePulsoRepository } from "./firestorePulsoRepository";
 
@@ -42,6 +43,12 @@ export async function seedPulsoFirestore(force = false) {
     for (const alert of seedAlertsV2) await pulsoRepository.saveAlert(alert);
     for (const job of seedSyncJobsV2) await pulsoRepository.saveSyncJob(job);
     for (const log of seedLogsV2) await pulsoRepository.saveLog(log);
+  }, force);
+
+  // --- VERSION 3: INGESTION & OUTBOX ---
+  await applySeed('v3_ingestion_outbox', async () => {
+    for (const ingest of seedIngestionEvents) await pulsoRepository.saveIngestionEvent(ingest);
+    for (const event of seedPulsoEvents) await pulsoRepository.saveEvent(event);
   }, force);
 }
 

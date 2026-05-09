@@ -15,6 +15,9 @@ import {
 } from "../types/pulso.types";
 import { IPulsoRepository } from "./pulsoRepository";
 import { MockPulsoRepository } from "./mockPulsoRepository";
+import { eventsService } from "./eventsService";
+import { ingestionService } from "./ingestionService";
+export { eventsService, ingestionService };
 /**
  * @file pulsoService.ts
  * @description Main service orchestration for PULSO ecosystem.
@@ -88,9 +91,45 @@ export const sourcesService = {
 export const inboxService = {
   getAll: () => getRepository().getInboxItems(),
   getById: (id: string) => getRepository().getInboxItemById(id),
-  create: (data: Partial<InboxItem>) => getRepository().saveInboxItem(data),
-  update: (id: string, data: Partial<InboxItem>) => getRepository().updateInboxItem(id, data),
-  triage: (id: string) => inboxService.update(id, { status: 'triaged' }),
+  create: async (data: Partial<InboxItem>) => {
+    const item = await getRepository().saveInboxItem(data);
+    await eventsService.createEvent({
+      eventType: 'inbox_item_created',
+      entityType: item.type,
+      entityRef: item.id,
+      areaRef: item.areaRef,
+      projectRef: item.projectRef,
+      actorType: 'user', // Default for UI actions
+      origin: 'manual',
+      payloadSummary: `Novo item no Inbox: ${item.name}`
+    });
+    return item;
+  },
+  update: async (id: string, data: Partial<InboxItem>) => {
+    const item = await getRepository().updateInboxItem(id, data);
+    await eventsService.createEvent({
+      eventType: 'inbox_item_updated',
+      entityType: item.type,
+      entityRef: item.id,
+      areaRef: item.areaRef,
+      projectRef: item.projectRef,
+      actorType: 'user',
+      origin: 'manual',
+      payloadSummary: `Item do Inbox atualizado: ${item.name}`
+    });
+    return item;
+  },
+  triage: async (id: string) => {
+    const item = await inboxService.update(id, { status: 'triaged' });
+    await eventsService.createEvent({
+      eventType: 'inbox_item_triaged',
+      entityType: item.type,
+      entityRef: item.id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return item;
+  },
   archive: (id: string) => inboxService.update(id, { status: 'archived' }),
   discard: (id: string) => inboxService.update(id, { status: 'discarded' }),
   getByArea: async (areaId: string) => {
@@ -138,7 +177,18 @@ export const inboxService = {
         throw new Error('Tipo de destino inválido');
     }
 
-    return getRepository().convertInboxItem(id, targetType, entity);
+    const result = await getRepository().convertInboxItem(id, targetType, entity);
+    
+    await eventsService.createEvent({
+      eventType: 'inbox_item_converted',
+      entityType: item.type,
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual',
+      payloadSummary: `Convertido para ${targetType}: ${result.entity.id}`
+    });
+
+    return result;
   },
   getByStatus: async (status: string) => {
     const all = await getRepository().getInboxItems();
@@ -185,15 +235,55 @@ export const notesService = {
 
 export const routinesService = {
   getAll: () => getRepository().getRoutines(),
-  update: (id: string, data: Partial<Routine>) => getRepository().updateRoutine(id, data),
-  pause: (id: string) => getRepository().updateRoutine(id, { status: 'paused' }),
-  resume: (id: string) => getRepository().updateRoutine(id, { status: 'active' }),
+  update: async (id: string, data: Partial<Routine>) => {
+    const r = await getRepository().updateRoutine(id, data);
+    await eventsService.createEvent({
+      eventType: 'routine_reactivated', // Generic for update
+      entityType: 'routine',
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return r;
+  },
+  pause: async (id: string) => {
+    const r = await getRepository().updateRoutine(id, { status: 'paused' });
+    await eventsService.createEvent({
+      eventType: 'routine_paused',
+      entityType: 'routine',
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return r;
+  },
+  resume: async (id: string) => {
+    const r = await getRepository().updateRoutine(id, { status: 'active' });
+    await eventsService.createEvent({
+      eventType: 'routine_reactivated',
+      entityType: 'routine',
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return r;
+  },
   markBroken: (id: string) => getRepository().updateRoutine(id, { status: 'broken' }),
 };
 
 export const agentsService = {
   getAll: () => getRepository().getAgents(),
-  update: (id: string, data: Partial<Agent>) => getRepository().updateAgent(id, data),
+  update: async (id: string, data: Partial<Agent>) => {
+    const a = await getRepository().updateAgent(id, data);
+    await eventsService.createEvent({
+      eventType: 'agent_updated',
+      entityType: 'agent',
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return a;
+  },
 };
 
 export const peopleService = {
@@ -215,8 +305,28 @@ export const healthService = {
     return all.filter(a => a.projectRef === projectId);
   },
   getLogs: (limit = 10) => getRepository().getLogs(limit),
-  acknowledgeAlert: (id: string) => getRepository().updateAlert(id, { status: 'acknowledged' }),
-  resolveAlert: (id: string) => getRepository().updateAlert(id, { status: 'resolved', resolvedAt: new Date() }),
+  acknowledgeAlert: async (id: string) => {
+    const a = await getRepository().updateAlert(id, { status: 'acknowledged' });
+    await eventsService.createEvent({
+      eventType: 'alert_acknowledged',
+      entityType: 'alert',
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return a;
+  },
+  resolveAlert: async (id: string) => {
+    const a = await getRepository().updateAlert(id, { status: 'resolved', resolvedAt: new Date() });
+    await eventsService.createEvent({
+      eventType: 'alert_resolved',
+      entityType: 'alert',
+      entityRef: id,
+      actorType: 'user',
+      origin: 'manual'
+    });
+    return a;
+  },
   ignoreAlert: (id: string) => getRepository().updateAlert(id, { status: 'ignored' }),
 };
 

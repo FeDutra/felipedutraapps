@@ -6,7 +6,8 @@ import {
 } from "../mocks/pulsoSeed";
 import { 
   Area, Project, InboxItem, Task, Decision, 
-  Routine, Agent, Source, Alert, Log, Person, Status, SyncJob 
+  Routine, Agent, Source, Alert, Log, Person, Status, SyncJob,
+  PulsoEvent, IngestionEvent
 } from "../types/pulso.types";
 
 /**
@@ -172,4 +173,64 @@ export class MockPulsoRepository implements IPulsoRepository {
 
   async getSeedStatus(version: string) { return true; } // Mock is always "seeded"
   async markSeedComplete(version: string) { }
+
+  async getEvents(limitCount = 20) { 
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pulso_mock_events');
+      if (stored) return JSON.parse(stored).slice(0, limitCount);
+    }
+    return []; 
+  }
+
+  async saveEvent(event: Partial<PulsoEvent>) { 
+    const newEvent = { ...event, id: event.id || `event_${Date.now()}`, createdAt: new Date() } as PulsoEvent;
+    if (typeof window !== 'undefined') {
+      const all = await this.getEvents(100);
+      localStorage.setItem('pulso_mock_events', JSON.stringify([newEvent, ...all]));
+    }
+    return newEvent;
+  }
+
+  async updateEvent(id: string, data: Partial<PulsoEvent>) { 
+    if (typeof window !== 'undefined') {
+      const all = await this.getEvents(100);
+      const index = all.findIndex(e => e.id === id);
+      if (index !== -1) {
+        all[index] = { ...all[index], ...data };
+        localStorage.setItem('pulso_mock_events', JSON.stringify(all));
+        return all[index];
+      }
+    }
+    return data as any; 
+  }
+
+  async getIngestionEvents() { 
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pulso_mock_ingestion');
+      if (stored) return JSON.parse(stored);
+    }
+    return []; 
+  }
+
+  async saveIngestionEvent(event: Partial<IngestionEvent>) { 
+    const newIngest = { ...event, id: event.id || `ingest_${Date.now()}`, createdAt: new Date() } as IngestionEvent;
+    if (typeof window !== 'undefined') {
+      const all = await this.getIngestionEvents();
+      localStorage.setItem('pulso_mock_ingestion', JSON.stringify([newIngest, ...all]));
+    }
+    return newIngest;
+  }
+
+  async updateIngestionEvent(id: string, data: Partial<IngestionEvent>) { 
+    if (typeof window !== 'undefined') {
+      const all = await this.getIngestionEvents();
+      const index = all.findIndex(i => i.id === id);
+      if (index !== -1) {
+        all[index] = { ...all[index], ...data, updatedAt: new Date() };
+        localStorage.setItem('pulso_mock_ingestion', JSON.stringify(all));
+        return all[index];
+      }
+    }
+    return data as any; 
+  }
 }

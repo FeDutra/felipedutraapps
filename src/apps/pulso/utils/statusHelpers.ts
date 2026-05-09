@@ -27,7 +27,13 @@ export const getStatusLabel = (status: Status): string => {
     pending: 'Pendente',
     running: 'Executando',
     success: 'Sucesso',
-    failed: 'Falhou'
+    failed: 'Falhou',
+    received: 'Recebido',
+    validated: 'Validado',
+    rejected: 'Rejeitado',
+    converted_to_inbox: 'Convertido',
+    processing: 'Processando',
+    processed: 'Processado'
   };
   return labels[status] || status;
 };

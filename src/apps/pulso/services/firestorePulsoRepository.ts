@@ -17,7 +17,8 @@ import { IPulsoRepository } from "./pulsoRepository";
 import { firestorePaths } from "./firestorePaths";
 import { 
   Area, Project, InboxItem, Task, Decision, 
-  Routine, Agent, Source, Alert, Log, Person, SyncJob 
+  Routine, Agent, Source, Alert, Log, Person, SyncJob,
+  PulsoEvent, IngestionEvent
 } from "../types/pulso.types";
 
 /**
@@ -288,8 +289,6 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     const batch = writeBatch(db!);
     
     // 1. Create the new entity
-    const entityPath = (firestorePaths as any)[targetType] ? (firestorePaths as any)[targetType + ''] : null;
-    // Manual mapping for now to avoid complexity
     let collectionPath = '';
     switch(targetType) {
       case 'task': collectionPath = firestorePaths.tasks(); break;
@@ -319,6 +318,59 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     
     const updatedItemSnap = await getDoc(inboxRef);
     return { item: this.toData<InboxItem>(updatedItemSnap), entity: entityData };
+  }
+
+  // --- Stage 6: Protocol & Events ---
+
+  async getEvents(limitCount = 20) {
+    const q = query(collection(db!, firestorePaths.events()), orderBy("createdAt", "desc"), limit(limitCount));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => this.toData<PulsoEvent>(d));
+  }
+
+  async saveEvent(event: Partial<PulsoEvent>) {
+    const id = event.id || `event_${Date.now()}`;
+    const data = { 
+      ...event, 
+      id, 
+      createdAt: serverTimestamp(),
+      outboxStatus: event.outboxStatus || 'pending'
+    };
+    await setDoc(doc(db!, firestorePaths.event(id)), data);
+    return { ...data, createdAt: new Date() } as any;
+  }
+
+  async updateEvent(id: string, data: Partial<PulsoEvent>) {
+    const ref = doc(db!, firestorePaths.event(id));
+    await updateDoc(ref, { ...data });
+    const snap = await getDoc(ref);
+    return this.toData<PulsoEvent>(snap);
+  }
+
+  async getIngestionEvents() {
+    const q = query(collection(db!, firestorePaths.ingestionEvents()), orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => this.toData<IngestionEvent>(d));
+  }
+
+  async saveIngestionEvent(event: Partial<IngestionEvent>) {
+    const id = event.id || `ingest_${Date.now()}`;
+    const data = { 
+      ...event, 
+      id, 
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      ingestionStatus: event.ingestionStatus || 'received'
+    };
+    await setDoc(doc(db!, firestorePaths.ingestionEvent(id)), data);
+    return { ...data, createdAt: new Date(), updatedAt: new Date() } as any;
+  }
+
+  async updateIngestionEvent(id: string, data: Partial<IngestionEvent>) {
+    const ref = doc(db!, firestorePaths.ingestionEvent(id));
+    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<IngestionEvent>(snap);
   }
 
   async getSeedStatus(version: string) {

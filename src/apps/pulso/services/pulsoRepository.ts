@@ -10,7 +10,9 @@ import {
   Alert, 
   Log,
   Person,
-  SyncJob
+  SyncJob,
+  PulsoEvent,
+  IngestionEvent
 } from "../types/pulso.types";
 
 /**
@@ -72,6 +74,15 @@ export interface IPulsoRepository {
   
   // Conversion Utility (Atomic)
   convertInboxItem(id: string, targetType: string, entityData: any): Promise<{ item: InboxItem, entity: any }>;
+
+  // Protocol & Events
+  getEvents(limitCount?: number): Promise<PulsoEvent[]>;
+  saveEvent(event: Partial<PulsoEvent>): Promise<PulsoEvent>;
+  updateEvent(id: string, data: Partial<PulsoEvent>): Promise<PulsoEvent>;
+  
+  getIngestionEvents(): Promise<IngestionEvent[]>;
+  saveIngestionEvent(event: Partial<IngestionEvent>): Promise<IngestionEvent>;
+  updateIngestionEvent(id: string, data: Partial<IngestionEvent>): Promise<IngestionEvent>;
 
   // Seed Status
   getSeedStatus(version: string): Promise<boolean>;

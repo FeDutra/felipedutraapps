@@ -67,7 +67,9 @@ export const getInboxTypeLabel = (type: InboxType): string => {
     potential_project: 'Projeto Potencial',
     summary: 'Resumo',
     pending_request: 'Solicitação Pendente',
-    context_update: 'Atualização de Contexto'
+    context_update: 'Atualização de Contexto',
+    ingestion: 'Ingestão',
+    system_update: 'Atualização do Sistema'
   };
   return labels[type] || type;
 };

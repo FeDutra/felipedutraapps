@@ -26,6 +26,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     { href: '/pulso', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Globe },
     { href: '/pulso/inbox', label: 'Inbox', icon: Inbox },
+    { href: '/pulso/eventos', label: 'Eventos', icon: Activity },
     { href: '/pulso/health', label: 'Health', icon: HeartPulse },
     { href: '/pulso/metabolismo', label: 'Metabolismo', icon: Zap },
   ];

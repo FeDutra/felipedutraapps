@@ -49,6 +49,12 @@ export const firestorePaths = {
   syncJobs: () => `${BASE_PATH}/pulso_sync_jobs`,
   syncJob: (id: string) => `${BASE_PATH}/pulso_sync_jobs/${id}`,
 
+  ingestionEvents: () => `${BASE_PATH}/pulso_ingestion_events`,
+  ingestionEvent: (id: string) => `${BASE_PATH}/pulso_ingestion_events/${id}`,
+
+  events: () => `${BASE_PATH}/pulso_events`,
+  event: (id: string) => `${BASE_PATH}/pulso_events/${id}`,
+
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`
 };
