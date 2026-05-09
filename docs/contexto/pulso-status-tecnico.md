@@ -57,31 +57,36 @@ Para os próximos dias de operação:
 
 ---
 
-## 🏗️ Stage 6: Protocolo de Ingestão + Eventos + Outbox (EM CURSO)
+## 🏗️ Stage 6: Protocolo de Ingestão + Eventos + Outbox (CONCLUÍDO)
 
 ### Objetivo
 Criar a infraestrutura para que o PULSO receba, registre e exponha eventos de forma organizada, preparando a integração bidirecional com a Lótus no OpenClaw.
 
-### Coleções Criadas
-- `pulso_ingestion_events`: Registros brutos de entrada externa.
+### Coleções Ativas
+- `pulso_ingestion_events`: Registros brutos de entrada externa com suporte a deduplicação.
 - `pulso_events`: Log oficial de mudanças de estado (Outbox).
 
 ### Fluxos Instrumentados
 - **Inbox**: Criação, edição, triagem e conversão geram eventos automáticos.
 - **Health**: Reconhecimento e resolução de alertas geram eventos.
 - **Metabolismo**: Pausa e reativação de rotinas geram eventos.
+- **Ecossistema**: Criação de projetos e atualização de fontes agora geram eventos.
+
+### Contrato OpenClaw
+- Documentado em `pulso-openclaw-contract.md`.
+- Suporte a idempotência via `event_id` e `dedupe_key`.
 
 ---
 
 ## 🛤️ Roadmap Futuro
 
-### Stage 7: Conectividade
-- Endpoint seguro de ingestão para OpenClaw/Lótus.
-- Leitura de Outbox pelo OpenClaw.
+### Stage 7: Conectividade Real
+- Endpoint seguro de ingestão para OpenClaw/Lótus (API Rest).
+- Implementação de API Key e Auth de Agentes.
 
 ### Stage 8: Fontes Externas (Real)
 - Conectores com Google Sheets, Drive, Notion e Obsidian.
 - Monitoramento de Sync Jobs reais no Health Center.
 
 ---
-**Registro de Checkpoint de Produção v0.2** (Incluindo Saúde e Eventos)
+**Registro de Checkpoint de Produção v0.2** (Incluindo Saúde, Eventos e Protocolo OpenClaw)

@@ -70,13 +70,26 @@ export type EventType =
   | 'agent_updated'
   | 'source_updated'
   | 'ingestion_received'
-  | 'ingestion_failed';
+  | 'ingestion_validated'
+  | 'ingestion_rejected'
+  | 'ingestion_failed'
+  | 'ingestion_duplicate'
+  | 'health_signal_received'
+  | 'sync_signal_received';
 
 export type ActorType = 'user' | 'agent' | 'system';
 
 export type EventOrigin = 'manual' | 'openclaw' | 'firestore' | 'system' | 'seed';
 
-export type IngestionStatus = 'received' | 'validated' | 'rejected' | 'converted_to_inbox' | 'failed';
+export type IngestionStatus = 
+  | 'received' 
+  | 'validated' 
+  | 'rejected' 
+  | 'converted_to_inbox' 
+  | 'converted_to_entity'
+  | 'duplicate'
+  | 'ignored'
+  | 'failed';
 
 export type OutboxStatus = 'pending' | 'processing' | 'processed' | 'ignored' | 'failed';
 
@@ -259,6 +272,9 @@ export interface SyncJob extends BaseEntity {
 }
 
 export interface IngestionEvent extends BaseEntity {
+  event_id?: string;
+  source_run_id?: string;
+  dedupe_key?: string;
   type: InboxType;
   rawInput: any;
   summary?: string;
@@ -271,6 +287,17 @@ export interface IngestionEvent extends BaseEntity {
   confidence?: Confidence;
   tags?: string[];
   ingestionStatus: IngestionStatus;
+  target_entity_type?: string;
+  target_entity_ref?: string;
+  should_create_inbox_item?: boolean;
+  requires_human_review?: boolean;
+  payload?: {
+    raw_input?: string;
+    context?: string;
+    suggested_action?: string;
+    external_refs?: any;
+    metadata?: any;
+  };
   errorMessage?: string;
 }
 

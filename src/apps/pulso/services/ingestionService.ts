@@ -17,6 +17,9 @@ export const ingestionService = {
    * Receives raw input and creates an ingestion event
    */
   receive: async (params: {
+    event_id?: string;
+    source_run_id?: string;
+    dedupe_key?: string;
     type: InboxType;
     rawInput: any;
     summary: string;
@@ -25,16 +28,42 @@ export const ingestionService = {
     areaRef?: string;
     projectRef?: string;
     confidence?: Confidence;
+    payload?: any;
+    should_create_inbox_item?: boolean;
+    target_entity_type?: string;
   }): Promise<IngestionEvent> => {
+    // 1. Deduplication check
+    const existing = await pulsoRepository.getIngestionEvents();
+    const isDuplicate = existing.find(e => 
+      (params.event_id && e.event_id === params.event_id) || 
+      (params.dedupe_key && e.dedupe_key === params.dedupe_key)
+    );
+
+    if (isDuplicate) {
+      console.log(`Ingestion: Duplicate detected for ${params.event_id || params.dedupe_key}`);
+      await eventsService.createEvent({
+        eventType: 'ingestion_duplicate',
+        entityType: 'ingestion',
+        entityRef: isDuplicate.id,
+        actorType: 'system',
+        origin: params.originLabel as any,
+        payloadSummary: `Duplicate ingestion ignored: ${params.event_id || params.dedupe_key}`
+      });
+      return isDuplicate;
+    }
+
+    // 2. Create Ingestion Event
     const ingestion: Partial<IngestionEvent> = {
       ...params,
       name: params.summary,
-      ingestionStatus: 'received'
+      ingestionStatus: 'received',
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
     const saved = await pulsoRepository.saveIngestionEvent(ingestion);
 
-    // Auto-generate system event
+    // 3. Auto-generate system event
     await eventsService.createEvent({
       eventType: 'ingestion_received',
       entityType: 'ingestion',
@@ -43,8 +72,13 @@ export const ingestionService = {
       projectRef: params.projectRef,
       actorType: 'system',
       origin: params.originLabel as any,
-      payloadSummary: `Ingestion received from ${params.originLabel}`
+      payloadSummary: `Ingestion received from ${params.originLabel}: ${saved.id}`
     });
+
+    // 4. Automatic Processing if requested
+    if (params.should_create_inbox_item) {
+      await ingestionService.convertToInbox(saved.id);
+    }
 
     return saved;
   },

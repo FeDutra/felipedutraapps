@@ -73,7 +73,32 @@ export const projectsService = {
     const all = await getRepository().getProjects();
     return all.filter(p => p.areaRef === areaId);
   },
-  create: (data: Partial<Project>) => getRepository().saveProject(data)
+  create: async (data: Partial<Project>) => {
+    const p = await getRepository().saveProject(data);
+    await eventsService.createEvent({
+      eventType: 'project_created',
+      entityType: 'project',
+      entityRef: p.id,
+      areaRef: p.areaRef,
+      actorType: 'user',
+      origin: 'manual',
+      payloadSummary: `Novo projeto criado: ${p.name}`
+    });
+    return p;
+  },
+  update: async (id: string, data: Partial<Project>) => {
+    const p = await getRepository().saveProject({ ...data, id });
+    await eventsService.createEvent({
+      eventType: 'project_updated',
+      entityType: 'project',
+      entityRef: id,
+      areaRef: p.areaRef,
+      actorType: 'user',
+      origin: 'manual',
+      payloadSummary: `Projeto atualizado: ${p.name}`
+    });
+    return p;
+  }
 };
 
 export const sourcesService = {
@@ -85,6 +110,19 @@ export const sourcesService = {
   getByProject: async (projectId: string) => {
     const all = await getRepository().getSources();
     return all.filter(s => s.projectRef === projectId);
+  },
+  update: async (id: string, data: Partial<Source>) => {
+    const s = await getRepository().saveSource({ ...data, id });
+    await eventsService.createEvent({
+      eventType: 'source_updated',
+      entityType: 'source',
+      entityRef: id,
+      areaRef: s.areaRef,
+      actorType: 'user',
+      origin: 'manual',
+      payloadSummary: `Fonte de dados atualizada: ${s.name}`
+    });
+    return s;
   }
 };
 

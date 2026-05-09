@@ -174,10 +174,10 @@ export class MockPulsoRepository implements IPulsoRepository {
   async getSeedStatus(version: string) { return true; } // Mock is always "seeded"
   async markSeedComplete(version: string) { }
 
-  async getEvents(limitCount = 20) { 
+  async getEvents(limitCount = 20): Promise<PulsoEvent[]> { 
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('pulso_mock_events');
-      if (stored) return JSON.parse(stored).slice(0, limitCount);
+      if (stored) return (JSON.parse(stored) as PulsoEvent[]).slice(0, limitCount);
     }
     return []; 
   }
@@ -194,7 +194,7 @@ export class MockPulsoRepository implements IPulsoRepository {
   async updateEvent(id: string, data: Partial<PulsoEvent>) { 
     if (typeof window !== 'undefined') {
       const all = await this.getEvents(100);
-      const index = all.findIndex(e => e.id === id);
+      const index = all.findIndex((e: PulsoEvent) => e.id === id);
       if (index !== -1) {
         all[index] = { ...all[index], ...data };
         localStorage.setItem('pulso_mock_events', JSON.stringify(all));
@@ -204,10 +204,10 @@ export class MockPulsoRepository implements IPulsoRepository {
     return data as any; 
   }
 
-  async getIngestionEvents() { 
+  async getIngestionEvents(): Promise<IngestionEvent[]> { 
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('pulso_mock_ingestion');
-      if (stored) return JSON.parse(stored);
+      if (stored) return JSON.parse(stored) as IngestionEvent[];
     }
     return []; 
   }
@@ -224,7 +224,7 @@ export class MockPulsoRepository implements IPulsoRepository {
   async updateIngestionEvent(id: string, data: Partial<IngestionEvent>) { 
     if (typeof window !== 'undefined') {
       const all = await this.getIngestionEvents();
-      const index = all.findIndex(i => i.id === id);
+      const index = all.findIndex((i: IngestionEvent) => i.id === id);
       if (index !== -1) {
         all[index] = { ...all[index], ...data, updatedAt: new Date() };
         localStorage.setItem('pulso_mock_ingestion', JSON.stringify(all));

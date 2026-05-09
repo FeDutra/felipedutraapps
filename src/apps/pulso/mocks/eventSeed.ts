@@ -8,6 +8,8 @@ const NOW = new Date();
 export const seedIngestionEvents: Partial<IngestionEvent>[] = [
   {
     id: 'ingest_v3_001',
+    event_id: 'claw_evt_001',
+    dedupe_key: 'task_opc_copy',
     name: 'Preparar copy e design do OPC',
     type: 'task',
     rawInput: { text: 'Cria uma tarefa para preparar copy e design do OPC' },
@@ -22,6 +24,7 @@ export const seedIngestionEvents: Partial<IngestionEvent>[] = [
   },
   {
     id: 'ingest_v3_002',
+    event_id: 'claw_evt_002',
     name: 'Monitorar latência da VPS',
     type: 'alert',
     rawInput: { server: 'vps-01', metric: 'latency', value: '850ms' },
@@ -30,6 +33,29 @@ export const seedIngestionEvents: Partial<IngestionEvent>[] = [
     originAgentRef: 'agent_watchdog',
     ingestionStatus: 'received',
     createdAt: new Date(NOW.getTime() - 1000 * 60 * 15) // 15m ago
+  },
+  {
+    id: 'ingest_v3_003',
+    event_id: 'claw_evt_001', // Intentional duplicate event_id
+    name: 'RETRY: Preparar copy e design do OPC',
+    type: 'task',
+    rawInput: { text: 'Cria uma tarefa para preparar copy e design do OPC' },
+    summary: 'Duplicate event ignored by idempotency logic.',
+    originLabel: 'openclaw',
+    ingestionStatus: 'duplicate',
+    createdAt: new Date(NOW.getTime() - 1000 * 60 * 5)
+  },
+  {
+    id: 'ingest_v3_004',
+    event_id: 'claw_evt_004',
+    name: 'Sinal de Saúde: Memória Alta',
+    type: 'log',
+    rawInput: { usage: '98%' },
+    summary: 'Erro ao processar sinal de saúde: Falha na validação do payload.',
+    originLabel: 'openclaw',
+    ingestionStatus: 'failed',
+    errorMessage: 'Payload schema mismatch: missing threshold field.',
+    createdAt: new Date(NOW.getTime() - 1000 * 60 * 2)
   }
 ];
 
@@ -60,14 +86,25 @@ export const seedPulsoEvents: Partial<PulsoEvent>[] = [
   },
   {
     id: 'event_v3_003',
-    eventType: 'alert_acknowledged',
-    entityType: 'alert',
-    entityRef: 'alert_001',
+    eventType: 'project_updated',
+    entityType: 'project',
+    entityRef: 'proj_opc',
     actorType: 'user',
     actorRef: 'user_felipe',
     origin: 'manual',
-    payloadSummary: 'Alerta de CPU reconhecido.',
+    payloadSummary: 'Status do projeto OPC alterado para "operation".',
     outboxStatus: 'pending',
-    createdAt: new Date(NOW.getTime() - 1000 * 60 * 5)
+    createdAt: new Date(NOW.getTime() - 1000 * 60 * 10)
+  },
+  {
+    id: 'event_v3_004',
+    eventType: 'ingestion_failed',
+    entityType: 'ingestion',
+    entityRef: 'ingest_v3_004',
+    actorType: 'system',
+    origin: 'openclaw',
+    payloadSummary: 'Falha crítica na ingestão do sinal de saúde da VPS.',
+    outboxStatus: 'failed',
+    createdAt: new Date(NOW.getTime() - 1000 * 60 * 2)
   }
 ];
