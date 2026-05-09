@@ -9,7 +9,7 @@ export const inboxService = {
     const item = await pulsoRepository.saveInboxItem(data);
     await eventsService.createEvent({
       eventType: 'inbox_item_created',
-      entityType: item.type,
+      entityType: item.type || 'note',
       entityRef: item.id,
       areaRef: item.areaRef,
       projectRef: item.projectRef,
@@ -23,7 +23,7 @@ export const inboxService = {
     const item = await pulsoRepository.updateInboxItem(id, data);
     await eventsService.createEvent({
       eventType: 'inbox_item_updated',
-      entityType: item.type,
+      entityType: item.type || 'note',
       entityRef: id,
       areaRef: item.areaRef,
       projectRef: item.projectRef,
