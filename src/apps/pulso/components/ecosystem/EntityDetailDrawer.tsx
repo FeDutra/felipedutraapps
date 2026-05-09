@@ -7,14 +7,12 @@ import {
   Target, AlertCircle, CheckSquare, Activity,
   Globe, Database, FileText, Layout, ArrowUpRight
 } from 'lucide-react';
-import { 
-  areasService, 
-  projectsService, 
-  tasksService, 
-  decisionsService, 
-  inboxService,
-  sourcesService
-} from '../../services/pulsoService';
+import { areasService } from '../../services/areasService';
+import { projectsService } from '../../services/projectsService';
+import { tasksService } from '../../services/tasksService';
+import { decisionsService } from '../../services/decisionsService';
+import { inboxService } from '../../services/inboxService';
+import { sourcesService } from '../../services/sourcesService';
 import { InboxTypeBadge } from '../inbox/InboxBadges';
 import { PriorityBadge } from '../BaseComponents';
 import { getStatusLabel } from '../../utils/statusHelpers';

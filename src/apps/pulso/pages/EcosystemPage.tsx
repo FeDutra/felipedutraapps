@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { 
-  areasService, 
-  projectsService, 
-  sourcesService, 
-  peopleService 
-} from '../services/pulsoService';
+import { areasService } from '../services/areasService';
+import { projectsService } from '../services/projectsService';
+import { sourcesService } from '../services/sourcesService';
+import { peopleService } from '../services/peopleService';
+import { tasksService } from '../services/tasksService';
+import { decisionsService } from '../services/decisionsService';
+import { inboxService } from '../services/inboxService';
 import { 
   Area, 
   Project, 

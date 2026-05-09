@@ -1,376 +1,35 @@
-import { 
-  Area, 
-  Project, 
-  InboxItem, 
-  Task, 
-  Decision, 
-  Routine, 
-  Agent, 
-  Source, 
-  Alert, 
-  Log,
-  Person,
-  Status,
-  SyncJob
-} from "../types/pulso.types";
-import { IPulsoRepository } from "./pulsoRepository";
-import { MockPulsoRepository } from "./mockPulsoRepository";
+import { pulsoRepository, getRepository } from "./pulsoRepositoryInstance";
+import { areasService } from "./areasService";
+import { projectsService } from "./projectsService";
+import { inboxService } from "./inboxService";
+import { healthService } from "./healthService";
 import { eventsService } from "./eventsService";
 import { ingestionService } from "./ingestionService";
-export { eventsService, ingestionService };
-/**
- * @file pulsoService.ts
- * @description Main service orchestration for PULSO ecosystem.
- * Toggles between Firestore and Mock data modes.
- */
+import { tasksService } from "./tasksService";
+import { decisionsService } from "./decisionsService";
+import { sourcesService } from "./sourcesService";
+import { peopleService } from "./peopleService";
+import { routinesService } from "./routinesService";
+import { agentsService } from "./agentsService";
+import { syncJobsService } from "./syncJobsService";
 
-// 1. Data Mode Configuration
-const DATA_MODE = process.env.NEXT_PUBLIC_PULSO_DATA_MODE || 'mock';
-
-// 2. Repository Instance (Singleton-like)
-let repository: IPulsoRepository;
-
-const getRepository = (): IPulsoRepository => {
-  if (repository) return repository;
-  
-  if (DATA_MODE === 'firestore' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-    console.log('PULSO: Modo Firestore Ativo');
-    // Using require to avoid side-effects from top-level import during build
-    const { FirestorePulsoRepository } = require("./firestorePulsoRepository");
-    repository = new FirestorePulsoRepository();
-  } else {
-    console.log('PULSO: Modo Mock Ativo');
-    repository = new MockPulsoRepository();
-  }
-  return repository;
-};
-
-// Export repository for advanced usage or seed
-export const pulsoRepository = getRepository();
-
-// 3. Service Definitions
-export const areasService = {
-  getAll: () => getRepository().getAreas(),
-  getById: (id: string) => getRepository().getAreaById(id),
-  getStats: async (id: string) => {
-    const [projects, inbox, alerts] = await Promise.all([
-      projectsService.getByArea(id),
-      inboxService.getByArea(id),
-      healthService.getAlertsByArea(id)
-    ]);
-    return {
-      projectsCount: projects.length,
-      pendingInboxCount: inbox.filter(i => i.status === 'new').length,
-      alertsCount: alerts.length
-    };
-  }
-};
-
-export const projectsService = {
-  getAll: () => getRepository().getProjects(),
-  getById: (id: string) => getRepository().getProjectById(id),
-  getByArea: async (areaId: string) => {
-    const all = await getRepository().getProjects();
-    return all.filter(p => p.areaRef === areaId);
-  },
-  create: async (data: Partial<Project>) => {
-    const p = await getRepository().saveProject(data);
-    await eventsService.createEvent({
-      eventType: 'project_created',
-      entityType: 'project',
-      entityRef: p.id,
-      areaRef: p.areaRef,
-      actorType: 'user',
-      origin: 'manual',
-      payloadSummary: `Novo projeto criado: ${p.name}`
-    });
-    return p;
-  },
-  update: async (id: string, data: Partial<Project>) => {
-    const p = await getRepository().saveProject({ ...data, id });
-    await eventsService.createEvent({
-      eventType: 'project_updated',
-      entityType: 'project',
-      entityRef: id,
-      areaRef: p.areaRef,
-      actorType: 'user',
-      origin: 'manual',
-      payloadSummary: `Projeto atualizado: ${p.name}`
-    });
-    return p;
-  }
-};
-
-export const sourcesService = {
-  getAll: () => getRepository().getSources(),
-  getByArea: async (areaId: string) => {
-    const all = await getRepository().getSources();
-    return all.filter(s => s.areaRef === areaId);
-  },
-  getByProject: async (projectId: string) => {
-    const all = await getRepository().getSources();
-    return all.filter(s => s.projectRef === projectId);
-  },
-  update: async (id: string, data: Partial<Source>) => {
-    const s = await getRepository().saveSource({ ...data, id });
-    await eventsService.createEvent({
-      eventType: 'source_updated',
-      entityType: 'source',
-      entityRef: id,
-      areaRef: s.areaRef,
-      actorType: 'user',
-      origin: 'manual',
-      payloadSummary: `Fonte de dados atualizada: ${s.name}`
-    });
-    return s;
-  }
-};
-
-export const inboxService = {
-  getAll: () => getRepository().getInboxItems(),
-  getById: (id: string) => getRepository().getInboxItemById(id),
-  create: async (data: Partial<InboxItem>) => {
-    const item = await getRepository().saveInboxItem(data);
-    await eventsService.createEvent({
-      eventType: 'inbox_item_created',
-      entityType: item.type,
-      entityRef: item.id,
-      areaRef: item.areaRef,
-      projectRef: item.projectRef,
-      actorType: 'user', // Default for UI actions
-      origin: 'manual',
-      payloadSummary: `Novo item no Inbox: ${item.name}`
-    });
-    return item;
-  },
-  update: async (id: string, data: Partial<InboxItem>) => {
-    const item = await getRepository().updateInboxItem(id, data);
-    await eventsService.createEvent({
-      eventType: 'inbox_item_updated',
-      entityType: item.type,
-      entityRef: item.id,
-      areaRef: item.areaRef,
-      projectRef: item.projectRef,
-      actorType: 'user',
-      origin: 'manual',
-      payloadSummary: `Item do Inbox atualizado: ${item.name}`
-    });
-    return item;
-  },
-  triage: async (id: string) => {
-    const item = await inboxService.update(id, { status: 'triaged' });
-    await eventsService.createEvent({
-      eventType: 'inbox_item_triaged',
-      entityType: item.type,
-      entityRef: item.id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return item;
-  },
-  archive: (id: string) => inboxService.update(id, { status: 'archived' }),
-  discard: (id: string) => inboxService.update(id, { status: 'discarded' }),
-  getByArea: async (areaId: string) => {
-    const all = await getRepository().getInboxItems();
-    return all.filter(i => i.areaRef === areaId);
-  },
-  getByProject: async (projectId: string) => {
-    const all = await getRepository().getInboxItems();
-    return all.filter(i => i.projectRef === projectId);
-  },
-  convertTo: async (id: string, targetType: string): Promise<{ item: InboxItem, entity: any }> => {
-    const item = await inboxService.getById(id);
-    if (!item) throw new Error('Item não encontrado');
-
-    const baseEntity = {
-      id: `${targetType}_${Date.now()}`,
-      slug: `${targetType}-${Date.now()}`,
-      name: item.name,
-      status: 'active' as Status,
-      importance: item.priority,
-      areaRef: item.areaRef || null,
-      projectRef: item.projectRef || null,
-      body: item.body || '',
-      originInboxRef: item.id
-    };
-
-    let entity: any;
-    switch (targetType) {
-      case 'task':
-        entity = { ...baseEntity, status: 'open', ownerRefs: [] };
-        break;
-      case 'decision':
-        entity = { ...baseEntity, takenByRefs: [], decision: item.name };
-        break;
-      case 'note':
-        entity = { ...baseEntity, type: 'analysis' };
-        break;
-      case 'meeting':
-        entity = { ...baseEntity, date: new Date(), participantsRefs: [] };
-        break;
-      case 'potential_project':
-        entity = { ...baseEntity, status: 'maintenance' };
-        break;
-      default:
-        throw new Error('Tipo de destino inválido');
-    }
-
-    const result = await getRepository().convertInboxItem(id, targetType, entity);
-    
-    await eventsService.createEvent({
-      eventType: 'inbox_item_converted',
-      entityType: item.type,
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual',
-      payloadSummary: `Convertido para ${targetType}: ${result.entity.id}`
-    });
-
-    return result;
-  },
-  getByStatus: async (status: string) => {
-    const all = await getRepository().getInboxItems();
-    return all.filter(i => i.status === status);
-  }
-};
-
-export const tasksService = {
-  getAll: () => getRepository().getTasks(),
-  getByProject: async (projectId: string) => {
-    const all = await getRepository().getTasks();
-    return all.filter(t => t.projectRef === projectId);
-  },
-  getByArea: async (areaId: string) => {
-    const all = await getRepository().getTasks();
-    return all.filter(t => t.areaRef === areaId);
-  },
-  create: (data: Partial<Task>) => getRepository().saveTask(data)
-};
-
-export const decisionsService = {
-  getAll: () => getRepository().getDecisions(),
-  getByProject: async (projectId: string) => {
-    const all = await getRepository().getDecisions();
-    return all.filter(d => d.projectRef === projectId);
-  },
-  getByArea: async (areaId: string) => {
-    const all = await getRepository().getDecisions();
-    return all.filter(d => d.areaRef === areaId);
-  },
-  create: (data: Partial<Decision>) => getRepository().saveDecision(data)
-};
-
-export const notesService = {
-  create: (data: Partial<any>) => getRepository().saveNote(data),
-  getByProject: async (projectId: string) => {
-     // Notes/Meetings don't have dedicated list methods in current repository
-     // but we can simulate them by filtering all if needed, 
-     // or just wait for real implementation. 
-     // For now, return empty as they are less frequent.
-     return [];
-  }
-};
-
-export const routinesService = {
-  getAll: () => getRepository().getRoutines(),
-  update: async (id: string, data: Partial<Routine>) => {
-    const r = await getRepository().updateRoutine(id, data);
-    await eventsService.createEvent({
-      eventType: 'routine_reactivated', // Generic for update
-      entityType: 'routine',
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return r;
-  },
-  pause: async (id: string) => {
-    const r = await getRepository().updateRoutine(id, { status: 'paused' });
-    await eventsService.createEvent({
-      eventType: 'routine_paused',
-      entityType: 'routine',
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return r;
-  },
-  resume: async (id: string) => {
-    const r = await getRepository().updateRoutine(id, { status: 'active' });
-    await eventsService.createEvent({
-      eventType: 'routine_reactivated',
-      entityType: 'routine',
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return r;
-  },
-  markBroken: (id: string) => getRepository().updateRoutine(id, { status: 'broken' }),
-};
-
-export const agentsService = {
-  getAll: () => getRepository().getAgents(),
-  update: async (id: string, data: Partial<Agent>) => {
-    const a = await getRepository().updateAgent(id, data);
-    await eventsService.createEvent({
-      eventType: 'agent_updated',
-      entityType: 'agent',
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return a;
-  },
-};
-
-export const peopleService = {
-  getAll: () => getRepository().getPeople()
-};
-
-export const meetingsService = {
-  create: (data: Partial<any>) => getRepository().saveMeeting(data)
-};
-
-export const healthService = {
-  getAlerts: () => getRepository().getAlerts(),
-  getAlertsByArea: async (areaId: string) => {
-    const all = await getRepository().getAlerts();
-    return all.filter(a => a.areaRef === areaId);
-  },
-  getAlertsByProject: async (projectId: string) => {
-    const all = await getRepository().getAlerts();
-    return all.filter(a => a.projectRef === projectId);
-  },
-  getLogs: (limit = 10) => getRepository().getLogs(limit),
-  acknowledgeAlert: async (id: string) => {
-    const a = await getRepository().updateAlert(id, { status: 'acknowledged' });
-    await eventsService.createEvent({
-      eventType: 'alert_acknowledged',
-      entityType: 'alert',
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return a;
-  },
-  resolveAlert: async (id: string) => {
-    const a = await getRepository().updateAlert(id, { status: 'resolved', resolvedAt: new Date() });
-    await eventsService.createEvent({
-      eventType: 'alert_resolved',
-      entityType: 'alert',
-      entityRef: id,
-      actorType: 'user',
-      origin: 'manual'
-    });
-    return a;
-  },
-  ignoreAlert: (id: string) => getRepository().updateAlert(id, { status: 'ignored' }),
-};
-
-export const syncJobsService = {
-  getAll: () => getRepository().getSyncJobs(),
-  update: (id: string, data: Partial<SyncJob>) => getRepository().updateSyncJob(id, data),
+// Re-export all services for backward compatibility
+export { 
+  pulsoRepository,
+  getRepository,
+  areasService, 
+  projectsService, 
+  inboxService, 
+  healthService,
+  eventsService,
+  ingestionService,
+  tasksService,
+  decisionsService,
+  sourcesService,
+  peopleService,
+  routinesService,
+  agentsService,
+  syncJobsService
 };
 
 // Main Pulso Service for Global State
@@ -393,6 +52,5 @@ export const pulsoService = {
     };
   },
   
-  // Data Mode Info
-  getDataMode: () => DATA_MODE
+  getDataMode: () => process.env.NEXT_PUBLIC_PULSO_DATA_MODE || 'mock'
 };

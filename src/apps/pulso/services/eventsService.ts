@@ -3,9 +3,10 @@ import {
   EventType, 
   ActorType, 
   EventOrigin,
-  InboxType
+  InboxType,
+  OutboxStatus
 } from "../types/pulso.types";
-import { pulsoRepository } from "./pulsoService";
+import { pulsoRepository } from "./pulsoRepositoryInstance";
 
 /**
  * @file eventsService.ts

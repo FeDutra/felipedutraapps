@@ -4,8 +4,9 @@ import {
   Confidence,
   IngestionStatus
 } from "../types/pulso.types";
-import { pulsoRepository, inboxService } from "./pulsoService";
+import { pulsoRepository } from "./pulsoRepositoryInstance";
 import { eventsService } from "./eventsService";
+import { inboxService } from "./inboxService";
 
 /**
  * @file ingestionService.ts

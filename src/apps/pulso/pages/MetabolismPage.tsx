@@ -1,10 +1,8 @@
 'use client';
 
 import React from 'react';
-import { 
-  agentsService, 
-  routinesService 
-} from '../services/pulsoService';
+import { routinesService } from '../services/routinesService';
+import { agentsService, healthService } from '../services/pulsoService';
 import { Agent, Routine } from '../types/pulso.types';
 import { AgentCard, RoutineCard } from '../components/system/SystemCards';
 import { SystemDetailDrawer } from '../components/system/SystemDetailDrawer';
