@@ -80,19 +80,20 @@ Criar a infraestrutura para que o PULSO receba, registre e exponha eventos de fo
 
 ## 🛤️ Roadmap Futuro
 
-## 🏗️ Stage 7: Conectividade Real OpenClaw/Lótus (CONCLUÍDO)
+## 🏗️ Stage 7: Conectividade Real OpenClaw/Lótus (CORRIGIDO)
 
 ### Objetivo
 Criar a primeira porta de entrada segura e programática para que a Lótus injete inteligência no PULSO.
 
 ### Entregas Técnicas
-- **Endpoint API**: `POST /api/pulso/ingest` (Next.js Edge/Server-side).
-- **Segurança**: Autenticação via Bearer Token e preparação para assinaturas HMAC.
-- **Deduplicação**: Verificação idempotente via `event_id` no Firestore.
+- **Correção Crítica**: Endpoint migrado de Next.js API Route para **Firebase Cloud Function** (`pulsoIngest`) para garantir funcionamento estável no Hosting.
+- **Hosting Rewrite**: Mapeamento de `/api/pulso/ingest` -> `pulsoIngest` (v2).
+- **Segurança**: Autenticação via Bearer Token validada no server-side.
+- **Deduplicação**: Verificação idempotente via `event_id` e `dedupe_key` no Firestore via Admin SDK.
 - **Roteamento Automático**: 
     - `agent_update` -> Atualiza agentes e gera logs técnicos.
     - `alert` -> Cria alertas reais no Health Center.
-    - `task` -> Cria tarefas (confiança alta) ou itens de Inbox.
+    - `task` -> Cria tarefas ou itens de Inbox.
 - **Contrato v1**: Especificado em `pulso-openclaw-contract.md`.
 
 ---
@@ -104,4 +105,4 @@ Criar a primeira porta de entrada segura e programática para que a Lótus injet
 - Monitoramento de Sync Jobs reais no Health Center.
 
 ---
-**Registro de Checkpoint de Produção v0.3** (Conectividade OpenClaw + Ingestão Segura)
+**Registro de Checkpoint de Produção v0.3** (Correção Ingestão via Cloud Functions)

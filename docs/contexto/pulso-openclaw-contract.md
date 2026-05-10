@@ -49,30 +49,46 @@ Toda entrada vinda do OpenClaw deve seguir a estrutura de **duas camadas**:
 - **`event_id`**: UUID único gerado pelo OpenClaw. Se o PULSO receber o mesmo ID, ele ignorará a criação da entidade.
 - **`dedupe_key`**: Chave opcional para evitar duplicidade conceitual (ex: a mesma tarefa enviada duas vezes por erro de rede).
 
-## 5. Endpoint de Ingestão v1 (Stage 7)
+## 🚀 Endpoint de Ingestão v1
 
-**URL**: `https://<dominio>/api/pulso/ingest`  
+O endpoint oficial para a Lótus enviar dados ao PULSO é:
+
+**URL**: `https://felipedutraapps.web.app/api/pulso/ingest`  
 **Método**: `POST`  
-**Autenticação**: `Authorization: Bearer <PULSO_INGEST_TOKEN>`
+**Autenticação**: `Bearer Token` obrigatório.  
+**Arquitetura**: Implementado como Firebase Cloud Function com rewrite no Hosting.
 
 ### Headers Obrigatórios
-- `Content-Type`: `application/json`
-- `Authorization`: `Bearer <token>`
-- `User-Agent`: `openclaw-pulso-skill/1.x`
+- `Content-Type: application/json`
+- `Authorization: Bearer <PULSO_INGEST_TOKEN>`
+- `X-Pulso-Signature: sha256=<hmac>` (Preparado/Opcional para v1)
 
-### Headers Opcionais (Preparados)
-- `X-Pulso-Signature`: `sha256=<hmac_corpo>` (Requer `PULSO_INGEST_HMAC_SECRET`)
+### Envelope de Payload (Canônico)
+A Lótus deve enviar o payload seguindo esta estrutura:
 
-### Exemplo de Resposta (201 Created)
 ```json
 {
-  "accepted": true,
-  "status": "converted_to_entity",
-  "event_id": "evt_01JXYZ...",
-  "dedupe_key": "task_abc_123",
-  "ingestion_event_ref": "ingest_1746780000",
-  "target_entity_ref": "task_1746780001",
-  "message": "Event received and scheduled for processing"
+  "version": "v1",
+  "event_id": "string (único)",
+  "dedupe_key": "string (para idempotência de entidade)",
+  "event_type": "alert | task | agent_update | decision",
+  "occurred_at": "ISO8601 Timestamp",
+  "source": {
+    "product": "openclaw",
+    "agent": "string",
+    "environment": "production | staging"
+  },
+  "actor": {
+    "type": "agent",
+    "id": "string",
+    "name": "string"
+  },
+  "payload": {
+    "summary": "string",
+    "status": "string (opcional)",
+    "severity": "low | medium | high | critical (para alertas)",
+    "raw_input": "string (opcional)"
+  }
 }
 ```
 
