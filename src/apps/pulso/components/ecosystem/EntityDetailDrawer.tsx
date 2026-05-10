@@ -13,6 +13,7 @@ import { tasksService } from '../../services/tasksService';
 import { decisionsService } from '../../services/decisionsService';
 import { inboxService } from '../../services/inboxService';
 import { sourcesService } from '../../services/sourcesService';
+import { eventsService } from '../../services/eventsService';
 import { InboxTypeBadge } from '../inbox/InboxBadges';
 import { PriorityBadge } from '../BaseComponents';
 import { getStatusLabel } from '../../utils/statusHelpers';
@@ -36,6 +37,7 @@ export const EntityDetailDrawer = ({
     decisions: [],
     inbox: [],
     sources: [],
+    events: [],
     area: null
   });
   const [loading, setLoading] = React.useState(false);
@@ -53,24 +55,26 @@ export const EntityDetailDrawer = ({
 
         if (entityType === 'area') {
           entityData = await areasService.getById(entityId);
-          const [projs, tasks, decs, inb, srcs] = await Promise.all([
+          const [projs, tasks, decs, inb, srcs, evts] = await Promise.all([
             projectsService.getByArea(entityId),
             tasksService.getByArea(entityId),
             decisionsService.getByArea(entityId),
             inboxService.getByArea(entityId),
-            sourcesService.getByArea(entityId)
+            sourcesService.getByArea(entityId),
+            eventsService.getByArea(entityId, 10)
           ]);
-          rels = { projects: projs, tasks, decisions: decs, inbox: inb, sources: srcs };
+          rels = { projects: projs, tasks, decisions: decs, inbox: inb, sources: srcs, events: evts };
         } else if (entityType === 'project') {
           entityData = await projectsService.getById(entityId);
-          const [tasks, decs, inb, srcs, area] = await Promise.all([
+          const [tasks, decs, inb, srcs, evts, area] = await Promise.all([
             tasksService.getByProject(entityId),
             decisionsService.getByProject(entityId),
             inboxService.getByProject(entityId),
             sourcesService.getByProject(entityId),
+            eventsService.getByProject(entityId, 10),
             entityData?.areaRef ? areasService.getById(entityData.areaRef) : Promise.resolve(null)
           ]);
-          rels = { tasks, decisions: decs, inbox: inb, sources: srcs, area };
+          rels = { tasks, decisions: decs, inbox: inb, sources: srcs, events: evts, area };
         } else if (entityType === 'source') {
           entityData = (await sourcesService.getAll()).find(s => s.id === entityId);
           // Simplified source relations for now
@@ -222,6 +226,26 @@ export const EntityDetailDrawer = ({
                     </div>
                   </RelationGroup>
                 )}
+
+                  {/* Linked Events (Sinais do Barramento) */}
+                  {relations.events?.length > 0 && (
+                    <RelationGroup title="Sinais do Barramento" count={relations.events.length} icon={Activity}>
+                      <div className="space-y-2">
+                        {relations.events.map((evt: any) => (
+                          <div key={evt.id} className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold text-white/70">{evt.payloadSummary}</span>
+                              <span className="text-[8px] font-black text-blue-400/40 uppercase">{evt.origin}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-1 h-1 rounded-full bg-blue-400/50" />
+                              <span className="text-[9px] text-white/30">{new Date(evt.createdAt).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </RelationGroup>
+                  )}
 
                 {/* Related Inbox Items */}
                 {relations.inbox?.length > 0 && (

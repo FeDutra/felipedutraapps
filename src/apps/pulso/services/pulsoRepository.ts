@@ -81,6 +81,8 @@ export interface IPulsoRepository {
   updateEvent(id: string, data: Partial<PulsoEvent>): Promise<PulsoEvent>;
   
   getIngestionEvents(): Promise<IngestionEvent[]>;
+  getEventsByArea(areaId: string, limitCount?: number): Promise<PulsoEvent[]>;
+  getEventsByProject(projectId: string, limitCount?: number): Promise<PulsoEvent[]>;
   saveIngestionEvent(event: Partial<IngestionEvent>): Promise<IngestionEvent>;
   updateIngestionEvent(id: string, data: Partial<IngestionEvent>): Promise<IngestionEvent>;
   findIngestionEventByKeys(eventId?: string, dedupeKey?: string): Promise<IngestionEvent | undefined>;

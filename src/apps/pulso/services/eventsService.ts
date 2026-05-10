@@ -61,5 +61,15 @@ export const eventsService = {
       processedByAgents,
       outboxStatus: 'processed' 
     });
-  }
+  },
+  
+  /**
+   * Lists events by Area
+   */
+  getByArea: (areaId: string, limit = 20) => pulsoRepository.getEventsByArea(areaId, limit),
+
+  /**
+   * Lists events by Project
+   */
+  getByProject: (projectId: string, limit = 20) => pulsoRepository.getEventsByProject(projectId, limit)
 };

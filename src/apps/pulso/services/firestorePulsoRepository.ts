@@ -349,6 +349,28 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return this.toData<PulsoEvent>(snap);
   }
 
+  async getEventsByArea(areaId: string, limitCount = 20) {
+    const q = query(
+      collection(db!, firestorePaths.events()), 
+      where("areaRef", "==", areaId),
+      orderBy("createdAt", "desc"), 
+      limit(limitCount)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => this.toData<PulsoEvent>(d));
+  }
+
+  async getEventsByProject(projectId: string, limitCount = 20) {
+    const q = query(
+      collection(db!, firestorePaths.events()), 
+      where("projectRef", "==", projectId),
+      orderBy("createdAt", "desc"), 
+      limit(limitCount)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => this.toData<PulsoEvent>(d));
+  }
+
   async getIngestionEvents() {
     const q = query(collection(db!, firestorePaths.ingestionEvents()), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);

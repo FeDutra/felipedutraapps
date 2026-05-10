@@ -204,6 +204,16 @@ export class MockPulsoRepository implements IPulsoRepository {
     return data as any; 
   }
 
+  async getEventsByArea(areaId: string, limitCount = 20) {
+    const all = await this.getEvents(100);
+    return all.filter(e => e.areaRef === areaId).slice(0, limitCount);
+  }
+
+  async getEventsByProject(projectId: string, limitCount = 20) {
+    const all = await this.getEvents(100);
+    return all.filter(e => e.projectRef === projectId).slice(0, limitCount);
+  }
+
   async getIngestionEvents(): Promise<IngestionEvent[]> { 
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('pulso_mock_ingestion');

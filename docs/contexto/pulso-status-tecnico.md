@@ -159,8 +159,16 @@ Implementar a ancoragem estrutural de eventos OpenClaw a entidades do ecossistem
 - Validar aparição de eventos reais em `/pulso/eventos`.
 
 ### Stage 9: Fontes Externas
-- Conectores com Google Sheets, Drive, Notion e Obsidian.
-- Monitoramento de Sync Jobs reais no Health Center.
+- [x] Cloud Function `pulsoIngest` extrai e normaliza `areaRef`/`projectRef`.
+- [x] UI de Eventos exibe chips de contexto e drawer de metadados.
+- [x] Contrato v1 atualizado com suporte a binding estrutural.
 
----
-**Registro de Checkpoint de Produção v0.6** — Stage 7.4 concluído, binding estrutural implementado. (2026-05-10)
+### [Stage 7.5] Correção de Sincronia e Visibilidade (Audit-Fix)
+- [x] Auditoria ponta a ponta: Identificada divergência de ambiente (Modo Mock no Frontend).
+- [x] Forçado `NEXT_PUBLIC_PULSO_DATA_MODE=firestore` via `.env.production`.
+- [x] Expansão do repositório para suportar consultas por Área e Projeto.
+- [x] Implementação de "Sinais do Barramento" no `EntityDetailDrawer` do Ecossistema.
+
+> **Checkpoint Produção (PULSO v0.7)**
+> Data: 2026-05-10
+> Status: Sincronizado e Visível. Eventos OpenClaw agora aparecem no Ecossistema.
