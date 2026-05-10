@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, Terminal, Zap, Shield, AlertTriangle,
   CheckCircle2, X, Bot, Cpu, Bell, ClipboardList,
-  ChevronRight, Package
+  ChevronRight, Package, Layout
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -294,6 +294,8 @@ function EventRow({ event, onClick }: { event: any; onClick: () => void }) {
               label={event.outboxStatus || 'received'}
               style={STATUS_CHIP[event.outboxStatus || 'pending']}
             />
+            {event.areaRef && <Chip label={event.areaRef.replace('area_', '')} style="border-blue-500/20 text-blue-400 bg-blue-500/5" />}
+            {event.projectRef && <Chip label={event.projectRef.replace('proj_', '')} style="border-violet-500/20 text-violet-400 bg-violet-500/5" />}
           </div>
 
           {/* Title */}
@@ -418,15 +420,28 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
               </div>
             )}
 
+            {/* Context & Metadata */}
+            <div className="mb-10">
+              <h3 className="text-[9px] font-black uppercase tracking-widest text-white/25 mb-3 flex items-center gap-2">
+                <Layout size={10} /> Contexto Estrutural
+              </h3>
+              <div className="space-y-0 border border-white/5 rounded-2xl overflow-hidden">
+                <MetaRow label="Área (areaRef)"     value={event.areaRef || '--'} />
+                <MetaRow label="Projeto (projectRef)" value={event.projectRef || '--'} />
+                <MetaRow label="entityType"          value={event.entityType || '--'} />
+                <MetaRow label="actorType"           value={event.actorType || '--'} />
+                <MetaRow label="actorRef"            value={event.actorRef || '--'} />
+                <MetaRow label="origin"              value={event.origin || '--'} />
+                <MetaRow label="createdAt"           value={event.createdAt ? new Date(event.createdAt).toLocaleString() : '--'} />
+              </div>
+            </div>
+
             {/* System metadata */}
             <div className="mb-10">
               <h3 className="text-[9px] font-black uppercase tracking-widest text-white/25 mb-3">Sistema</h3>
               <div className="space-y-0 border border-white/5 rounded-2xl overflow-hidden">
                 <MetaRow label="pulso_event_id" value={event.id} />
                 <MetaRow label="entityRef"      value={event.entityRef || '--'} />
-                <MetaRow label="entityType"     value={event.entityType || '--'} />
-                <MetaRow label="actorType"      value={event.actorType || '--'} />
-                <MetaRow label="createdAt"      value={event.createdAt ? new Date(event.createdAt).toLocaleString() : '--'} />
                 <MetaRow label="processedBy"    value={event.processedByAgents?.join(', ') || 'nenhum'} />
               </div>
             </div>

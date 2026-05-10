@@ -73,6 +73,8 @@ A Lótus deve enviar o payload seguindo esta estrutura:
   "dedupe_key": "string (para idempotência de entidade)",
   "event_type": "alert | task | agent_update | decision",
   "occurred_at": "ISO8601 Timestamp",
+  "area_ref": "string (opcional - ex: area_despertar)",
+  "project_ref": "string (opcional - ex: proj_central_despertar)",
   "source": {
     "product": "openclaw",
     "agent": "string",
@@ -91,6 +93,9 @@ A Lótus deve enviar o payload seguindo esta estrutura:
   }
 }
 ```
+
+### 5. Normalização de Entidades
+O PULSO normaliza as referências para `areaRef` e `projectRef` internamente. Por compatibilidade, o endpoint aceita os campos tanto em snake_case quanto camelCase, e em diferentes níveis do JSON (raiz, `context` ou `payload`), priorizando a raiz do envelope.
 
 ### Códigos de Erro
 - `401 Unauthorized`: Token ausente ou inválido.

@@ -138,6 +138,16 @@ O PULSO recebe mudança de estado, não atividade.
 #### Próxima Fase
 Teste manual controlado de 48h (máximo 5 emissões/dia) para validar a utilidade real dos sinais antes de novas automações.
 
+### Stage 7.4: Binding estrutural Área/Projeto v0.1 ✅ CONCLUÍDO
+
+#### Objetivo
+Implementar a ancoragem estrutural de eventos OpenClaw a entidades do ecossistema (Área e Projeto).
+
+- **Endpoint v1**: Atualizado para extrair `area_ref` e `project_ref`.
+- **Normalização**: Persistência interna como `areaRef` e `projectRef`.
+- **Compatibilidade**: Suporte a snake_case, camelCase e fallbacks (raiz, context, payload).
+- **UI**: Exibição de contexto de Área/Projeto no Barramento de Eventos.
+
 ---
 
 ## 🛤️ Roadmap
@@ -153,4 +163,4 @@ Teste manual controlado de 48h (máximo 5 emissões/dia) para validar a utilidad
 - Monitoramento de Sync Jobs reais no Health Center.
 
 ---
-**Registro de Checkpoint de Produção v0.5** — Stage 7.2 concluído, política de emissão formalizada. (2026-05-10)
+**Registro de Checkpoint de Produção v0.6** — Stage 7.4 concluído, binding estrutural implementado. (2026-05-10)

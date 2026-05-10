@@ -29,9 +29,20 @@ export const pulsoIngest = onRequest(
       const p  = event.payload || {};
       const eventTitle = p.title || p.summary || p.message || p.topic || event.event_type || "Ingestão externa";
 
+      // ── Normalize Area and Project Refs ────────────────────────────────────
+      const areaRef = event.areaRef ?? event.area_ref ?? 
+                     event.context?.areaRef ?? event.context?.area_ref ?? 
+                     p.areaRef ?? p.area_ref ?? null;
+      
+      const projectRef = event.projectRef ?? event.project_ref ?? 
+                        event.context?.projectRef ?? event.context?.project_ref ?? 
+                        p.projectRef ?? p.project_ref ?? null;
+
       // ── 1. Save raw ingestion event ────────────────────────────────────────
       await ref.set({
         ...event,
+        areaRef,
+        projectRef,
         ingestionStatus: "received",
         createdAt:       ts,
         updatedAt:       ts,
@@ -43,6 +54,8 @@ export const pulsoIngest = onRequest(
         eventType:       "ingestion_received",
         entityType:      "ingestion",
         entityRef:       event.event_id,
+        areaRef,
+        projectRef,
         actorType:       event.actor?.type || "agent",
         actorRef:        event.actor?.id   || "openclaw",
         origin:          "openclaw",
@@ -72,6 +85,8 @@ export const pulsoIngest = onRequest(
           status:      p.status   || "open",
           priority:    p.severity === "critical" ? "critical" : p.severity === "high" ? "high" : "medium",
           tags:        ["openclaw", ...(event.source?.agent ? [event.source.agent] : [])],
+          areaRef,
+          projectRef,
           agentRef:    event.actor?.id || "openclaw",
           notes:       `Recebido via OpenClaw. event_id: ${event.event_id}. dedupe_key: ${event.dedupe_key || "--"}`,
           createdAt:   ts,
