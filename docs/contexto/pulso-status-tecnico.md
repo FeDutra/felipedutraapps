@@ -87,14 +87,13 @@ Criar a primeira porta de entrada segura e programática para que a Lótus injet
 
 ### Entregas Técnicas
 - **Correção Crítica**: Endpoint migrado de Next.js API Route para **Firebase Cloud Function** (`pulsoIngest`) para garantir funcionamento estável no Hosting.
-- **Hosting Rewrite**: Mapeamento de `/api/pulso/ingest` -> `pulsoIngest` (v2).
-- **Segurança**: Autenticação via Bearer Token validada no server-side.
-- **Deduplicação**: Verificação idempotente via `event_id` e `dedupe_key` no Firestore via Admin SDK.
-- **Roteamento Automático**: 
-    - `agent_update` -> Atualiza agentes e gera logs técnicos.
-    - `alert` -> Cria alertas reais no Health Center.
-    - `task` -> Cria tarefas ou itens de Inbox.
-- **Contrato v1**: Especificado em `pulso-openclaw-contract.md`.
+- [x] **Stage 7: Endpoint Seguro de Ingestão (OpenClaw/Lótus)**
+- [x] Migração de API Route (Next.js) para Firebase Cloud Function v2 (`pulsoIngest`).
+- [x] Proteção via Bearer Token usando Firebase Secret Manager (`PULSO_INGEST_TOKEN`).
+- [x] Deduplicação funcional por `event_id` e `dedupe_key`.
+- [x] Roteamento automático de eventos OpenClaw para Firestore (`ingestion_events` e `pulso_events`).
+- [x] Estabilização da UI com safeguards para dados legados/malformados.
+- [x] Validação em produção via `curl` e logs de auditoria.
 
 ---
 

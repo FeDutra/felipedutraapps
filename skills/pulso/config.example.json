@@ -1,0 +1,38 @@
+{
+  "_comment": "Copie para config.json. NUNCA versione config.json se contiver segredos.",
+  "pulso": {
+    "endpoint": "https://felipedutraapps.web.app/api/pulso/ingest",
+    "version": "v1",
+    "timeout_seconds": 15,
+    "user_agent": "openclaw-pulso-skill/1.0"
+  },
+  "auth": {
+    "method": "bearer_token",
+    "token_env_var": "PULSO_INGEST_TOKEN",
+    "token_file": "/root/.openclaw/secrets/pulso.env",
+    "_note": "O token NUNCA deve ser escrito neste arquivo. Use variável de ambiente ou arquivo seguro."
+  },
+  "source": {
+    "product": "openclaw",
+    "workspace": "lotus",
+    "agent": "main",
+    "host": "srv1499601",
+    "environment": "production"
+  },
+  "actor": {
+    "type": "agent",
+    "id": "lotus",
+    "name": "Lótus"
+  },
+  "retry": {
+    "max_attempts": 5,
+    "backoff_seconds": [0, 30, 120, 600, 1800],
+    "retryable_http_codes": [429, 500, 502, 503, 504],
+    "no_retry_http_codes": [400, 401, 403, 404, 422]
+  },
+  "state": {
+    "queue_file": "skills/pulso/state/queue.ndjson",
+    "sent_file": "skills/pulso/state/sent.ndjson",
+    "failed_file": "skills/pulso/state/failed.ndjson"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "_doc": "Template de alert — preencha os campos marcados com <valor>.",
+  "version": "v1",
+  "event_id": "<gerado automaticamente por pulso_emit.sh>",
+  "dedupe_key": "alert:<title-slug>:<YYYY-MM-DDTHH>",
+  "event_type": "alert",
+  "occurred_at": "<ISO8601: 2026-05-10T03:00:00Z>",
+  "source": {
+    "product": "openclaw",
+    "workspace": "lotus",
+    "agent": "main",
+    "host": "<hostname do servidor>",
+    "environment": "production"
+  },
+  "actor": {
+    "type": "agent",
+    "id": "lotus",
+    "name": "Lótus"
+  },
+  "context": {
+    "channel": "<whatsapp | api | system>",
+    "session_key": "<opcional>"
+  },
+  "payload": {
+    "severity": "<critical | high | medium | low | info>",
+    "title": "<título curto do alerta>",
+    "message": "<descrição detalhada do problema>",
+    "status": "<open | acknowledged | resolved>",
+    "area_ref": "<opcional: area_infra, area_financas, etc>",
+    "routine_ref": "<opcional: ID da rotina que falhou>"
+  }
+}

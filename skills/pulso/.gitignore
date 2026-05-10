@@ -1,0 +1,7 @@
+# Skill PULSO — arquivos de estado e configuração local (nunca versionar)
+config.json
+state/queue.ndjson
+state/sent.ndjson
+state/failed.ndjson
+*.env
+secrets/

@@ -1,0 +1,34 @@
+{
+  "_doc": "Template de task — preencha os campos marcados com <valor>.",
+  "version": "v1",
+  "event_id": "<gerado automaticamente por pulso_emit.sh>",
+  "dedupe_key": "task:<title-slug>:<session_key ou YYYY-MM-DD>",
+  "event_type": "task",
+  "occurred_at": "<ISO8601: 2026-05-10T03:00:00Z>",
+  "source": {
+    "product": "openclaw",
+    "workspace": "lotus",
+    "agent": "main",
+    "host": "<hostname do servidor>",
+    "environment": "production"
+  },
+  "actor": {
+    "type": "agent",
+    "id": "lotus",
+    "name": "Lótus"
+  },
+  "context": {
+    "channel": "<whatsapp | api | telegram>",
+    "session_key": "<session-key-atual ou vazio>",
+    "message_id": "<ID da mensagem original, se disponível>"
+  },
+  "payload": {
+    "kind": "request",
+    "title": "<título curto da tarefa>",
+    "body": "<descrição detalhada da tarefa>",
+    "status": "<received | in_progress | done>",
+    "priority": "<critical | high | medium | low>",
+    "area_ref": "<opcional: area_infra, area_financas, etc>",
+    "project_ref": "<opcional: proj_xyz>"
+  }
+}

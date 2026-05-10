@@ -1,0 +1,30 @@
+{
+  "_doc": "Template de agent_update — preencha os campos marcados com <valor>.",
+  "version": "v1",
+  "event_id": "<gerado automaticamente por pulso_emit.sh>",
+  "dedupe_key": "agent_update:<topic>:<YYYY-MM-DD>",
+  "event_type": "agent_update",
+  "occurred_at": "<ISO8601: 2026-05-10T03:00:00Z>",
+  "source": {
+    "product": "openclaw",
+    "workspace": "lotus",
+    "agent": "main",
+    "host": "<hostname do servidor>",
+    "environment": "production"
+  },
+  "actor": {
+    "type": "agent",
+    "id": "lotus",
+    "name": "Lótus"
+  },
+  "context": {
+    "channel": "<whatsapp | api | telegram>",
+    "session_key": "<session-key-atual ou vazio>",
+    "message_id": "<opcional>"
+  },
+  "payload": {
+    "status": "<working | idle | error | completed>",
+    "summary": "<descrição do que a Lótus está fazendo ou fez>",
+    "topic": "<slug do assunto: ex: pulso-skill-v1, task-review, boot>"
+  }
+}
