@@ -7,6 +7,7 @@ import {
 import { pulsoRepository } from "./pulsoRepositoryInstance";
 import { eventsService } from "./eventsService";
 import { inboxService } from "./inboxService";
+import { healthService } from "./healthService";
 
 /**
  * @file ingestionService.ts
@@ -21,7 +22,7 @@ export const ingestionService = {
     event_id?: string;
     source_run_id?: string;
     dedupe_key?: string;
-    type: InboxType;
+    type: InboxType | string;
     rawInput: any;
     summary: string;
     originLabel: string;
@@ -33,12 +34,8 @@ export const ingestionService = {
     should_create_inbox_item?: boolean;
     target_entity_type?: string;
   }): Promise<IngestionEvent> => {
-    // 1. Deduplication check
-    const existing = await pulsoRepository.getIngestionEvents();
-    const isDuplicate = existing.find(e => 
-      (params.event_id && e.event_id === params.event_id) || 
-      (params.dedupe_key && e.dedupe_key === params.dedupe_key)
-    );
+    // 1. Optimized Deduplication check
+    const isDuplicate = await pulsoRepository.findIngestionEventByKeys(params.event_id, params.dedupe_key);
 
     if (isDuplicate) {
       console.log(`Ingestion: Duplicate detected for ${params.event_id || params.dedupe_key}`);
@@ -56,6 +53,7 @@ export const ingestionService = {
     // 2. Create Ingestion Event
     const ingestion: Partial<IngestionEvent> = {
       ...params,
+      type: params.type as InboxType,
       name: params.summary,
       ingestionStatus: 'received',
       createdAt: new Date(),
@@ -76,12 +74,88 @@ export const ingestionService = {
       payloadSummary: `Ingestion received from ${params.originLabel}: ${saved.id}`
     });
 
-    // 4. Automatic Processing if requested
-    if (params.should_create_inbox_item) {
-      await ingestionService.convertToInbox(saved.id);
+    // 4. Automatic Processing based on type and params
+    try {
+      if (params.should_create_inbox_item) {
+        await ingestionService.convertToInbox(saved.id);
+      } else {
+        // New Stage 7 routing logic
+        await ingestionService.route(saved.id);
+      }
+    } catch (err) {
+      console.error(`Ingestion routing failed for ${saved.id}:`, err);
     }
 
     return saved;
+  },
+
+  /**
+   * Routes an ingestion event to its proper entity based on type
+   */
+  route: async (id: string): Promise<any> => {
+    const events = await pulsoRepository.getIngestionEvents();
+    const event = events.find(e => e.id === id);
+    if (!event) throw new Error('Ingestion event not found');
+
+    const type = event.type;
+    let targetRef = '';
+
+    try {
+      switch (type) {
+        case 'alert': {
+          const alert = await healthService.createAlert({
+            name: event.name,
+            description: event.summary || event.payload?.raw_input,
+            severity: event.payload?.severity || 'medium',
+            areaRef: event.areaRef,
+            projectRef: event.projectRef,
+            agentRef: event.originAgentRef
+          });
+          targetRef = alert.id;
+          break;
+        }
+        case 'agent_update': {
+          if (event.originAgentRef) {
+            await pulsoRepository.updateAgent(event.originAgentRef, {
+              lastActivityAt: new Date(),
+              status: event.payload?.status || 'active'
+            });
+            await healthService.createLog({
+              type: 'agent_activity',
+              system: 'openclaw',
+              severity: 'info',
+              event: 'agent_update',
+              agentRef: event.originAgentRef,
+              payloadSummary: event.summary || 'Atividade do agente registrada'
+            });
+          }
+          break;
+        }
+        case 'task': {
+          // If high confidence, create task directly, otherwise inbox
+          if (event.confidence === 'high') {
+            const task = await inboxService.convertTo(event.id, 'task');
+            targetRef = task.entity.id;
+          } else {
+            await ingestionService.convertToInbox(id);
+          }
+          break;
+        }
+        default:
+          // Fallback to inbox for unknown types
+          await ingestionService.convertToInbox(id);
+      }
+
+      await pulsoRepository.updateIngestionEvent(id, { 
+        ingestionStatus: 'converted_to_entity',
+        target_entity_ref: targetRef 
+      });
+    } catch (error) {
+      await pulsoRepository.updateIngestionEvent(id, { 
+        ingestionStatus: 'failed',
+        errorMessage: (error as any).message 
+      });
+    }
   },
 
   /**

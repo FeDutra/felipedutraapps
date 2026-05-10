@@ -10,7 +10,9 @@ import {
   limit, 
   writeBatch,
   Timestamp,
-  serverTimestamp
+  serverTimestamp,
+  where,
+  or
 } from "firebase/firestore";
 import { db } from "@/shared/lib/firebase/client";
 import { IPulsoRepository } from "./pulsoRepository";
@@ -366,11 +368,37 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return { ...data, createdAt: new Date(), updatedAt: new Date() } as any;
   }
 
-  async updateIngestionEvent(id: string, data: Partial<IngestionEvent>) {
+  updateIngestionEvent(id: string, data: Partial<IngestionEvent>) {
     const ref = doc(db!, firestorePaths.ingestionEvent(id));
-    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
-    const snap = await getDoc(ref);
-    return this.toData<IngestionEvent>(snap);
+    return updateDoc(ref, { ...data, updatedAt: serverTimestamp() }).then(() => this.toData<IngestionEvent>({ id, data }));
+  }
+
+  async findIngestionEventByKeys(eventId?: string, dedupeKey?: string): Promise<IngestionEvent | undefined> {
+    if (!eventId && !dedupeKey) return undefined;
+    
+    let q;
+    if (eventId && dedupeKey) {
+      q = query(
+        collection(db!, firestorePaths.ingestionEvents()), 
+        or(where("event_id", "==", eventId), where("dedupe_key", "==", dedupeKey)),
+        limit(1)
+      );
+    } else if (eventId) {
+      q = query(
+        collection(db!, firestorePaths.ingestionEvents()), 
+        where("event_id", "==", eventId),
+        limit(1)
+      );
+    } else {
+      q = query(
+        collection(db!, firestorePaths.ingestionEvents()), 
+        where("dedupe_key", "==", dedupeKey!),
+        limit(1)
+      );
+    }
+    
+    const snap = await getDocs(q);
+    return snap.empty ? undefined : this.toData<IngestionEvent>(snap.docs[0]);
   }
 
   async getSeedStatus(version: string) {

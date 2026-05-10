@@ -80,13 +80,28 @@ Criar a infraestrutura para que o PULSO receba, registre e exponha eventos de fo
 
 ## 🛤️ Roadmap Futuro
 
-### Stage 7: Conectividade Real
-- Endpoint seguro de ingestão para OpenClaw/Lótus (API Rest).
-- Implementação de API Key e Auth de Agentes.
+## 🏗️ Stage 7: Conectividade Real OpenClaw/Lótus (CONCLUÍDO)
+
+### Objetivo
+Criar a primeira porta de entrada segura e programática para que a Lótus injete inteligência no PULSO.
+
+### Entregas Técnicas
+- **Endpoint API**: `POST /api/pulso/ingest` (Next.js Edge/Server-side).
+- **Segurança**: Autenticação via Bearer Token e preparação para assinaturas HMAC.
+- **Deduplicação**: Verificação idempotente via `event_id` no Firestore.
+- **Roteamento Automático**: 
+    - `agent_update` -> Atualiza agentes e gera logs técnicos.
+    - `alert` -> Cria alertas reais no Health Center.
+    - `task` -> Cria tarefas (confiança alta) ou itens de Inbox.
+- **Contrato v1**: Especificado em `pulso-openclaw-contract.md`.
+
+---
+
+## 🛤️ Roadmap Futuro
 
 ### Stage 8: Fontes Externas (Real)
 - Conectores com Google Sheets, Drive, Notion e Obsidian.
 - Monitoramento de Sync Jobs reais no Health Center.
 
 ---
-**Registro de Checkpoint de Produção v0.2** (Incluindo Saúde, Eventos e Protocolo OpenClaw)
+**Registro de Checkpoint de Produção v0.3** (Conectividade OpenClaw + Ingestão Segura)

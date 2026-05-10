@@ -83,6 +83,7 @@ export interface IPulsoRepository {
   getIngestionEvents(): Promise<IngestionEvent[]>;
   saveIngestionEvent(event: Partial<IngestionEvent>): Promise<IngestionEvent>;
   updateIngestionEvent(id: string, data: Partial<IngestionEvent>): Promise<IngestionEvent>;
+  findIngestionEventByKeys(eventId?: string, dedupeKey?: string): Promise<IngestionEvent | undefined>;
 
   // Seed Status
   getSeedStatus(version: string): Promise<boolean>;

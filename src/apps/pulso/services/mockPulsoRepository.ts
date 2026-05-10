@@ -233,4 +233,12 @@ export class MockPulsoRepository implements IPulsoRepository {
     }
     return data as any; 
   }
+  
+  async findIngestionEventByKeys(eventId?: string, dedupeKey?: string): Promise<IngestionEvent | undefined> {
+    const all = await this.getIngestionEvents();
+    return all.find(e => 
+      (eventId && e.event_id === eventId) || 
+      (dedupeKey && e.dedupe_key === dedupeKey)
+    );
+  }
 }

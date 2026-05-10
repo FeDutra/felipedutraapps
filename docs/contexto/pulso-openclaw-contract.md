@@ -49,9 +49,44 @@ Toda entrada vinda do OpenClaw deve seguir a estrutura de **duas camadas**:
 - **`event_id`**: UUID único gerado pelo OpenClaw. Se o PULSO receber o mesmo ID, ele ignorará a criação da entidade.
 - **`dedupe_key`**: Chave opcional para evitar duplicidade conceitual (ex: a mesma tarefa enviada duas vezes por erro de rede).
 
-## 5. Próximos Passos (Stage 7)
-- [ ] Implementação de Endpoint API Rest com API Key.
-- [ ] Mecanismo de Long Polling ou Webhook para leitura do Outbox pelo OpenClaw.
+## 5. Endpoint de Ingestão v1 (Stage 7)
+
+**URL**: `https://<dominio>/api/pulso/ingest`  
+**Método**: `POST`  
+**Autenticação**: `Authorization: Bearer <PULSO_INGEST_TOKEN>`
+
+### Headers Obrigatórios
+- `Content-Type`: `application/json`
+- `Authorization`: `Bearer <token>`
+- `User-Agent`: `openclaw-pulso-skill/1.x`
+
+### Headers Opcionais (Preparados)
+- `X-Pulso-Signature`: `sha256=<hmac_corpo>` (Requer `PULSO_INGEST_HMAC_SECRET`)
+
+### Exemplo de Resposta (201 Created)
+```json
+{
+  "accepted": true,
+  "status": "converted_to_entity",
+  "event_id": "evt_01JXYZ...",
+  "dedupe_key": "task_abc_123",
+  "ingestion_event_ref": "ingest_1746780000",
+  "target_entity_ref": "task_1746780001",
+  "message": "Event received and scheduled for processing"
+}
+```
+
+### Códigos de Erro
+- `401 Unauthorized`: Token ausente ou inválido.
+- `403 Forbidden`: Falha na assinatura HMAC (se habilitada).
+- `400 Bad Request`: Payload malformado ou versão incompatível.
+- `422 Unprocessable Entity`: Falha na validação de campos obrigatórios.
+- `200 OK` (com `status: duplicate`): Evento já processado anteriormente.
+
+## 6. Próximos Passos
+- [x] Endpoint seguro de ingestão v1.
+- [ ] Implementação de Webhook para leitura do Outbox pelo OpenClaw.
+- [ ] Interface de auditoria de ingestão no Health Center.
 
 ---
 **Frase-Mãe da Arquitetura:**

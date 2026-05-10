@@ -50,7 +50,9 @@ export type InboxType =
   | 'pending_request'
   | 'ingestion'
   | 'system_update'
-  | 'context_update';
+  | 'context_update'
+  | 'agent_update'
+  | 'health_signal';
 
 export type EventType = 
   | 'inbox_item_created'
@@ -295,6 +297,8 @@ export interface IngestionEvent extends BaseEntity {
     raw_input?: string;
     context?: string;
     suggested_action?: string;
+    severity?: Severity;
+    status?: Status;
     external_refs?: any;
     metadata?: any;
   };

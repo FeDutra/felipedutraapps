@@ -38,4 +38,24 @@ export const healthService = {
     return a;
   },
   ignoreAlert: (id: string) => pulsoRepository.updateAlert(id, { status: 'ignored' }),
+  createAlert: async (data: Partial<Alert>) => {
+    const a = await pulsoRepository.saveAlert({
+      ...data,
+      status: data.status || 'open',
+      priority: data.priority || 'medium',
+      severity: data.severity || 'medium'
+    });
+    await eventsService.createEvent({
+      eventType: 'health_signal_received',
+      entityType: 'alert',
+      entityRef: a.id,
+      areaRef: a.areaRef,
+      projectRef: a.projectRef,
+      actorType: 'system',
+      origin: 'openclaw',
+      payloadSummary: `Alerta recebido via ingestão: ${a.name}`
+    });
+    return a;
+  },
+  createLog: (data: any) => pulsoRepository.saveLog(data),
 };
