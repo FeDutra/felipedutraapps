@@ -15,14 +15,35 @@ export const pulsoIngest = onRequest({ region: "us-central1", secrets: ["PULSO_I
     const ref = db.collection(`${BASE}/pulso_ingestion_events`).doc(event.event_id);
     const doc = await ref.get();
     if (doc.exists) { res.status(200).json({ status: "duplicate" }); return; }
-    await ref.set({ ...event, received_at: admin.firestore.FieldValue.serverTimestamp() });
-    await db.collection(`${BASE}/pulso_events`).add({
-      type: "ingestion_received",
-      entityType: "ingestion",
-      entityId: event.event_id,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      data: { eventType: event.event_type, summary: event.payload?.summary }
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    
+    // 1. Save Ingestion Event (Backdoor for OpenClaw)
+    await ref.set({ 
+      ...event, 
+      ingestionStatus: "received",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      originLabel: "OpenClaw"
     });
+
+    // 2. Create Audit Event (Barramento)
+    await db.collection(`${BASE}/pulso_events`).add({
+      eventType: "ingestion_received",
+      entityType: "ingestion",
+      entityRef: event.event_id,
+      actorType: "agent",
+      actorRef: "openclaw",
+      origin: "openclaw",
+      createdAt: timestamp,
+      outboxStatus: "pending",
+      payloadSummary: `Ingestão recebida: ${event.event_type} (${event.event_id})`,
+      payloadSnapshot: event.payload || {}
+    });
+
     res.status(201).json({ status: "success", event_id: event.event_id });
-  } catch (e) { res.status(500).send("Error"); }
+  } catch (e) { 
+    console.error("Ingestion Error:", e);
+    res.status(500).send("Internal Error"); 
+  }
 });

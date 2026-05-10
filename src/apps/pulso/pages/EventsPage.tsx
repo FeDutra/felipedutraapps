@@ -132,11 +132,13 @@ export default function EventsPage() {
                     'bg-blue-500'
                   }`} />
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] font-black text-white/20 uppercase tracking-tighter">{ingest.originLabel}</span>
-                    <span className="text-[8px] text-white/10">{new Date(ingest.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-[9px] font-black text-white/20 uppercase tracking-tighter">{ingest.originLabel || 'OpenClaw'}</span>
+                    <span className="text-[8px] text-white/10">
+                      {ingest.createdAt ? new Date(ingest.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                    </span>
                   </div>
-                  <p className="text-xs text-white/60 font-medium line-clamp-1">{ingest.name}</p>
-                  <p className="text-[9px] text-white/30 font-bold uppercase mt-1 tracking-widest">{ingest.ingestionStatus}</p>
+                  <p className="text-xs text-white/60 font-medium line-clamp-1">{ingest.name || ingest.summary || 'Ingestão externa'}</p>
+                  <p className="text-[9px] text-white/30 font-bold uppercase mt-1 tracking-widest">{ingest.ingestionStatus || 'received'}</p>
                 </div>
               ))}
               {ingestions.length === 0 && (
@@ -187,23 +189,25 @@ function EventRow({ event, onClick }: { event: PulsoEvent, onClick: () => void }
     >
       <div className="flex items-center gap-5">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-          event.eventType.includes('created') ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-          event.eventType.includes('updated') ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+          (event.eventType || '').includes('created') ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+          (event.eventType || '').includes('updated') ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
           'bg-white/5 border-white/10 text-white/40'
         }`}>
           <Activity size={18} />
         </div>
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h4 className="text-[11px] font-black text-white/80 uppercase tracking-widest">{event.eventType.replace(/_/g, ' ')}</h4>
-            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${statusColors[event.outboxStatus]}`}>
-              {event.outboxStatus}
+            <h4 className="text-[11px] font-black text-white/80 uppercase tracking-widest">
+              {(event.eventType || 'unknown_event').replace(/_/g, ' ')}
+            </h4>
+            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${statusColors[event.outboxStatus || 'pending']}`}>
+              {event.outboxStatus || 'pending'}
             </span>
           </div>
           <div className="flex items-center gap-4 text-[9px] font-bold text-white/20 uppercase tracking-widest">
-             <span className="flex items-center gap-1"><Shield size={10} /> {event.actorType}</span>
-             <span className="flex items-center gap-1"><Inbox size={10} /> {event.entityType}</span>
-             <span>{new Date(event.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+             <span className="flex items-center gap-1"><Shield size={10} /> {event.actorType || 'system'}</span>
+             <span className="flex items-center gap-1"><Inbox size={10} /> {event.entityType || 'unknown'}</span>
+             <span>{event.createdAt ? new Date(event.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}</span>
           </div>
         </div>
       </div>
@@ -249,7 +253,7 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Log de Evento</p>
-                  <h2 className="text-xl font-black text-white">{event.eventType}</h2>
+                  <h2 className="text-xl font-black text-white">{event.eventType || 'Evento Desconhecido'}</h2>
                 </div>
               </div>
               <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors">
@@ -263,12 +267,12 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Status Outbox</p>
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${event.outboxStatus === 'processed' ? 'bg-emerald-500' : event.outboxStatus === 'failed' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                  <span className="text-xs font-bold text-white/80 uppercase tracking-widest">{event.outboxStatus}</span>
+                  <span className="text-xs font-bold text-white/80 uppercase tracking-widest">{event.outboxStatus || 'pending'}</span>
                 </div>
               </div>
               <div className="bg-white/2 border border-white/5 p-5 rounded-3xl">
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Entidade</p>
-                <span className="text-xs font-bold text-white/80 uppercase tracking-widest">{event.entityType}</span>
+                <span className="text-xs font-bold text-white/80 uppercase tracking-widest">{event.entityType || 'unknown'}</span>
               </div>
             </div>
 
@@ -283,10 +287,10 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             {/* Metadata Table */}
             <div className="space-y-4 mb-12">
                <MetaRow label="ID do Evento" value={event.id} />
-               <MetaRow label="Ref Entidade" value={event.entityRef} />
-               <MetaRow label="Ator" value={`${event.actorType} (${event.actorRef || 'system'})`} />
-               <MetaRow label="Origem" value={event.origin} />
-               <MetaRow label="Data/Hora" value={new Date(event.createdAt).toLocaleString()} />
+               <MetaRow label="Ref Entidade" value={event.entityRef || '--'} />
+               <MetaRow label="Ator" value={`${event.actorType || 'system'} (${event.actorRef || 'system'})`} />
+               <MetaRow label="Origem" value={event.origin || 'system'} />
+               <MetaRow label="Data/Hora" value={event.createdAt ? new Date(event.createdAt).toLocaleString() : '--'} />
                <MetaRow label="Processado Por" value={event.processedByAgents?.join(', ') || 'Nenhum agente'} />
             </div>
 
