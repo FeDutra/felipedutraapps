@@ -1,6 +1,7 @@
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInAnonymously as firebaseSignInAnonymously,
   signOut, 
   onAuthStateChanged,
   User
@@ -28,6 +29,27 @@ export const authService = {
       return result.user;
     } catch (error) {
       console.error("AuthService: Error during Google Sign-In", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Signs in anonymously for public/MVP access
+   */
+  signInAnonymously: async () => {
+    if (!auth) {
+      console.warn("AuthService: Firebase Auth not configured.");
+      return null;
+    }
+    try {
+      const result = await firebaseSignInAnonymously(auth);
+      return result.user;
+    } catch (error: any) {
+      if (error.code === 'auth/operation-not-allowed') {
+        console.error("AuthService: Anonymous Auth is disabled in Firebase Console. Please enable it in Authentication > Sign-in method.");
+      } else {
+        console.error("AuthService: Error during Anonymous Sign-In", error);
+      }
       throw error;
     }
   },

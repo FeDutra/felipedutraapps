@@ -17,6 +17,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = React.useState(true);
   const [isFirestore, setIsFirestore] = React.useState(false);
   const [hasConfig, setHasConfig] = React.useState(true);
+  const [authMode, setAuthMode] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     // Check if we are in firestore mode
@@ -35,10 +36,21 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    // Subscribe to auth state
     const unsubscribe = authService.onAuthStateChange((u) => {
       setUser(u);
-      setLoading(false);
+      
+      // If anonymous mode is active and there's no user, sign in automatically
+      const currentAuthMode = process.env.NEXT_PUBLIC_PULSO_AUTH_MODE;
+      setAuthMode(currentAuthMode || 'google');
+
+      if (currentAuthMode === 'anonymous' && !u && isFS && !bypass) {
+        authService.signInAnonymously().catch(err => {
+          console.error("Auto anonymous sign-in failed:", err);
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
     });
 
     return () => unsubscribe();
@@ -64,7 +76,16 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }
 
   // If in Firestore mode and no user, show login screen
+  // EXCEPT in anonymous mode where we show the loader while signing in
   if (!user) {
+    if (authMode === 'anonymous') {
+      return (
+        <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center">
+          <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+          <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Iniciando Sessão Segura</p>
+        </div>
+      );
+    }
     return <LoginScreen />;
   }
 

@@ -11,6 +11,7 @@ import { User } from 'firebase/auth';
 export default function PulsoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = React.useState<User | null>(null);
+  const [authMode, setAuthMode] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark');
@@ -18,6 +19,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     // Listen to user state for the header
     const unsubscribe = authService.onAuthStateChange((u) => {
       setUser(u);
+      setAuthMode(process.env.NEXT_PUBLIC_PULSO_AUTH_MODE || 'google');
     });
     return () => unsubscribe();
   }, []);
@@ -76,7 +78,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
         </div>
         
         <div className="flex items-center gap-4">
-          {user && (
+          {user && authMode !== 'anonymous' && (
             <div className="flex items-center gap-3 pr-4 border-r border-white/5">
               <div className="hidden md:block text-right">
                 <p className="text-[10px] font-black text-white/80 leading-none mb-1">{user.displayName}</p>
