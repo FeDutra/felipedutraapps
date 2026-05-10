@@ -122,8 +122,21 @@ Content-Type: application/json
 - Token: carregado de `$PULSO_INGEST_TOKEN` ou `/root/.openclaw/secrets/pulso.env` (600)
 - Estado local: `state/queue.ndjson`, `sent.ndjson`, `failed.ndjson` (fora do Git)
 
-### Próximo Passo
-- **Ativação no ambiente OpenClaw**: copiar `skills/pulso/` para o VPS, configurar o token no servidor, rodar `pulso_health.sh --test-endpoint` e emitir o primeiro evento real da Lótus.
+### Stage 7.2: Política de emissão OpenClaw → PULSO v0.1 ✅ CONCLUÍDO
+
+#### Objetivo
+Formalizar as regras de quando e como os agentes operacionais devem emitir sinais para o PULSO, priorizando a mudança de estado sobre a atividade técnica.
+
+- **Política Criada no OpenClaw**: `/root/.openclaw/workspace/skills/pulso/policy.md`
+- **Política Espelhada no PULSO**: `docs/contexto/pulso-openclaw-emission-policy.md`
+- **Tipos Ativos v0.1**: `task`, `decision`, `alert`, `project_update`.
+- **Tipos em Espera**: `note`, `agent_update` automático, `health_signal` detalhado, `lateralidade`, `resumo operacional`, `leitura de fonte`.
+
+#### Princípio Central
+O PULSO recebe mudança de estado, não atividade.
+
+#### Próxima Fase
+Teste manual controlado de 48h (máximo 5 emissões/dia) para validar a utilidade real dos sinais antes de novas automações.
 
 ---
 
@@ -140,4 +153,4 @@ Content-Type: application/json
 - Monitoramento de Sync Jobs reais no Health Center.
 
 ---
-**Registro de Checkpoint de Produção v0.4** — Stage 7 concluído, endpoint validado, skill v1 pronta. (2026-05-10)
+**Registro de Checkpoint de Produção v0.5** — Stage 7.2 concluído, política de emissão formalizada. (2026-05-10)
