@@ -80,28 +80,64 @@ Criar a infraestrutura para que o PULSO receba, registre e exponha eventos de fo
 
 ## 🛤️ Roadmap Futuro
 
-## 🏗️ Stage 7: Conectividade Real OpenClaw/Lótus (CORRIGIDO)
+## 🏗️ Stage 7: Endpoint Seguro de Ingestão OpenClaw/Lótus ✅ CONCLUÍDO
 
 ### Objetivo
-Criar a primeira porta de entrada segura e programática para que a Lótus injete inteligência no PULSO.
+Criar a primeira porta de entrada segura e programática para que a Lótus (OpenClaw) injete dados estruturados no PULSO.
 
 ### Entregas Técnicas
-- **Correção Crítica**: Endpoint migrado de Next.js API Route para **Firebase Cloud Function** (`pulsoIngest`) para garantir funcionamento estável no Hosting.
-- [x] **Stage 7: Endpoint Seguro de Ingestão (OpenClaw/Lótus)**
-- [x] Migração de API Route (Next.js) para Firebase Cloud Function v2 (`pulsoIngest`).
-- [x] Proteção via Bearer Token usando Firebase Secret Manager (`PULSO_INGEST_TOKEN`).
-- [x] Deduplicação funcional por `event_id` e `dedupe_key`.
-- [x] Roteamento automático de eventos OpenClaw para Firestore (`ingestion_events` e `pulso_events`).
-- [x] Estabilização da UI com safeguards para dados legados/malformados.
-- [x] Validação em produção via `curl` e logs de auditoria.
+- [x] Endpoint migrado de Next.js API Route → **Firebase Cloud Function v2** (`pulsoIngest`).
+- [x] Rewrite no `firebase.json`: `/api/pulso/ingest` → `pulsoIngest`.
+- [x] Autenticação via **Bearer Token** com Firebase Secret Manager (`PULSO_INGEST_TOKEN` v2).
+- [x] Deduplicação idempotente por `event_id` e `dedupe_key` no Firestore (Admin SDK).
+- [x] Roteamento para `pulso_ingestion_events` e `pulso_events` com schema correto.
+- [x] Estabilização da UI `/pulso/eventos` com null-guards para dados legados.
+- [x] Skill PULSO v1 criada em `skills/pulso/` e commitada.
+
+### Endpoint de Produção
+```
+POST https://felipedutraapps.web.app/api/pulso/ingest
+Authorization: Bearer $PULSO_INGEST_TOKEN
+Content-Type: application/json
+```
+
+### Validação em Produção (2026-05-10)
+
+| Teste | Cenário | Esperado | HTTP | Resultado |
+|-------|---------|----------|------|-----------|
+| A | Sem token | 401 | `401` | ✅ |
+| B | Token inválido | 401 | `401` | ✅ |
+| C | `agent_update` válido | 201 | `201 {"status":"success"}` | ✅ |
+| D | Reenvio mesmo `event_id` | duplicate | `200 {"status":"duplicate"}` | ✅ |
+| E | `task` válida | 201 | `201 {"status":"success"}` | ✅ |
+| F | `alert` para Health Center | 201 | `201 {"status":"success"}` | ✅ |
+
+### Skill PULSO v1 — `skills/pulso/`
+- `pulso_emit.sh` — monta e envia eventos v1 com autenticação segura
+- `pulso_queue_add.sh` — fila local NDJSON para envio diferido
+- `pulso_queue_retry.sh` — retry com backoff (0s/30s/2min/10min/30min)
+- `pulso_mark_result.sh` — registra sent/failed por event_id
+- `pulso_health.sh` — dashboard de status + teste de conectividade
+- Templates: `agent_update.json`, `task.json`, `alert.json`
+- Token: carregado de `$PULSO_INGEST_TOKEN` ou `/root/.openclaw/secrets/pulso.env` (600)
+- Estado local: `state/queue.ndjson`, `sent.ndjson`, `failed.ndjson` (fora do Git)
+
+### Próximo Passo
+- **Ativação no ambiente OpenClaw**: copiar `skills/pulso/` para o VPS, configurar o token no servidor, rodar `pulso_health.sh --test-endpoint` e emitir o primeiro evento real da Lótus.
 
 ---
 
-## 🛤️ Roadmap Futuro
+## 🛤️ Roadmap
 
-### Stage 8: Fontes Externas (Real)
+### Stage 8: Ativação Real no OpenClaw
+- Instalar e configurar a skill no servidor OpenClaw (VPS).
+- Emitir primeiro `agent_update` real da Lótus em produção.
+- Configurar cron de `pulso_queue_retry.sh` para resiliência.
+- Validar aparição de eventos reais em `/pulso/eventos`.
+
+### Stage 9: Fontes Externas
 - Conectores com Google Sheets, Drive, Notion e Obsidian.
 - Monitoramento de Sync Jobs reais no Health Center.
 
 ---
-**Registro de Checkpoint de Produção v0.3** (Correção Ingestão via Cloud Functions)
+**Registro de Checkpoint de Produção v0.4** — Stage 7 concluído, endpoint validado, skill v1 pronta. (2026-05-10)
