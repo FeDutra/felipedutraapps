@@ -85,9 +85,11 @@ export default function EventsPage() {
   const [ingestions, setIngestions] = React.useState<IngestionEvent[]>([]);
   const [filter, setFilter] = React.useState<OutboxStatus | 'all' | 'openclaw'>('all');
   const [selectedEvent, setSelectedEvent] = React.useState<PulsoEvent | null>(null);
+  const [error, setError] = React.useState<{ code: string; message: string } | null>(null);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [allEvents, allIngestions] = await Promise.all([
         eventsService.getRecent(50),
@@ -95,8 +97,19 @@ export default function EventsPage() {
       ]);
       setEvents(allEvents);
       setIngestions(allIngestions);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading events:', err);
+      let message = 'Falha ao carregar eventos. Ver console/log técnico.';
+      
+      if (err.code === 'permission-denied') {
+        message = 'Firestore bloqueou a leitura. Verifique autenticação anônima e regras.';
+      } else if (err.code === 'unauthenticated') {
+        message = 'Usuário não autenticado. Tente recarregar a página.';
+      } else if (err.code === 'failed-precondition') {
+        message = 'A query exige índice Firestore (fallback parcial ativo).';
+      }
+
+      setError({ code: err.code || 'unknown', message });
     }
     setLoading(false);
   }, []);
@@ -159,6 +172,23 @@ export default function EventsPage() {
           ))}
         </div>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-8 p-6 bg-red-500/5 border border-red-500/10 rounded-3xl flex items-center gap-4">
+          <AlertTriangle className="text-red-400 shrink-0" size={20} />
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-400/60 mb-1">Erro de Sincronia</p>
+            <p className="text-xs text-white/70 font-medium">{error.message}</p>
+          </div>
+          <button 
+            onClick={() => loadData()}
+            className="ml-auto px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         {/* Events list */}

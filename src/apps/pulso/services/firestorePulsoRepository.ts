@@ -31,6 +31,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   
   private toData<T>(doc: any): T {
     const data = doc.data();
+    if (!data) return { id: doc.id } as T;
     // Convert Firestore Timestamps back to JS Dates for the app
     Object.keys(data).forEach(key => {
       if (data[key] instanceof Timestamp) {
@@ -38,6 +39,38 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       }
     });
     return { ...data, id: doc.id } as T;
+  }
+
+  /**
+   * Runs a query with orderBy fallback for missing indices
+   */
+  private async runResilientQuery<T>(
+    colRef: any,
+    baseConstraints: any[],
+    limitCount: number
+  ): Promise<T[]> {
+    try {
+      const q = query(colRef, ...baseConstraints, orderBy("createdAt", "desc"), limit(limitCount));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => this.toData<T>(d));
+    } catch (error: any) {
+      const isIndexError = error.code === 'failed-precondition' || error.message?.includes('index');
+      
+      if (isIndexError) {
+        console.warn(`Firestore: Query missing index for ${colRef.path}. Falling back to un-ordered query.`);
+        const qSimple = query(colRef, ...baseConstraints, limit(limitCount));
+        const snapSimple = await getDocs(qSimple);
+        const results = snapSimple.docs.map(d => this.toData<T>(d));
+        
+        // Manual sort in memory
+        return results.sort((a: any, b: any) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+          const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+          return dateB - dateA;
+        });
+      }
+      throw error;
+    }
   }
 
   async getAreas() {
@@ -325,9 +358,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   // --- Stage 6: Protocol & Events ---
 
   async getEvents(limitCount = 20) {
-    const q = query(collection(db!, firestorePaths.events()), orderBy("createdAt", "desc"), limit(limitCount));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => this.toData<PulsoEvent>(d));
+    return this.runResilientQuery<PulsoEvent>(
+      collection(db!, firestorePaths.events()),
+      [],
+      limitCount
+    );
   }
 
   async saveEvent(event: Partial<PulsoEvent>) {
@@ -350,31 +385,27 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   }
 
   async getEventsByArea(areaId: string, limitCount = 20) {
-    const q = query(
-      collection(db!, firestorePaths.events()), 
-      where("areaRef", "==", areaId),
-      orderBy("createdAt", "desc"), 
-      limit(limitCount)
+    return this.runResilientQuery<PulsoEvent>(
+      collection(db!, firestorePaths.events()),
+      [where("areaRef", "==", areaId)],
+      limitCount
     );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => this.toData<PulsoEvent>(d));
   }
 
   async getEventsByProject(projectId: string, limitCount = 20) {
-    const q = query(
-      collection(db!, firestorePaths.events()), 
-      where("projectRef", "==", projectId),
-      orderBy("createdAt", "desc"), 
-      limit(limitCount)
+    return this.runResilientQuery<PulsoEvent>(
+      collection(db!, firestorePaths.events()),
+      [where("projectRef", "==", projectId)],
+      limitCount
     );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => this.toData<PulsoEvent>(d));
   }
 
   async getIngestionEvents() {
-    const q = query(collection(db!, firestorePaths.ingestionEvents()), orderBy("createdAt", "desc"));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => this.toData<IngestionEvent>(d));
+    return this.runResilientQuery<IngestionEvent>(
+      collection(db!, firestorePaths.ingestionEvents()),
+      [],
+      50
+    );
   }
 
   async saveIngestionEvent(event: Partial<IngestionEvent>) {
