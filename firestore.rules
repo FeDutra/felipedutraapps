@@ -1,15 +1,25 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regra básica de MVP: Exige autenticação para qualquer leitura ou escrita.
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Regras específicas para o workspace do PULSO (flexível para novos nomes de coleção)
-    match /workspaces/{workspaceId}/{collectionName}/{documentId} {
-      allow read, write: if request.auth != null;
+
+    function isPersonalWorkspace(workspaceId) {
+      return workspaceId == "felipe_dutra";
+    }
+
+    // Explicitly allow access to the personal workspace and all its subcollections
+    // This covers: pulso_events, pulso_ingestion_events, pulso_inbox_items, etc.
+    match /workspaces/{workspaceId}/{document=**} {
+      allow read, write: if isSignedIn() && isPersonalWorkspace(workspaceId);
+    }
+
+    // Default deny for anything else
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
