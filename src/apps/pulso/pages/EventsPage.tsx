@@ -86,6 +86,7 @@ export default function EventsPage() {
   const [filter, setFilter] = React.useState<OutboxStatus | 'all' | 'openclaw'>('all');
   const [selectedEvent, setSelectedEvent] = React.useState<PulsoEvent | null>(null);
   const [error, setError] = React.useState<{ code: string; message: string } | null>(null);
+  const [authReady, setAuthReady] = React.useState(false);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -114,7 +115,20 @@ export default function EventsPage() {
     setLoading(false);
   }, []);
 
-  React.useEffect(() => { loadData(); }, [loadData]);
+  React.useEffect(() => {
+    const unsubscribe = authService.onAuthStateChange((u) => {
+      if (u) {
+        setAuthReady(true);
+        loadData();
+      } else {
+        // If no user yet, wait for AuthGate to handle login
+        // But we mark as ready to allow loadData to try (it might fail with auth error)
+        setAuthReady(true);
+        loadData();
+      }
+    });
+    return () => unsubscribe();
+  }, [loadData]);
 
   const filteredEvents = React.useMemo(() => {
     if (filter === 'all') return events;
@@ -132,11 +146,13 @@ export default function EventsPage() {
     }
   };
 
-  if (loading) {
+  if (!authReady || loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
         <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-        <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">Sincronizando Barramento</p>
+        <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">
+          {!authReady ? 'Autenticando Barramento' : 'Sincronizando Barramento'}
+        </p>
       </div>
     );
   }

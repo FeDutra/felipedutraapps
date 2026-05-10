@@ -30,23 +30,30 @@ export default function DashboardPage() {
   const router = useRouter();
   const [state, setState] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     async function load() {
-      const dashboardState = await pulsoService.getDashboardState();
-      const allRoutines = await routinesService.getAll();
-      const allAgents = await agentsService.getAll();
-      const allLogs = await healthService.getLogs(5);
-      const allAreas = await areasService.getAll();
-      
-      setState({
-        ...dashboardState,
-        allRoutines,
-        allAgents,
-        allLogs,
-        allAreas
-      });
-      setLoading(false);
+      try {
+        const dashboardState = await pulsoService.getDashboardState();
+        const allRoutines = await routinesService.getAll();
+        const allAgents = await agentsService.getAll();
+        const allLogs = await healthService.getLogs(5);
+        const allAreas = await areasService.getAll();
+        
+        setState({
+          ...dashboardState,
+          allRoutines,
+          allAgents,
+          allLogs,
+          allAreas
+        });
+      } catch (err: any) {
+        console.error('Dashboard load error:', err);
+        setError(err.message || 'Erro desconhecido ao sintonizar ecossistema.');
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -56,6 +63,24 @@ export default function DashboardPage() {
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
         <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
         <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">Sintonizando Ecossistema</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-3xl flex items-center justify-center mb-6">
+          <AlertCircle size={32} className="text-red-400" />
+        </div>
+        <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">Falha na Sintonização</h2>
+        <p className="text-sm text-white/40 max-w-sm mb-8 leading-relaxed">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
+        >
+          Tentar Novamente
+        </button>
       </div>
     );
   }
