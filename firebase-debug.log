@@ -79,3 +79,163 @@ Type error: Argument of type 'Auth | undefined' is not assignable to parameter o
 [debug] [2026-05-11T00:35:02.600Z] Error: ENOENT: no such file or directory, open '/Users/felipedutra/Projetos/eden-terra/.next/export-marker.json'
 [error] 
 [error] Error: An unexpected error has occurred.
+[debug] [2026-05-11T00:45:35.133Z] ----------------------------------------------------------------------
+[debug] [2026-05-11T00:45:35.137Z] Command:       /usr/local/Cellar/node/25.9.0_2/bin/node /usr/local/bin/firebase deploy --only hosting,firestore:rules --project felipedutraapps
+[debug] [2026-05-11T00:45:35.137Z] CLI Version:   15.16.0
+[debug] [2026-05-11T00:45:35.137Z] Platform:      darwin
+[debug] [2026-05-11T00:45:35.137Z] Node Version:  v25.9.0
+[debug] [2026-05-11T00:45:35.138Z] Time:          Sun May 10 2026 21:45:35 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-05-11T00:45:35.138Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-11T00:45:37.707Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-11T00:45:37.707Z] > authorizing via signed-in user (felipemachadodutra@gmail.com)
+[debug] [2026-05-11T00:45:37.707Z] [iam] checking project felipedutraapps for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-05-11T00:45:37.709Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:37.709Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:37.711Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions [none]
+[debug] [2026-05-11T00:45:37.711Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions  x-goog-user-project=felipedutraapps
+[debug] [2026-05-11T00:45:37.711Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-11T00:45:38.408Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions 200
+[debug] [2026-05-11T00:45:38.409Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-11T00:45:38.409Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:38.409Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:38.410Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/felipedutraapps [none]
+[debug] [2026-05-11T00:45:39.222Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/felipedutraapps 200
+[debug] [2026-05-11T00:45:39.222Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/felipedutraapps {"projectId":"felipedutraapps","projectNumber":"493666894040","displayName":"PULSO APPS","name":"projects/felipedutraapps","resources":{"hostingSite":"felipedutraapps"},"state":"ACTIVE","etag":"1_fd27035c-dcc7-44d0-99a5-54daab97cd27"}
+[debug] [2026-05-11T00:45:41.853Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:41.854Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:41.854Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites pageToken=&pageSize=10
+[debug] [2026-05-11T00:45:42.706Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites 200
+[debug] [2026-05-11T00:45:42.706Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites {"sites":[{"name":"projects/felipedutraapps/sites/felipedutraapps","defaultUrl":"https://felipedutraapps.web.app","appId":"1:493666894040:web:a9f897823e207161fd57ad","type":"DEFAULT_SITE"}]}
+[debug] [2026-05-11T00:45:42.706Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:42.706Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:42.706Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:493666894040:web:a9f897823e207161fd57ad/config [none]
+[debug] [2026-05-11T00:45:43.223Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:493666894040:web:a9f897823e207161fd57ad/config 200
+[debug] [2026-05-11T00:45:43.223Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:493666894040:web:a9f897823e207161fd57ad/config {"projectId":"felipedutraapps","appId":"1:493666894040:web:a9f897823e207161fd57ad","storageBucket":"felipedutraapps.firebasestorage.app","apiKey":"AIzaSyB-VcAZ6emCYcIJWu2iffhGD58wqmMsShw","authDomain":"felipedutraapps.firebaseapp.com","messagingSenderId":"493666894040","measurementId":"G-4M3KFJLLNF","projectNumber":"493666894040","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2026-05-11T00:45:49.257Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:49.257Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:45:49.257Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites/felipedutraapps [none]
+[debug] [2026-05-11T00:45:50.080Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites/felipedutraapps 200
+[debug] [2026-05-11T00:45:50.080Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites/felipedutraapps {"name":"projects/felipedutraapps/sites/felipedutraapps","defaultUrl":"https://felipedutraapps.web.app","appId":"1:493666894040:web:a9f897823e207161fd57ad","type":"DEFAULT_SITE"}
+[info] ▲ Next.js 16.2.4 (Turbopack)
+
+[info] - Environments: .env.local, .env.production
+
+
+[info]   Creating an optimized production build ...
+
+[info] ✓ Compiled successfully in 9.0s
+
+[info]   Running TypeScript ...
+
+[info] Failed to type check.
+
+
+[info] ./src/shared/services/authService.ts:102:46
+Type error: Argument of type 'Auth | undefined' is not assignable to parameter of type 'Auth'.
+  Type 'undefined' is not assignable to type 'Auth'.
+
+  100 |       let resolved = false;
+  101 |       
+> 102 |       const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      |                                              ^
+  103 |         if (resolved) return;
+  104 |         
+  105 |         if (user) {
+
+[info] Next.js build worker exited with code: 1 and signal: null
+
+[debug] [2026-05-11T00:46:11.478Z] Error: ENOENT: no such file or directory, open '/Users/felipedutra/Projetos/eden-terra/.next/export-marker.json'
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-05-11T00:49:39.413Z] ----------------------------------------------------------------------
+[debug] [2026-05-11T00:49:39.417Z] Command:       /usr/local/Cellar/node/25.9.0_2/bin/node /usr/local/bin/firebase deploy --only hosting,firestore:rules --project felipedutraapps
+[debug] [2026-05-11T00:49:39.418Z] CLI Version:   15.16.0
+[debug] [2026-05-11T00:49:39.418Z] Platform:      darwin
+[debug] [2026-05-11T00:49:39.418Z] Node Version:  v25.9.0
+[debug] [2026-05-11T00:49:39.418Z] Time:          Sun May 10 2026 21:49:39 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-05-11T00:49:39.418Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-11T00:49:41.781Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-11T00:49:41.781Z] > authorizing via signed-in user (felipemachadodutra@gmail.com)
+[debug] [2026-05-11T00:49:41.782Z] [iam] checking project felipedutraapps for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-05-11T00:49:41.783Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:41.783Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:41.785Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions [none]
+[debug] [2026-05-11T00:49:41.785Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions  x-goog-user-project=felipedutraapps
+[debug] [2026-05-11T00:49:41.785Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-11T00:49:42.743Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions 200
+[debug] [2026-05-11T00:49:42.744Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/felipedutraapps:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-05-11T00:49:42.744Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:42.744Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:42.745Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/felipedutraapps [none]
+[debug] [2026-05-11T00:49:43.238Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/felipedutraapps 200
+[debug] [2026-05-11T00:49:43.239Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/felipedutraapps {"projectId":"felipedutraapps","projectNumber":"493666894040","displayName":"PULSO APPS","name":"projects/felipedutraapps","resources":{"hostingSite":"felipedutraapps"},"state":"ACTIVE","etag":"1_fd27035c-dcc7-44d0-99a5-54daab97cd27"}
+[debug] [2026-05-11T00:49:46.014Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:46.015Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:46.016Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites pageToken=&pageSize=10
+[debug] [2026-05-11T00:49:47.482Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites 200
+[debug] [2026-05-11T00:49:47.482Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites {"sites":[{"name":"projects/felipedutraapps/sites/felipedutraapps","defaultUrl":"https://felipedutraapps.web.app","appId":"1:493666894040:web:a9f897823e207161fd57ad","type":"DEFAULT_SITE"}]}
+[debug] [2026-05-11T00:49:47.483Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:47.483Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:47.483Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:493666894040:web:a9f897823e207161fd57ad/config [none]
+[debug] [2026-05-11T00:49:48.726Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:493666894040:web:a9f897823e207161fd57ad/config 200
+[debug] [2026-05-11T00:49:48.726Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/-/webApps/1:493666894040:web:a9f897823e207161fd57ad/config {"projectId":"felipedutraapps","appId":"1:493666894040:web:a9f897823e207161fd57ad","storageBucket":"felipedutraapps.firebasestorage.app","apiKey":"AIzaSyB-VcAZ6emCYcIJWu2iffhGD58wqmMsShw","authDomain":"felipedutraapps.firebaseapp.com","messagingSenderId":"493666894040","measurementId":"G-4M3KFJLLNF","projectNumber":"493666894040","version":"2"}
+[info] 
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+[debug] [2026-05-11T00:49:54.944Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:54.944Z] Checked if tokens are valid: true, expires at: 1778461641272
+[debug] [2026-05-11T00:49:54.944Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites/felipedutraapps [none]
+[debug] [2026-05-11T00:49:56.250Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites/felipedutraapps 200
+[debug] [2026-05-11T00:49:56.250Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/felipedutraapps/sites/felipedutraapps {"name":"projects/felipedutraapps/sites/felipedutraapps","defaultUrl":"https://felipedutraapps.web.app","appId":"1:493666894040:web:a9f897823e207161fd57ad","type":"DEFAULT_SITE"}
+[info] ▲ Next.js 16.2.4 (Turbopack)
+
+[info] - Environments: .env.local, .env.production
+
+
+[info]   Creating an optimized production build ...
+
+[info] ✓ Compiled successfully in 9.8s
+
+[info]   Running TypeScript ...
+
+[info] Failed to type check.
+
+
+[info] ./src/shared/services/authService.ts:102:46
+Type error: Argument of type 'Auth | undefined' is not assignable to parameter of type 'Auth'.
+  Type 'undefined' is not assignable to type 'Auth'.
+
+  100 |       let resolved = false;
+  101 |       
+> 102 |       const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      |                                              ^
+  103 |         if (resolved) return;
+  104 |         
+  105 |         if (user) {
+
+[info] Next.js build worker exited with code: 1 and signal: null
+
+[debug] [2026-05-11T00:50:18.348Z] Error: ENOENT: no such file or directory, open '/Users/felipedutra/Projetos/eden-terra/.next/export-marker.json'
+[error] 
+[error] Error: An unexpected error has occurred.

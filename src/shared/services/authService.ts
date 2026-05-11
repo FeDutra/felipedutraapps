@@ -20,8 +20,8 @@ export const authService = {
    * Triggers a Google Sign-In popup
    */
   signInWithGoogle: async () => {
-    if (!auth || !googleProvider) {
-      console.warn("AuthService: Firebase Auth not configured.");
+    if (!googleProvider) {
+      console.warn("AuthService: Google Sign-In not available (check Firebase config).");
       return null;
     }
     try {
@@ -37,10 +37,6 @@ export const authService = {
    * Signs in anonymously for public/MVP access
    */
   signInAnonymously: async () => {
-    if (!auth) {
-      console.warn("AuthService: Firebase Auth not configured.");
-      return null;
-    }
     try {
       const result = await firebaseSignInAnonymously(auth);
       return result.user;
@@ -58,7 +54,6 @@ export const authService = {
    * Signs out the current user
    */
   logout: async () => {
-    if (!auth) return;
     try {
       await signOut(auth);
     } catch (error) {
@@ -71,10 +66,6 @@ export const authService = {
    * Listens to authentication state changes
    */
   onAuthStateChange: (callback: (user: User | null) => void) => {
-    if (!auth) {
-      callback(null);
-      return () => {};
-    }
     return onAuthStateChanged(auth, callback);
   },
 
@@ -82,7 +73,7 @@ export const authService = {
    * Returns the currently authenticated user
    */
   getCurrentUser: () => {
-    return auth?.currentUser || null;
+    return auth.currentUser;
   },
 
   /**
@@ -90,8 +81,6 @@ export const authService = {
    * and returns the user object only when ready for Firestore operations.
    */
   ensurePulsoAuthReady: async (): Promise<User> => {
-    if (!auth) throw new Error("Firebase Auth not configured");
-    
     // Check if user already exists
     if (auth.currentUser) return auth.currentUser;
     

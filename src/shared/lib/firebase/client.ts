@@ -1,4 +1,4 @@
-import { getApps, initializeApp, FirebaseApp } from "firebase/app";
+import { getApps, initializeApp, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
@@ -19,20 +19,18 @@ export const isFirebaseConfigured = !!(
   firebaseConfig.appId
 );
 
-let firebaseApp: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
-let storage: FirebaseStorage | undefined;
+/**
+ * Singleton instance of Firebase App
+ */
+const firebaseApp: FirebaseApp = getApps().length === 0 
+  ? initializeApp(firebaseConfig) 
+  : getApp();
 
-if (isFirebaseConfigured) {
-  try {
-    firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    auth = getAuth(firebaseApp);
-    db = getFirestore(firebaseApp);
-    storage = getStorage(firebaseApp);
-  } catch (error) {
-    console.error("Firebase initialization error:", error);
-  }
-}
+/**
+ * Mandatory Firebase service instances
+ */
+const auth: Auth = getAuth(firebaseApp);
+const db: Firestore = getFirestore(firebaseApp);
+const storage: FirebaseStorage = getStorage(firebaseApp);
 
 export { firebaseApp, auth, db, storage };
