@@ -2,14 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * [DIAGNOSTIC TEST 2]
-     * Testing if a specific known UID is recognized by the rules engine.
-     * UID extracted from production debug: 0E1nfbY0Z1W45C5wYI1jxkvwIJt1
-     */
+    // Workspace pessoal: acesso somente para usuário autenticado com Google
+    match /workspaces/{workspaceId}/{document=**} {
+      allow read, write: if request.auth != null && workspaceId == "felipe_dutra";
+    }
+
+    // Qualquer outro path: bloqueado por padrão
     match /{document=**} {
-      allow read: if request.auth != null && request.auth.uid == "0E1nfbY0Z1W45C5wYI1jxkvwIJt1";
-      allow write: if false;
+      allow read, write: if false;
     }
   }
 }

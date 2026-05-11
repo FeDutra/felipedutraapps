@@ -17,8 +17,6 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = React.useState(true);
   const [isFirestore, setIsFirestore] = React.useState(false);
   const [hasConfig, setHasConfig] = React.useState(true);
-  const [authMode, setAuthMode] = React.useState<string | null>(null);
-  const [authError, setAuthError] = React.useState<{ code: string; message: string } | null>(null);
 
   React.useEffect(() => {
     // Check if we are in firestore mode
@@ -39,23 +37,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
     const unsubscribe = authService.onAuthStateChange((u) => {
       setUser(u);
-      
-      // If anonymous mode is active and there's no user, sign in automatically
-      const currentAuthMode = process.env.NEXT_PUBLIC_PULSO_AUTH_MODE;
-      setAuthMode(currentAuthMode || 'google');
-
-      if (currentAuthMode === 'anonymous' && !u && isFS && !bypass) {
-        authService.signInAnonymously().catch(err => {
-          console.error("Auto anonymous sign-in failed:", err);
-          setAuthError({ 
-            code: err.code || 'unknown', 
-            message: err.message || 'Erro desconhecido na autenticação anônima.' 
-          });
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -80,46 +62,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     return <ConfigErrorScreen />;
   }
 
-  // If there's an auth error in anonymous mode
-  if (authError && authMode === 'anonymous') {
-    return (
-      <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
-        <div className="w-full max-w-sm text-center">
-          <div className="inline-flex p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 mb-6">
-            <ShieldCheck size={32} className="text-amber-500" />
-          </div>
-          <h2 className="text-xl font-black mb-2 uppercase tracking-tighter">Erro de Autenticação Anônima</h2>
-          <p className="text-sm text-white/40 mb-8 leading-relaxed">
-            {authError.code === 'auth/operation-not-allowed' 
-              ? "Anonymous Auth não está habilitado no Firebase. Ative em Authentication > Sign-in method > Anonymous." 
-              : authError.message}
-          </p>
-          <div className="p-4 bg-white/2 border border-white/5 rounded-2xl">
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/20">Código do Erro</p>
-            <p className="text-[10px] font-mono text-amber-500/60 mt-1">{authError.code}</p>
-          </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="mt-6 w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            Tentar Novamente
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // If in Firestore mode and no user, show login screen
-  // EXCEPT in anonymous mode where we show the loader while signing in
   if (!user) {
-    if (authMode === 'anonymous') {
-      return (
-        <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center">
-          <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-          <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Iniciando Sessão Segura</p>
-        </div>
-      );
-    }
     return <LoginScreen />;
   }
 

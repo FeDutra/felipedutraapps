@@ -74,13 +74,7 @@ export default function PulsoDebugPage() {
         displayName: user?.displayName
       });
 
-      if (!user) {
-        try {
-          await authService.signInAnonymously();
-        } catch (err: any) {
-          setAuthStatus((prev: any) => ({ ...prev, error: { code: err.code, message: err.message } }));
-        }
-      } else {
+      if (user) {
         runTests(user);
       }
       setLoading(false);
