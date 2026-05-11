@@ -114,6 +114,11 @@ export interface BaseEntity {
   uncertainties?: string[];
   createdAt: Date;
   updatedAt: Date;
+  archived?: boolean;
+  archivedAt?: Date;
+  archivedBy?: string;
+  archiveReason?: string;
+  cleanupBatch?: string;
 }
 
 export interface Area extends BaseEntity {
@@ -321,6 +326,11 @@ export interface PulsoEvent {
   createdAt: Date;
   processedByAgents?: string[];
   outboxStatus: OutboxStatus;
+  archived?: boolean;
+  archivedAt?: Date;
+  archivedBy?: string;
+  archiveReason?: string;
+  cleanupBatch?: string;
 }
 
 export interface Tag {

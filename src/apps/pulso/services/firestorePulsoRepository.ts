@@ -118,7 +118,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   }
 
   async getInboxItems() {
-    const q = query(collection(db!, firestorePaths.inboxItems()), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db!, firestorePaths.inboxItems()), 
+      where("archived", "==", false),
+      orderBy("createdAt", "desc")
+    );
     const snap = await getDocs(q);
     return snap.docs.map(d => this.toData<InboxItem>(d));
   }
@@ -134,6 +138,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       ...item, 
       id, 
       status: item.status || 'new',
+      archived: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp() 
     };
@@ -149,7 +154,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   }
 
   async getTasks() {
-    const snap = await getDocs(collection(db!, firestorePaths.tasks()));
+    const q = query(
+      collection(db!, firestorePaths.tasks()),
+      where("archived", "==", false)
+    );
+    const snap = await getDocs(q);
     return snap.docs.map(d => this.toData<Task>(d));
   }
 
@@ -158,6 +167,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     const data = { 
       ...task, 
       id, 
+      archived: false,
       updatedAt: serverTimestamp(),
       createdAt: task.createdAt || serverTimestamp()
     };
@@ -166,7 +176,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   }
 
   async getDecisions() {
-    const snap = await getDocs(collection(db!, firestorePaths.decisions()));
+    const q = query(
+      collection(db!, firestorePaths.decisions()),
+      where("archived", "==", false)
+    );
+    const snap = await getDocs(q);
     return snap.docs.map(d => this.toData<Decision>(d));
   }
 
@@ -175,6 +189,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     const data = { 
       ...decision, 
       id, 
+      archived: false,
       updatedAt: serverTimestamp(),
       createdAt: decision.createdAt || serverTimestamp()
     };
@@ -195,7 +210,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   }
 
   async getAlerts() {
-    const snap = await getDocs(collection(db!, firestorePaths.alerts()));
+    const q = query(
+      collection(db!, firestorePaths.alerts()),
+      where("status", "==", "open")
+    );
+    const snap = await getDocs(q);
     return snap.docs.map(d => this.toData<Alert>(d));
   }
 
@@ -360,7 +379,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   async getEvents(limitCount = 20) {
     return this.runResilientQuery<PulsoEvent>(
       collection(db!, firestorePaths.events()),
-      [],
+      [where("archived", "==", false)],
       limitCount
     );
   }
@@ -370,6 +389,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     const data = { 
       ...event, 
       id, 
+      archived: false,
       createdAt: serverTimestamp(),
       outboxStatus: event.outboxStatus || 'pending'
     };
@@ -403,7 +423,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   async getIngestionEvents() {
     return this.runResilientQuery<IngestionEvent>(
       collection(db!, firestorePaths.ingestionEvents()),
-      [],
+      [where("archived", "==", false)],
       50
     );
   }
