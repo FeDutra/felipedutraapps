@@ -16,6 +16,14 @@ import { FirestorePulsoRepository } from "./firestorePulsoRepository";
  * @description Populates Firestore with deterministic seed data version by version.
  */
 export async function seedPulsoFirestore(force = false) {
+  // 1. Trava explícita de seed
+  const AUTO_SEED_ENABLED = process.env.NEXT_PUBLIC_PULSO_AUTO_SEED === "true";
+  
+  if (!AUTO_SEED_ENABLED && !force) {
+    console.info("[PULSO] Auto-seed desativado via configuração de ambiente.");
+    return;
+  }
+
   if (!(pulsoRepository instanceof FirestorePulsoRepository)) {
     console.warn('SEED: O repositório não é Firestore. Abortando.');
     return;
