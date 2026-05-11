@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { eventsService } from '../services/eventsService';
+import { authService } from '../../../shared/services/authService';
 import { ingestionService } from '../services/ingestionService';
 import { PulsoEvent, IngestionEvent, OutboxStatus } from '../types/pulso.types';
 import { motion, AnimatePresence } from 'framer-motion';
