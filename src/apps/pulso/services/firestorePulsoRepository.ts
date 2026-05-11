@@ -20,7 +20,7 @@ import { firestorePaths } from "./firestorePaths";
 import { 
   Area, Project, InboxItem, Task, Decision, 
   Routine, Agent, Source, Alert, Log, Person, SyncJob,
-  PulsoEvent, IngestionEvent
+  PulsoEvent, IngestionEvent, PulsoRequest
 } from "../types/pulso.types";
 
 /**
@@ -484,5 +484,44 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       completedAt: serverTimestamp(),
       version 
     });
+  }
+
+  // --- Requests ---
+
+  async getRequests(limitCount = 20) {
+    return this.runResilientQuery<PulsoRequest>(
+      collection(db!, firestorePaths.requests()),
+      [where("archived", "==", false)],
+      limitCount
+    );
+  }
+
+  async getPendingRequests() {
+    return this.runResilientQuery<PulsoRequest>(
+      collection(db!, firestorePaths.requests()),
+      [where("status", "in", ["requested", "accepted", "running", "needs_clarification"])],
+      50
+    );
+  }
+
+  async saveRequest(request: Partial<PulsoRequest>) {
+    const id = request.id || `req_${Date.now()}`;
+    const data = { 
+      ...request, 
+      id, 
+      status: request.status || 'requested',
+      archived: false,
+      requestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp() 
+    };
+    await setDoc(doc(db!, firestorePaths.request(id)), data);
+    return { ...data, requestedAt: new Date(), updatedAt: new Date() } as any;
+  }
+
+  async updateRequest(id: string, data: Partial<PulsoRequest>) {
+    const ref = doc(db!, firestorePaths.request(id));
+    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<PulsoRequest>(snap);
   }
 }

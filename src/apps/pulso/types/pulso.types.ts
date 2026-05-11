@@ -77,7 +77,52 @@ export type EventType =
   | 'ingestion_failed'
   | 'ingestion_duplicate'
   | 'health_signal_received'
-  | 'sync_signal_received';
+  | 'sync_signal_received'
+  | 'operational_request_created';
+
+export type RequestType = 
+  | 'create_agent'
+  | 'create_area'
+  | 'create_project'
+  | 'register_source'
+  | 'register_person'
+  | 'refresh_state'
+  | 'sync_area'
+  | 'create_task'
+  | 'register_decision'
+  | 'create_alert';
+
+export type RequestStatus = 
+  | 'requested'
+  | 'accepted'
+  | 'running'
+  | 'needs_clarification'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'archived';
+
+export interface PulsoRequest {
+  id: string;
+  requestType: RequestType;
+  title: string;
+  summary: string;
+  status: RequestStatus;
+  priority: Priority;
+  areaRef?: string;
+  projectRef?: string;
+  sourceRef?: string;
+  personRef?: string;
+  requestedBy: string; 
+  requestedAt: Date;
+  updatedAt: Date;
+  payload?: any;
+  result?: any;
+  error?: string;
+  processedBy?: string; 
+  processedAt?: Date;
+  archived?: boolean;
+}
 
 export type ActorType = 'user' | 'agent' | 'system';
 

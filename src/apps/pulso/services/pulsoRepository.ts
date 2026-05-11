@@ -12,7 +12,8 @@ import {
   Person,
   SyncJob,
   PulsoEvent,
-  IngestionEvent
+  IngestionEvent,
+  PulsoRequest
 } from "../types/pulso.types";
 
 /**
@@ -90,4 +91,10 @@ export interface IPulsoRepository {
   // Seed Status
   getSeedStatus(version: string): Promise<boolean>;
   markSeedComplete(version: string): Promise<void>;
+
+  // Requests
+  getRequests(limitCount?: number): Promise<PulsoRequest[]>;
+  getPendingRequests(): Promise<PulsoRequest[]>;
+  saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest>;
+  updateRequest(id: string, data: Partial<PulsoRequest>): Promise<PulsoRequest>;
 }

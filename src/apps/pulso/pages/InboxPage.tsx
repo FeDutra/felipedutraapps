@@ -1,14 +1,15 @@
 'use client';
 
 import React from 'react';
-import { inboxService } from '../services/pulsoService';
+import { inboxService, requestsService } from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
 import { AlertCircle } from 'lucide-react';
 import { inboxHelpers } from '../utils/inboxHelpers';
-import { InboxItem } from '../types/pulso.types';
+import { InboxItem, PulsoRequest } from '../types/pulso.types';
 import { InboxHeader } from '../components/inbox/InboxHeader';
 import { InboxFilters } from '../components/inbox/InboxFilters';
 import { InboxItemCard } from '../components/inbox/InboxItemCard';
+import { RequestItemCard } from '../components/inbox/RequestItemCard';
 import { InboxDetailDrawer } from '../components/inbox/InboxDetailDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,8 +20,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function InboxPage() {
   const [items, setItems] = React.useState<InboxItem[]>([]);
+  const [requests, setRequests] = React.useState<PulsoRequest[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [selectedItem, setSelectedItem] = React.useState<InboxItem | null>(null);
+  const [selectedRequest, setSelectedRequest] = React.useState<PulsoRequest | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filters, setFilters] = React.useState({
@@ -40,8 +43,12 @@ export default function InboxPage() {
     setLoading(true);
     try {
       await authService.ensurePulsoAuthReady();
-      const data = await inboxService.getAll();
-      setItems([...data]);
+      const [inboxData, requestsData] = await Promise.all([
+        inboxService.getAll(),
+        requestsService.getRequests()
+      ]);
+      setItems([...inboxData]);
+      setRequests([...requestsData]);
     } catch (err: any) {
       console.error('Inbox load error:', err);
       showFeedback(err.message || 'Erro ao carregar itens do Inbox', 'error');
@@ -54,10 +61,19 @@ export default function InboxPage() {
   }, [loadItems]);
 
   const filteredItems = React.useMemo(() => {
+    if (filters.status === 'requests') return [];
     let result = inboxHelpers.filterItems(items, filters);
     result = inboxHelpers.searchItems(result, searchQuery);
     return result;
   }, [items, filters, searchQuery]);
+
+  const filteredRequests = React.useMemo(() => {
+    if (filters.status !== 'requests') return [];
+    return requests.filter(r => 
+      r.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      r.summary.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [requests, filters.status, searchQuery]);
 
   const stats = React.useMemo(() => inboxHelpers.getStats(items), [items]);
 
@@ -121,19 +137,30 @@ export default function InboxPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
         <AnimatePresence mode="popLayout">
-          {filteredItems.map((item) => (
-            <InboxItemCard 
-              key={item.id} 
-              item={item} 
-              onClick={(it) => {
-                setSelectedItem(it);
-                setIsCreating(false);
-              }} 
-            />
-          ))}
+          {filters.status === 'requests' ? (
+            filteredRequests.map((req) => (
+              <RequestItemCard 
+                key={req.id} 
+                request={req} 
+                onClick={(r) => setSelectedRequest(r)} 
+              />
+            ))
+          ) : (
+            filteredItems.map((item) => (
+              <InboxItemCard 
+                key={item.id} 
+                item={item} 
+                onClick={(it) => {
+                  setSelectedItem(it);
+                  setIsCreating(false);
+                }} 
+              />
+            ))
+          )}
         </AnimatePresence>
 
-        {filteredItems.length === 0 && (
+        {((filters.status === 'requests' && filteredRequests.length === 0) || 
+          (filters.status !== 'requests' && filteredItems.length === 0)) && (
           <div className="py-20 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-3xl bg-white/1">
             <p className="text-white/20 text-xs italic">Nenhum item encontrado nesta categoria.</p>
           </div>

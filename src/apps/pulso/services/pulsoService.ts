@@ -12,6 +12,7 @@ import { peopleService } from "./peopleService";
 import { routinesService } from "./routinesService";
 import { agentsService } from "./agentsService";
 import { syncJobsService } from "./syncJobsService";
+import { requestsService } from "./requestsService";
 
 // Re-export all services for backward compatibility
 export { 
@@ -29,7 +30,8 @@ export {
   peopleService,
   routinesService,
   agentsService,
-  syncJobsService
+  syncJobsService,
+  requestsService
 };
 
 // Main Pulso Service for Global State

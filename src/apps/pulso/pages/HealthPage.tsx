@@ -5,7 +5,8 @@ import {
   healthService, 
   syncJobsService, 
   pulsoService,
-  eventsService
+  eventsService,
+  requestsService
 } from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
 import { AlertCircle as AlertCircleIcon } from 'lucide-react';
@@ -94,6 +95,27 @@ export default function HealthPage() {
     loadData();
   };
 
+  const handleRefreshState = async () => {
+    try {
+      await requestsService.createRequest({
+        requestType: 'refresh_state',
+        title: 'Solicitação: Atualizar Estado do Workspace',
+        summary: 'Sincronização completa do estado atual solicitada via Health Center.',
+        status: 'requested',
+        priority: 'high',
+        requestedBy: 'user_felipe',
+        payload: {
+          scope: 'workspace',
+          requestedFrom: 'health_center',
+          force: false
+        }
+      });
+      alert("Solicitação de atualização registrada com sucesso.");
+    } catch (err) {
+      console.error('Refresh request error:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
@@ -141,7 +163,7 @@ export default function HealthPage() {
           </p>
         </div>
         <button 
-          onClick={loadData}
+          onClick={handleRefreshState}
           className="p-4 bg-white/2 border border-white/5 rounded-2xl text-white/40 hover:bg-white/5 transition-all flex items-center gap-2 text-xs font-bold"
         >
           <Activity size={16} />

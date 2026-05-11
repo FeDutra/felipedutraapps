@@ -28,7 +28,7 @@ export const InboxFilters = ({
 
         {/* Quick Filters */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
-          {['all', 'new', 'triaged', 'converted'].map(status => (
+          {['all', 'new', 'triaged', 'converted', 'requests'].map(status => (
             <button
               key={status}
               onClick={() => setFilters({ ...filters, status })}
@@ -38,7 +38,7 @@ export const InboxFilters = ({
                   : 'bg-white/2 border-white/5 text-white/30 hover:border-white/10'
               }`}
             >
-              {status === 'all' ? 'Todos' : status === 'new' ? 'Novos' : status === 'triaged' ? 'Triados' : 'Convertidos'}
+              {status === 'all' ? 'Todos' : status === 'new' ? 'Novos' : status === 'triaged' ? 'Triados' : status === 'converted' ? 'Convertidos' : 'Solicitações'}
             </button>
           ))}
         </div>

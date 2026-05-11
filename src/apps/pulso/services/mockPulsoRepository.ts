@@ -7,7 +7,7 @@ import {
 import { 
   Area, Project, InboxItem, Task, Decision, 
   Routine, Agent, Source, Alert, Log, Person, Status, SyncJob,
-  PulsoEvent, IngestionEvent
+  PulsoEvent, IngestionEvent, PulsoRequest
 } from "../types/pulso.types";
 
 /**
@@ -250,5 +250,47 @@ export class MockPulsoRepository implements IPulsoRepository {
       (eventId && e.event_id === eventId) || 
       (dedupeKey && e.dedupe_key === dedupeKey)
     );
+  }
+
+  async getRequests(limitCount = 20): Promise<PulsoRequest[]> {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pulso_mock_requests');
+      if (stored) return JSON.parse(stored) as PulsoRequest[];
+    }
+    return [];
+  }
+
+  async getPendingRequests(): Promise<PulsoRequest[]> {
+    const all = await this.getRequests();
+    return all.filter(r => ['requested', 'accepted', 'running', 'needs_clarification'].includes(r.status));
+  }
+
+  async saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest> {
+    const newReq = { 
+      ...request, 
+      id: request.id || `req_${Date.now()}`, 
+      requestedAt: new Date(),
+      updatedAt: new Date(),
+      status: request.status || 'requested',
+      archived: false
+    } as PulsoRequest;
+    if (typeof window !== 'undefined') {
+      const all = await this.getRequests();
+      localStorage.setItem('pulso_mock_requests', JSON.stringify([newReq, ...all]));
+    }
+    return newReq;
+  }
+
+  async updateRequest(id: string, data: Partial<PulsoRequest>): Promise<PulsoRequest> {
+    if (typeof window !== 'undefined') {
+      const all = await this.getRequests();
+      const index = all.findIndex((r: PulsoRequest) => r.id === id);
+      if (index !== -1) {
+        all[index] = { ...all[index], ...data, updatedAt: new Date() };
+        localStorage.setItem('pulso_mock_requests', JSON.stringify(all));
+        return all[index];
+      }
+    }
+    return data as any;
   }
 }

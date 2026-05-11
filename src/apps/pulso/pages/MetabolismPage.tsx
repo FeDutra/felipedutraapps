@@ -7,6 +7,7 @@ import { Agent, Routine } from '../types/pulso.types';
 import { authService } from '../../../shared/services/authService';
 import { AgentCard, RoutineCard } from '../components/system/SystemCards';
 import { SystemDetailDrawer } from '../components/system/SystemDetailDrawer';
+import { AgentRequestDrawer } from '../components/system/RequestDrawers';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Server, Clock, Activity, Play, 
@@ -18,6 +19,7 @@ export default function MetabolismPage() {
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [routines, setRoutines] = React.useState<Routine[]>([]);
   const [selectedEntity, setSelectedEntity] = React.useState<{ type: 'agent' | 'routine', data: any } | null>(null);
+  const [isRequestDrawerOpen, setIsRequestDrawerOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const loadData = React.useCallback(async () => {
@@ -98,7 +100,10 @@ export default function MetabolismPage() {
           >
             <RefreshCw size={18} />
           </button>
-          <button className="px-6 py-4 bg-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2">
+          <button 
+            onClick={() => setIsRequestDrawerOpen(true)}
+            className="px-6 py-4 bg-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+          >
             <Zap size={14} /> Novo Agente
           </button>
         </div>
@@ -170,6 +175,15 @@ export default function MetabolismPage() {
         onClose={() => setSelectedEntity(null)}
         onAction={(id, action) => {
           if (action === 'pause' || action === 'resume') handleToggleStatus(id, action);
+        }}
+      />
+
+      <AgentRequestDrawer 
+        isOpen={isRequestDrawerOpen} 
+        onClose={() => setIsRequestDrawerOpen(false)} 
+        onSuccess={() => {
+          // Success feedback or notification could go here
+          loadData();
         }}
       />
     </div>
