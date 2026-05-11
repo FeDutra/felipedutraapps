@@ -62,8 +62,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     return <ConfigErrorScreen />;
   }
 
-  // If in Firestore mode and no user, show login screen
-  if (!user) {
+  // If in Firestore mode and no user or anonymous user, show login screen
+  if (!user || user.isAnonymous) {
     return <LoginScreen />;
   }
 

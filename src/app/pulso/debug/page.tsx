@@ -59,7 +59,7 @@ export default function PulsoDebugPage() {
       WORKSPACE_ID: process.env.NEXT_PUBLIC_PULSO_WORKSPACE_ID,
       firebaseConfigured: isFirebaseConfigured,
       hostname: typeof window !== 'undefined' ? window.location.hostname : 'n/a',
-      version: 'debug-rules-auth-v1',
+      version: 'debug-rollback-v1.1',
       timestamp: new Date().toISOString()
     });
 
