@@ -83,5 +83,54 @@ export const authService = {
    */
   getCurrentUser: () => {
     return auth?.currentUser || null;
+  },
+
+  /**
+   * Ensures the user is authenticated (using anonymous auth if necessary)
+   * and returns the user object only when ready for Firestore operations.
+   */
+  ensurePulsoAuthReady: async (): Promise<User> => {
+    if (!auth) throw new Error("Firebase Auth not configured");
+    
+    // Check if user already exists
+    if (auth.currentUser) return auth.currentUser;
+    
+    // Wait for the auth state to settle (in case it's still loading)
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (resolved) return;
+        
+        if (user) {
+          resolved = true;
+          unsubscribe();
+          resolve(user);
+        } else {
+          // If no user after initial check, try anonymous sign in
+          try {
+            const anonymousUser = await authService.signInAnonymously();
+            if (anonymousUser) {
+              resolved = true;
+              unsubscribe();
+              resolve(anonymousUser);
+            }
+          } catch (err) {
+            resolved = true;
+            unsubscribe();
+            reject(err);
+          }
+        }
+      });
+      
+      // Safety timeout
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          unsubscribe();
+          reject(new Error("Auth timeout: could not establish secure session. Please check your internet connection."));
+        }
+      }, 15000);
+    });
   }
 };

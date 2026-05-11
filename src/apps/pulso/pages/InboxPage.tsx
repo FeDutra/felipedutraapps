@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { inboxService } from '../services/pulsoService';
+import { authService } from '../../../shared/services/authService';
+import { AlertCircle } from 'lucide-react';
 import { inboxHelpers } from '../utils/inboxHelpers';
 import { InboxItem } from '../types/pulso.types';
 import { InboxHeader } from '../components/inbox/InboxHeader';
@@ -37,10 +39,12 @@ export default function InboxPage() {
   const loadItems = React.useCallback(async () => {
     setLoading(true);
     try {
+      await authService.ensurePulsoAuthReady();
       const data = await inboxService.getAll();
       setItems([...data]);
-    } catch (err) {
-      showFeedback('Erro ao carregar itens', 'error');
+    } catch (err: any) {
+      console.error('Inbox load error:', err);
+      showFeedback(err.message || 'Erro ao carregar itens do Inbox', 'error');
     }
     setLoading(false);
   }, []);

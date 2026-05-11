@@ -8,6 +8,7 @@ import {
   agentsService, 
   healthService 
 } from '../services/pulsoService';
+import { authService } from '../../../shared/services/authService';
 import { ontologyHelpers } from '../utils/ontologyHelpers';
 import { PulsoHeader } from '../components/BaseComponents';
 import { PulseRadar } from '../components/PulseRadar';
@@ -35,6 +36,9 @@ export default function DashboardPage() {
   React.useEffect(() => {
     async function load() {
       try {
+        // Ensure auth is ready before any Firestore calls
+        await authService.ensurePulsoAuthReady();
+        
         const dashboardState = await pulsoService.getDashboardState();
         const allRoutines = await routinesService.getAll();
         const allAgents = await agentsService.getAll();

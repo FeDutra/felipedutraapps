@@ -2,22 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isPersonalWorkspace(workspaceId) {
-      return workspaceId == "felipe_dutra";
-    }
-
-    // Explicitly allow access to the personal workspace and all its subcollections
-    // This covers: pulso_events, pulso_ingestion_events, pulso_inbox_items, etc.
+    // Allow authenticated access to the personal workspace and all its subcollections
+    // Excludes everything else by default.
     match /workspaces/{workspaceId}/{document=**} {
-      allow read, write: if isSignedIn() && isPersonalWorkspace(workspaceId);
+      allow read, write: if request.auth != null && workspaceId == "felipe_dutra";
     }
 
-    // Default deny for anything else
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }

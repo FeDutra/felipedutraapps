@@ -8,6 +8,8 @@ import { peopleService } from '../services/peopleService';
 import { tasksService } from '../services/tasksService';
 import { decisionsService } from '../services/decisionsService';
 import { inboxService } from '../services/inboxService';
+import { authService } from '../../../shared/services/authService';
+import { AlertCircle } from 'lucide-react';
 import { 
   Area, 
   Project, 
@@ -24,6 +26,7 @@ export default function EcosystemPage() {
   const [activeTab, setActiveTab] = React.useState<EcosystemTabType>('areas');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   
   // Data States
   const [areas, setAreas] = React.useState<Area[]>([]);
@@ -37,26 +40,36 @@ export default function EcosystemPage() {
 
   React.useEffect(() => {
     async function load() {
-      setLoading(true);
-      const [allAreas, allProjects, allSources, allPeople] = await Promise.all([
-        areasService.getAll(),
-        projectsService.getAll(),
-        sourcesService.getAll(),
-        peopleService.getAll()
-      ]);
-      
-      setAreas(allAreas);
-      setProjects(allProjects);
-      setSources(allSources);
-      setPeople(allPeople);
+      try {
+        setLoading(true);
+        setError(null);
+        
+        await authService.ensurePulsoAuthReady();
+        
+        const [allAreas, allProjects, allSources, allPeople] = await Promise.all([
+          areasService.getAll(),
+          projectsService.getAll(),
+          sourcesService.getAll(),
+          peopleService.getAll()
+        ]);
+        
+        setAreas(allAreas);
+        setProjects(allProjects);
+        setSources(allSources);
+        setPeople(allPeople);
 
-      // Load stats for areas
-      const statsMap: any = {};
-      for (const area of allAreas) {
-        statsMap[area.id] = await areasService.getStats(area.id);
+        // Load stats for areas
+        const statsMap: any = {};
+        for (const area of allAreas) {
+          statsMap[area.id] = await areasService.getStats(area.id);
+        }
+        setAreaStats(statsMap);
+      } catch (err: any) {
+        console.error('Ecosystem load error:', err);
+        setError(err.message || 'Erro ao sintonizar estruturas do ecossistema.');
+      } finally {
+        setLoading(false);
       }
-      setAreaStats(statsMap);
-      setLoading(false);
     }
     load();
   }, []);
@@ -114,6 +127,20 @@ export default function EcosystemPage() {
         <div className="py-40 flex flex-col items-center justify-center">
           <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
           <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Sintonizando Estruturas</p>
+        </div>
+      ) : error ? (
+        <div className="py-40 flex flex-col items-center justify-center text-center px-6">
+          <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-3xl flex items-center justify-center mb-6">
+            <AlertCircle size={32} className="text-red-400" />
+          </div>
+          <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">Falha na Sintonização</h2>
+          <p className="text-sm text-white/40 max-w-sm mb-8 leading-relaxed">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
+          >
+            Tentar Novamente
+          </button>
         </div>
       ) : (
         <motion.div 

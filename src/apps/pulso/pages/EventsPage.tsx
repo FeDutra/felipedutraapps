@@ -93,6 +93,7 @@ export default function EventsPage() {
     setLoading(true);
     setError(null);
     try {
+      await authService.ensurePulsoAuthReady();
       const [allEvents, allIngestions] = await Promise.all([
         eventsService.getRecent(50),
         ingestionService.getAll()
@@ -117,18 +118,7 @@ export default function EventsPage() {
   }, []);
 
   React.useEffect(() => {
-    const unsubscribe = authService.onAuthStateChange((u) => {
-      if (u) {
-        setAuthReady(true);
-        loadData();
-      } else {
-        // If no user yet, wait for AuthGate to handle login
-        // But we mark as ready to allow loadData to try (it might fail with auth error)
-        setAuthReady(true);
-        loadData();
-      }
-    });
-    return () => unsubscribe();
+    loadData();
   }, [loadData]);
 
   const filteredEvents = React.useMemo(() => {
@@ -147,12 +137,12 @@ export default function EventsPage() {
     }
   };
 
-  if (!authReady || loading) {
+  if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
         <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
         <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">
-          {!authReady ? 'Autenticando Barramento' : 'Sincronizando Barramento'}
+          Sincronizando Barramento
         </p>
       </div>
     );
