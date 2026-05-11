@@ -27,8 +27,8 @@ export const ingestionService = {
     summary: string;
     originLabel: string;
     originAgentRef?: string;
-    areaRef?: string;
-    projectRef?: string;
+    areaRef?: string | null;
+    projectRef?: string | null;
     confidence?: Confidence;
     payload?: any;
     should_create_inbox_item?: boolean;

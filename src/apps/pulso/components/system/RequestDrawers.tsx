@@ -57,18 +57,18 @@ export const AgentRequestDrawer = ({ isOpen, onClose, onSuccess }: AgentRequestD
         status: 'requested',
         priority: 'medium',
         areaRef: formData.areaRef,
-        projectRef: formData.projectRef || undefined,
-        requestedBy: 'user_felipe', // Hardcoded for now as per instructions (Google Auth user)
+        projectRef: formData.projectRef || null,
+        requestedBy: 'user_felipe', 
         payload: {
           provisionalName: formData.name,
           mission: formData.mission,
-          inputs: formData.inputs,
-          outputs: formData.outputs,
-          sourceRefs: formData.sourceRefs,
+          inputs: formData.inputs || null,
+          outputs: formData.outputs || null,
+          sourceRefs: formData.sourceRefs.length > 0 ? formData.sourceRefs : null,
           autonomyLevel: formData.autonomy,
-          cadence: formData.cadence,
-          notes: formData.notes,
-          riskAssessment: formData.risk
+          cadence: formData.cadence || null,
+          notes: formData.notes || null,
+          riskAssessment: formData.risk || null
         }
       });
       onSuccess();

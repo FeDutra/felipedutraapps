@@ -21,8 +21,8 @@ export const eventsService = {
     eventType: EventType;
     entityType: InboxType | string;
     entityRef: string;
-    areaRef?: string;
-    projectRef?: string;
+    areaRef?: string | null;
+    projectRef?: string | null;
     actorType: ActorType;
     actorRef?: string;
     origin: EventOrigin;

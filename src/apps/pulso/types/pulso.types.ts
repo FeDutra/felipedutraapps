@@ -109,10 +109,10 @@ export interface PulsoRequest {
   summary: string;
   status: RequestStatus;
   priority: Priority;
-  areaRef?: string;
-  projectRef?: string;
-  sourceRef?: string;
-  personRef?: string;
+  areaRef?: string | null;
+  projectRef?: string | null;
+  sourceRef?: string | null;
+  personRef?: string | null;
   requestedBy: string; 
   requestedAt: Date;
   updatedAt: Date;
@@ -153,8 +153,8 @@ export interface BaseEntity {
   notes?: string;
   sourceRefs?: string[];
   peopleRefs?: string[];
-  areaRef?: string;
-  projectRef?: string;
+  areaRef?: string | null;
+  projectRef?: string | null;
   confidence?: Confidence;
   uncertainties?: string[];
   createdAt: Date;
@@ -304,8 +304,8 @@ export interface Log {
   severity: Severity;
   event: string;
   payloadSummary?: string;
-  areaRef?: string;
-  projectRef?: string;
+  areaRef?: string | null;
+  projectRef?: string | null;
   routineRef?: string;
   agentRef?: string;
   sourceRef?: string;
@@ -330,8 +330,8 @@ export interface IngestionEvent extends BaseEntity {
   type: InboxType;
   rawInput: any;
   summary?: string;
-  areaRef?: string;
-  projectRef?: string;
+  areaRef?: string | null;
+  projectRef?: string | null;
   sourceRefs?: string[];
   peopleRefs?: string[];
   originLabel?: string;
@@ -360,8 +360,8 @@ export interface PulsoEvent {
   eventType: EventType;
   entityType: InboxType | string;
   entityRef: string;
-  areaRef?: string;
-  projectRef?: string;
+  areaRef?: string | null;
+  projectRef?: string | null;
   sourceRefs?: string[];
   actorType: ActorType;
   actorRef?: string;

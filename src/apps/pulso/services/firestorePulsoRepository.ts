@@ -506,8 +506,13 @@ export class FirestorePulsoRepository implements IPulsoRepository {
 
   async saveRequest(request: Partial<PulsoRequest>) {
     const id = request.id || `req_${Date.now()}`;
+    const cleanData = Object.entries(request).reduce((acc, [key, val]) => {
+      if (val !== undefined) acc[key] = val;
+      return acc;
+    }, {} as any);
+
     const data = { 
-      ...request, 
+      ...cleanData, 
       id, 
       status: request.status || 'requested',
       archived: false,
@@ -520,7 +525,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
 
   async updateRequest(id: string, data: Partial<PulsoRequest>) {
     const ref = doc(db!, firestorePaths.request(id));
-    await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+    const cleanData = Object.entries(data).reduce((acc, [key, val]) => {
+      if (val !== undefined) acc[key] = val;
+      return acc;
+    }, {} as any);
+    await updateDoc(ref, { ...cleanData, updatedAt: serverTimestamp() });
     const snap = await getDoc(ref);
     return this.toData<PulsoRequest>(snap);
   }

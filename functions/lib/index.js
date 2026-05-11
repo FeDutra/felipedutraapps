@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pulsoIngest = void 0;
+exports.pulsoRequests = exports.pulsoIngest = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -135,4 +135,6 @@ exports.pulsoIngest = (0, https_1.onRequest)({ region: "us-central1", secrets: [
         res.status(500).send("Internal Error");
     }
 });
+var requests_1 = require("./requests");
+Object.defineProperty(exports, "pulsoRequests", { enumerable: true, get: function () { return requests_1.pulsoRequests; } });
 //# sourceMappingURL=index.js.map
