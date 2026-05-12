@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, Terminal, Zap, Shield, AlertTriangle,
   CheckCircle2, X, Bot, Cpu, Bell, ClipboardList,
-  ChevronRight, Package, Layout
+  ChevronRight, Package, Layout, Calendar
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ function isOpenClaw(event: any): boolean {
 /** Icon per event/oc-type */
 function EventIcon({ event }: { event: any }) {
   const oc = resolveOcType(event);
-  const base = 'w-10 h-10 rounded-xl flex items-center justify-center border';
+  const base = 'w-10 h-10 rounded-xl flex items-center justify-center border shrink-0';
   if (oc === 'alert') return <div className={`${base} bg-red-500/10 border-red-500/20 text-red-400`}><AlertTriangle size={18} /></div>;
   if (oc === 'task')  return <div className={`${base} bg-blue-500/10 border-blue-500/20 text-blue-400`}><ClipboardList size={18} /></div>;
   if (oc === 'agent_update') return <div className={`${base} bg-violet-500/10 border-violet-500/20 text-violet-400`}><Bot size={18} /></div>;
@@ -72,7 +72,7 @@ const OC_TYPE_CHIP: Record<string, string> = {
 
 function Chip({ label, style }: { label: string; style?: string }) {
   return (
-    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border ${style || 'border-white/10 text-white/30 bg-white/5'}`}>
+    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border shrink-0 ${style || 'border-white/10 text-white/30 bg-white/5'}`}>
       {label}
     </span>
   );
@@ -85,9 +85,9 @@ export default function EventsPage() {
   const [events, setEvents] = React.useState<PulsoEvent[]>([]);
   const [ingestions, setIngestions] = React.useState<IngestionEvent[]>([]);
   const [filter, setFilter] = React.useState<OutboxStatus | 'all' | 'openclaw'>('all');
+  const [dateRange, setDateRange] = React.useState<string>('all');
   const [selectedEvent, setSelectedEvent] = React.useState<PulsoEvent | null>(null);
   const [error, setError] = React.useState<{ code: string; message: string } | null>(null);
-  const [authReady, setAuthReady] = React.useState(false);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -122,10 +122,44 @@ export default function EventsPage() {
   }, [loadData]);
 
   const filteredEvents = React.useMemo(() => {
-    if (filter === 'all') return events;
-    if (filter === 'openclaw') return events.filter(e => isOpenClaw(e));
-    return events.filter(e => e.outboxStatus === filter);
-  }, [events, filter]);
+    let baseList = events;
+    if (filter !== 'all') {
+      if (filter === 'openclaw') {
+        baseList = baseList.filter(e => isOpenClaw(e));
+      } else {
+        baseList = baseList.filter(e => e.outboxStatus === filter);
+      }
+    }
+
+    if (dateRange && dateRange !== 'all') {
+      const now = new Date();
+      baseList = baseList.filter(e => {
+        if (!e.createdAt) return false;
+        let d: Date;
+        if (typeof (e.createdAt as any).toDate === 'function') {
+          d = (e.createdAt as any).toDate();
+        } else if ((e.createdAt as any).seconds) {
+          d = new Date((e.createdAt as any).seconds * 1000);
+        } else {
+          d = new Date(e.createdAt);
+        }
+        if (isNaN(d.getTime())) return false;
+
+        if (dateRange === 'today') {
+          return d.toDateString() === now.toDateString();
+        } else if (dateRange === '7d') {
+          return d >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        } else if (dateRange === '30d') {
+          return d >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        } else if (dateRange === 'month') {
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
+    }
+
+    return baseList;
+  }, [events, filter, dateRange]);
 
   const ocCount = events.filter(e => isOpenClaw(e)).length;
 
@@ -140,7 +174,7 @@ export default function EventsPage() {
   if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
         <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">
           Sincronizando Barramento
         </p>
@@ -149,87 +183,108 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 w-full max-w-full">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8 w-full max-w-full min-w-0">
         <div>
           <h1 className="text-3xl font-black text-white mb-2">Barramento de Eventos</h1>
           <p className="text-sm text-white/40 max-w-lg">
             Auditoria, sincronização e ingestão OpenClaw → PULSO.
           </p>
         </div>
-        {/* Filters */}
-        <div className="flex bg-white/2 border border-white/5 p-1 rounded-xl flex-wrap gap-1">
-          {([
-            { key: 'all',       label: 'Todos' },
-            { key: 'openclaw',  label: `OpenClaw (${ocCount})` },
-            { key: 'pending',   label: 'Pendentes' },
-            { key: 'processed', label: 'Processados' },
-            { key: 'failed',    label: 'Falhos' },
-          ] as const).map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key as any)}
-              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
-                filter === key ? 'bg-white/5 text-white' : 'text-white/20 hover:text-white/40'
-              }`}
+
+        {/* Filters Container with full horizontal layout responsiveness */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto min-w-0">
+          {/* Horizontal scrollable status filters bar */}
+          <div className="flex bg-white/2 border border-white/5 p-1 rounded-xl overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto">
+            {([
+              { key: 'all',       label: 'Todos' },
+              { key: 'openclaw',  label: `OpenClaw (${ocCount})` },
+              { key: 'pending',   label: 'Pendentes' },
+              { key: 'processed', label: 'Processados' },
+              { key: 'failed',    label: 'Falhos' },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key as any)}
+                className={`px-3.5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
+                  filter === key ? 'bg-white/5 text-white shadow-[0_0_10px_rgba(255,255,255,0.05)]' : 'text-white/20 hover:text-white/40'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Mandatory Recency Date filter selector */}
+          <div className="flex items-center gap-2 bg-white/2 border border-white/5 px-3 py-2 rounded-xl shrink-0 self-start sm:self-center">
+            <Calendar size={12} className="text-blue-400" />
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Data:</span>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="bg-transparent border-none text-[10px] font-bold text-blue-400 focus:ring-0 p-0 cursor-pointer hover:text-blue-300 transition-colors outline-none"
             >
-              {label}
-            </button>
-          ))}
+              <option value="all" className="bg-[#020617]">Sempre</option>
+              <option value="today" className="bg-[#020617]">Hoje</option>
+              <option value="7d" className="bg-[#020617]">Últimos 7 dias</option>
+              <option value="30d" className="bg-[#020617]">Últimos 30 dias</option>
+              <option value="month" className="bg-[#020617]">Este mês</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Error Alert */}
       {error && (
-        <div className="mb-8 p-6 bg-red-500/5 border border-red-500/10 rounded-3xl flex items-center gap-4">
-          <AlertTriangle className="text-red-400 shrink-0" size={20} />
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-red-400/60 mb-1">Erro de Sincronia</p>
-            <p className="text-xs text-white/70 font-medium">{error.message}</p>
+        <div className="mb-8 p-5 bg-red-500/5 border border-red-500/10 rounded-2xl flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="text-red-400 shrink-0" size={18} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-black uppercase tracking-widest text-red-400/60 mb-0.5">Erro de Sincronia</p>
+            <p className="text-xs text-white/70 font-medium break-words">{error.message}</p>
           </div>
           <button 
             onClick={() => loadData()}
-            className="ml-auto px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+            className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all shrink-0"
           >
             Tentar Novamente
           </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full max-w-full min-w-0">
         {/* Events list */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-              <Terminal size={12} /> Fluxo do Outbox
+        <div className="lg:col-span-8 space-y-3 w-full max-w-full min-w-0">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h3 className="text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-1.5">
+              <Terminal size={10} /> Fluxo do Outbox
             </h3>
-            <span className="text-[10px] font-bold text-white/10 uppercase">{filteredEvents.length} Eventos</span>
+            <span className="text-[9px] font-bold text-white/20 uppercase">{filteredEvents.length} Eventos</span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 w-full max-w-full min-w-0">
             {filteredEvents.map(event => (
               <EventRow key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
             ))}
             {filteredEvents.length === 0 && (
-              <div className="py-20 text-center border border-dashed border-white/5 rounded-3xl">
-                <p className="text-white/20 text-xs italic">Nenhum evento encontrado para este filtro.</p>
+              <div className="py-20 text-center border border-dashed border-white/5 rounded-2xl mt-2">
+                <p className="text-white/20 text-xs italic">Nenhum evento encontrado para estes filtros.</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Right column */}
-        <div className="lg:col-span-4 space-y-8">
+        <div className="lg:col-span-4 space-y-6 w-full max-w-full min-w-0">
           {/* Ingestion stream */}
-          <section className="bg-white/2 border border-white/5 rounded-3xl p-8">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-                <Zap size={12} /> Ingestão (OpenClaw)
+          <section className="bg-white/2 border border-white/5 rounded-3xl p-6 w-full max-w-full min-w-0">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-1.5">
+                <Zap size={10} /> Ingestão (OpenClaw)
               </h3>
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
             </div>
-            <div className="space-y-6">
+            <div className="space-y-5">
               {ingestions.map(ingest => {
                 const p: any = (ingest as any).payload || {};
                 const title =
@@ -238,27 +293,27 @@ export default function EventsPage() {
                   ingest.name || ingest.summary || 'Ingestão externa';
                 const ocType = (ingest as any).event_type || (ingest as any).ocEventType || null;
                 return (
-                  <div key={ingest.id} className="relative pl-6 pb-6 border-l border-white/5 last:pb-0">
-                    <div className={`absolute left-[-5px] top-0 w-2 h-2 rounded-full ${
+                  <div key={ingest.id} className="relative pl-5 pb-5 border-l border-white/5 last:pb-0 min-w-0">
+                    <div className={`absolute left-[-4px] top-0 w-2 h-2 rounded-full ${
                       ingest.ingestionStatus === 'failed' ? 'bg-red-500' :
                       ingest.ingestionStatus === 'converted_to_inbox' ? 'bg-emerald-500' :
                       'bg-blue-500'
                     }`} />
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black text-cyan-400/60 uppercase tracking-tighter">OpenClaw</span>
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[8px] font-black text-cyan-400/60 uppercase tracking-tight shrink-0">OpenClaw</span>
                         {ocType && (
-                          <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border ${OC_TYPE_CHIP[ocType] || 'border-white/10 text-white/30'}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border shrink-0 truncate ${OC_TYPE_CHIP[ocType] || 'border-white/10 text-white/30'}`}>
                             {ocType.replace(/_/g, ' ')}
                           </span>
                         )}
                       </div>
-                      <span className="text-[8px] text-white/10">
+                      <span className="text-[8px] text-white/20 shrink-0">
                         {ingest.createdAt ? new Date(ingest.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                       </span>
                     </div>
-                    <p className="text-xs text-white/60 font-medium line-clamp-2">{title}</p>
-                    <p className="text-[9px] text-white/30 font-bold uppercase mt-1 tracking-widest">{ingest.ingestionStatus || 'received'}</p>
+                    <p className="text-xs text-white/60 font-medium line-clamp-2 break-words">{title}</p>
+                    <p className="text-[8px] text-white/30 font-bold uppercase mt-1 tracking-widest">{ingest.ingestionStatus || 'received'}</p>
                   </div>
                 );
               })}
@@ -269,14 +324,14 @@ export default function EventsPage() {
           </section>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/2 border border-white/5 p-5 rounded-3xl">
-              <p className="text-[9px] font-black text-white/20 uppercase mb-1">OpenClaw</p>
-              <p className="text-xl font-black text-cyan-400">{ocCount}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/2 border border-white/5 p-4 rounded-2xl min-w-0">
+              <p className="text-[8px] font-black text-white/20 uppercase mb-0.5 truncate">OpenClaw</p>
+              <p className="text-lg font-black text-cyan-400">{ocCount}</p>
             </div>
-            <div className="bg-white/2 border border-white/5 p-5 rounded-3xl">
-              <p className="text-[9px] font-black text-white/20 uppercase mb-1">Pendentes</p>
-              <p className="text-xl font-black text-amber-500">{events.filter(e => e.outboxStatus === 'pending').length}</p>
+            <div className="bg-white/2 border border-white/5 p-4 rounded-2xl min-w-0">
+              <p className="text-[8px] font-black text-white/20 uppercase mb-0.5 truncate">Pendentes</p>
+              <p className="text-lg font-black text-amber-500">{events.filter(e => e.outboxStatus === 'pending').length}</p>
             </div>
           </div>
         </div>
@@ -306,14 +361,14 @@ function EventRow({ event, onClick }: { event: any; onClick: () => void }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
-      className="group bg-white/2 border border-white/5 p-5 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all cursor-pointer"
+      className="group bg-white/2 border border-white/5 p-4 md:p-5 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all cursor-pointer w-full max-w-full min-w-0"
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3 md:gap-4 min-w-0">
         <EventIcon event={event} />
 
         <div className="flex-1 min-w-0">
           {/* Chips row */}
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
             {oc && <Chip label="OpenClaw" style="border-cyan-500/30 text-cyan-400 bg-cyan-500/5" />}
             {ocType && <Chip label={ocType.replace(/_/g, ' ')} style={OC_TYPE_CHIP[ocType]} />}
             {severity && (
@@ -336,24 +391,24 @@ function EventRow({ event, onClick }: { event: any; onClick: () => void }) {
           </div>
 
           {/* Title */}
-          <h4 className="text-[13px] font-bold text-white/85 leading-snug line-clamp-1 mb-1">
+          <h4 className="text-xs md:text-[13px] font-bold text-white/85 leading-snug break-words mb-1">
             {title}
           </h4>
 
           {/* Meta row */}
-          <div className="flex items-center gap-3 text-[9px] font-bold text-white/25 uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-[8px] font-bold text-white/25 uppercase tracking-widest flex-wrap">
             {event.ocActor?.name && (
-              <span className="flex items-center gap-1"><Bot size={9} />{event.ocActor.name}</span>
+              <span className="flex items-center gap-1 shrink-0"><Bot size={8} />{event.ocActor.name}</span>
             )}
             {!event.ocActor?.name && event.actorRef && (
-              <span className="flex items-center gap-1"><Shield size={9} />{event.actorRef}</span>
+              <span className="flex items-center gap-1 shrink-0"><Shield size={8} />{event.actorRef}</span>
             )}
-            {event.ocSource?.host && <span>{event.ocSource.host}</span>}
-            <span>{event.createdAt ? new Date(event.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '--'}</span>
+            {event.ocSource?.host && <span className="shrink-0">{event.ocSource.host}</span>}
+            <span className="shrink-0">{event.createdAt ? new Date(event.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '--'}</span>
           </div>
         </div>
 
-        <ChevronRight size={14} className="text-white/10 group-hover:text-white/30 transition-colors mt-1 shrink-0" />
+        <ChevronRight size={14} className="text-white/10 group-hover:text-white/30 transition-colors mt-1 shrink-0 ml-1" />
       </div>
     </motion.div>
   );
@@ -378,68 +433,68 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[60] flex justify-end pointer-events-none">
+      <div className="fixed inset-0 z-[60] flex justify-end pointer-events-none w-full max-w-full">
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           onClick={onClose}
-          className="absolute inset-0 bg-black/80 backdrop-blur-md pointer-events-auto"
+          className="absolute inset-0 bg-black/80 backdrop-blur-md pointer-events-auto w-full max-w-full"
         />
         <motion.div
           initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-lg bg-slate-950 border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl"
+          className="relative w-full max-w-lg sm:max-w-md md:max-w-lg bg-[#020617] border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col shrink-0 custom-scrollbar"
         >
-          <div className="p-10">
+          <div className="p-6 md:p-8 w-full max-w-full min-w-0">
             {/* Header */}
-            <div className="flex items-start justify-between mb-8">
-              <div className="flex items-center gap-4">
+            <div className="flex items-start justify-between mb-6 pb-2 border-b border-white/5">
+              <div className="flex items-center gap-3 min-w-0">
                 <EventIcon event={event} />
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     {oc    && <Chip label="OpenClaw"   style="border-cyan-500/30 text-cyan-400 bg-cyan-500/5" />}
                     {ocType && <Chip label={ocType.replace(/_/g, ' ')} style={OC_TYPE_CHIP[ocType]} />}
                   </div>
-                  <h2 className="text-lg font-black text-white leading-tight">{title}</h2>
+                  <h2 className="text-base font-black text-white leading-tight break-words">{title}</h2>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors">
-                <X size={20} />
+              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors shrink-0">
+                <X size={18} />
               </button>
             </div>
 
             {/* Status cards */}
-            <div className="grid grid-cols-2 gap-3 mb-8">
-              <div className="bg-white/2 border border-white/5 p-4 rounded-2xl">
-                <p className="text-[9px] font-black text-white/20 uppercase mb-1.5">Outbox</p>
-                <div className="flex items-center gap-1.5">
-                  <div className={`w-2 h-2 rounded-full ${
+            <div className="grid grid-cols-2 gap-3 mb-6 w-full max-w-full min-w-0">
+              <div className="bg-white/2 border border-white/5 p-3 rounded-xl min-w-0">
+                <p className="text-[8px] font-black text-white/20 uppercase mb-1 truncate">Outbox Status</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${
                     event.outboxStatus === 'processed' ? 'bg-emerald-500' :
                     event.outboxStatus === 'failed'    ? 'bg-red-500' : 'bg-amber-500'
                   }`} />
-                  <span className="text-[10px] font-bold text-white/70 uppercase">{event.outboxStatus || 'pending'}</span>
+                  <span className="text-[9px] font-bold text-white/70 uppercase truncate">{event.outboxStatus || 'pending'}</span>
                 </div>
               </div>
-              <div className="bg-white/2 border border-white/5 p-4 rounded-2xl">
-                <p className="text-[9px] font-black text-white/20 uppercase mb-1.5">Origem</p>
-                <span className="text-[10px] font-bold text-cyan-400 uppercase">{event.origin || 'system'}</span>
+              <div className="bg-white/2 border border-white/5 p-3 rounded-xl min-w-0">
+                <p className="text-[8px] font-black text-white/20 uppercase mb-1 truncate">Origem</p>
+                <span className="text-[9px] font-bold text-cyan-400 uppercase truncate block">{event.origin || 'system'}</span>
               </div>
             </div>
 
             {/* Payload */}
-            <div className="mb-8">
-              <h3 className="text-[9px] font-black uppercase tracking-widest text-white/25 mb-3">Payload</h3>
-              <pre className="p-5 bg-black/40 border border-white/5 rounded-2xl text-[10px] text-blue-400 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
+            <div className="mb-6 w-full max-w-full min-w-0">
+              <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 truncate">Payload Snapshot</h3>
+              <pre className="p-4 bg-black/40 border border-white/5 rounded-xl text-[9px] text-blue-400 font-mono overflow-x-auto whitespace-pre-wrap break-words leading-relaxed max-h-60 custom-scrollbar">
                 {JSON.stringify(p && Object.keys(p).length > 0 ? p : { info: event.payloadSummary || 'sem payload' }, null, 2)}
               </pre>
             </div>
 
             {/* OpenClaw envelope fields */}
             {oc && (
-              <div className="mb-8">
-                <h3 className="text-[9px] font-black uppercase tracking-widest text-white/25 mb-3 flex items-center gap-2">
-                  <Cpu size={10} /> Envelope OpenClaw
+              <div className="mb-6 w-full max-w-full min-w-0">
+                <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 flex items-center gap-1 truncate">
+                  <Cpu size={10} className="shrink-0" /> Envelope OpenClaw
                 </h3>
-                <div className="space-y-0 border border-white/5 rounded-2xl overflow-hidden">
+                <div className="space-y-0 border border-white/5 rounded-xl overflow-hidden max-w-full min-w-0">
                   <MetaRow label="event_id"      value={event.entityRef || event.id} />
                   <MetaRow label="dedupe_key"    value={event.ocDedupeKey || '--'} />
                   <MetaRow label="event_type"    value={ocType || '--'} />
@@ -458,11 +513,11 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             )}
 
             {/* Context & Metadata */}
-            <div className="mb-10">
-              <h3 className="text-[9px] font-black uppercase tracking-widest text-white/25 mb-3 flex items-center gap-2">
-                <Layout size={10} /> Contexto Estrutural
+            <div className="mb-6 w-full max-w-full min-w-0">
+              <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 flex items-center gap-1 truncate">
+                <Layout size={10} className="shrink-0" /> Contexto Estrutural
               </h3>
-              <div className="space-y-0 border border-white/5 rounded-2xl overflow-hidden">
+              <div className="space-y-0 border border-white/5 rounded-xl overflow-hidden max-w-full min-w-0">
                 <MetaRow label="Área (areaRef)"     value={event.areaRef || '--'} />
                 <MetaRow label="Projeto (projectRef)" value={event.projectRef || '--'} />
                 <MetaRow label="entityType"          value={event.entityType || '--'} />
@@ -474,9 +529,9 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             </div>
 
             {/* System metadata */}
-            <div className="mb-10">
-              <h3 className="text-[9px] font-black uppercase tracking-widest text-white/25 mb-3">Sistema</h3>
-              <div className="space-y-0 border border-white/5 rounded-2xl overflow-hidden">
+            <div className="mb-6 w-full max-w-full min-w-0">
+              <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 truncate">Sistema Canônico</h3>
+              <div className="space-y-0 border border-white/5 rounded-xl overflow-hidden max-w-full min-w-0">
                 <MetaRow label="pulso_event_id" value={event.id} />
                 <MetaRow label="entityRef"      value={event.entityRef || '--'} />
                 <MetaRow label="processedBy"    value={event.processedByAgents?.join(', ') || 'nenhum'} />
@@ -484,23 +539,23 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 pt-6 border-t border-white/5">
+            <div className="flex items-center gap-2 pt-4 border-t border-white/5 w-full max-w-full">
               <button
                 onClick={() => onUpdateStatus(event.id, 'processed')}
-                className="flex-1 py-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 size={13} /> Processado
+                <CheckCircle2 size={12} /> Processado
               </button>
               <button
                 onClick={() => onUpdateStatus(event.id, 'failed')}
-                className="flex-1 py-3.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1.5"
               >
-                <X size={13} /> Reportar Falha
+                <X size={12} /> Falha
               </button>
             </div>
             <button
               onClick={() => onUpdateStatus(event.id, 'ignored')}
-              className="w-full mt-3 py-3.5 bg-white/2 border border-white/8 rounded-2xl text-[9px] font-black uppercase tracking-widest text-white/25 hover:bg-white/5 transition-all"
+              className="w-full mt-2 py-3 bg-white/2 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/30 hover:bg-white/5 transition-all"
             >
               Ignorar Evento
             </button>
@@ -515,9 +570,9 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-2.5 px-4 border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
-      <span className="text-[9px] text-white/20 font-black uppercase tracking-widest shrink-0 mr-4">{label}</span>
-      <span className="text-[10px] text-white/55 font-mono truncate max-w-[220px] text-right">{value}</span>
+    <div className="flex items-center justify-between py-2 px-3 border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors min-w-0 gap-2">
+      <span className="text-[8px] text-white/20 font-black uppercase tracking-widest shrink-0 truncate max-w-[40%]">{label}</span>
+      <span className="text-[9px] text-white/60 font-mono truncate max-w-[60%] text-right select-all">{value}</span>
     </div>
   );
 }

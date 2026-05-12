@@ -13,6 +13,36 @@ export const inboxHelpers = {
       if (filters.priority && filters.priority !== 'all' && item.priority !== filters.priority) return false;
       if (filters.area && filters.area !== 'all' && item.areaRef !== filters.area) return false;
       if (filters.origin && filters.origin !== 'all' && item.originChannel !== filters.origin) return false;
+      
+      if (filters.dateRange && filters.dateRange !== 'all') {
+        const dVal = item.createdAt || (item as any).updatedAt || item.processedAt;
+        if (!dVal) return false;
+        
+        let dateObj: Date;
+        if (typeof (dVal as any).toDate === 'function') {
+          dateObj = (dVal as any).toDate();
+        } else if ((dVal as any).seconds) {
+          dateObj = new Date((dVal as any).seconds * 1000);
+        } else {
+          dateObj = new Date(dVal);
+        }
+
+        if (isNaN(dateObj.getTime())) return false;
+        
+        const now = new Date();
+        if (filters.dateRange === 'today') {
+          if (dateObj.toDateString() !== now.toDateString()) return false;
+        } else if (filters.dateRange === '7d') {
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (dateObj < sevenDaysAgo) return false;
+        } else if (filters.dateRange === '30d') {
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (dateObj < thirtyDaysAgo) return false;
+        } else if (filters.dateRange === 'month') {
+          if (dateObj.getMonth() !== now.getMonth() || dateObj.getFullYear() !== now.getFullYear()) return false;
+        }
+      }
+
       return true;
     });
   },
@@ -21,8 +51,8 @@ export const inboxHelpers = {
     if (!query) return items;
     const q = query.toLowerCase();
     return items.filter(item => 
-      item.name.toLowerCase().includes(q) || 
-      item.body.toLowerCase().includes(q)
+      ((item as any).name || '').toLowerCase().includes(q) || 
+      ((item as any).body || '').toLowerCase().includes(q)
     );
   },
 

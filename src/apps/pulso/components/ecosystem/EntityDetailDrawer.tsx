@@ -16,10 +16,7 @@ import { inboxService } from '../../services/inboxService';
 import { sourcesService } from '../../services/sourcesService';
 import { eventsService } from '../../services/eventsService';
 import { peopleService } from '../../services/peopleService';
-import { InboxTypeBadge } from '../inbox/InboxBadges';
-import { PriorityBadge } from '../BaseComponents';
-import { getStatusLabel } from '../../utils/statusHelpers';
-import { getEntityTypeLabel, getInboxTypeLabel } from '../../utils/translationHelpers';
+import { getEntityTypeLabel } from '../../utils/translationHelpers';
 
 export const EntityDetailDrawer = ({ 
   type, 
@@ -27,10 +24,10 @@ export const EntityDetailDrawer = ({
   onClose,
   onNavigate 
 }: { 
-  type: 'area' | 'project' | 'source' | 'person' | null, 
-  id: string | null, 
-  onClose: () => void,
-  onNavigate?: (type: any, id: string) => void
+  type: 'area' | 'project' | 'source' | 'person' | null; 
+  id: string | null; 
+  onClose: () => void;
+  onNavigate?: (type: any, id: string) => void;
 }) => {
   const [data, setData] = React.useState<any>(null);
   const [relations, setRelations] = React.useState<any>({
@@ -41,7 +38,8 @@ export const EntityDetailDrawer = ({
     sources: [],
     people: [],
     events: [],
-    area: null
+    area: null,
+    project: null,
   });
   const [loading, setLoading] = React.useState(false);
 
@@ -93,12 +91,15 @@ export const EntityDetailDrawer = ({
           if (entityData?.areaRef) {
             rels.area = await areasService.getById(entityData.areaRef);
           }
+          if (entityData?.projectRef) {
+            rels.project = await projectsService.getById(entityData.projectRef);
+          }
         }
 
         setData(entityData);
         setRelations(rels);
       } catch (err) {
-        console.error('Erro ao carregar detalhes da entidade:', err);
+        console.error('Erro ao carregar detalhes da entidade no cache:', err);
       }
       setLoading(false);
     }
@@ -106,6 +107,17 @@ export const EntityDetailDrawer = ({
   }, [type, id]);
 
   if (!type || !id) return null;
+
+  const safeDateStr = (dVal: any) => {
+    if (!dVal) return 'N/A';
+    try {
+      if (typeof dVal.toDate === 'function') return dVal.toDate().toLocaleDateString();
+      if (dVal.seconds) return new Date(dVal.seconds * 1000).toLocaleDateString();
+      return new Date(dVal).toLocaleDateString();
+    } catch {
+      return 'N/A';
+    }
+  };
 
   const renderSpecificDetails = () => {
     if (type === 'person') {
@@ -115,43 +127,52 @@ export const EntityDetailDrawer = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Role / Cargo</span>
-              <span className="text-xs font-bold text-white/80">{data.role || 'N/A'}</span>
+              <span className="text-xs font-bold text-white/80 truncate block">{data.role || 'N/A'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Tipo de Relação</span>
-              <span className="text-xs font-bold text-white/80 uppercase">{data.relationType || 'N/A'}</span>
+              <span className="text-xs font-bold text-white/80 uppercase truncate block">{data.relationType || 'N/A'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Nível de Atenção</span>
-              <span className={`text-xs font-bold uppercase tracking-wide ${data.attentionLevel === 'high' ? 'text-red-400' : 'text-amber-400'}`}>
+              <span className={`text-xs font-bold uppercase tracking-wide block ${data.attentionLevel === 'high' ? 'text-red-400' : 'text-amber-400'}`}>
                 {data.attentionLevel || 'medium'}
               </span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Origem / Canal</span>
-              <span className="text-xs font-bold text-white/60 uppercase">{data.source || data.channel || 'OpenClaw'}</span>
+              <span className="text-xs font-bold text-white/60 uppercase truncate block">{data.source || data.channel || 'OpenClaw'}</span>
             </div>
           </div>
-          {data.areaRef && (
-            <div className="pt-2 border-t border-white/5">
+
+          <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
+            <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área Vinculada</span>
-              <span className="text-xs font-bold text-blue-400">{relations.area?.name || data.areaRef}</span>
+              <span className="text-xs font-bold text-blue-400 block truncate">{relations.area?.name || data.areaRef || 'Geral / Desvinculado'}</span>
             </div>
-          )}
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Projeto(s)</span>
+              <span className="text-xs font-bold text-emerald-400 block truncate">
+                {relations.project?.name || data.projectRef || data.projectRefs?.join(', ') || 'Nenhum direto'}
+              </span>
+            </div>
+          </div>
+
           {data.notes && (
-            <div className="pt-2 border-t border-white/5">
+            <div className="pt-3 border-t border-white/5">
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Notas Estratégicas</span>
               <p className="text-xs text-white/60 leading-relaxed italic bg-white/2 p-3 rounded-xl border border-white/5">
                 "{data.notes}"
               </p>
             </div>
           )}
-          {data.lastInteractionAt && (
-            <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-white/40">
-              <Clock size={10} />
-              <span className="text-[9px]">Última Interação: {new Date(data.lastInteractionAt).toLocaleDateString()}</span>
-            </div>
-          )}
+
+          <div className="pt-3 border-t border-white/5 flex items-center justify-between text-white/30 text-[9px] font-mono">
+            <span className="flex items-center gap-1">
+              <Clock size={10} /> Criado: {safeDateStr(data.createdAt)}
+            </span>
+            <span>Atualizado: {safeDateStr(data.updatedAt)}</span>
+          </div>
         </div>
       );
     }
@@ -163,54 +184,58 @@ export const EntityDetailDrawer = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Tipo de Conector</span>
-              <span className="text-xs font-mono font-bold text-white/80 uppercase">{data.type || 'google_sheets'}</span>
+              <span className="text-xs font-mono font-bold text-white/80 uppercase truncate block">{data.type || 'google_sheets'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Relevância</span>
-              <span className="text-xs font-bold text-emerald-400 uppercase">{data.relevance || 'high'}</span>
+              <span className="text-xs font-bold text-emerald-400 uppercase block">{data.relevance || 'high'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Modo de Sincronia</span>
-              <span className="text-xs font-bold text-white/60 uppercase">{data.syncMode || 'auto'}</span>
+              <span className="text-xs font-bold text-white/60 uppercase block">{data.syncMode || 'auto'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Papel / Missão</span>
-              <span className="text-xs font-bold text-white/60">{data.role || 'Repositório Base'}</span>
+              <span className="text-xs font-bold text-white/60 truncate block">{data.role || 'Repositório Base'}</span>
             </div>
           </div>
+
           {data.url && (
-            <div className="pt-2 border-t border-white/5">
+            <div className="pt-3 border-t border-white/5">
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Endereço (Link)</span>
-              <a href={data.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-blue-400 hover:underline flex items-center gap-1 break-all">
-                <LinkIcon size={12} />
+              <a href={data.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-blue-400 hover:underline flex items-center gap-1.5 break-all">
+                <LinkIcon size={12} className="shrink-0" />
                 {data.url}
               </a>
             </div>
           )}
-          {(data.areaRef || data.projectRef) && (
-            <div className="pt-2 border-t border-white/5 grid grid-cols-2 gap-2">
-              {data.areaRef && (
-                <div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área</span>
-                  <span className="text-xs font-bold text-blue-400">{relations.area?.name || data.areaRef}</span>
-                </div>
-              )}
-              {data.projectRef && (
-                <div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Projeto</span>
-                  <span className="text-xs font-bold text-emerald-400">{relations.project?.name || data.projectRef}</span>
-                </div>
-              )}
+
+          <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área Canônica</span>
+              <span className="text-xs font-bold text-blue-400 block truncate">{relations.area?.name || data.areaRef || 'Desvinculada'}</span>
             </div>
-          )}
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Projeto de Escopo</span>
+              <span className="text-xs font-bold text-emerald-400 block truncate">{relations.project?.name || data.projectRef || 'Geral'}</span>
+            </div>
+          </div>
+
           {data.notes && (
-            <div className="pt-2 border-t border-white/5">
-              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Notas</span>
+            <div className="pt-3 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Notas da Ingestão</span>
               <p className="text-xs text-white/60 italic bg-white/2 p-3 rounded-xl border border-white/5">
                 "{data.notes}"
               </p>
             </div>
           )}
+
+          <div className="pt-3 border-t border-white/5 flex items-center justify-between text-white/30 text-[9px] font-mono">
+            <span className="flex items-center gap-1">
+              <Clock size={10} /> Criado: {safeDateStr(data.createdAt)}
+            </span>
+            <span>Atualizado: {safeDateStr(data.updatedAt)}</span>
+          </div>
         </div>
       );
     }
@@ -222,23 +247,41 @@ export const EntityDetailDrawer = ({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Status</span>
-              <span className="text-xs font-bold text-white/80 uppercase">{data.status || 'active'}</span>
+              <span className="text-xs font-bold text-white/80 uppercase block">{data.status || 'active'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Estágio</span>
-              <span className="text-xs font-bold text-white/60 uppercase">{data.stage || 'execução'}</span>
+              <span className="text-xs font-bold text-white/60 uppercase block">{data.stage || 'execução'}</span>
             </div>
             <div>
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Prioridade</span>
-              <span className="text-xs font-bold text-emerald-400 uppercase">{data.priority || 'high'}</span>
+              <span className="text-xs font-bold text-emerald-400 uppercase block">{data.priority || 'high'}</span>
             </div>
           </div>
           {relations.area && (
-            <div className="pt-2 border-t border-white/5">
+            <div className="pt-3 border-t border-white/5">
               <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área de Domínio</span>
-              <span className="text-xs font-bold text-blue-400">{relations.area.name}</span>
+              <span className="text-xs font-bold text-blue-400 block truncate">{relations.area.name}</span>
             </div>
           )}
+        </div>
+      );
+    }
+
+    if (type === 'area') {
+      return (
+        <div className="bg-white/2 border border-white/5 rounded-3xl p-6 space-y-4 mb-8">
+          <h4 className="text-xs font-black uppercase tracking-widest text-blue-400">Atributos da Área</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Status Operacional</span>
+              <span className="text-xs font-bold text-white/80 uppercase block">{data.status || 'active'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Prioridade Geral</span>
+              <span className="text-xs font-bold text-blue-400 uppercase block">{data.priority || 'high'}</span>
+            </div>
+          </div>
         </div>
       );
     }
@@ -248,13 +291,13 @@ export const EntityDetailDrawer = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-end pointer-events-none">
+      <div className="fixed inset-0 z-50 flex justify-end pointer-events-none w-full max-w-full">
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="absolute inset-0 bg-black/80 backdrop-blur-md pointer-events-auto"
+          className="absolute inset-0 bg-black/80 backdrop-blur-md pointer-events-auto w-full max-w-full"
         />
 
         <motion.div 
@@ -262,7 +305,7 @@ export const EntityDetailDrawer = ({
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-2xl bg-[#020617] border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col custom-scrollbar"
+          className="relative w-full max-w-2xl sm:max-w-xl md:max-w-2xl bg-[#020617] border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col custom-scrollbar shrink-0"
         >
           {loading ? (
             <div className="flex-1 flex flex-col items-center justify-center">
@@ -270,38 +313,38 @@ export const EntityDetailDrawer = ({
               <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Sintonizando Detalhes</p>
             </div>
           ) : data ? (
-            <div className="p-8">
+            <div className="p-6 md:p-8 w-full max-w-full min-w-0">
               {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                   <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-blue-400">
-                     {type === 'area' ? <Hash size={24} /> : type === 'project' ? <Layers size={24} /> : type === 'source' ? <Database size={24} /> : <User size={24} />}
+              <div className="flex items-center justify-between mb-8 pb-2 border-b border-white/5">
+                <div className="flex items-center gap-3 min-w-0">
+                   <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-blue-400 shrink-0">
+                     {type === 'area' ? <Hash size={20} /> : type === 'project' ? <Layers size={20} /> : type === 'source' ? <Database size={20} /> : <User size={20} />}
                    </div>
-                   <div>
-                     <p className="text-[10px] font-black uppercase tracking-widest text-white/20">{getEntityTypeLabel(type)}</p>
-                     <h2 className="text-xl font-black text-white">{data.name}</h2>
+                   <div className="min-w-0">
+                     <p className="text-[9px] font-black uppercase tracking-widest text-white/20">{getEntityTypeLabel(type)}</p>
+                     <h2 className="text-lg font-black text-white truncate">{data.name}</h2>
                    </div>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors">
-                  <X size={20} />
+                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors shrink-0">
+                  <X size={18} />
                 </button>
               </div>
 
-              {/* Render Specific Blocks enriched with rules */}
+              {/* Enriched Specific Info Card */}
               {renderSpecificDetails()}
 
-              {/* General Description */}
+              {/* General Objective/Description */}
               {(data.description || data.objective) && (
                 <div className="mb-8">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Objetivo Central / Descrição</p>
-                  <p className="text-xs text-white/60 leading-relaxed bg-white/2 p-5 rounded-2xl border border-white/5 italic">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-2">Objetivo Central / Descrição</p>
+                  <p className="text-xs text-white/60 leading-relaxed bg-white/2 p-4 rounded-2xl border border-white/5 italic">
                     "{data.description || data.objective}"
                   </p>
                 </div>
               )}
 
-              {/* RELATIONS SECTION */}
-              <div className="space-y-8">
+              {/* Sub-Entities & Relationships */}
+              <div className="space-y-6">
                 
                 {/* Linked Area (for Projects) */}
                 {type === 'project' && relations.area && (
@@ -321,7 +364,7 @@ export const EntityDetailDrawer = ({
                         <RelationItem 
                           key={pep.id} 
                           label={pep.name} 
-                          sublabel={pep.role || pep.relationType} 
+                          sublabel={pep.role || pep.relationType || 'Stakeholder'} 
                           onClick={() => onNavigate?.('person', pep.id)}
                         />
                       ))}
@@ -337,7 +380,7 @@ export const EntityDetailDrawer = ({
                         <RelationItem 
                           key={p.id} 
                           label={p.name} 
-                          sublabel={p.stage} 
+                          sublabel={`Estágio: ${p.stage || 'Operação'}`} 
                           onClick={() => onNavigate?.('project', p.id)}
                         />
                       ))}
@@ -353,7 +396,7 @@ export const EntityDetailDrawer = ({
                         <RelationItem 
                           key={s.id} 
                           label={s.name} 
-                          sublabel={s.type || s.system}
+                          sublabel={s.type || 'Conector Canônico'}
                           icon={Database}
                           onClick={() => onNavigate?.('source', s.id)}
                         />
@@ -362,41 +405,41 @@ export const EntityDetailDrawer = ({
                   </RelationGroup>
                 )}
 
-                {/* Tasks & Records (Task 5: Garantir visibilidade das Tarefas criadas via Request) */}
+                {/* Tasks Materializadas via Request */}
                 {relations.tasks?.length > 0 && (
                   <RelationGroup title="Tarefas Vinculadas (Materializadas)" count={relations.tasks.length} icon={CheckSquare}>
                     <div className="space-y-2">
                       {relations.tasks.map((t: any) => (
-                        <div key={t.id} className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white/90">{t.name || t.title}</span>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${t.priority === 'high' ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-white/40'}`}>
+                        <div key={t.id} className="p-3.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex flex-col gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-white/90 truncate">{t.name || t.title}</span>
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0 ${t.priority === 'high' || t.priority === 'critical' ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-white/40'}`}>
                               {t.priority || 'medium'}
                             </span>
                           </div>
                           {t.description && (
-                            <p className="text-[10px] text-white/40 line-clamp-2">{t.description}</p>
+                            <p className="text-[10px] text-white/40 line-clamp-2 mt-0.5">{t.description}</p>
                           )}
-                          <span className="text-[8px] font-bold text-emerald-400/60 font-mono mt-1">ID: {t.id}</span>
+                          <span className="text-[8px] font-bold text-emerald-400/50 font-mono mt-1 block">ID: {t.id}</span>
                         </div>
                       ))}
                     </div>
                   </RelationGroup>
                 )}
 
-                {/* Linked Events (Sinais do Barramento no detalhe do Projeto/Área) */}
+                {/* Sinais do Barramento */}
                 {relations.events?.length > 0 && (
                   <RelationGroup title="Sinais do Barramento (Eventos Recentes)" count={relations.events.length} icon={Activity}>
                     <div className="space-y-2">
                       {relations.events.map((evt: any) => (
                         <div key={evt.id} className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white/80">{evt.payloadSummary || evt.title || evt.eventType}</span>
-                            <span className="text-[8px] font-black text-blue-400 uppercase px-1.5 py-0.5 bg-blue-500/10 rounded">{evt.eventType}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-white/80 truncate">{evt.payloadSummary || evt.title || evt.eventType}</span>
+                            <span className="text-[8px] font-black text-blue-400 uppercase px-1.5 py-0.5 bg-blue-500/10 rounded shrink-0">{evt.eventType}</span>
                           </div>
-                          <div className="flex items-center justify-between text-[9px] text-white/40">
-                            <span>Ator: {evt.actor || 'OpenClaw'}</span>
-                            <span>{new Date(evt.createdAt).toLocaleString()}</span>
+                          <div className="flex items-center justify-between text-[8px] text-white/40">
+                            <span>Origem: {evt.actor || 'OpenClaw'}</span>
+                            <span>{safeDateStr(evt.createdAt)}</span>
                           </div>
                         </div>
                       ))}
@@ -407,8 +450,10 @@ export const EntityDetailDrawer = ({
               </div>
             </div>
           ) : (
-             <div className="p-10 text-center">
-               <p className="text-white/20 text-xs">Entidade não encontrada no cache local.</p>
+             <div className="p-12 text-center my-auto">
+               <AlertCircle size={24} className="text-white/20 mx-auto mb-2" />
+               <p className="text-white/30 text-xs font-bold">Estrutura sem registros de metadados no cache da sessão.</p>
+               <p className="text-[10px] text-white/20 mt-1">Sintonize novamente ou verifique as permissões de acesso.</p>
              </div>
           )}
         </motion.div>
@@ -418,13 +463,13 @@ export const EntityDetailDrawer = ({
 };
 
 const RelationGroup = ({ title, count, icon: Icon, children }: any) => (
-  <div>
-    <div className="flex items-center justify-between mb-3 px-1">
-      <div className="flex items-center gap-1.5">
-        <Icon size={12} className="text-white/20" />
-        <h5 className="text-[9px] font-black uppercase tracking-widest text-white/30">{title}</h5>
+  <div className="w-full max-w-full min-w-0">
+    <div className="flex items-center justify-between mb-2 px-1">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Icon size={12} className="text-white/20 shrink-0" />
+        <h5 className="text-[9px] font-black uppercase tracking-widest text-white/30 truncate">{title}</h5>
       </div>
-      {count !== undefined && <span className="text-[9px] font-bold text-white/20">{count}</span>}
+      {count !== undefined && <span className="text-[9px] font-bold text-white/20 shrink-0">{count}</span>}
     </div>
     {children}
   </div>
@@ -434,17 +479,17 @@ const RelationItem = ({ label, sublabel, icon: Icon, onClick }: any) => (
   <button 
     onClick={onClick}
     disabled={!onClick}
-    className={`w-full flex items-center justify-between p-3.5 bg-white/2 border border-white/5 rounded-2xl text-left transition-all ${
+    className={`w-full flex items-center justify-between p-3 bg-white/2 border border-white/5 rounded-xl text-left transition-all max-w-full min-w-0 ${
       onClick ? 'hover:bg-white/5 hover:border-white/10' : 'cursor-default'
     }`}
   >
-    <div className="flex items-center gap-3 min-w-0">
-      {Icon && <Icon size={14} className="text-white/20 shrink-0" />}
-      <div className="min-w-0">
-        <p className="text-xs font-bold text-white/80 truncate">{label}</p>
-        {sublabel && <p className="text-[9px] font-bold text-white/30 uppercase tracking-tighter mt-0.5 truncate">{sublabel}</p>}
+    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+      {Icon && <Icon size={12} className="text-white/20 shrink-0" />}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold text-white/80 truncate block">{label}</p>
+        {sublabel && <p className="text-[8px] font-bold text-white/30 uppercase tracking-tight mt-0.5 truncate block">{sublabel}</p>}
       </div>
     </div>
-    {onClick && <ArrowUpRight size={14} className="text-white/10 shrink-0" />}
+    {onClick && <ArrowUpRight size={12} className="text-white/10 shrink-0 ml-2" />}
   </button>
 );
