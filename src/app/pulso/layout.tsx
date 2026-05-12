@@ -34,10 +34,13 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[#020617] text-white selection:bg-blue-500/30 w-full max-w-full overflow-x-hidden">
       {/* Responsive Premium Top Nav */}
-      <nav className="p-3 md:p-6 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 border-b border-white/5 bg-[#020617]/80 backdrop-blur-xl sticky top-0 z-50 w-full max-w-full overflow-x-hidden">
-        <div className="flex items-center justify-between gap-4 w-full xl:w-auto">
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Link href="/" className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+      <nav className="p-3 md:p-4 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 border-b border-white/5 bg-[#020617]/80 backdrop-blur-xl sticky top-0 z-50 w-full max-w-full overflow-x-hidden">
+        
+        {/* Mobile-only Top Wrapper (combines Left Logo and Right Profile side-by-side on screens < xl) */}
+        <div className="flex xl:hidden items-center justify-between gap-2 w-full">
+          {/* Logo & v0.1 */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/" className="p-1.5 hover:bg-white/5 rounded-xl transition-colors">
               <ArrowLeft size={16} className="text-white/40" />
             </Link>
             <div className="flex items-center gap-2">
@@ -49,10 +52,13 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                 <p className="text-[8px] text-white/30 font-medium mt-0.5">Central Viva</p>
               </div>
             </div>
+            <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[8px] font-black uppercase tracking-widest text-blue-400 shrink-0 ml-1">
+              v0.1
+            </span>
           </div>
 
-          {/* User info & Logout compact group */}
-          <div className="flex items-center gap-2.5">
+          {/* User info & Logout */}
+          <div className="flex items-center gap-2 shrink-0">
             {user && (
               <div className="flex items-center gap-2">
                 <div className="hidden sm:block text-right">
@@ -68,14 +74,30 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                 </button>
               </div>
             )}
-            <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[8px] font-black uppercase tracking-widest text-blue-400 shrink-0">
-              v0.1
-            </span>
           </div>
         </div>
 
-        {/* Fully scrollable horizontal navigation bar */}
-        <div className="flex items-center gap-1 bg-white/2 p-1 rounded-xl border border-white/5 w-full xl:w-auto max-w-full overflow-x-auto custom-scrollbar flex-nowrap">
+        {/* Desktop Left Section (Logo & v0.1) */}
+        <div className="hidden xl:flex items-center justify-start gap-2 shrink-0 xl:w-1/3">
+          <Link href="/" className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+            <ArrowLeft size={16} className="text-white/40" />
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-blue-500/20 rounded-lg flex items-center justify-center border border-blue-500/30">
+              <Activity size={14} className="text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-xs font-black tracking-tight leading-none">PULSO</h1>
+              <p className="text-[8px] text-white/30 font-medium mt-0.5">Central Viva</p>
+            </div>
+          </div>
+          <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[8px] font-black uppercase tracking-widest text-blue-400 shrink-0 ml-1">
+            v0.1
+          </span>
+        </div>
+
+        {/* Center Section: Navigation pill container perfectly centralized */}
+        <div className="flex items-center justify-start sm:justify-center gap-1 bg-white/2 p-1 rounded-xl border border-white/5 w-full xl:w-auto max-w-full overflow-x-auto custom-scrollbar flex-nowrap mx-auto shrink-0">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -93,6 +115,25 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
               </Link>
             );
           })}
+        </div>
+
+        {/* Desktop Right Section: User Info & Logout button on the right side */}
+        <div className="hidden xl:flex items-center justify-end gap-2 shrink-0 xl:w-1/3">
+          {user && (
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <p className="text-[9px] font-black text-white/80 leading-none mb-0.5">{user.displayName}</p>
+                <p className="text-[7px] font-medium text-white/20 leading-none">{user.email}</p>
+              </div>
+              <button 
+                onClick={() => authService.logout()}
+                className="p-2 bg-white/2 border border-white/5 rounded-xl text-white/20 hover:text-red-400 hover:bg-red-400/5 hover:border-red-400/20 transition-all group shrink-0"
+                title="Sair"
+              >
+                <LogOut size={12} className="group-hover:scale-110 transition-transform" />
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
