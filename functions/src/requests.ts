@@ -280,6 +280,20 @@ export const pulsoRequests = onRequest(
         return;
       }
 
+      // ── POST /needs-approval ───────────────────────────────────────────────
+      if (req.method === "POST" && path === "/needs-approval") {
+        const { requestId, reason, blueprint } = req.body;
+        if (!requestId) { res.status(400).send("Missing requestId"); return; }
+        const ts = admin.firestore.FieldValue.serverTimestamp();
+        await db.collection(BASE).doc(requestId).update(sanitize({
+          status: "needs_approval",
+          result: { reason: reason || "Requer aprovação humana estrutural", blueprint: blueprint || null },
+          updatedAt: ts,
+        }));
+        res.status(200).send("needs_approval");
+        return;
+      }
+
       // ── POST /create ───────────────────────────────────────────────────────
       if (req.method === "POST" && (path === "/create" || path === "/requests/create")) {
         const data = req.body;

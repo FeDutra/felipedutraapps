@@ -214,12 +214,15 @@ Fechar o ciclo operacional ponta a ponta permitindo que a OpenClaw/Lótus crie s
   - `create_agent` → blindado estruturalmente para retornar `needs_approval`.
 - [x] **Persistência de Resultados**: Retorno canônico de `entityRef` e `entityPath` para navegação direta a partir dos cartões de solicitação.
 
-### Status de Validação Externa (Honesto & Transparente)
-- **Requests Bridge**: Validada em fluxos básicos e de autoria.
-- **Materialização Geral**: Implementada internamente (com Dispatcher, fallbacks e chaves de navegação), mas **pendente de validação e prova externa pela Lótus/OpenClaw**.
-- **Kit Operacional Entregue**:
-  - `docs/contexto/pulso-requests-bridge.md` — Contrato e especificação canônica.
-  - `docs/contexto/pulso-requests-curl-examples.md` — Guia rápido de chamadas cURL.
-  - `scripts/pulso/test-materialization-cycle.mjs` — Automação de teste ponta a ponta.
-  - `/pulso/debug/requests` — Cockpit visual administrativo para auditar desfechos de materialização e questionamentos na base.
-- **Próximo Passo**: A Lótus/OpenClaw consumir o Kit Operacional, certificar as chaves retornadas (`entityRef`/`entityPath`) e atestar a existência real nas coleções canônicas de destino.
+### Status Operacional e Certificação (Transparência Técnica)
+- **PULSO UI**: Funcionando com estabilidade.
+- **Requests Bridge**: Funcionando internamente.
+- **Materialização Técnica**: Aparentemente implementada na camada Cloud Functions (Dispatcher, fallbacks e atribuição de caminhos).
+- **Materialização via OpenClaw**: **Pendente de certificação e consumo do Operational Kit**.
+- **Uso Real Imediato**: Google Sheets mantidas como base canônica principal das áreas + PULSO utilizado ativamente como barramento de sinais e interface de monitoramento.
+
+### Documentação do Operational Kit Entregue
+- `docs/contexto/pulso-requests-bridge-operational-kit.md` — Contrato unificado, URLs, verbos transacionais e caminhos do Firestore.
+- `docs/contexto/pulso-requests-curl-examples.md` — Bateria cURL prática cobrindo especificamente criação de pessoas, fontes e tarefas.
+- `scripts/pulso/test-request-materialization.mjs` — Bateria multi-caso de validação programática de ponta a ponta.
+- `/pulso/debug/requests` — Rota visual de auditoria estática do desfecho e das chaves.

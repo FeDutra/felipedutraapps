@@ -1,128 +1,154 @@
-# Exemplos cURL: Interação com a Requests Bridge
+# Catálogo de Chamadas cURL: Requests Bridge Operational Kit
 
-Este documento fornece comandos `cURL` prontos para uso que ilustram como consumir programaticamente os endpoints da camada **Requests Bridge**. Os comandos utilizam a variável de ambiente `$PULSO_INGEST_TOKEN` para manter as credenciais protegidas.
+Este catálogo lista os comandos prontos para a Lótus/OpenClaw acionar e testar o ciclo operacional transacional completo da **Requests Bridge**, mantendo o token de autenticação protegido na variável de ambiente `$PULSO_INGEST_TOKEN`.
 
 ---
 
-## 1. Criar Solicitação (`POST /create`)
-Cria uma solicitação operacional autônoma simulando a captura a partir de uma mensagem do WhatsApp.
+## 1. Criar Solicitações Operacionais (`POST /create`)
 
+### 1.1 Criar `register_person`
 ```bash
 curl -X POST -s \
   -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "requestType": "register_person",
-    "title": "Registrar Stakeholder: Juliana",
-    "summary": "Nova parceira estratégica identificada via Lótus.",
-    "priority": "high",
+    "title": "Registrar Stakeholder: Mariana",
+    "summary": "Captura autônoma de contato via OpenClaw.",
+    "priority": "medium",
     "areaRef": "area_openclaw",
     "requestedBy": "agent_lotus",
-    "dedupeKey": "whats_msg_999888",
-    "origin": {
-      "channel": "whatsapp",
-      "source": "openclaw"
-    },
+    "dedupeKey": "person_mariana_001",
+    "origin": { "channel": "whatsapp", "source": "openclaw" },
     "payload": {
-      "name": "Juliana",
-      "role": "Líder de Operações",
+      "name": "Mariana",
+      "role": "Consultora Externa",
       "attentionLevel": "high",
-      "notes": "Ponto de contato chave para integrações."
+      "notes": "Parceira estratégica de processos."
     }
   }' \
   "https://felipedutraapps.web.app/api/pulso/requests/create"
 ```
-**Saída Esperada**:
-```json
-{"status":"created","requestId":"req_1778549999999_xyz123"}
+**Resposta Esperada**: `{"status":"created","requestId":"req_123456_abc"}`
+
+### 1.2 Criar `register_source`
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "register_source",
+    "title": "Registrar Fonte: Planilha Base",
+    "summary": "Planilha financeira unificada.",
+    "priority": "high",
+    "requestedBy": "agent_lotus",
+    "dedupeKey": "source_planilha_base_001",
+    "payload": {
+      "name": "Planilha Financeira Unificada",
+      "type": "google_sheets",
+      "url": "https://docs.google.com/spreadsheets/d/abc123xyz",
+      "relevance": "critical"
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
 ```
+**Resposta Esperada**: `{"status":"created","requestId":"req_123456_def"}`
+
+### 1.3 Criar `create_task`
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "create_task",
+    "title": "Estruturar Relatório Semanal",
+    "priority": "high",
+    "requestedBy": "agent_lotus",
+    "dedupeKey": "task_relatorio_001",
+    "payload": {
+      "title": "Estruturar Relatório Semanal",
+      "description": "Compilar avanços das obras e finanças operacionais."
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+**Resposta Esperada**: `{"status":"created","requestId":"req_123456_ghi"}`
 
 ---
 
-## 2. Listar Solicitações Pendentes (`GET /pending`)
-Busca as solicitações que ainda não foram processadas (status `requested`).
+## 2. Listar Fila de Pendentes (`GET /pending`)
+Lista as intenções operacionais que ainda não possuem um lock de agente e estão no status `requested`.
 
 ```bash
 curl -s -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
-  "https://felipedutraapps.web.app/api/pulso/requests/pending?limit=5&status=requested"
+  "https://felipedutraapps.web.app/api/pulso/requests/pending?limit=10&status=requested"
 ```
 
 ---
 
-## 3. Fazer Lock / Claim (`POST /claim`)
-Aplica o bloqueio transacional na solicitação para iniciar o processamento com exclusividade.
+## 3. Lock Transacional de Agente (`POST /claim`)
+Reivindica a solicitação, trocando seu status para `running` de forma atômica para impedir colisões de processamento.
 
 ```bash
 curl -X POST -s \
   -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "requestId": "req_1778549999999_xyz123",
+    "requestId": "req_123456_abc",
     "processedBy": "openclaw_agent_lotus"
   }' \
   "https://felipedutraapps.web.app/api/pulso/requests/claim"
 ```
-**Saída Esperada**:
-```
-claimed
-```
+**Resposta Esperada**: `claimed`
 
 ---
 
-## 4. Concluir e Materializar (`POST /complete`)
-Finaliza a solicitação acionando a materialização direta para a coleção `pulso_people`.
+## 4. Conclusão e Gatilho de Materialização (`POST /complete`)
+Finaliza o fluxo operacional acionando o Dispatcher de Materialização que escreve o registro canônico na coleção correspondente.
 
 ```bash
 curl -X POST -s \
   -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "requestId": "req_1778549999999_xyz123",
+    "requestId": "req_123456_abc",
     "result": {
       "status": "success",
-      "log": "Processamento Lótus validado."
+      "notes": "Processamento externo validado com sucesso via Lótus."
     }
   }' \
   "https://felipedutraapps.web.app/api/pulso/requests/complete"
 ```
-**Saída Esperada**:
-```
-completed
-```
+**Resposta Esperada**: `completed`
 
 ---
 
-## 5. Consultar Solicitação por ID (`GET /:id`)
-Inspeciona o documento final e seus metadados de materialização gerados de forma canônica.
+## 5. Consultar Desfecho e Chaves por ID (`GET /:id`)
+Busca o documento completo da solicitação para auditar as chaves canônicas de navegação geradas (`result.entityRef` e `result.entityPath`).
 
 ```bash
 curl -s -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
-  "https://felipedutraapps.web.app/api/pulso/requests/req_1778549999999_xyz123"
+  "https://felipedutraapps.web.app/api/pulso/requests/req_123456_abc"
 ```
-**Saída Esperada**:
+**Resposta Esperada**:
 ```json
 {
-  "id": "req_1778549999999_xyz123",
+  "id": "req_123456_abc",
   "requestType": "register_person",
   "status": "completed",
-  "title": "Registrar Stakeholder: Juliana",
+  "title": "Registrar Stakeholder: Mariana",
   "result": {
     "status": "success",
-    "log": "Processamento Lótus validado.",
+    "notes": "Processamento externo validado com sucesso via Lótus.",
     "matResult": {
       "ok": true,
       "action": "created",
       "entityType": "person",
-      "entityRef": "person_juliana",
-      "entityPath": "workspaces/felipe_dutra/pulso_people/person_juliana",
+      "entityRef": "person_mariana",
+      "entityPath": "workspaces/felipe_dutra/pulso_people/person_mariana",
       "summary": "Entidade materializada."
     }
   },
-  "updatedAt": "2026-05-12T05:30:00.000Z"
+  "updatedAt": "2026-05-12T10:05:00.000Z"
 }
 ```
-
----
-
-## 6. Provar Materialização na Base Canônica
-Como a consulta direta ao Firestore via API REST do Firebase requer chaves ou regras específicas, a verificação externa final da existência de `workspaces/felipe_dutra/pulso_people/person_juliana` prova conclusivamente a solidez do ciclo operacional para a OpenClaw.
