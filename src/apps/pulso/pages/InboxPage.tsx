@@ -101,6 +101,18 @@ export default function InboxPage() {
     }
   };
 
+  const handleArchiveRequest = async (id: string) => {
+    try {
+      await requestsService.archiveRequest(id);
+      setRequests(prev => prev.filter(r => r.id !== id));
+      setSelectedRequest(null);
+      showFeedback('Solicitação de teste arquivada/escondida com sucesso');
+    } catch (err) {
+      showFeedback('Erro ao arquivar solicitação', 'error');
+    }
+  };
+
+
   const handleCreateNew = () => {
     setIsCreating(true);
     setSelectedItem(null);
@@ -201,6 +213,7 @@ export default function InboxPage() {
       <RequestDetailDrawer 
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
+        onArchive={handleArchiveRequest}
       />
     </div>
   );

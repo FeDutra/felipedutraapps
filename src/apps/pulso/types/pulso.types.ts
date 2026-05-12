@@ -97,6 +97,7 @@ export type RequestStatus =
   | 'accepted'
   | 'running'
   | 'needs_clarification'
+  | 'needs_approval'
   | 'completed'
   | 'failed'
   | 'cancelled'

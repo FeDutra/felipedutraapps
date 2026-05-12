@@ -213,3 +213,46 @@ A Lótus/OpenClaw deve utilizar os seguintes caminhos exatos sob o escopo do wor
 
 ## 7. Critério de Certificação Externa
 > **IMPORTANTE**: A materialização geral não deve ser declarada como "validada pela OpenClaw" na documentação de status técnico até que a própria OpenClaw consuma as chaves `entityRef` e `entityPath` retornadas neste kit e prove a existência efetiva do documento gravado de forma autônoma na respectiva coleção canônica.
+
+---
+
+## 8. Protocolos de Consumo pela OpenClaw
+
+Para assegurar estabilidade, rastreabilidade e governança impecável na comunicação assíncrona, a Lótus/OpenClaw deve seguir os protocolos contratuais descritos abaixo.
+
+### 8.1 RequestTypes Autorizados (Modo Automático)
+Podem ser concluídos sem aprovação prévia de governança desde que seus campos obrigatórios mínimos estejam presentes:
+*   `register_person` (Obrigatório: `name`)
+*   `register_source` (Obrigatório: `name`, `type`, `url`)
+*   `create_task` (Obrigatório: `title` ou `name`)
+*   `register_decision` (Obrigatório: `title`)
+*   `create_alert` (Obrigatório: `title`)
+*   `create_project` (Obrigatório: `name`, `areaRef`, não colidir com ID existente ou prover `dedupeKey`)
+
+### 8.2 RequestTypes que Exigem Aprovação Humana (`needs_approval`)
+Sempre interceptados pelo materializador para validação de governança:
+*   `create_agent` — Sempre encaminhado para `needs_approval` a fim de evitar a injeção programática de atores ativos autônomos sem revisão.
+*   `create_area` — Encarada como modificação estrutural pesada. Requer aprovação prévia, salvo se enviada em modo confiável explícito (`"trusted": true`).
+
+### 8.3 Erros Comuns de Roteamento e Payload
+1.  **Ausência de `dedupeKey` em fluxos reativos**: Interações de mensageria (ex: WhatsApp) frequentemente emitem duplos disparos. A falta de `dedupeKey` gera poluição de registros.
+2.  **Passagem de `Timestamp` não serializado**: Passar objetos de data puros ao invés de strings ISO quebra decodificadores JSON em rotas REST.
+3.  **Inconsistência de IDs Canônicos**: Omissão de prefixos de coleção em `areaRef` ou `projectRef` impede o link do barramento visual na interface.
+
+### 8.4 Política Canônica de Emissão para `pulso_events`
+> **REGRA DE OURO**: **Request não é igual a evento**. A criação, processamento ou checagem de uma solicitação representa uma *intenção transacional*, não uma alteração de estado do ecossistema.
+
+A OpenClaw **SÓ DEVE** emitir um evento para a coleção `pulso_events` quando ocorrer uma **mudança real de estado com impacto no negócio**, tais como:
+*   Tarefa de **alta prioridade** ou crítica criada.
+*   Decisão estratégica formalmente registrada.
+*   Alerta ou risco severo disparado no radar.
+*   Projeto mudou de estágio ou de status operacional.
+*   Agente solicitou aprovação estrutural com impacto direto em workflows.
+
+**NÃO EMITIR EVENTO PARA:**
+*   Testes de rotina ou automações de health check.
+*   Leitura, listagem (`pending`) ou polling de solicitações.
+*   Locks transacionais simples (`claim`).
+*   Conclusão de requests sem alteração material ou de baixo impacto.
+*   Cadastros acessórios simples sem relevância imediata para as áreas de foco.
+

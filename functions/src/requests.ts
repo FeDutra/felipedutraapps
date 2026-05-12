@@ -203,6 +203,9 @@ export const pulsoRequests = onRequest(
 
               case "create_area": {
                 if (!payload.name) return { ok: false, action: "needs_clarification", missingFields: ["name"], summary: "Nome da área é obrigatório." };
+                if (payload.trusted !== true) {
+                  return { ok: true, action: "needs_approval", summary: "Criação de Área Estrutural requer aprovação de governança humana prévia." };
+                }
                 const slug = slugify(payload.name);
                 const areaId = `area_${slug}`;
                 const base = `workspaces/${WORKSPACE_ID}/pulso_areas`;

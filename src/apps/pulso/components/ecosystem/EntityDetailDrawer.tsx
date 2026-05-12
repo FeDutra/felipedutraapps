@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Hash, Layers, Share2, Users, 
   Target, AlertCircle, CheckSquare, Activity,
-  Globe, Database, FileText, Layout, ArrowUpRight
+  Globe, Database, FileText, Layout, ArrowUpRight,
+  User, Link as LinkIcon, RefreshCw, Clock, Shield
 } from 'lucide-react';
 import { areasService } from '../../services/areasService';
 import { projectsService } from '../../services/projectsService';
@@ -14,6 +15,7 @@ import { decisionsService } from '../../services/decisionsService';
 import { inboxService } from '../../services/inboxService';
 import { sourcesService } from '../../services/sourcesService';
 import { eventsService } from '../../services/eventsService';
+import { peopleService } from '../../services/peopleService';
 import { InboxTypeBadge } from '../inbox/InboxBadges';
 import { PriorityBadge } from '../BaseComponents';
 import { getStatusLabel } from '../../utils/statusHelpers';
@@ -37,6 +39,7 @@ export const EntityDetailDrawer = ({
     decisions: [],
     inbox: [],
     sources: [],
+    people: [],
     events: [],
     area: null
   });
@@ -55,29 +58,41 @@ export const EntityDetailDrawer = ({
 
         if (entityType === 'area') {
           entityData = await areasService.getById(entityId);
-          const [projs, tasks, decs, inb, srcs, evts] = await Promise.all([
+          const [projs, tasks, decs, inb, srcs, evts, peps] = await Promise.all([
             projectsService.getByArea(entityId),
             tasksService.getByArea(entityId),
             decisionsService.getByArea(entityId),
             inboxService.getByArea(entityId),
             sourcesService.getByArea(entityId),
-            eventsService.getByArea(entityId, 10)
+            eventsService.getByArea(entityId, 15),
+            peopleService.getAll().then(res => res.filter(p => p.areaRef === entityId))
           ]);
-          rels = { projects: projs, tasks, decisions: decs, inbox: inb, sources: srcs, events: evts };
+          rels = { projects: projs, tasks, decisions: decs, inbox: inb, sources: srcs, events: evts, people: peps };
         } else if (entityType === 'project') {
           entityData = await projectsService.getById(entityId);
-          const [tasks, decs, inb, srcs, evts, area] = await Promise.all([
+          const [tasks, decs, inb, srcs, evts, area, peps] = await Promise.all([
             tasksService.getByProject(entityId),
             decisionsService.getByProject(entityId),
             inboxService.getByProject(entityId),
             sourcesService.getByProject(entityId),
-            eventsService.getByProject(entityId, 10),
-            entityData?.areaRef ? areasService.getById(entityData.areaRef) : Promise.resolve(null)
+            eventsService.getByProject(entityId, 15),
+            entityData?.areaRef ? areasService.getById(entityData.areaRef) : Promise.resolve(null),
+            peopleService.getAll().then(res => res.filter(p => (p as any).projectRefs?.includes(entityId) || p.projectRef === entityId))
           ]);
-          rels = { tasks, decisions: decs, inbox: inb, sources: srcs, events: evts, area };
+          rels = { tasks, decisions: decs, inbox: inb, sources: srcs, events: evts, area, people: peps };
         } else if (entityType === 'source') {
           entityData = (await sourcesService.getAll()).find(s => s.id === entityId);
-          // Simplified source relations for now
+          if (entityData?.areaRef) {
+            rels.area = await areasService.getById(entityData.areaRef);
+          }
+          if (entityData?.projectRef) {
+            rels.project = await projectsService.getById(entityData.projectRef);
+          }
+        } else if (entityType === 'person') {
+          entityData = (await peopleService.getAll()).find(p => p.id === entityId);
+          if (entityData?.areaRef) {
+            rels.area = await areasService.getById(entityData.areaRef);
+          }
         }
 
         setData(entityData);
@@ -91,6 +106,145 @@ export const EntityDetailDrawer = ({
   }, [type, id]);
 
   if (!type || !id) return null;
+
+  const renderSpecificDetails = () => {
+    if (type === 'person') {
+      return (
+        <div className="bg-white/2 border border-white/5 rounded-3xl p-6 space-y-4 mb-8">
+          <h4 className="text-xs font-black uppercase tracking-widest text-blue-400">Atributos do Stakeholder</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Role / Cargo</span>
+              <span className="text-xs font-bold text-white/80">{data.role || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Tipo de Relação</span>
+              <span className="text-xs font-bold text-white/80 uppercase">{data.relationType || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Nível de Atenção</span>
+              <span className={`text-xs font-bold uppercase tracking-wide ${data.attentionLevel === 'high' ? 'text-red-400' : 'text-amber-400'}`}>
+                {data.attentionLevel || 'medium'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Origem / Canal</span>
+              <span className="text-xs font-bold text-white/60 uppercase">{data.source || data.channel || 'OpenClaw'}</span>
+            </div>
+          </div>
+          {data.areaRef && (
+            <div className="pt-2 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área Vinculada</span>
+              <span className="text-xs font-bold text-blue-400">{relations.area?.name || data.areaRef}</span>
+            </div>
+          )}
+          {data.notes && (
+            <div className="pt-2 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Notas Estratégicas</span>
+              <p className="text-xs text-white/60 leading-relaxed italic bg-white/2 p-3 rounded-xl border border-white/5">
+                "{data.notes}"
+              </p>
+            </div>
+          )}
+          {data.lastInteractionAt && (
+            <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-white/40">
+              <Clock size={10} />
+              <span className="text-[9px]">Última Interação: {new Date(data.lastInteractionAt).toLocaleDateString()}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (type === 'source') {
+      return (
+        <div className="bg-white/2 border border-white/5 rounded-3xl p-6 space-y-4 mb-8">
+          <h4 className="text-xs font-black uppercase tracking-widest text-purple-400">Atributos da Fonte</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Tipo de Conector</span>
+              <span className="text-xs font-mono font-bold text-white/80 uppercase">{data.type || 'google_sheets'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Relevância</span>
+              <span className="text-xs font-bold text-emerald-400 uppercase">{data.relevance || 'high'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Modo de Sincronia</span>
+              <span className="text-xs font-bold text-white/60 uppercase">{data.syncMode || 'auto'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Papel / Missão</span>
+              <span className="text-xs font-bold text-white/60">{data.role || 'Repositório Base'}</span>
+            </div>
+          </div>
+          {data.url && (
+            <div className="pt-2 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Endereço (Link)</span>
+              <a href={data.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-blue-400 hover:underline flex items-center gap-1 break-all">
+                <LinkIcon size={12} />
+                {data.url}
+              </a>
+            </div>
+          )}
+          {(data.areaRef || data.projectRef) && (
+            <div className="pt-2 border-t border-white/5 grid grid-cols-2 gap-2">
+              {data.areaRef && (
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área</span>
+                  <span className="text-xs font-bold text-blue-400">{relations.area?.name || data.areaRef}</span>
+                </div>
+              )}
+              {data.projectRef && (
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Projeto</span>
+                  <span className="text-xs font-bold text-emerald-400">{relations.project?.name || data.projectRef}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {data.notes && (
+            <div className="pt-2 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Notas</span>
+              <p className="text-xs text-white/60 italic bg-white/2 p-3 rounded-xl border border-white/5">
+                "{data.notes}"
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (type === 'project') {
+      return (
+        <div className="bg-white/2 border border-white/5 rounded-3xl p-6 space-y-4 mb-8">
+          <h4 className="text-xs font-black uppercase tracking-widest text-emerald-400">Atributos do Projeto</h4>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Status</span>
+              <span className="text-xs font-bold text-white/80 uppercase">{data.status || 'active'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Estágio</span>
+              <span className="text-xs font-bold text-white/60 uppercase">{data.stage || 'execução'}</span>
+            </div>
+            <div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Prioridade</span>
+              <span className="text-xs font-bold text-emerald-400 uppercase">{data.priority || 'high'}</span>
+            </div>
+          </div>
+          {relations.area && (
+            <div className="pt-2 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Área de Domínio</span>
+              <span className="text-xs font-bold text-blue-400">{relations.area.name}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <AnimatePresence>
@@ -108,7 +262,7 @@ export const EntityDetailDrawer = ({
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-2xl bg-slate-950 border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col"
+          className="relative w-full max-w-2xl bg-[#020617] border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col custom-scrollbar"
         >
           {loading ? (
             <div className="flex-1 flex flex-col items-center justify-center">
@@ -116,48 +270,38 @@ export const EntityDetailDrawer = ({
               <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Sintonizando Detalhes</p>
             </div>
           ) : data ? (
-            <div className="p-10">
+            <div className="p-8">
               {/* Header */}
-              <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
                    <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-blue-400">
-                     {type === 'area' ? <Hash size={24} /> : <Layers size={24} />}
+                     {type === 'area' ? <Hash size={24} /> : type === 'project' ? <Layers size={24} /> : type === 'source' ? <Database size={24} /> : <User size={24} />}
                    </div>
                    <div>
                      <p className="text-[10px] font-black uppercase tracking-widest text-white/20">{getEntityTypeLabel(type)}</p>
-                     <h2 className="text-2xl font-black text-white">{data.name}</h2>
+                     <h2 className="text-xl font-black text-white">{data.name}</h2>
                    </div>
                 </div>
                 <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors">
-                  <X size={24} />
+                  <X size={20} />
                 </button>
               </div>
 
-              {/* Status & Priority Row */}
-              <div className="grid grid-cols-2 gap-4 mb-10">
-                <div className="bg-white/2 border border-white/5 p-4 rounded-2xl">
-                   <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Status</p>
-                   <div className="flex items-center gap-2 text-xs font-bold text-white/60">
-                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                     {getStatusLabel(data.status)}
-                   </div>
-                </div>
-                <div className="bg-white/2 border border-white/5 p-4 rounded-2xl">
-                   <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Prioridade</p>
-                   <PriorityBadge priority={data.priority} />
-                </div>
-              </div>
+              {/* Render Specific Blocks enriched with rules */}
+              {renderSpecificDetails()}
 
-              {/* Description */}
-              <div className="mb-12">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-4">Descrição / Objetivo</p>
-                <p className="text-sm text-white/60 leading-relaxed bg-white/2 p-6 rounded-3xl border border-white/5 italic">
-                  "{data.description || data.objective || 'Nenhuma descrição fornecida.'}"
-                </p>
-              </div>
+              {/* General Description */}
+              {(data.description || data.objective) && (
+                <div className="mb-8">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-2">Objetivo Central / Descrição</p>
+                  <p className="text-xs text-white/60 leading-relaxed bg-white/2 p-5 rounded-2xl border border-white/5 italic">
+                    "{data.description || data.objective}"
+                  </p>
+                </div>
+              )}
 
               {/* RELATIONS SECTION */}
-              <div className="space-y-10">
+              <div className="space-y-8">
                 
                 {/* Linked Area (for Projects) */}
                 {type === 'project' && relations.area && (
@@ -166,6 +310,22 @@ export const EntityDetailDrawer = ({
                       label={relations.area.name} 
                       onClick={() => onNavigate?.('area', relations.area.id)}
                     />
+                  </RelationGroup>
+                )}
+
+                {/* Linked People */}
+                {relations.people?.length > 0 && (
+                  <RelationGroup title="Stakeholders / Pessoas Vinculadas" count={relations.people.length} icon={Users}>
+                    <div className="grid grid-cols-1 gap-2">
+                      {relations.people.map((pep: any) => (
+                        <RelationItem 
+                          key={pep.id} 
+                          label={pep.name} 
+                          sublabel={pep.role || pep.relationType} 
+                          onClick={() => onNavigate?.('person', pep.id)}
+                        />
+                      ))}
+                    </div>
                   </RelationGroup>
                 )}
 
@@ -193,74 +353,51 @@ export const EntityDetailDrawer = ({
                         <RelationItem 
                           key={s.id} 
                           label={s.name} 
-                          sublabel={s.system}
+                          sublabel={s.type || s.system}
                           icon={Database}
+                          onClick={() => onNavigate?.('source', s.id)}
                         />
                       ))}
                     </div>
                   </RelationGroup>
                 )}
 
-                {/* Tasks & Records */}
-                {(relations.tasks?.length > 0 || relations.decisions?.length > 0) && (
-                  <RelationGroup title="Registros Vinculados" icon={Activity}>
-                    <div className="space-y-4">
-                      {relations.tasks.slice(0, 5).map((t: any) => (
-                        <div key={t.id} className="flex items-center justify-between p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <CheckSquare size={14} className="text-emerald-400" />
-                            <span className="text-xs text-white/60">{t.name}</span>
+                {/* Tasks & Records (Task 5: Garantir visibilidade das Tarefas criadas via Request) */}
+                {relations.tasks?.length > 0 && (
+                  <RelationGroup title="Tarefas Vinculadas (Materializadas)" count={relations.tasks.length} icon={CheckSquare}>
+                    <div className="space-y-2">
+                      {relations.tasks.map((t: any) => (
+                        <div key={t.id} className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white/90">{t.name || t.title}</span>
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${t.priority === 'high' ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-white/40'}`}>
+                              {t.priority || 'medium'}
+                            </span>
                           </div>
-                          <span className="text-[8px] font-black text-emerald-500/40 uppercase">Task</span>
-                        </div>
-                      ))}
-                      {relations.decisions.slice(0, 5).map((d: any) => (
-                        <div key={d.id} className="flex items-center justify-between p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <Target size={14} className="text-blue-400" />
-                            <span className="text-xs text-white/60">{d.name}</span>
-                          </div>
-                          <span className="text-[8px] font-black text-blue-500/40 uppercase">Decision</span>
+                          {t.description && (
+                            <p className="text-[10px] text-white/40 line-clamp-2">{t.description}</p>
+                          )}
+                          <span className="text-[8px] font-bold text-emerald-400/60 font-mono mt-1">ID: {t.id}</span>
                         </div>
                       ))}
                     </div>
                   </RelationGroup>
                 )}
 
-                  {/* Linked Events (Sinais do Barramento) */}
-                  {relations.events?.length > 0 && (
-                    <RelationGroup title="Sinais do Barramento" count={relations.events.length} icon={Activity}>
-                      <div className="space-y-2">
-                        {relations.events.map((evt: any) => (
-                          <div key={evt.id} className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-bold text-white/70">{evt.payloadSummary}</span>
-                              <span className="text-[8px] font-black text-blue-400/40 uppercase">{evt.origin}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-1 h-1 rounded-full bg-blue-400/50" />
-                              <span className="text-[9px] text-white/30">{new Date(evt.createdAt).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </RelationGroup>
-                  )}
-
-                {/* Related Inbox Items */}
-                {relations.inbox?.length > 0 && (
-                  <RelationGroup title="Inbox Relacionado" count={relations.inbox.length} icon={FileText}>
+                {/* Linked Events (Sinais do Barramento no detalhe do Projeto/Área) */}
+                {relations.events?.length > 0 && (
+                  <RelationGroup title="Sinais do Barramento (Eventos Recentes)" count={relations.events.length} icon={Activity}>
                     <div className="space-y-2">
-                      {relations.inbox.slice(0, 5).map((i: any) => (
-                        <div key={i.id} className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl group cursor-pointer hover:bg-amber-500/10 transition-colors">
-                           <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-bold text-white/80">{i.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-black text-amber-400/60 uppercase tracking-tight">{getInboxTypeLabel(i.type)}</span>
-                                <InboxTypeBadge type={i.type} />
-                              </div>
-                           </div>
-                          <p className="text-[10px] text-white/30 line-clamp-1">{i.body}</p>
+                      {relations.events.map((evt: any) => (
+                        <div key={evt.id} className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white/80">{evt.payloadSummary || evt.title || evt.eventType}</span>
+                            <span className="text-[8px] font-black text-blue-400 uppercase px-1.5 py-0.5 bg-blue-500/10 rounded">{evt.eventType}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] text-white/40">
+                            <span>Ator: {evt.actor || 'OpenClaw'}</span>
+                            <span>{new Date(evt.createdAt).toLocaleString()}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -271,7 +408,7 @@ export const EntityDetailDrawer = ({
             </div>
           ) : (
              <div className="p-10 text-center">
-               <p className="text-white/20">Entidade não encontrada.</p>
+               <p className="text-white/20 text-xs">Entidade não encontrada no cache local.</p>
              </div>
           )}
         </motion.div>
@@ -282,12 +419,12 @@ export const EntityDetailDrawer = ({
 
 const RelationGroup = ({ title, count, icon: Icon, children }: any) => (
   <div>
-    <div className="flex items-center justify-between mb-4 px-2">
-      <div className="flex items-center gap-2">
-        <Icon size={14} className="text-white/20" />
-        <h5 className="text-[10px] font-black uppercase tracking-widest text-white/30">{title}</h5>
+    <div className="flex items-center justify-between mb-3 px-1">
+      <div className="flex items-center gap-1.5">
+        <Icon size={12} className="text-white/20" />
+        <h5 className="text-[9px] font-black uppercase tracking-widest text-white/30">{title}</h5>
       </div>
-      {count !== undefined && <span className="text-[10px] font-bold text-white/20">{count}</span>}
+      {count !== undefined && <span className="text-[9px] font-bold text-white/20">{count}</span>}
     </div>
     {children}
   </div>
@@ -297,17 +434,17 @@ const RelationItem = ({ label, sublabel, icon: Icon, onClick }: any) => (
   <button 
     onClick={onClick}
     disabled={!onClick}
-    className={`w-full flex items-center justify-between p-4 bg-white/2 border border-white/5 rounded-2xl text-left transition-all ${
+    className={`w-full flex items-center justify-between p-3.5 bg-white/2 border border-white/5 rounded-2xl text-left transition-all ${
       onClick ? 'hover:bg-white/5 hover:border-white/10' : 'cursor-default'
     }`}
   >
-    <div className="flex items-center gap-3">
-      {Icon && <Icon size={14} className="text-white/20" />}
-      <div>
-        <p className="text-xs font-bold text-white/80">{label}</p>
-        {sublabel && <p className="text-[9px] font-bold text-white/20 uppercase tracking-tighter mt-0.5">{sublabel}</p>}
+    <div className="flex items-center gap-3 min-w-0">
+      {Icon && <Icon size={14} className="text-white/20 shrink-0" />}
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-white/80 truncate">{label}</p>
+        {sublabel && <p className="text-[9px] font-bold text-white/30 uppercase tracking-tighter mt-0.5 truncate">{sublabel}</p>}
       </div>
     </div>
-    {onClick && <ArrowUpRight size={14} className="text-white/10" />}
+    {onClick && <ArrowUpRight size={14} className="text-white/10 shrink-0" />}
   </button>
 );

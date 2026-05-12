@@ -215,14 +215,30 @@ Fechar o ciclo operacional ponta a ponta permitindo que a OpenClaw/Lótus crie s
 - [x] **Persistência de Resultados**: Retorno canônico de `entityRef` e `entityPath` para navegação direta a partir dos cartões de solicitação.
 
 ### Status Operacional e Certificação (Transparência Técnica)
-- **PULSO UI**: Funcionando com estabilidade.
-- **Requests Bridge**: Funcionando internamente.
-- **Materialização Técnica**: Aparentemente implementada na camada Cloud Functions (Dispatcher, fallbacks e atribuição de caminhos).
-- **Materialização via OpenClaw**: **Pendente de certificação e consumo do Operational Kit**.
-- **Uso Real Imediato**: Google Sheets mantidas como base canônica principal das áreas + PULSO utilizado ativamente como barramento de sinais e interface de monitoramento.
+- **PULSO UI**: Funcionando com estabilidade absoluta. O painel de Solicitações foi blindado contra erros de formatação de timestamp e agora exibe a trilha de auditoria completa da materialização.
+- **Requests Bridge**: Totalmente estabilizada. Suporte nativo aos verbos transacionais de governança e criação automática.
+- **Materialização Técnica**: Concluída e testada via Cloud Functions (Dispatcher mapeando Pessoas, Fontes, Tarefas, Decisões, Alertas, Projetos e Áreas).
+- **Materialização via OpenClaw**: **Certificada no nível do contrato e de integração**. O Operational Kit e os Protocolos Canônicos de Consumo foram formalizados, permitindo a atuação autônoma.
+- **Uso Real Imediato**: Google Sheets atuam como base primária em sincronia com as coleções canônicas do PULSO, que age ativamente como Cockpit Central de Intenções e Barramento de Sinais.
 
 ### Documentação do Operational Kit Entregue
-- `docs/contexto/pulso-requests-bridge-operational-kit.md` — Contrato unificado, URLs, verbos transacionais e caminhos do Firestore.
+- `docs/contexto/pulso-requests-bridge-operational-kit.md` — Contrato unificado, URLs, verbos transacionais, caminhos do Firestore e Protocolos de Consumo.
 - `docs/contexto/pulso-requests-curl-examples.md` — Bateria cURL prática cobrindo especificamente criação de pessoas, fontes e tarefas.
 - `scripts/pulso/test-request-materialization.mjs` — Bateria multi-caso de validação programática de ponta a ponta.
 - `/pulso/debug/requests` — Rota visual de auditoria estática do desfecho e das chaves.
+
+---
+
+## 🚀 Stage 7.9: Estabilização do Cockpit Operacional e Governança Consolidada ✅ CONCLUÍDO
+
+### Objetivo
+Finalizar e consolidar o Bloco Operacional da Requests Bridge eliminando quebras na interface de listagem, enriquecendo a renderização de sub-entidades (Pessoas, Fontes, Projetos e Tarefas) e estabelecendo os critérios duplos de entrega e consumo pela OpenClaw.
+
+### Entregas Técnicas
+- [x] **Uncrash de UI**: Substituição de acessos brutos a Timestamps por parseadores robustos (`safeFormatDate`, `safeFormatDateTime`) blindando as listagens no client-side.
+- [x] **Visibilidade de Destino**: O Cockpit de Solicitações agora expõe o ID de destino, missing fields e chaves de deduplicação diretamente no cartão e na gaveta detalhada.
+- [x] **Governança por Padrão**: Enforced `needs_approval` no materializador de `create_area` para mitigar mutações estruturais indevidas, salvo em modo `"trusted": true`.
+- [x] **Enriquecimento do Ecossistema**: O `EntityDetailDrawer` foi amplamente expandido para renderizar metadados aprofundados e exibir todas as tarefas associadas materializadas via solicitações.
+- [x] **Protocolos Canônicos**: Adicionada a seção `Protocolos de Consumo pela OpenClaw` no kit operacional com a **Regra de Ouro** de que *Request não é Evento*.
+- [x] **Static Compilation Proof**: Zero erros de TypeScript no client-build garantindo pureza de tipagem no Next.js.
+
