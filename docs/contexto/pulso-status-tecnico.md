@@ -214,7 +214,12 @@ Fechar o ciclo operacional ponta a ponta permitindo que a OpenClaw/Lótus crie s
   - `create_agent` → blindado estruturalmente para retornar `needs_approval`.
 - [x] **Persistência de Resultados**: Retorno canônico de `entityRef` e `entityPath` para navegação direta a partir dos cartões de solicitação.
 
-### Validação Concluída em Produção
-- Fluxo de ponta a ponta validado com o caso **Validar Materialização de Tarefas** (WhatsApp Command).
-- Transição impecável: `requested` → `claimed` → `completed` com gravação na entidade de destino.
-- UI refletindo metadados de canal (WhatsApp) e identificadores técnicos do processo concluído.
+### Status de Validação Externa (Honesto & Transparente)
+- **Requests Bridge**: Validada em fluxos básicos e de autoria.
+- **Materialização Geral**: Implementada internamente (com Dispatcher, fallbacks e chaves de navegação), mas **pendente de validação e prova externa pela Lótus/OpenClaw**.
+- **Kit Operacional Entregue**:
+  - `docs/contexto/pulso-requests-bridge.md` — Contrato e especificação canônica.
+  - `docs/contexto/pulso-requests-curl-examples.md` — Guia rápido de chamadas cURL.
+  - `scripts/pulso/test-materialization-cycle.mjs` — Automação de teste ponta a ponta.
+  - `/pulso/debug/requests` — Cockpit visual administrativo para auditar desfechos de materialização e questionamentos na base.
+- **Próximo Passo**: A Lótus/OpenClaw consumir o Kit Operacional, certificar as chaves retornadas (`entityRef`/`entityPath`) e atestar a existência real nas coleções canônicas de destino.

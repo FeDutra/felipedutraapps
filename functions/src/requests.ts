@@ -306,6 +306,28 @@ export const pulsoRequests = onRequest(
         return;
       }
 
+      // ── GET /:id ───────────────────────────────────────────────────────────
+      if (req.method === "GET" && path.startsWith("/") && path !== "/pending") {
+        const id = path.replace(/^\/requests\//, "").replace(/^\//, "");
+        if (id && id.startsWith("req_")) {
+          const docSnap = await db.collection(BASE).doc(id).get();
+          if (!docSnap.exists) {
+            res.status(404).json({ error: "Request not found" });
+            return;
+          }
+          const data = docSnap.data()!;
+          res.status(200).json({
+            ...data,
+            id: docSnap.id,
+            requestedAt: data.requestedAt?.toDate()?.toISOString(),
+            updatedAt: data.updatedAt?.toDate()?.toISOString(),
+            startedAt: data.startedAt?.toDate()?.toISOString(),
+            processedAt: data.processedAt?.toDate()?.toISOString(),
+          });
+          return;
+        }
+      }
+
       res.status(404).send(`Endpoint not found: ${path}`);
     } catch (e) {
       console.error("Requests Bridge Error:", e);
