@@ -20,7 +20,8 @@ import { EcosystemTabs, EcosystemTabType } from '../components/ecosystem/Ecosyst
 import { AreaCard, ProjectCard, SourceCard, PersonCard } from '../components/ecosystem/EntityCards';
 import { EntityDetailDrawer } from '../components/ecosystem/EntityDetailDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, Database, UserPlus } from 'lucide-react';
+import { SourceRequestDrawer, PersonRequestDrawer } from '../components/system/RequestDrawers';
 
 export default function EcosystemPage() {
   const [activeTab, setActiveTab] = React.useState<EcosystemTabType>('areas');
@@ -37,6 +38,10 @@ export default function EcosystemPage() {
 
   // Selection
   const [selectedEntity, setSelectedEntity] = React.useState<{ type: any, id: string } | null>(null);
+
+  // Request Drawers
+  const [sourceDrawerOpen, setSourceDrawerOpen] = React.useState(false);
+  const [personDrawerOpen, setPersonDrawerOpen] = React.useState(false);
 
   React.useEffect(() => {
     async function load() {
@@ -102,7 +107,21 @@ export default function EcosystemPage() {
             Navegue pela estrutura orgânica de Áreas, Projetos e Fontes que compõem o ecossistema ÉDEN.
           </p>
         </div>
-        <EcosystemTabs activeTab={activeTab} onChange={setActiveTab} tabs={tabs} />
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setSourceDrawerOpen(true)}
+            className="flex items-center gap-2 px-6 py-4 bg-white/2 border border-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:bg-white/5 transition-all"
+          >
+            <Database size={14} className="text-emerald-400" /> Registrar Fonte
+          </button>
+          <button 
+            onClick={() => setPersonDrawerOpen(true)}
+            className="flex items-center gap-2 px-6 py-4 bg-white/2 border border-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:bg-white/5 transition-all"
+          >
+            <UserPlus size={14} className="text-amber-400" /> Registrar Pessoa
+          </button>
+          <EcosystemTabs activeTab={activeTab} onChange={setActiveTab} tabs={tabs} />
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -182,6 +201,22 @@ export default function EcosystemPage() {
         id={selectedEntity?.id || null}
         onClose={() => setSelectedEntity(null)}
         onNavigate={(type, id) => setSelectedEntity({ type, id })}
+      />
+
+      {/* Request Drawers */}
+      <SourceRequestDrawer 
+        isOpen={sourceDrawerOpen}
+        onClose={() => setSourceDrawerOpen(false)}
+        onSuccess={() => {
+          // Success feedback
+        }}
+      />
+      <PersonRequestDrawer 
+        isOpen={personDrawerOpen}
+        onClose={() => setPersonDrawerOpen(false)}
+        onSuccess={() => {
+          // Success feedback
+        }}
       />
     </div>
   );

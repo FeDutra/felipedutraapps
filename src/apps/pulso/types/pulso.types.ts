@@ -119,9 +119,21 @@ export interface PulsoRequest {
   payload?: any;
   result?: any;
   error?: string;
+  recoverable?: boolean;
+  nextSuggestedAction?: string;
   processedBy?: string; 
   processedAt?: Date;
   archived?: boolean;
+  dedupeKey?: string;
+  sourceHash?: string;
+  origin?: {
+    channel: 'whatsapp' | 'web' | 'voice' | 'routine' | 'system';
+    source: string;
+    sessionKey?: string;
+    messageRef?: string;
+  };
+  createdByType?: ActorType;
+  createdById?: string;
 }
 
 export type ActorType = 'user' | 'agent' | 'system';

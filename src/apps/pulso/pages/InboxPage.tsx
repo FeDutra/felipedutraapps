@@ -10,6 +10,7 @@ import { InboxHeader } from '../components/inbox/InboxHeader';
 import { InboxFilters } from '../components/inbox/InboxFilters';
 import { InboxItemCard } from '../components/inbox/InboxItemCard';
 import { RequestItemCard } from '../components/inbox/RequestItemCard';
+import { RequestDetailDrawer } from '../components/inbox/RequestDetailDrawer';
 import { InboxDetailDrawer } from '../components/inbox/InboxDetailDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -195,6 +196,11 @@ export default function InboxPage() {
         onUpdate={handleUpdate}
         onConvert={handleConvert}
         onCreate={handleSaveNew}
+      />
+
+      <RequestDetailDrawer 
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
       />
     </div>
   );

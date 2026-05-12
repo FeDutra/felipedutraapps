@@ -169,6 +169,52 @@ Implementar a ancoragem estrutural de eventos OpenClaw a entidades do ecossistem
 - [x] Expansão do repositório para suportar consultas por Área e Projeto.
 - [x] Implementação de "Sinais do Barramento" no `EntityDetailDrawer` do Ecossistema.
 
-> **Checkpoint Produção (PULSO v0.7)**
-> Data: 2026-05-10
-> Status: Sincronizado e Visível. Eventos OpenClaw agora aparecem no Ecossistema.
+---
+
+## 🏗️ Stage 7.6: Requests Bridge validada ✅ CONCLUÍDO
+
+### Objetivo
+Estabelecer a ponte assíncrona para que a Lótus (OpenClaw) consuma solicitações operacionais do PULSO de forma segura.
+
+### Validações Realizadas
+- [x] **refresh_state**: Ciclo completo `pending` → `claim` → `complete` validado via bridge.
+- [x] **create_agent**: Ciclo `pending` → `claim` → `needs_clarification` validado.
+- [x] **Segurança**: Endpoint `/pulsoRequests` protegido por token Bearer e Secret Manager.
+- [x] **Integridade**: Lock atômico via transações no Firestore para evitar double-claim.
+- [x] **OpenClaw Integration**: Confirmado que agentes externos não emitem eventos indevidos e não executam ações sem autorização.
+
+### Próxima Fase
+- Entrada operacional real para `register_source`, `register_person` e `create_task` via Requests Layer.
+- Implementação de filtros de autonomia e aprovação na interface.
+
+---
+
+> **Checkpoint Produção (PULSO v0.8)**
+> Data: 2026-05-11
+> Status: Requests Bridge Operacional.
+
+---
+
+## 🏗️ Stage 7.8: Request Authoring Bridge v0.1 + Materialização Automática ✅ CONCLUÍDO
+
+### Objetivo
+Fechar o ciclo operacional ponta a ponta permitindo que a OpenClaw/Lótus crie solicitações de forma autônoma a partir de ordens capturadas fora da UI (ex: WhatsApp) e, após o processamento, garanta a materialização automática na base canônica do ecossistema.
+
+### Entregas Técnicas
+- [x] **Endpoint de Criação**: Criada a rota `POST /create` na Cloud Function `pulsoRequests` (via rewrite `/api/pulso/requests/create`).
+- [x] **Idempotência Operacional**: Suporte nativo à chave `dedupeKey` para impedir duplicidades decorrentes de duplos disparos de mensageria.
+- [x] **Rastreabilidade de Autoria**: Incorporação do objeto `origin` (`channel`, `source`, `messageRef`) distinguindo interações de usuários humanos vs. agentes na interface de triagem.
+- [x] **Dispatcher de Materialização**: Implementada a conversão estrutural de intenções concluídas (`complete`) em entidades do ecossistema para todos os escopos suportados:
+  - `register_person` → materializa em `pulso_people`.
+  - `register_source` → materializa em `pulso_sources`.
+  - `create_task` → materializa em `pulso_tasks` com vínculo de autoria e prioridade.
+  - `register_decision` → materializa em `pulso_decisions`.
+  - `create_alert` → materializa em `pulso_alerts`.
+  - `create_project` e `create_area` → materialização e vinculação direta.
+  - `create_agent` → blindado estruturalmente para retornar `needs_approval`.
+- [x] **Persistência de Resultados**: Retorno canônico de `entityRef` e `entityPath` para navegação direta a partir dos cartões de solicitação.
+
+### Validação Concluída em Produção
+- Fluxo de ponta a ponta validado com o caso **Validar Materialização de Tarefas** (WhatsApp Command).
+- Transição impecável: `requested` → `claimed` → `completed` com gravação na entidade de destino.
+- UI refletindo metadados de canal (WhatsApp) e identificadores técnicos do processo concluído.

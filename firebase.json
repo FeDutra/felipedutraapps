@@ -13,6 +13,10 @@
       {
         "source": "/api/pulso/ingest",
         "function": "pulsoIngest"
+      },
+      {
+        "source": "/api/pulso/requests/**",
+        "function": "pulsoRequests"
       }
     ]
   },

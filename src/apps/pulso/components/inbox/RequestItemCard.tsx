@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Clock, User, Layers, Tag, ChevronRight, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Zap, Clock, User, Layers, Tag, ChevronRight, AlertCircle, CheckCircle2, Loader2, MessageSquare, Mic, RefreshCw, Cpu, Layout } from 'lucide-react';
 import { PulsoRequest } from '../../types/pulso.types';
 
 interface RequestItemCardProps {
@@ -18,7 +18,18 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
       case 'running': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
       case 'completed': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
       case 'failed': return 'text-red-400 bg-red-500/10 border-red-500/20';
+      case 'needs_clarification': return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
       default: return 'text-white/40 bg-white/5 border-white/10';
+    }
+  };
+
+  const getOriginIcon = (channel?: string) => {
+    switch (channel) {
+      case 'whatsapp': return <MessageSquare size={10} />;
+      case 'voice': return <Mic size={10} />;
+      case 'routine': return <RefreshCw size={10} />;
+      case 'system': return <Cpu size={10} />;
+      default: return <Layout size={10} />;
     }
   };
 
@@ -47,6 +58,13 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
               {request.status}
             </span>
             <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">{request.requestType.replace('_', ' ')}</span>
+            
+            {request.origin?.channel && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded text-[8px] font-bold text-white/40 uppercase tracking-tight">
+                {getOriginIcon(request.origin.channel)}
+                {request.origin.channel}
+              </span>
+            )}
           </div>
           
           <h4 className="text-sm font-black text-white/90 mb-2 truncate group-hover:text-white transition-colors">{request.title}</h4>
