@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, HeartPulse, Zap } from 'lucide-react';
+import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, HeartPulse, Zap, CheckSquare } from 'lucide-react';
 import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
 import { authService } from '@/shared/services/authService';
 import { User } from 'firebase/auth';
@@ -26,16 +26,16 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     { href: '/pulso', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Globe },
     { href: '/pulso/inbox', label: 'Inbox', icon: Inbox },
+    { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
     { href: '/pulso/eventos', label: 'Eventos', icon: Activity },
     { href: '/pulso/health', label: 'Health', icon: HeartPulse },
     { href: '/pulso/metabolismo', label: 'Metabolismo', icon: Zap },
   ];
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white selection:bg-blue-500/30 w-full max-w-full overflow-x-hidden">
-      {/* Responsive Premium Top Nav */}
-      <nav className="relative p-3 md:p-4 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 border-b border-white/5 bg-[#020617]/80 backdrop-blur-xl sticky top-0 z-50 w-full max-w-full overflow-x-hidden">
-        
+    <div className="min-h-screen bg-[#020617] text-white selection:bg-blue-500/30 w-full max-w-full flex flex-col xl:flex-row overflow-x-hidden">
+      {/* MOBILE / TABLET TOP NAV (Hidden on Desktop xl) */}
+      <nav className="xl:hidden relative p-3 md:p-4 flex flex-col items-stretch justify-between gap-3 border-b border-white/5 bg-[#020617]/80 backdrop-blur-xl sticky top-0 z-50 w-full max-w-full overflow-x-hidden">
         {/* Top bar layer: Logo securely on the left, Profile & Logout securely on the right */}
         <div className="flex items-center justify-between gap-4 w-full">
           {/* Logo & v0.1 */}
@@ -78,9 +78,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Center Section: Navigation pill container */}
-        {/* On mobile: displayed as a smooth scrollable row below the top bar */}
-        {/* On desktop: positioned with absolute center alignment to eliminate side-element push completely */}
-        <div className="flex items-center justify-start sm:justify-center gap-1 bg-white/2 p-1 rounded-xl border border-white/5 w-full xl:w-auto max-w-full overflow-x-auto custom-scrollbar flex-nowrap shrink-0 xl:absolute xl:left-1/2 xl:-translate-x-1/2 xl:top-1/2 xl:-translate-y-1/2">
+        <div className="flex items-center justify-start sm:justify-center gap-1 bg-white/2 p-1 rounded-xl border border-white/5 w-full max-w-full overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -101,7 +99,82 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
         </div>
       </nav>
 
-      <main className="min-h-screen w-full max-w-full overflow-x-hidden">
+      {/* DESKTOP SIDEBAR (Hidden on Mobile/Tablet, visible on Desktop xl) */}
+      <aside className="hidden xl:flex flex-col justify-between w-64 min-w-[16rem] h-screen sticky top-0 border-r border-white/5 bg-[#020617]/80 backdrop-blur-xl z-50 p-4 shrink-0">
+        {/* Top Section: Logo & Nav items */}
+        <div className="flex flex-col gap-6">
+          {/* Logo & Back button */}
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Link href="/" className="p-1.5 hover:bg-white/5 rounded-xl transition-colors shrink-0 -ml-1.5" title="Voltar para Home">
+                <ArrowLeft size={16} className="text-white/40" />
+              </Link>
+              <div className="w-8 h-8 bg-blue-500/20 rounded-xl flex items-center justify-center border border-blue-500/30 shrink-0">
+                <Activity size={16} className="text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm font-black tracking-tight leading-none truncate">PULSO</h1>
+                <p className="text-[9px] text-white/30 font-medium mt-0.5 truncate">Central Viva</p>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[8px] font-black uppercase tracking-widest text-blue-400 shrink-0">
+              v0.1
+            </span>
+          </div>
+
+          {/* Vertical Navigation items */}
+          <div className="flex flex-col gap-1.5 mt-2">
+            <p className="text-[8px] font-black uppercase tracking-widest text-white/20 px-3 mb-1">Navegação</p>
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link 
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold tracking-wide transition-all ${
+                    isActive 
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)] font-black relative overflow-hidden' 
+                      : 'text-white/40 hover:text-white/90 hover:bg-white/2'
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-4 bg-blue-400 rounded-r-full" />
+                  )}
+                  <item.icon size={16} className={isActive ? 'text-blue-400' : 'text-white/40'} />
+                  <span className="block truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom Section: Profile & Logout */}
+        {user ? (
+          <div className="flex items-center justify-between gap-3 p-2.5 bg-white/2 border border-white/5 rounded-2xl mt-4">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center font-bold text-xs text-white/80 shrink-0">
+                {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-white/90 leading-tight truncate">{user.displayName || 'Usuário'}</p>
+                <p className="text-[9px] font-medium text-white/30 leading-tight truncate">{user.email}</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => authService.logout()}
+              className="p-2 bg-white/2 border border-white/5 rounded-xl text-white/30 hover:text-red-400 hover:bg-red-400/5 hover:border-red-400/20 transition-all group shrink-0"
+              title="Sair"
+            >
+              <LogOut size={14} className="group-hover:scale-110 transition-transform" />
+            </button>
+          </div>
+        ) : (
+          <div className="h-12" />
+        )}
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 min-w-0 w-full max-w-full overflow-x-hidden">
         <AuthGate>
           {children}
         </AuthGate>
