@@ -1,154 +1,148 @@
-# PULSO v1.0: Definição Canônica e Universal de Campos por Entidade
+# PULSO v1.0: Definição Canônica de Campos e Usabilidade por Entidade
 
-Este manual de arquitetura consolida o modelo de dados final mínimo exigido para o ecossistema **PULSO v1.0**, estabelecendo o limite absoluto e inegociável entre os vetores brutos de tráfego do barramento e os atributos de estado vivo no Cockpit Operacional.
+A decisão mestre de produto que rege a arquitetura do **PULSO v1.0** dita que:
 
-Cada propriedade de todas as entidades do sistema é exaustivamente classificada com os seguintes carimbos de governança técnica:
-*   **[Obrigatório]**: Chave estrutural crítica para o tráfego da Bridge, indexação no Firestore e materialização de chaves primárias.
-*   **[Opcional]**: Atributo de conveniência ou contato secundário.
-*   **[Estratégico]**: Métrica de alto valor relacional, preditiva ou de alavancagem operacional para governança e tomadas de decisão pela IA ou pelo usuário.
-*   **[Subjetivo]**: Memória humana ou de máquina não estruturada, notas de campo, impressões ou sínteses textuais abertas.
-*   **[Rastreabilidade]**: Assinatura técnica temporal ou de origem garantindo a trilha de auditoria atômica do tráfego.
-*   **[Governança]**: Variável ou array encarregado de travar barreiras de chancelamento (Approval) ou acionar alarmes de desobstrução de loops.
+> [!IMPORTANT]
+> **A versão v1.0 precisa ser operável antes de ser completa.**
+
+Para evitar o inchaço da plataforma e garantir uma interface ágil e limpa, os atributos de todas as entidades são estruturados sob a **Matriz de 5 Camadas de Produto**:
+1.  **[Obrigatório]**: O núcleo mínimo vital. Sem essas chaves, o registro não nasce como entidade madura no banco (bloqueia a criação ou mantém-se como rascunho de triagem).
+2.  **[Opcional]**: Atributos de conveniência que enriquecem o uso, mas cuja ausência jamais trava o fluxo de ingestão.
+3.  **[Estratégico]**: Indicadores mestre de gestão, priorização, risco, alavancagem de rede e cadência de operação.
+4.  **[Subjetivo]**: Memória humana fina, notas livres, sínteses abertas e contexto relacional não estruturado.
+5.  **[Futuro]**: Previstos para iterações avançadas. Não devem ser cobrados como exigência de barramento ou validação na v1.0.
 
 ---
 
 ## 1. Pessoas (`pulso_people`)
 
-Nós nevrálgicos de capital social, conectividade, alavancagem comercial e contexto do ecossistema.
+O nó mais sensível de capital social. Uma Pessoa pode nascer como **rascunho** a partir de uma menção em áudio com dados esparsos, mas só é promovida ao status de **entidade madura** se detiver o conjunto obrigatório mínimo.
 
-### Esquema de Campos Canônicos (24 Vetores Mapeados)
+### Camadas de Atributos
 
-#### A. Identificação e Base
-1.  `id` **[Obrigatório]**: Identificador único canônico da entidade (ex: `person_177868_abc`).
-2.  `name` **[Obrigatório]**: Nome completo ou designação de identificação direta.
-3.  `profession` (ou `role`) **[Opcional]**: Atividade principal ou título funcional.
-4.  `company` (ou `organization`) **[Opcional]**: Entidade jurídica ou ecossistema institucional de ancoragem.
+#### 🔴 Obrigatório (Mínimo de Maturidade)
+*   `id`: Identificador único no formato `person_<hash>`.
+*   `name`: Nome limpo ou designação inequívoca.
+*   `status`: Estado de vida (`active`, `inactive`, `archived`).
+*   `relationType`: Categoria do vínculo (`partner`, `client`, `team`, `friend`, `provider`, `mentor`).
+*   `importance`: Peso na gestão de atenção (`critical`, `high`, `medium`, `low`).
+*   `createdAt` e `updatedAt`: Carimbos temporais do sistema.
+*   *Nota*: Exige-se também a presença de pelo menos um canal de contato ou origem clara da menção.
 
-#### B. Comunicação e Endereçamento
-5.  `contactMethods.whatsapp` **[Obrigatório para Lótus]**: Chave primária de disparo e interface com o agente autônomo via canais de mensagens.
-6.  `contactMethods.phone` **[Opcional]**: Linha direta secundária.
-7.  `contactMethods.email` **[Opcional]**: Correio eletrônico formal.
-8.  `contactMethods.instagram` **[Opcional]**: Vetor social visual.
-9.  `contactMethods.linkedin` **[Opcional]**: Vetor social profissional corporativo.
-10. `location.city` e `location.country` **[Opcional]**: Ancoragem geográfica para cruzamento de contexto físico e fuso horário.
+#### 🟡 Opcional (Enriquecimento de Contato)
+*   `whatsapp`: Chave primária de mensageria da Lótus.
+*   `email` / `phone`: Vias de comunicação direta.
+*   `profession` / `organization`: Contexto funcional corporativo.
+*   `areaRef` / `projectRefs`: Vínculos com o esqueleto operacional.
 
-#### C. Tipificação e Força Relacional
-11. `relationType` **[Obrigatório]**: Natureza formal do laço (ex: `partner`, `client`, `team`, `friend`, `provider`, `mentor`).
-12. `relationshipLevel` **[Estratégico]**: Grau de profundidade ou maturidade de acesso e confiança.
-13. `bondStrength` **[Estratégico]**: Índice de coesão ou força do vínculo (ex: `strong`, `stable`, `fragile`, `dormant`).
+#### 🔵 Estratégico (Alavancagem e Recorrência)
+*   `relationshipLevel` e `trustLevel`: Índices de profundidade e confiança mútua.
+*   `commercialPotential` / `partnershipPotential`: Matrizes de alavancagem para novos negócios ou co-criações.
+*   `networkValue`: Conectividade e peso do *stakeholder* na rede.
+*   `lastContactAt`: Data do último toque real bem-sucedido.
+*   `nextContactAt`: Alarme disparador de sugestão de *follow-up*.
+*   `followUpReason`: O gatilho ou justificativa para reatar o contato.
+*   `openLoops` / `pendingPromises`: Acordos firmados ou pontas soltas exigindo fechamento.
 
-#### D. Oportunidade e Expansão
-14. `potentialClient` **[Estratégico]**: Sinalizador *Boolean* ou de nível indicando potencial de conversão de negócios diretos.
-15. `potentialPartner` **[Estratégico]**: Sinalizador de alavancagem para joint-ventures, co-criações ou distribuição conjunta.
-16. `skillsIdentified` **[Estratégico]**: *Array* de *strings* mapeando competências raras ou capacidades técnicas passíveis de consulta futura pelo Fê.
+#### 🟣 Subjetivo (Memória Relacional)
+*   `notes` / `personalContext`: Peculiaridades, preferências e restrições de vida.
+*   `relationshipHistory`: Trilha narrativa dos marcos da relação.
+*   `lastInteractionSummary`: Síntese textual do último encontro ou conversa.
+*   `knownSkills`: Competências raras mapeadas.
+*   `communicationStyle`: Estilo preferido de abordagem.
 
-#### E. Histórico e Rastreabilidade
-17. `projectRefs` **[Rastreabilidade]**: *Array* de referências canônicas apontando para quais Projetos do PULSO o *stakeholder* possui interface ativa ou concluída.
-18. `interactionHistory` **[Subjetivo]**: Trilha auditável ou *array* de objetos narrando os últimos marcos ou encontros significativos.
-19. `lastContactAt` **[Rastreabilidade]**: Carimbo estrito contendo a data e hora da última comunicação bidirecional bem-sucedida.
-
-#### F. Governança e Recorrência de Relacionamento
-20. `nextContactAt` **[Governança]**: Alarme estrito indicando a data limite ideal para o próximo ponto de toque, servindo de insumo para a Lótus agendar sugestões.
-21. `followUpCadence` **[Governança]**: Periodicidade ideal pré-configurada para o laço (ex: `weekly`, `monthly`, `quarterly`, `semiannual`).
-22. `relationshipAlerts` **[Governança]**: *Array* de sinalizadores sobre fricções, esfriamento de laço ou alertas de risco comportamental.
-23. `pendingPromises` (ou `openLoops`) **[Governança]**: Acordos ou entregas combinadas pendentes de chancelamento ou cumprimento.
-
-#### G. Enriquecimento Livre e Canal
-24. `primaryContactChannel` **[Opcional]**: Opção predileta e mais responsiva do nó (ex: `whatsapp`, `call`, `instagram_dm`, `email`).
-25. `subjectiveNotes` **[Subjetivo]**: Contexto sensível humano, preferências, *hobbies*, restrições ou peculiaridades documentadas.
-
-### Impactos de Interface e Barramento (Entidade Pessoas)
-*   **Impacto na UI**: O formulário de detalhes em `EntityDetailDrawer.tsx` (ou nas visualizações de Pessoas) ganha abas ou seções retráteis agrupadas por cor (Relação, Governança, Oportunidade e Contato), permitindo edição ágil e legibilidade superior sem poluição.
-*   **Impacto na Requests Bridge**: O `requestType` canônico `register_person` ou `update_person` precisa aceitar a injeção parcial desses sub-objetos no `payload` sem validação restritiva em tempo de *hook*, assegurando a absorção em tempo real e encaminhando *missingFields* se o nome ou a chave do canal de contato estiverem nulos.
-*   **Impacto na Lótus/OpenClaw**: A IA não precisa extrair simultaneamente todos os 24 campos em um único *audio-prompt*. Ela opera de forma cumulativa, enviando atualizações isoladas à medida que novas nuances emergem nas interações do Fê.
+#### ⚪ Futuro (Não Bloqueante)
+*   `creativePotential`, `influenceLevel`, `riskLevel`, `importantDates`, `followUpCadence`.
 
 ---
 
 ## 2. Fontes (`pulso_sources`)
 
-Conectores estruturais com a memória externa descentralizada.
-*   `id` / `name` / `type` / `system` **[Obrigatório]**: Identificação atômica e destino (ex: `google_sheets`, `notion`).
-*   `relevance` **[Obrigatório]**: Peso no carregamento contextual.
-*   `syncMode` **[Obrigatório]**: `manual` ou `auto`.
-*   `url` **[Opcional]**: Link de visualização canônica.
-*   `accessNotes` **[Subjetivo]**: Chaves, *tokens* ou observações de acesso.
-*   `lastSyncAt` **[Rastreabilidade]**: Registro do último descarregamento íntegro.
-*   **Impacto**: O painel visual mapeia o estado da sincronia e isola *timeouts* da nuvem. A Lótus consome como vetor prioritário para elaboração de respostas.
+Sensores de memória externa e sincronização.
+*   **Obrigatório**: `id`, `name`, `type`, `system`, `status`, `relevance`, `syncMode`.
+*   **Progressivo/Opcional**: `url`, `lastSyncAt`, `accessNotes`, vínculos com projetos.
 
 ---
 
 ## 3. Projetos (`pulso_projects`)
 
-Onde as intenções ganham prazos, responsáveis e critérios de sucesso mensuráveis.
-*   `id` / `name` / `status` / `stage` / `priority` / `areaRef` **[Obrigatório]**: O esqueleto imutável do projeto.
-*   `objective` **[Opcional]**: Intenção ou macro-meta.
-*   `nextStep` **[Estratégico]**: A próxima ação imediata física capaz de mover o ponteiro (desobstrução direta).
-*   `riskSummary` **[Estratégico]**: Síntese de entraves técnicos, humanos ou financeiros.
-*   `successCriteria` **[Estratégico]**: A definição exata de *"done"* (quando comemoramos).
-*   `deadline` / `startedAt` / `completedAt` **[Rastreabilidade]**
-*   **Impacto**: Mapeado na UI com cartões de progresso em grade. O dispatcher da Bridge pode criar tarefas (`create_task`) que se auto-vinculam ao projeto correspondente se a Área bater com o contexto.
+Frentes de intenção com prazos e entregáveis.
+*   **Obrigatório**: `id`, `name`, `status`, `stage`, `priority`, `areaRef`.
+*   **Regra de Produto**: Um projeto sem `nextStep` tem permissão estrutural para existir, mas a interface deve aplicar uma marcação visual contundente e elegante de **"Sem próximo passo"** no *card* para alertar sobre o gargalo de desobstrução.
+*   **Estratégico/Importante**: `objective`, `nextStep`, `riskSummary`, `whyItMatters`, `successCriteria`, `deadline`.
 
 ---
 
 ## 4. Tarefas (`pulso_tasks`)
 
-A menor unidade atômica de execução operacional.
-*   `id` / `title` / `status` / `priority` / `ownerRefs` **[Obrigatório]**: Identificação, estado e os CPFs responsáveis pela entrega.
-*   `areaRef` / `projectRef` **[Opcional]**: Vínculos hierárquicos.
-*   `description` **[Subjetivo]**: Escopo ou notas de execução.
-*   `dueDate` **[Opcional]**: Prazo final ou janela ideal.
-*   `blockedBy` / `blockReason` **[Estratégico]**: Array ou objeto sinalizando dependências críticas travadas.
-*   `originTrail` **[Rastreabilidade]**: Assinatura técnica contendo o `requestId` da Bridge que instanciou a tarefa, canal e *source*.
-*   **Impacto**: Componentização central na aba "Tarefas". Se uma tarefa chega com *ownerRefs* que não são o Fê, ela ganha um *badge* de delegação para facilitar o acompanhamento.
+Unidades atômicas de esforço.
+*   **Obrigatório**: `id`, `title`, `status`, `priority`, `ownerRefs`, `createdAt`, `updatedAt`.
+*   **Regra de Delegação**: Se a tarefa chega via ingestão da Bridge sem um dono humano claro, ela nasce em estado de triagem sob a responsabilidade genérica da Lótus/Fê, mas deve ser explicitamente sinalizada na UI como **pendente de atribuição**.
+*   **Estratégico/Importante**: `description`, `areaRef`, `projectRef`, `dueDate`, `completedAt`, `blockedBy`, `blockReason`, `nextAction`, `originTrail`, `notes`.
 
 ---
 
 ## 5. Decisões (`pulso_decisions`)
 
-A memória imutável dos cortes estratégicos.
-*   `id` / `title` / `decision` / `takenByRefs` **[Obrigatório]**: O enunciado da escolha e quem a assinou.
-*   `context` **[Subjetivo]**: O cenário ou dilema que exigiu o veredito.
-*   `impactSummary` **[Estratégico]**: Consequências ou desdobramentos operacionais inevitáveis.
-*   `createdAt` **[Rastreabilidade]**
-*   **Impacto**: O Cockpit exibe o feed de decisões como uma "trilha de sabedoria" e insumo para o modelo de IA evitar a reabertura ou rediscussão de tópicos já deliberados.
+A âncora de sabedoria e alinhamento mestre.
+*   **Obrigatório**: `id`, `title`, `decision`, `takenByRefs`, `createdAt`.
+*   **Regra de Barreira**: Se o *payload* da IA tenta registrar uma decisão sem preencher a string literal do veredito em `decision`, o processador ejeta a transação automaticamente para a quarentena de `needs_clarification`.
 
 ---
 
 ## 6. Alertas (`pulso_alerts`)
 
-Sinais vitais e de risco iminente exigindo contenção.
-*   `id` / `title` / `severity` / `status` **[Obrigatório]**: Nível de gravidade (`critical`, `high`, `medium`, `low`) e estado do ciclo (`active`, `acknowledged`, `resolved`).
-*   `description` **[Opcional]**: Causa-raiz ou sintoma.
-*   `recommendedAction` **[Estratégico]**: O caminho mais rápido e seguro de mitigação sugerido pela IA ou sensor.
-*   `resolvedAt` **[Rastreabilidade]**
-*   **Impacto**: Ocupam o topo visual do *Health Center* e do *Cockpit Header* em vermelho pulsante ou ânbar de acordo com a severidade. A Lótus pode disparar sugestões proativas de contenção.
+Sinais de risco e contenção de danos.
+*   **Obrigatório**: `id`, `title`, `severity`, `status`, `createdAt`.
+*   **Regra de Risco**: Se um alerta for classificado como `critical` e o agente omitir o caminho de mitigação em `recommendedAction`, a transação é retida em `needs_clarification`.
+*   **Métrica de Qualidade**: Um alerta excelente na v1.0 responde de forma cabal a 4 vetores: *O que é*, *Quão grave é*, *Está ativo ou resolvido*, e *O que fazer*.
 
 ---
 
 ## 7. Áreas (`pulso_areas`)
 
-O telhado estrutural e os pilares de longo prazo.
-*   `id` / `name` / `type` / `importance` / `status` **[Obrigatório]**: O pilar de sustentação (ex: `business`, `personal`, `health`).
-*   `ownerRef` **[Estratégico]**: Guardião da vertical.
-*   `governancePolicy` **[Governança]**: Regras canônicas determinando se a injeção de novas frentes de custo nesta Área passa compulsoriamente pelo funil de `needs_approval`.
-*   **Impacto**: Filtro base de todas as abas. Garante isolamento entre as verticais da vida pessoal e os braços comerciais da operação corporativa.
+O telhado estrutural e as vigas de fundação.
+*   **Obrigatório**: `id`, `name`, `type`, `priority`, `status`.
+*   **Governança**: A injeção de novas Áreas estruturais exige compulsoriamente a passagem pela barreira de `needs_approval`.
 
 ---
 
 ## 8. Agentes (`pulso_agents`)
 
-Identidades e *skills* autônomas que rodam na infraestrutura.
-*   `id` / `name` / `role` / `status` / `autonomyLevel` **[Obrigatório]**: O raio de ação da IA.
-*   `requiresApproval` **[Governança]**: Sinalizador mestre ativando a barreira humana em caso de saídas destrutivas.
-*   `lastActivityAt` **[Rastreabilidade]**
-*   **Impacto**: Exibidos no painel do Ecossistema como cartões de servidores virtuais.
+Identidades virtuais e *skills* com autonomia mestre.
+*   **Obrigatório**: `id`, `name`, `role`, `status`, `autonomyLevel`, `requiresApproval`.
+*   **Governança Estrita**: Agentes ativos **nunca** nascem de forma automatizada sem *approval*.
+*   **Mapeamento Importante**: `systemsUsed`, `limitations`, `inputTypes`, `outputTypes`, `approvalPolicy`, `knownRisks`, `lastActivityAt`.
 
 ---
 
 ## 9. Rotinas (`pulso_routines`)
 
-Loops periódicos automatizados.
-*   `id` / `name` / `frequency` / `status` / `tool` **[Obrigatório]**: O motor cíclico.
-*   `lastRunAt` / `nextRunAt` **[Rastreabilidade]**
-*   `outputExpected` **[Estratégico]**: O artefato ou log de saída esperado ao fim da execução.
-*   **Impacto**: Permite o monitoramento visual de saúde para garantir que integrações críticas (como extrações do Sheets ou envios de *follow-up*) rodem conforme o agendamento.
+Loops periódicos. Na v1.0 operam sob o escopo de leitura e monitoramento visual de integridade.
+*   **Obrigatório**: `id`, `name`, `frequency`, `triggerType`, `tool`, `status`.
+*   **Importante**: `description`, `lastRunAt`, `nextRunAt`, `outputExpected`, `notes`.
+
+---
+
+## Política Operacional Mestre v1.0
+
+### ✅ Autonomia de Criação Direta (Lótus ➔ `completed`)
+A IA cria autonomamente: Pessoas, Fontes, Tarefas, Decisões, Alertas, e Projetos contidos dentro de uma Área preexistente.
+
+### 🔄 Autonomia de Atualização Direta
+A IA atualiza autonomamente: Atributos de Pessoas e Fontes, progresso de Tarefas e Projetos, *status* de Projetos, prioridades, notas de campo, e vínculos simples de Pessoas/Fontes com Projetos.
+
+### 📦 Autonomia de Arquivamento Direto
+A IA arquiva autonomamente: Documentos gerados com finalidade de teste, tarefas finalizadas ou canceladas, e projetos autorizados.
+
+### 🛑 Exigência de Aprovação Humana (`needs_approval`)
+Dispara notificação de chancela perante: Criação ou arquivamento de Áreas, criação, ativação ou aumento de autonomia de Agentes, e ações que envolvam deleções lógicas em massa.
+
+### ❓ Exigência de Clarificação (`needs_clarification`)
+Retém a transação e solicita insumos se: Faltar nome/título, faltar referência canônica obrigatória, o vínculo for ambíguo, a tarefa nascer órfã contra a regra de negócio, ou houver risco de sobreposição destrutiva.
+
+### ❌ Interdições Absolutas (O que NUNCA Fazer)
+*   Deletar fisicamente documentos do banco de produção (`DELETE`).
+*   Emitir pacotes na Bridge para cadastros triviais sem valor de alteração de estado.
+*   Criar ou ativar Agentes/Áreas sem autorização expressa.
+*   Aplicar *workarounds* silenciosos na extração de *schemas*.

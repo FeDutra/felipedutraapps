@@ -54,7 +54,7 @@ export const ProjectCard = ({ project, areaName, onClick }: { project: Project, 
     <motion.div 
       whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.04)' }}
       onClick={onClick}
-      className="p-6 bg-white/2 border border-white/5 rounded-3xl cursor-pointer transition-all group"
+      className="p-6 bg-white/2 border border-white/5 rounded-3xl cursor-pointer transition-all group flex flex-col h-full"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -67,9 +67,18 @@ export const ProjectCard = ({ project, areaName, onClick }: { project: Project, 
       </div>
 
       <h3 className="text-base font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">{project.name}</h3>
-      <p className="text-xs text-white/40 line-clamp-2 mb-6 leading-relaxed">{project.objective}</p>
+      <p className="text-xs text-white/40 line-clamp-2 mb-4 leading-relaxed">{project.objective}</p>
 
-      <div className="flex items-center justify-between mt-auto">
+      {!project.nextStep && (
+        <div className="mb-4 py-1.5 px-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-center justify-between">
+          <span className="text-[9px] font-black uppercase tracking-widest text-amber-500/90">
+            Sem Próximo Passo
+          </span>
+          <span className="text-[8px] text-white/30 font-medium">Gargalo</span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
              <Target size={12} className="text-white/20" />
