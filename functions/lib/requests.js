@@ -378,7 +378,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                             let patchData = { updatedAt: ts };
                             if (type === "update_task") {
                                 const patch = payload.patch || payload;
-                                const allowedKeys = ["name", "status", "priority", "notes", "areaRef", "projectRef", "dueAt"];
+                                const allowedKeys = ["name", "status", "priority", "notes", "areaRef", "projectRef", "dueAt", "completedAt", "archived"];
                                 allowedKeys.forEach(k => {
                                     if (patch[k] !== undefined)
                                         patchData[k] = patch[k];
@@ -471,24 +471,39 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
             };
             const matResult = await materialize();
             if (matResult.action === "needs_clarification") {
+                const clarifObj = { question: matResult.summary, missingFields: matResult.missingFields || [] };
                 await docRef.update(sanitize({
                     status: "needs_clarification",
-                    result: { question: matResult.summary, missingFields: matResult.missingFields || [] },
+                    result: clarifObj,
                     updatedAt: ts
                 }));
-                res.status(200).send("needs_clarification");
+                res.status(200).json({ status: "needs_clarification", result: clarifObj });
                 return;
             }
-            const finalStatus = matResult.action === "needs_approval" ? "needs_approval" : "completed";
+            const isFailed = matResult.action === "failed" || matResult.ok === false;
+            const finalStatus = matResult.action === "needs_approval" ? "needs_approval" : isFailed ? "failed" : "completed";
+            const finalResultObj = sanitize({
+                ...(result || {}),
+                action: matResult.action || (finalStatus === "completed" ? "updated" : "failed"),
+                entityType: matResult.entityType || null,
+                entityRef: matResult.entityRef || null,
+                entityPath: matResult.entityPath || null,
+                matResult,
+            });
             await docRef.update(sanitize({
                 status: finalStatus,
-                result: { ...(result || {}), matResult },
+                result: finalResultObj,
+                error: isFailed ? matResult.summary || "Erro na materialização" : admin.firestore.FieldValue.delete(),
                 emittedEvents: emittedEvents || null,
                 pulsoEventId: pulsoEventId || null,
                 processedAt: ts,
                 updatedAt: ts,
             }));
-            res.status(200).send(finalStatus);
+            res.status(200).json({
+                status: finalStatus,
+                result: finalResultObj,
+                error: isFailed ? matResult.summary || "Erro na materialização" : null
+            });
             return;
         }
         // ── POST /fail ─────────────────────────────────────────────────────────
