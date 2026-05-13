@@ -162,6 +162,36 @@ export default function InboxPage() {
     }
   };
 
+  const handleArchiveBulkTests = async () => {
+    // Filtrar solicitações em cache que tenham a flag ou sejam explícitas de teste
+    const testReqs = requests.filter(r => {
+      if (!r || r.archived) return false;
+      const tStr = (r.title || '').toLowerCase();
+      const dkStr = (r.dedupeKey || '').toLowerCase();
+      return tStr.includes('teste') || dkStr.includes('teste') || (r as any).isTest;
+    });
+
+    if (testReqs.length === 0) {
+      showFeedback('Nenhuma solicitação ativa de Teste encontrada na lista renderizada.', 'error');
+      return;
+    }
+
+    try {
+      await Promise.all(testReqs.map(r => requestsService.archiveRequest(r.id)));
+      setRequests(prev => prev.map(r => {
+        if (testReqs.some(tr => tr.id === r.id)) {
+          return { ...r, archived: true };
+        }
+        return r;
+      }));
+      const rawData = await requestsService.getRawRequests(20);
+      setRawDocs([...rawData]);
+      showFeedback(`Sucesso! ${testReqs.length} solicitações de Teste arquivadas em lote para a quarentena.`);
+    } catch (err: any) {
+      showFeedback('Erro na quarentena em lote: ' + (err.message || 'Falha no barramento'), 'error');
+    }
+  };
+
   const handleApproveRequest = async (id: string) => {
     try {
       const updated = await requestsService.approveRequest(id);
@@ -238,12 +268,21 @@ export default function InboxPage() {
               <span className="text-[10px] font-black uppercase tracking-widest text-purple-300">Auditoria Bruta Direta (Debug Interno)</span>
               <span className="text-[9px] text-white/40">({rawDocs.length} docs lidos da raiz sem filtros)</span>
             </div>
-            <button
-              onClick={() => setShowRawAudit(!showRawAudit)}
-              className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[9px] font-bold text-purple-300 hover:bg-purple-500/20 transition-all uppercase tracking-wider cursor-pointer"
-            >
-              {showRawAudit ? 'Esconder Leitura Bruta' : 'Exibir Leitura Bruta'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleArchiveBulkTests}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-300 hover:bg-amber-500/20 transition-all uppercase tracking-wider cursor-pointer"
+                title="Arquivar em lote todas as solicitações de teste exibidas na fila"
+              >
+                Quarentena de Testes
+              </button>
+              <button
+                onClick={() => setShowRawAudit(!showRawAudit)}
+                className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[9px] font-bold text-purple-300 hover:bg-purple-500/20 transition-all uppercase tracking-wider cursor-pointer"
+              >
+                {showRawAudit ? 'Esconder Leitura Bruta' : 'Exibir Leitura Bruta'}
+              </button>
+            </div>
           </div>
 
           {showRawAudit && (

@@ -53,11 +53,22 @@ export const requestsService = {
    * Human Governance: Approves a previously blocked request
    */
   approveRequest: async (id: string) => {
+    const now = new Date();
+    const isoNow = now.toISOString();
     return pulsoRepository.updateRequest(id, { 
       status: "completed",
+      processedBy: "human_governance",
+      processedAt: now,
+      updatedAt: now,
       result: { 
         action: "approved", 
         summary: "Aprovado expressamente pelo usuário via Cockpit Operacional.",
+        auditLog: {
+          approvedBy: "Felipe Dutra (Owner)",
+          approvedAt: isoNow,
+          channel: "web_cockpit",
+          policyCheck: "explicit_consent"
+        },
         matResult: { ok: true, action: "approved", summary: "Aprovado no Cockpit" }
       } as any
     });
@@ -67,10 +78,23 @@ export const requestsService = {
    * Human Governance: Rejects a blocked request
    */
   rejectRequest: async (id: string) => {
+    const now = new Date();
+    const isoNow = now.toISOString();
     return pulsoRepository.updateRequest(id, { 
       status: "failed",
+      processedBy: "human_governance",
+      processedAt: now,
+      updatedAt: now,
       error: "Rejeitado pela governança humana no Cockpit.",
-      result: { action: "rejected", summary: "Rejeição explícita." } as any
+      result: { 
+        action: "rejected", 
+        summary: "Rejeição explícita no Cockpit.",
+        auditLog: {
+          rejectedBy: "Felipe Dutra (Owner)",
+          rejectedAt: isoNow,
+          channel: "web_cockpit"
+        }
+      } as any
     });
   },
 
