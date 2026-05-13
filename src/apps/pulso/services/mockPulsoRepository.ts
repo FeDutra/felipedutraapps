@@ -252,6 +252,10 @@ export class MockPulsoRepository implements IPulsoRepository {
     );
   }
 
+  async getRawRequests(limitCount = 20): Promise<any[]> {
+    return this.getRequests(limitCount, true);
+  }
+
   async getRequests(limitCount = 20, includeArchived?: boolean): Promise<PulsoRequest[]> {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('pulso_mock_requests');
@@ -265,7 +269,7 @@ export class MockPulsoRepository implements IPulsoRepository {
 
   async getPendingRequests(): Promise<PulsoRequest[]> {
     const all = await this.getRequests();
-    return all.filter(r => ['requested', 'accepted', 'running', 'needs_clarification'].includes(r.status));
+    return all.filter(r => ['requested', 'accepted', 'running', 'needs_approval', 'needs_clarification'].includes(r.status));
   }
 
   async saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest> {

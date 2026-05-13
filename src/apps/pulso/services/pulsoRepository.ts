@@ -93,6 +93,7 @@ export interface IPulsoRepository {
   markSeedComplete(version: string): Promise<void>;
 
   // Requests
+  getRawRequests(limitCount?: number): Promise<any[]>;
   getRequests(limitCount?: number, includeArchived?: boolean): Promise<PulsoRequest[]>;
   getPendingRequests(): Promise<PulsoRequest[]>;
   saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest>;

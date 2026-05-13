@@ -52,11 +52,19 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
     }
   };
 
+  const payload = request.payload || {};
   const resObj = request.result || {};
   const mat = resObj.matResult || null;
   const targetId = resObj.entityRef || mat?.entityRef || null;
   const missing = resObj.missingFields || [];
-  const isTest = (request as any).isTest || request.dedupeKey?.includes('test') || request.title?.toLowerCase().includes('test');
+  
+  const titleFallback = request.title || payload.title || payload.name || payload.decision || request.requestType || request.id || 'Sem Título';
+  const summaryFallback = request.summary || payload.summary || payload.notes || resObj.summary || request.error || 'Sem resumo disponível';
+  const dateFallback = request.requestedAt || (request as any).createdAt || request.updatedAt || request.processedAt || null;
+  const statusFallback = request.status || 'unknown';
+  const requestTypeFallback = request.requestType || 'unknown';
+
+  const isTest = (request as any).isTest || request.dedupeKey?.includes('test') || titleFallback.toLowerCase().includes('test');
 
   return (
     <motion.div
@@ -69,12 +77,12 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
       <div className="flex items-start justify-between gap-6 relative z-10">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${getStatusColor(request.status)}`}>
-              {request.status === 'running' && <Loader2 size={10} className="animate-spin" />}
-              {request.status}
+            <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${getStatusColor(statusFallback)}`}>
+              {statusFallback === 'running' && <Loader2 size={10} className="animate-spin" />}
+              {statusFallback}
             </span>
             <span className="px-2 py-1 rounded-lg bg-white/5 text-[9px] font-bold text-white/40 uppercase tracking-widest border border-white/5">
-              {request.requestType.replace('_', ' ')}
+              {requestTypeFallback.replace('_', ' ')}
             </span>
             
             {request.origin?.channel && (
@@ -91,10 +99,8 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
             )}
           </div>
           
-          <h4 className="text-sm font-black text-white/90 mb-1.5 truncate group-hover:text-white transition-colors">{request.title || 'Sem Título'}</h4>
-          {request.summary && (
-            <p className="text-xs text-white/40 line-clamp-2 leading-relaxed mb-3">{request.summary}</p>
-          )}
+          <h4 className="text-sm font-black text-white/90 mb-1.5 truncate group-hover:text-white transition-colors">{titleFallback}</h4>
+          <p className="text-xs text-white/40 line-clamp-2 leading-relaxed mb-3">{summaryFallback}</p>
           
           {/* Cockpit mini audit trail directly on card */}
           {(targetId || missing.length > 0 || request.error) && (
@@ -138,7 +144,7 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
             )}
             <div className="flex items-center gap-1.5 text-white/20">
               <Clock size={12} />
-              <span className="text-[10px] font-bold">{safeFormatDate(request.requestedAt || (request as any).createdAt)}</span>
+              <span className="text-[10px] font-bold">{safeFormatDate(dateFallback)}</span>
             </div>
           </div>
         </div>

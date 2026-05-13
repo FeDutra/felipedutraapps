@@ -15,6 +15,13 @@ export const requestsService = {
   },
 
   /**
+   * Fetches un-ordered raw requests directly for diagnostic audit
+   */
+  getRawRequests: async (limitCount = 20) => {
+    return pulsoRepository.getRawRequests(limitCount);
+  },
+
+  /**
    * Fetches requests with optional archival visibility
    */
   getRequests: async (limitCount = 50, includeArchived?: boolean) => {

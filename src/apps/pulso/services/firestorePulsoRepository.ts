@@ -490,24 +490,49 @@ export class FirestorePulsoRepository implements IPulsoRepository {
 
   // --- Requests ---
 
+  async getRawRequests(limitCount = 20) {
+    const qSimple = query(collection(db!, firestorePaths.requests()), limit(limitCount));
+    const snapSimple = await getDocs(qSimple);
+    return snapSimple.docs.map(d => ({ ...d.data(), id: d.id }));
+  }
+
   async getRequests(limitCount = 20, includeArchived?: boolean) {
     const constraints: any[] = [];
     if (!includeArchived) {
       constraints.push(where("archived", "==", false));
     }
-    return this.runResilientQuery<PulsoRequest>(
-      collection(db!, firestorePaths.requests()),
-      constraints,
-      limitCount
-    );
+    try {
+      const q = query(collection(db!, firestorePaths.requests()), ...constraints, orderBy("requestedAt", "desc"), limit(limitCount));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => this.toData<PulsoRequest>(d));
+    } catch (error: any) {
+      const qSimple = query(collection(db!, firestorePaths.requests()), ...constraints, limit(limitCount));
+      const snapSimple = await getDocs(qSimple);
+      const results = snapSimple.docs.map(d => this.toData<PulsoRequest>(d));
+      return results.sort((a: any, b: any) => {
+        const tA = a.requestedAt?.getTime?.() || (a as any).createdAt?.getTime?.() || a.updatedAt?.getTime?.() || 0;
+        const tB = b.requestedAt?.getTime?.() || (b as any).createdAt?.getTime?.() || b.updatedAt?.getTime?.() || 0;
+        return tB - tA;
+      });
+    }
   }
 
   async getPendingRequests() {
-    return this.runResilientQuery<PulsoRequest>(
-      collection(db!, firestorePaths.requests()),
-      [where("status", "in", ["requested", "accepted", "running", "needs_clarification"])],
-      50
-    );
+    const constraints = [where("status", "in", ["requested", "accepted", "running", "needs_approval", "needs_clarification"])];
+    try {
+      const q = query(collection(db!, firestorePaths.requests()), ...constraints, orderBy("requestedAt", "desc"), limit(50));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => this.toData<PulsoRequest>(d));
+    } catch (error: any) {
+      const qSimple = query(collection(db!, firestorePaths.requests()), ...constraints, limit(50));
+      const snapSimple = await getDocs(qSimple);
+      const results = snapSimple.docs.map(d => this.toData<PulsoRequest>(d));
+      return results.sort((a: any, b: any) => {
+        const tA = a.requestedAt?.getTime?.() || (a as any).createdAt?.getTime?.() || a.updatedAt?.getTime?.() || 0;
+        const tB = b.requestedAt?.getTime?.() || (b as any).createdAt?.getTime?.() || b.updatedAt?.getTime?.() || 0;
+        return tB - tA;
+      });
+    }
   }
 
   async saveRequest(request: Partial<PulsoRequest>) {

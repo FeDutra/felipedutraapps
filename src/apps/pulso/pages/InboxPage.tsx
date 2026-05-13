@@ -23,6 +23,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function InboxPage() {
   const [items, setItems] = React.useState<InboxItem[]>([]);
   const [requests, setRequests] = React.useState<PulsoRequest[]>([]);
+  const [rawDocs, setRawDocs] = React.useState<any[]>([]);
+  const [showRawAudit, setShowRawAudit] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [selectedItem, setSelectedItem] = React.useState<InboxItem | null>(null);
   const [selectedRequest, setSelectedRequest] = React.useState<PulsoRequest | null>(null);
@@ -46,12 +48,14 @@ export default function InboxPage() {
     setLoading(true);
     try {
       await authService.ensurePulsoAuthReady();
-      const [inboxData, requestsData] = await Promise.all([
+      const [inboxData, requestsData, rawData] = await Promise.all([
         inboxService.getAll(),
-        requestsService.getRequests(100, true) // Fetch history inclusive of archived tests
+        requestsService.getRequests(100, true), // Fetch history inclusive of archived tests
+        requestsService.getRawRequests(20)
       ]);
       setItems([...inboxData]);
       setRequests([...requestsData]);
+      setRawDocs([...rawData]);
     } catch (err: any) {
       console.error('Inbox load error:', err);
       showFeedback(err.message || 'Erro ao carregar itens do Inbox', 'error');
@@ -80,12 +84,13 @@ export default function InboxPage() {
       const reqSt = filters.requestStatus || 'active';
       if (reqSt === 'active') {
         if (r.archived) return false;
+        const activeStatuses = ['requested', 'running', 'needs_approval', 'needs_clarification'];
+        if (!activeStatuses.includes(r.status)) return false;
       } else if (reqSt === 'archived') {
         if (!r.archived) return false;
       } else {
         // Direct status filter (running, needs_approval, needs_clarification, completed, etc)
         if (r.status !== reqSt) return false;
-        // Optionally omit archived from direct sub-filters unless specifically viewed
         if (r.archived) return false;
       }
 
@@ -224,6 +229,46 @@ export default function InboxPage() {
         setFilters={setFilters} 
         onSearch={setSearchQuery} 
       />
+
+      {filters.status === 'requests' && (
+        <div className="mb-6 bg-purple-500/5 border border-purple-500/20 rounded-3xl p-4 transition-all">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-300">Auditoria Bruta Direta (Debug Interno)</span>
+              <span className="text-[9px] text-white/40">({rawDocs.length} docs lidos da raiz sem filtros)</span>
+            </div>
+            <button
+              onClick={() => setShowRawAudit(!showRawAudit)}
+              className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[9px] font-bold text-purple-300 hover:bg-purple-500/20 transition-all uppercase tracking-wider cursor-pointer"
+            >
+              {showRawAudit ? 'Esconder Leitura Bruta' : 'Exibir Leitura Bruta'}
+            </button>
+          </div>
+
+          {showRawAudit && (
+            <div className="mt-4 pt-4 border-t border-purple-500/10 grid grid-cols-1 gap-2 max-h-96 overflow-y-auto custom-scrollbar pr-2">
+              {rawDocs.map((doc, idx) => (
+                <div key={doc.id || idx} className="p-3 bg-black/40 rounded-xl border border-white/5 font-mono text-[10px] flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-purple-300">
+                    <span className="font-bold">{doc.id}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-[8px] uppercase">{doc.status || 'sem status'}</span>
+                  </div>
+                  <div className="text-white/60 truncate">
+                    Nome/Título: {doc.title || doc.name || doc.decision || doc.requestType || 'N/A'}
+                  </div>
+                  <div className="text-white/30 text-[9px] truncate">
+                    Sumário: {doc.summary || doc.notes || 'N/A'}
+                  </div>
+                </div>
+              ))}
+              {rawDocs.length === 0 && (
+                <div className="text-center py-4 text-white/40 text-xs">Nenhum documento retornado na leitura bruta. Verifique as permissões de rede.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4">
         <AnimatePresence mode="popLayout">
