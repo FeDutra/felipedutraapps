@@ -70,10 +70,16 @@ export const RequestDetailDrawer = ({
   const question = resObj.question || resObj.reason || null;
   const isTest = (request as any).isTest || request.dedupeKey?.includes('test') || request.title?.toLowerCase().includes('test');
 
+  const requestedByStr = request.createdById || request.requestedBy || 'lotus';
+  const requestedAtStr = safeFormatDateTime(request.requestedAt || (request as any).createdAt);
+  const processedByStr = request.processedBy || 'dispatcher/matResult';
+  const processedAtStr = safeFormatDateTime(request.processedAt || request.updatedAt);
+
   const actionStr = mat?.action || resObj.action || (request.status === 'completed' ? 'updated' : 'N/A');
   const typeStr = mat?.entityType || resObj.entityType || request.requestType.replace('register_', '').replace('create_', '');
   const refStr = resObj.entityRef || mat?.entityRef || 'N/A';
   const pathStr = resObj.entityPath || mat?.entityPath || 'N/A';
+  const matOkStr = mat?.ok !== undefined ? String(mat.ok) : (resObj.ok !== undefined ? String(resObj.ok) : 'N/A');
   const summaryStr = mat?.summary || resObj.summary || resObj.notes || 'Sem sumário técnico gravado.';
 
   const handleSendClarification = () => {
@@ -81,7 +87,6 @@ export const RequestDetailDrawer = ({
     const finalAnswers: any = { ...answers };
     if (genericAnswer) {
       finalAnswers.clarificationResponse = genericAnswer;
-      // If a single critical missing attribute is queried, map shortcut string natively
       if (missing.length === 1) {
         finalAnswers[missing[0]] = genericAnswer;
       }
@@ -131,25 +136,138 @@ export const RequestDetailDrawer = ({
               </div>
 
               <div className="space-y-6 w-full max-w-full min-w-0">
-                {/* 1. Status Section */}
-                <div className={`${statusInfo.bg} border ${statusInfo.border} rounded-2xl p-4 flex flex-wrap items-center justify-between gap-2`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${statusInfo.color.replace('text', 'bg')}`} />
-                    <span className={`text-xs font-black uppercase tracking-widest ${statusInfo.color}`}>{statusInfo.label}</span>
+                {/* 1. Matriz de Auditoria Operacional Consolidada */}
+                <div className="bg-white/2 border border-white/5 rounded-3xl p-5 space-y-4 w-full max-w-full min-w-0">
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <Shield size={14} className="text-purple-400 shrink-0" />
+                    <h3 className="text-xs font-black text-white uppercase tracking-widest truncate">Rastreabilidade Visual e Auditoria</h3>
                   </div>
-                  <div className="text-[9px] text-white/20 font-mono font-bold truncate max-w-full">
-                    ID: {request.id}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 rounded-2xl p-3 border border-white/5 text-[10px] font-mono">
+                    {/* 1. requestId */}
+                    <div className="col-span-1 sm:col-span-2 pb-1.5 border-b border-white/5 min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-purple-400/80 block font-sans">1. Request ID (Raiz do Envelope)</span>
+                      <span className="text-xs font-bold text-white break-all select-all block">{request.id}</span>
+                    </div>
+
+                    {/* 10. result.entityRef */}
+                    <div className="col-span-1 sm:col-span-2 pb-1.5 border-b border-white/5 min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-blue-400/80 block font-sans">10. Entity Ref (ID do Alvo Materializado)</span>
+                      <span className="text-xs font-bold text-blue-400 break-all select-all block">{refStr}</span>
+                    </div>
+
+                    {/* 2. requestType */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">2. Request Type</span>
+                      <span className="text-white/80 truncate block">{request.requestType}</span>
+                    </div>
+
+                    {/* 3. status */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans mb-0.5">3. Status Final</span>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] uppercase font-bold ${statusInfo.bg} ${statusInfo.color} border ${statusInfo.border} truncate max-w-full`}>
+                        {request.status}
+                      </span>
+                    </div>
+
+                    {/* 4. requestedBy */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">4. Requested By</span>
+                      <span className="text-white/80 truncate block">{requestedByStr}</span>
+                    </div>
+
+                    {/* 5. requestedAt */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">5. Requested At</span>
+                      <span className="text-white/60 truncate block">{requestedAtStr}</span>
+                    </div>
+
+                    {/* 6. processedBy */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">6. Processed By</span>
+                      <span className="text-white/80 truncate block">{processedByStr}</span>
+                    </div>
+
+                    {/* 7. processedAt */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">7. Processed At</span>
+                      <span className="text-white/60 truncate block">{processedAtStr}</span>
+                    </div>
+
+                    {/* 8. result.action */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">8. Result Action</span>
+                      <span className="text-emerald-400 font-bold truncate block">{actionStr}</span>
+                    </div>
+
+                    {/* 9. result.entityType */}
+                    <div className="min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">9. Result Entity Type</span>
+                      <span className="text-white/80 uppercase truncate block">{typeStr}</span>
+                    </div>
+
+                    {/* 11. result.entityPath */}
+                    <div className="col-span-1 sm:col-span-2 pt-1 border-t border-white/5 min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">11. Result Entity Path</span>
+                      <span className="text-white/40 break-all select-all block text-[9px]">{pathStr}</span>
+                    </div>
+
+                    {/* 12. matResult.ok */}
+                    <div className="col-span-1 sm:col-span-2 pt-1 border-t border-white/5 min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-white/30 block font-sans">12. Materialization OK (matResult.ok)</span>
+                      <span className={`font-bold block truncate ${matOkStr === 'true' ? 'text-emerald-400' : (matOkStr === 'false' ? 'text-red-400' : 'text-white/40')}`}>
+                        {matOkStr}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* 13. missingFields */}
+                  {missing.length > 0 && (
+                    <div className="pt-2 border-t border-white/5 min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-amber-400 block mb-1 font-sans">
+                        13. Missing Fields (Chaves Ausentes)
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {missing.map((f: string) => (
+                          <span key={f} className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded font-mono text-[9px] text-amber-300">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 14. error */}
+                  {request.error && (
+                    <div className="pt-2 border-t border-white/5 min-w-0">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-red-400 block mb-1 font-sans">
+                        14. Error Log (Falha Capturada)
+                      </span>
+                      <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl font-mono text-[10px] text-red-200 break-all">
+                        {request.error}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* 2. Deduplication Key Tracing */}
+                {/* Deduplication Key Tracing */}
                 {request.dedupeKey && (
                   <div className="px-3 py-1.5 bg-white/1 border border-white/5 rounded-xl text-[9px] font-mono text-white/30 truncate select-all">
                     DedupeKey: {request.dedupeKey}
                   </div>
                 )}
 
-                {/* 3. Human Governance Practical Action Box (needs_approval) */}
+                {/* Sumário Técnico / Detalhe Adicional */}
+                {summaryStr && summaryStr !== 'Sem sumário técnico gravado.' && (
+                  <div className="bg-white/2 border border-white/5 rounded-3xl p-5 w-full max-w-full min-w-0">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1.5">Sumário / Notas Técnicas</span>
+                    <p className="text-xs text-white/60 leading-relaxed font-sans bg-white/1 p-3 rounded-xl border border-white/5">
+                      {summaryStr}
+                    </p>
+                  </div>
+                )}
+
+                {/* Ações de Barreira Humana Ativa */}
                 {request.status === 'needs_approval' && (
                   <div className="bg-purple-500/10 border-2 border-purple-500/30 rounded-3xl p-5 space-y-4 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none" />
@@ -167,7 +285,7 @@ export const RequestDetailDrawer = ({
                       {onApprove && (
                         <button
                           onClick={() => onApprove(request.id)}
-                          className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5"
+                          className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Check size={14} />
                           Aprovar e Materializar
@@ -176,7 +294,7 @@ export const RequestDetailDrawer = ({
                       {onReject && (
                         <button
                           onClick={() => onReject(request.id)}
-                          className="py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1"
+                          className="py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
                         >
                           <X size={12} />
                           Rejeitar
@@ -186,7 +304,6 @@ export const RequestDetailDrawer = ({
                   </div>
                 )}
 
-                {/* 4. Practical Clarification Box (needs_clarification) */}
                 {request.status === 'needs_clarification' && (
                   <div className="bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl p-5 space-y-4">
                     <div className="flex items-center gap-2">
@@ -239,7 +356,7 @@ export const RequestDetailDrawer = ({
                       {onClarify && (
                         <button
                           onClick={handleSendClarification}
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5"
+                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Send size={12} />
                           Transmitir Respostas à Lótus
@@ -249,116 +366,7 @@ export const RequestDetailDrawer = ({
                   </div>
                 )}
 
-                {/* 5. Resultado da Materialização */}
-                <div className="bg-white/2 border border-white/5 rounded-3xl p-5 space-y-4 w-full max-w-full min-w-0">
-                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
-                    <Database size={14} className="text-purple-400 shrink-0" />
-                    <h3 className="text-xs font-black text-white uppercase tracking-widest truncate">Resultado da Materialização</h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 bg-white/1 rounded-2xl p-3 border border-white/5 w-full max-w-full min-w-0">
-                    <div className="min-w-0">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Ação Técnica</span>
-                      <span className="text-xs font-mono font-bold text-emerald-400 truncate block">{actionStr}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Entity Type</span>
-                      <span className="text-xs font-mono text-white/60 uppercase truncate block">{typeStr}</span>
-                    </div>
-                    <div className="col-span-2 pt-2 border-t border-white/5 min-w-0">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Entity Ref (ID Destino)</span>
-                      <span className="text-xs font-mono font-bold text-blue-400 break-all block select-all">{refStr}</span>
-                    </div>
-                    <div className="col-span-2 pt-2 border-t border-white/5 min-w-0">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Caminho Canônico (Path)</span>
-                      <span className="text-[9px] font-mono text-white/40 break-all select-all block">{pathStr}</span>
-                    </div>
-                  </div>
-
-                  {summaryStr && (
-                    <div className="w-full max-w-full min-w-0">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Sumário Técnico do Dispatcher</span>
-                      <p className="text-xs text-white/60 leading-relaxed font-sans bg-white/2 p-3 rounded-xl border border-white/5">
-                        {summaryStr}
-                      </p>
-                    </div>
-                  )}
-
-                  {missing.length > 0 && request.status !== 'needs_clarification' && (
-                    <div className="pt-2 w-full max-w-full min-w-0">
-                      <span className="text-[9px] font-black text-amber-400/80 uppercase tracking-widest block mb-1.5 flex items-center gap-1 truncate">
-                        <HelpCircle size={12} className="shrink-0" />
-                        Campos Ausentes Registrados:
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        {missing.map((f: string) => (
-                          <span key={f} className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded text-[9px] font-mono text-amber-300">
-                            {f}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {request.error && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl mt-2 w-full max-w-full min-w-0">
-                      <span className="text-[9px] font-black text-red-400 uppercase tracking-widest block mb-0.5">Erro no Processo:</span>
-                      <p className="text-xs font-mono text-red-200 break-all">{request.error}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* 6. General Content */}
-                <div className="bg-white/2 border border-white/5 rounded-3xl p-5 space-y-4 w-full max-w-full min-w-0">
-                  <div className="min-w-0">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Título</label>
-                    <p className="text-sm font-bold text-white break-words">{request.title || 'Sem Título'}</p>
-                  </div>
-
-                  {request.summary && (
-                    <div className="min-w-0">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Missão / Descrição</label>
-                      <p className="text-xs text-white/60 leading-relaxed break-words">{request.summary}</p>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5 w-full max-w-full min-w-0">
-                    <div className="min-w-0">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Prioridade</label>
-                      <span className="text-xs font-bold text-white uppercase truncate block">{request.priority || 'medium'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Solicitado em</label>
-                      <span className="text-xs font-bold text-white/60 block truncate">{safeFormatDateTime(request.requestedAt || (request as any).createdAt)}</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-white/5 min-w-0">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Autoria e Rastreabilidade</label>
-                    <div className="flex items-center gap-1.5 mt-1 min-w-0">
-                      <User size={12} className="text-blue-400 shrink-0" />
-                      <span className="text-xs font-bold text-white uppercase truncate block">
-                        {request.createdByType || 'agent'} / {request.createdById || request.requestedBy || 'lotus'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {request.origin && (
-                    <div className="pt-3 border-t border-white/5 min-w-0">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1.5">Canal de Origem</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-bold text-white/60 uppercase tracking-tight border border-white/5 truncate max-w-full">
-                          Canal: {request.origin.channel || 'N/A'}
-                        </span>
-                        <span className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-bold text-white/60 uppercase tracking-tight border border-white/5 truncate max-w-full">
-                          Fonte: {request.origin.source || 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 7. Payload JSON */}
+                {/* Payload JSON Original */}
                 {request.payload && (
                   <div className="w-full max-w-full min-w-0 space-y-3">
                     <div>
@@ -373,7 +381,6 @@ export const RequestDetailDrawer = ({
                       </div>
                     </div>
 
-                    {/* Patch Aplicado / Trilha Before-After */}
                     {(mat?.patch || resObj.patch) && (
                       <div className="pt-2">
                         <div className="flex items-center gap-1 mb-1.5 px-1">
@@ -390,12 +397,12 @@ export const RequestDetailDrawer = ({
                   </div>
                 )}
 
-                {/* 8. Ações de Governança e Limpeza */}
+                {/* Ações de Limpeza */}
                 <div className="pt-4 border-t border-white/5 space-y-2 w-full max-w-full">
                   {onArchive && !request.archived && (
                     <button 
                       onClick={() => onArchive(request.id)}
-                      className="w-full py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-purple-300 hover:bg-purple-500/20 transition-all flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-purple-300 hover:bg-purple-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Archive size={12} />
                       Arquivar Solicitação (Esconder Teste)
@@ -404,7 +411,7 @@ export const RequestDetailDrawer = ({
 
                   <button 
                     onClick={onClose}
-                    className="w-full py-2.5 bg-white/2 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all"
+                    className="w-full py-2.5 bg-white/2 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/40 hover:bg-white/5 transition-all cursor-pointer"
                   >
                     Fechar Painel
                   </button>
