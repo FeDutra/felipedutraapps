@@ -2,13 +2,16 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Zap, Clock, User, Layers, MessageSquare, AlertCircle, CheckCircle2, HelpCircle, AlertTriangle, Shield, Archive, Database, Code } from 'lucide-react';
+import { X, Zap, Clock, User, Layers, MessageSquare, AlertCircle, CheckCircle2, HelpCircle, AlertTriangle, Shield, Archive, Database, Code, Check, Send } from 'lucide-react';
 import { PulsoRequest } from '../../types/pulso.types';
 
 interface RequestDetailDrawerProps {
   request: PulsoRequest | null;
   onClose: () => void;
   onArchive?: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onReject?: (id: string) => void;
+  onClarify?: (id: string, answers: any) => void;
 }
 
 const safeFormatDateTime = (val: any) => {
@@ -29,7 +32,23 @@ const safeFormatDateTime = (val: any) => {
   }
 };
 
-export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDetailDrawerProps) => {
+export const RequestDetailDrawer = ({ 
+  request, 
+  onClose, 
+  onArchive,
+  onApprove,
+  onReject,
+  onClarify
+}: RequestDetailDrawerProps) => {
+  const [answers, setAnswers] = React.useState<Record<string, string>>({});
+  const [genericAnswer, setGenericAnswer] = React.useState('');
+
+  // Auto-reset buffer when opened envelope changes
+  React.useEffect(() => {
+    setAnswers({});
+    setGenericAnswer('');
+  }, [request?.id]);
+
   if (!request) return null;
 
   const getStatusInfo = (status: string) => {
@@ -51,11 +70,24 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
   const question = resObj.question || resObj.reason || null;
   const isTest = (request as any).isTest || request.dedupeKey?.includes('test') || request.title?.toLowerCase().includes('test');
 
-  const actionStr = mat?.action || resObj.action || (request.status === 'completed' ? 'created' : 'N/A');
+  const actionStr = mat?.action || resObj.action || (request.status === 'completed' ? 'updated' : 'N/A');
   const typeStr = mat?.entityType || resObj.entityType || request.requestType.replace('register_', '').replace('create_', '');
   const refStr = resObj.entityRef || mat?.entityRef || 'N/A';
   const pathStr = resObj.entityPath || mat?.entityPath || 'N/A';
   const summaryStr = mat?.summary || resObj.summary || resObj.notes || 'Sem sumário técnico gravado.';
+
+  const handleSendClarification = () => {
+    if (!onClarify) return;
+    const finalAnswers: any = { ...answers };
+    if (genericAnswer) {
+      finalAnswers.clarificationResponse = genericAnswer;
+      // If a single critical missing attribute is queried, map shortcut string natively
+      if (missing.length === 1) {
+        finalAnswers[missing[0]] = genericAnswer;
+      }
+    }
+    onClarify(request.id, finalAnswers);
+  };
 
   return (
     <AnimatePresence>
@@ -83,7 +115,7 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-base md:text-lg font-black text-white truncate">Detalhes da Solicitação</h2>
+                      <h2 className="text-base md:text-lg font-black text-white truncate">Envelope da Solicitação</h2>
                       {isTest && (
                         <span className="px-2 py-0.5 rounded text-[8px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase tracking-widest shrink-0">
                           Teste
@@ -99,7 +131,7 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
               </div>
 
               <div className="space-y-6 w-full max-w-full min-w-0">
-                {/* Status Section */}
+                {/* 1. Status Section */}
                 <div className={`${statusInfo.bg} border ${statusInfo.border} rounded-2xl p-4 flex flex-wrap items-center justify-between gap-2`}>
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${statusInfo.color.replace('text', 'bg')}`} />
@@ -110,7 +142,114 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                   </div>
                 </div>
 
-                {/* Resultado da Materialização */}
+                {/* 2. Deduplication Key Tracing */}
+                {request.dedupeKey && (
+                  <div className="px-3 py-1.5 bg-white/1 border border-white/5 rounded-xl text-[9px] font-mono text-white/30 truncate select-all">
+                    DedupeKey: {request.dedupeKey}
+                  </div>
+                )}
+
+                {/* 3. Human Governance Practical Action Box (needs_approval) */}
+                {request.status === 'needs_approval' && (
+                  <div className="bg-purple-500/10 border-2 border-purple-500/30 rounded-3xl p-5 space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none" />
+                    
+                    <div className="flex items-center gap-2">
+                      <Shield size={16} className="text-purple-400 shrink-0" />
+                      <h3 className="text-xs font-black text-purple-300 uppercase tracking-widest">Aprovação de Barreira Ativa</h3>
+                    </div>
+
+                    <p className="text-xs text-purple-200/80 leading-relaxed font-sans">
+                      O agente propôs uma materialização estrutural ou novo *blueprint* que requer sua chancela direta para liberação no sistema.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row items-stretch gap-2 pt-2">
+                      {onApprove && (
+                        <button
+                          onClick={() => onApprove(request.id)}
+                          className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5"
+                        >
+                          <Check size={14} />
+                          Aprovar e Materializar
+                        </button>
+                      )}
+                      {onReject && (
+                        <button
+                          onClick={() => onReject(request.id)}
+                          className="py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1"
+                        >
+                          <X size={12} />
+                          Rejeitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Practical Clarification Box (needs_clarification) */}
+                {request.status === 'needs_clarification' && (
+                  <div className="bg-amber-500/10 border-2 border-amber-500/30 rounded-3xl p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <HelpCircle size={16} className="text-amber-400 shrink-0" />
+                      <h3 className="text-xs font-black text-amber-300 uppercase tracking-widest">Esclarecimento Pendente</h3>
+                    </div>
+
+                    {question && (
+                      <p className="text-xs text-amber-200/90 leading-relaxed bg-amber-500/5 p-3 rounded-xl border border-amber-500/10 font-mono">
+                        "{question}"
+                      </p>
+                    )}
+
+                    <div className="space-y-3 pt-1">
+                      {missing.length > 0 && (
+                        <div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-amber-400/80 block mb-1.5">
+                            Preenchimento das Chaves Ausentes:
+                          </span>
+                          <div className="space-y-2">
+                            {missing.map((field: string) => (
+                              <div key={field} className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono text-white/40 w-24 shrink-0 truncate">{field}:</span>
+                                <input
+                                  type="text"
+                                  placeholder="Inserir valor canônico..."
+                                  value={answers[field] || ''}
+                                  onChange={(e) => setAnswers({ ...answers, [field]: e.target.value })}
+                                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-white/20 focus:border-amber-500/40 outline-none font-mono"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-white/30 block mb-1.5">
+                          {missing.length > 0 ? "Ou Resposta de Contexto Livre:" : "Resposta de Clarificação:"}
+                        </span>
+                        <textarea
+                          rows={2}
+                          placeholder="Instrua o agente ou preencha a informação faltante para destravar a máquina..."
+                          value={genericAnswer}
+                          onChange={(e) => setGenericAnswer(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white placeholder:text-white/20 focus:border-amber-500/40 outline-none font-sans leading-relaxed resize-none custom-scrollbar"
+                        />
+                      </div>
+
+                      {onClarify && (
+                        <button
+                          onClick={handleSendClarification}
+                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5"
+                        >
+                          <Send size={12} />
+                          Transmitir Respostas à Lótus
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Resultado da Materialização */}
                 <div className="bg-white/2 border border-white/5 rounded-3xl p-5 space-y-4 w-full max-w-full min-w-0">
                   <div className="flex items-center gap-2 pb-2 border-b border-white/5">
                     <Database size={14} className="text-purple-400 shrink-0" />
@@ -128,7 +267,7 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                     </div>
                     <div className="col-span-2 pt-2 border-t border-white/5 min-w-0">
                       <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Entity Ref (ID Destino)</span>
-                      <span className="text-xs font-mono font-bold text-blue-400 break-all block">{refStr}</span>
+                      <span className="text-xs font-mono font-bold text-blue-400 break-all block select-all">{refStr}</span>
                     </div>
                     <div className="col-span-2 pt-2 border-t border-white/5 min-w-0">
                       <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block mb-1">Caminho Canônico (Path)</span>
@@ -145,11 +284,11 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                     </div>
                   )}
 
-                  {missing.length > 0 && (
+                  {missing.length > 0 && request.status !== 'needs_clarification' && (
                     <div className="pt-2 w-full max-w-full min-w-0">
                       <span className="text-[9px] font-black text-amber-400/80 uppercase tracking-widest block mb-1.5 flex items-center gap-1 truncate">
                         <HelpCircle size={12} className="shrink-0" />
-                        Campos Ausentes:
+                        Campos Ausentes Registrados:
                       </span>
                       <div className="flex flex-wrap gap-1">
                         {missing.map((f: string) => (
@@ -169,22 +308,7 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                   )}
                 </div>
 
-                {/* Clarification/Approval Section */}
-                {(request.status === 'needs_clarification' || request.status === 'needs_approval') && question && (
-                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-3xl p-5 space-y-2 w-full max-w-full min-w-0">
-                    <div className="flex items-center gap-2">
-                      <HelpCircle size={14} className="text-purple-400 shrink-0" />
-                      <h3 className="text-xs font-black text-white uppercase tracking-widest truncate">
-                        {request.status === 'needs_approval' ? 'Governança Exige Aprovação' : 'Lótus Pede Esclarecimento'}
-                      </h3>
-                    </div>
-                    <p className="text-xs text-purple-200 leading-relaxed bg-purple-500/5 p-3 rounded-xl border border-purple-500/10 font-mono break-words">
-                      "{question}"
-                    </p>
-                  </div>
-                )}
-
-                {/* General Content */}
+                {/* 6. General Content */}
                 <div className="bg-white/2 border border-white/5 rounded-3xl p-5 space-y-4 w-full max-w-full min-w-0">
                   <div className="min-w-0">
                     <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1">Título</label>
@@ -230,32 +354,11 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                           Fonte: {request.origin.source || 'N/A'}
                         </span>
                       </div>
-                      {request.origin.messageRef && (
-                        <p className="text-[8px] text-white/20 font-mono italic mt-1 break-all">MsgRef: {request.origin.messageRef}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {(request.areaRef || request.projectRef) && (
-                    <div className="pt-3 border-t border-white/5 min-w-0">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-white/20 block mb-1.5">Contexto Ancorado</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {request.areaRef && (
-                          <span className="px-2 py-0.5 bg-blue-500/5 border border-blue-500/10 rounded-md text-[9px] font-black text-blue-400 uppercase tracking-widest truncate max-w-full">
-                            Área: {request.areaRef}
-                          </span>
-                        )}
-                        {request.projectRef && (
-                          <span className="px-2 py-0.5 bg-emerald-500/5 border border-emerald-500/10 rounded-md text-[9px] font-black text-emerald-400 uppercase tracking-widest truncate max-w-full">
-                            Proj: {request.projectRef}
-                          </span>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Payload JSON */}
+                {/* 7. Payload JSON */}
                 {request.payload && (
                   <div className="w-full max-w-full min-w-0 space-y-3">
                     <div>
@@ -287,9 +390,9 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
                   </div>
                 )}
 
-                {/* Ações de Governança e Limpeza */}
+                {/* 8. Ações de Governança e Limpeza */}
                 <div className="pt-4 border-t border-white/5 space-y-2 w-full max-w-full">
-                  {onArchive && (
+                  {onArchive && !request.archived && (
                     <button 
                       onClick={() => onArchive(request.id)}
                       className="w-full py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-purple-300 hover:bg-purple-500/20 transition-all flex items-center justify-center gap-1.5"

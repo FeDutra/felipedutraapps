@@ -16,7 +16,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 /**
  * @file InboxPage.tsx
- * @description Universal Inbox page for the PULSO cockpit.
+ * @description Universal Inbox and Requests Bridge monitoring page.
+ * Highly resilient to legacy test items and dynamic payloads.
  */
 
 export default function InboxPage() {
@@ -31,13 +32,14 @@ export default function InboxPage() {
     status: 'new',
     type: 'all',
     priority: 'all',
-    area: 'all'
+    area: 'all',
+    requestStatus: 'active' // sub-filter default initialized
   });
   const [feedback, setFeedback] = React.useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
   const showFeedback = (message: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ message, type });
-    setTimeout(() => setFeedback(null), 3000);
+    setTimeout(() => setFeedback(null), 3500);
   };
 
   const loadItems = React.useCallback(async () => {
@@ -46,7 +48,7 @@ export default function InboxPage() {
       await authService.ensurePulsoAuthReady();
       const [inboxData, requestsData] = await Promise.all([
         inboxService.getAll(),
-        requestsService.getRequests()
+        requestsService.getRequests(100, true) // Fetch history inclusive of archived tests
       ]);
       setItems([...inboxData]);
       setRequests([...requestsData]);
@@ -70,11 +72,53 @@ export default function InboxPage() {
 
   const filteredRequests = React.useMemo(() => {
     if (filters.status !== 'requests') return [];
-    return requests.filter(r => 
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      r.summary.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [requests, filters.status, searchQuery]);
+    
+    return requests.filter(r => {
+      if (!r) return false;
+      
+      // 1. Sub-filter matching logic
+      const reqSt = filters.requestStatus || 'active';
+      if (reqSt === 'active') {
+        if (r.archived) return false;
+      } else if (reqSt === 'archived') {
+        if (!r.archived) return false;
+      } else {
+        // Direct status filter (running, needs_approval, needs_clarification, completed, etc)
+        if (r.status !== reqSt) return false;
+        // Optionally omit archived from direct sub-filters unless specifically viewed
+        if (r.archived) return false;
+      }
+
+      // 2. Type matching logic
+      if (filters.type && filters.type !== 'all') {
+        const entityTypeStr = r.result?.entityType || r.result?.matResult?.entityType || '';
+        const reqTypeStr = r.requestType || '';
+        const matchesType = entityTypeStr.toLowerCase() === filters.type.toLowerCase() ||
+                            reqTypeStr.toLowerCase().includes(filters.type.toLowerCase());
+        if (!matchesType) return false;
+      }
+
+      // 3. Priority matching logic
+      if (filters.priority && filters.priority !== 'all') {
+        if ((r.priority || 'medium') !== filters.priority) return false;
+      }
+
+      // 4. Safe Textual search mapping
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      const titleStr = r.title || '';
+      const summaryStr = r.summary || '';
+      const dedupeStr = r.dedupeKey || '';
+      const refStr = r.result?.entityRef || r.result?.matResult?.entityRef || '';
+      const typeStr = r.requestType || '';
+
+      return titleStr.toLowerCase().includes(q) || 
+             summaryStr.toLowerCase().includes(q) ||
+             dedupeStr.toLowerCase().includes(q) ||
+             refStr.toLowerCase().includes(q) ||
+             typeStr.toLowerCase().includes(q);
+    });
+  }, [requests, filters, searchQuery]);
 
   const stats = React.useMemo(() => inboxHelpers.getStats(items), [items]);
 
@@ -104,14 +148,47 @@ export default function InboxPage() {
   const handleArchiveRequest = async (id: string) => {
     try {
       await requestsService.archiveRequest(id);
-      setRequests(prev => prev.filter(r => r.id !== id));
-      setSelectedRequest(null);
-      showFeedback('Solicitação de teste arquivada/escondida com sucesso');
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, archived: true } : r));
+      // Auto-update drawer if open
+      setSelectedRequest(prev => prev?.id === id ? { ...prev, archived: true } : prev);
+      showFeedback('Solicitação arquivada da fila principal com sucesso');
     } catch (err) {
       showFeedback('Erro ao arquivar solicitação', 'error');
     }
   };
 
+  const handleApproveRequest = async (id: string) => {
+    try {
+      const updated = await requestsService.approveRequest(id);
+      setRequests(prev => prev.map(r => r.id === id ? updated : r));
+      setSelectedRequest(updated);
+      showFeedback('Intenção chancelada! Liberado para materialização com sucesso.');
+    } catch (err) {
+      showFeedback('Erro ao aprovar solicitação', 'error');
+    }
+  };
+
+  const handleRejectRequest = async (id: string) => {
+    try {
+      const updated = await requestsService.rejectRequest(id);
+      setRequests(prev => prev.map(r => r.id === id ? updated : r));
+      setSelectedRequest(updated);
+      showFeedback('Solicitação bloqueada e rejeitada.', 'error');
+    } catch (err) {
+      showFeedback('Erro ao rejeitar solicitação', 'error');
+    }
+  };
+
+  const handleClarifyRequest = async (id: string, answers: any) => {
+    try {
+      const updated = await requestsService.answerClarification(id, answers);
+      setRequests(prev => prev.map(r => r.id === id ? updated : r));
+      setSelectedRequest(updated);
+      showFeedback('Esclarecimentos acoplados ao envelope da Lótus com sucesso!');
+    } catch (err) {
+      showFeedback('Erro ao transmitir esclarecimento', 'error');
+    }
+  };
 
   const handleCreateNew = () => {
     setIsCreating(true);
@@ -129,11 +206,11 @@ export default function InboxPage() {
     }
   };
 
-  if (loading && items.length === 0) {
+  if (loading && items.length === 0 && requests.length === 0) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-        <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Sincronizando Inbox</p>
+        <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Sincronizando Barramento</p>
       </div>
     );
   }
@@ -148,7 +225,7 @@ export default function InboxPage() {
         onSearch={setSearchQuery} 
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <AnimatePresence mode="popLayout">
           {filters.status === 'requests' ? (
             filteredRequests.map((req) => (
@@ -175,7 +252,8 @@ export default function InboxPage() {
         {((filters.status === 'requests' && filteredRequests.length === 0) || 
           (filters.status !== 'requests' && filteredItems.length === 0)) && (
           <div className="py-20 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-3xl bg-white/1">
-            <p className="text-white/20 text-xs italic">Nenhum item encontrado nesta categoria.</p>
+            <AlertCircle size={28} className="text-white/10 mb-2" />
+            <p className="text-white/20 text-xs font-bold">Nenhum envelope de dados corresponde aos critérios.</p>
           </div>
         )}
       </div>
@@ -214,6 +292,9 @@ export default function InboxPage() {
         request={selectedRequest}
         onClose={() => setSelectedRequest(null)}
         onArchive={handleArchiveRequest}
+        onApprove={handleApproveRequest}
+        onReject={handleRejectRequest}
+        onClarify={handleClarifyRequest}
       />
     </div>
   );

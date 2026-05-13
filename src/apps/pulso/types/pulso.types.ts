@@ -249,8 +249,10 @@ export interface InboxItem extends BaseEntity {
 }
 
 export interface Task extends BaseEntity {
+  title?: string;
   ownerRefs: string[];
   dueAt?: Date;
+  dueDate?: Date;
   weekTarget?: boolean;
   dependsOnTaskRefs?: string[];
   dependsOnPeopleRefs?: string[];

@@ -153,13 +153,15 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return this.toData<InboxItem>(snap);
   }
 
-  async getTasks() {
-    const q = query(
-      collection(db!, firestorePaths.tasks()),
-      where("archived", "==", false)
-    );
+  async getTasks(includeArchived?: boolean) {
+    const col = collection(db!, firestorePaths.tasks());
+    const constraints: any[] = [];
+    if (!includeArchived) {
+      constraints.push(where("archived", "==", false));
+    }
+    const q = constraints.length > 0 ? query(col, ...constraints) : query(col);
     const snap = await getDocs(q);
-    return snap.docs.map(d => this.toData<Task>(d));
+    return snap.docs.map((d) => this.toData<Task>(d));
   }
 
   async saveTask(task: Partial<Task>) {
@@ -488,10 +490,14 @@ export class FirestorePulsoRepository implements IPulsoRepository {
 
   // --- Requests ---
 
-  async getRequests(limitCount = 20) {
+  async getRequests(limitCount = 20, includeArchived?: boolean) {
+    const constraints: any[] = [];
+    if (!includeArchived) {
+      constraints.push(where("archived", "==", false));
+    }
     return this.runResilientQuery<PulsoRequest>(
       collection(db!, firestorePaths.requests()),
-      [where("archived", "==", false)],
+      constraints,
       limitCount
     );
   }

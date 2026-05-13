@@ -84,7 +84,7 @@ export class MockPulsoRepository implements IPulsoRepository {
     return all[index];
   }
 
-  async getTasks() { return seedTasks; }
+  async getTasks(includeArchived?: boolean) { return seedTasks; }
   async saveTask(task: Partial<Task>) {
     const newTask = { ...task, id: task.id || `task_${Date.now()}` } as Task;
     seedTasks.unshift(newTask);
@@ -252,10 +252,13 @@ export class MockPulsoRepository implements IPulsoRepository {
     );
   }
 
-  async getRequests(limitCount = 20): Promise<PulsoRequest[]> {
+  async getRequests(limitCount = 20, includeArchived?: boolean): Promise<PulsoRequest[]> {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('pulso_mock_requests');
-      if (stored) return JSON.parse(stored) as PulsoRequest[];
+      if (stored) {
+        const parsed = JSON.parse(stored) as PulsoRequest[];
+        return includeArchived ? parsed : parsed.filter(r => !r.archived);
+      }
     }
     return [];
   }

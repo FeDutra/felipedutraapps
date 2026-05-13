@@ -38,7 +38,7 @@ export interface IPulsoRepository {
   updateInboxItem(id: string, data: Partial<InboxItem>): Promise<InboxItem>;
   
   // Tasks
-  getTasks(): Promise<Task[]>;
+  getTasks(includeArchived?: boolean): Promise<Task[]>;
   saveTask(task: Partial<Task>): Promise<Task>;
   
   // Decisions
@@ -93,7 +93,7 @@ export interface IPulsoRepository {
   markSeedComplete(version: string): Promise<void>;
 
   // Requests
-  getRequests(limitCount?: number): Promise<PulsoRequest[]>;
+  getRequests(limitCount?: number, includeArchived?: boolean): Promise<PulsoRequest[]>;
   getPendingRequests(): Promise<PulsoRequest[]>;
   saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest>;
   updateRequest(id: string, data: Partial<PulsoRequest>): Promise<PulsoRequest>;
