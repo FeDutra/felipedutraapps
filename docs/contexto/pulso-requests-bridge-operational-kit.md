@@ -139,6 +139,15 @@ curl -s -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
 ```
 
 ### 4.8 Operações de Manutenção Diária (Maturidade Operacional)
+
+> [!IMPORTANT]
+> **Regra de Ouro de Manutenção Canônica (Validada pela OpenClaw)**
+> Toda operação de manutenção no barramento deve utilizar estritamente o `entityRef` real retornado no envelope da criação ou localizado por meio de leitura canônica prévia e confiável. **É expressamente vedado** o uso de referências presumidas, *slugs* deduzidos ou nomes convertidos por *workarounds* manuais.
+> 
+> *A bateria encadeada de testes certificou com sucesso absoluto as operações de `register/create`, `update` e `archive` para as entidades **Pessoas**, **Fontes**, **Projetos** e **Tarefas** consumindo a chave primária real.*
+> 
+> *Nota de Retorno Semântico (`archive_*`)*: As operações encarregadas de deleção lógica (`archive_person`, `archive_project`, etc.) encerram o ciclo de vida e retornam na chave de auditoria `result.action = "updated"`, contudo, persistem no Firestore as chaves `archived: true` e `status` como `"inactive"` ou `"archived"` com 100% de precisão atômica. Essa discrepância puramente semântica no *string literal* de retorno **não é considerada um bloqueio da v1.0**, restando tipificada como um refinamento futuro para o *controller*.
+
 Exemplos de envio de intenções para atualização, arquivamento e vinculação de entidades sem deleção física.
 
 #### Atualizar Projeto (`update_project`)

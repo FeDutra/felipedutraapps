@@ -8,6 +8,14 @@ Este documento estabelece o contrato canônico de todos os `requestTypes` autori
 
 ---
 
+> [!IMPORTANT]
+> **Certificação Universal de Chaves (Bateria Encadeada OpenClaw)**
+> Conforme as leis de tráfego da versão `1.0.0`, todas as intenções encarregadas da manutenção do ciclo de vida das entidades (`update_*` e `archive_*`) exigem estritamente a injeção do **`entityRef` real** gerado no instante do nascimento ou obtido de forma determinística na base viva. **É sumariamente vetado** o tráfego de identificadores presumidos ou *slugs* gerados por regras de cliente.
+> 
+> *A integridade das rotas de `create`, `update` e `archive` operando com referências reais foi chancelada e homologada com sucesso na malha de testes autônomos para as entidades **Pessoas**, **Fontes**, **Projetos** e **Tarefas**.*
+
+---
+
 ## 1. Pessoas (`pulso_people`)
 
 ### `register_person`
