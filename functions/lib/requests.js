@@ -43,8 +43,14 @@ const db = admin.firestore();
 const sanitize = (obj) => {
     const result = {};
     Object.keys(obj).forEach((key) => {
-        if (obj[key] !== undefined) {
-            result[key] = obj[key];
+        const val = obj[key];
+        if (val !== undefined) {
+            if (Array.isArray(val)) {
+                result[key] = val.filter((v) => v !== undefined);
+            }
+            else {
+                result[key] = val;
+            }
         }
     });
     return result;
@@ -180,7 +186,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                                 priority: payload.priority || requestData.priority || "medium",
                                 areaRef: requestData.areaRef || null, projectRef: requestData.projectRef || null,
                                 notes: payload.notes || payload.description || requestData.summary || null,
-                                ownerRefs: [requestData.requestedBy], createdAt: ts, updatedAt: ts, archived: false
+                                ownerRefs: requestData.requestedBy ? [requestData.requestedBy] : [], createdAt: ts, updatedAt: ts, archived: false
                             }));
                             return { ...matResult, entityType: "task", entityRef: taskId, entityPath: `${base}/${taskId}` };
                         }
@@ -195,7 +201,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                                 context: payload.context || requestData.summary || null,
                                 status: "active", priority: requestData.priority || "medium",
                                 areaRef: requestData.areaRef || null, projectRef: requestData.projectRef || null,
-                                takenByRefs: [requestData.requestedBy], createdAt: ts, updatedAt: ts
+                                takenByRefs: requestData.requestedBy ? [requestData.requestedBy] : [], createdAt: ts, updatedAt: ts
                             }));
                             return { ...matResult, entityType: "decision", entityRef: decisionId, entityPath: `${base}/${decisionId}` };
                         }
@@ -240,6 +246,216 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                                 createdAt: ts, updatedAt: ts
                             }), { merge: true });
                             return { ...matResult, entityType: "area", entityRef: areaId, entityPath: `${base}/${areaId}` };
+                        }
+                        // ── MATURIDADE OPERACIONAL: PESSOAS ────────────────────────────
+                        case "update_person":
+                        case "archive_person":
+                        case "link_person_to_project":
+                        case "unlink_person_from_project":
+                        case "link_person_to_area":
+                        case "unlink_person_from_area": {
+                            const pBase = `workspaces/${WORKSPACE_ID}/pulso_people`;
+                            let personId = payload.personRef || requestData.personRef;
+                            if (!personId && payload.name) {
+                                personId = `person_${slugify(payload.name)}`;
+                            }
+                            if (!personId && payload.slug) {
+                                personId = `person_${payload.slug}`;
+                            }
+                            if (!personId) {
+                                return { ok: false, action: "needs_clarification", missingFields: ["personRef"], summary: "personRef ou name/slug obrigatório para resolução." };
+                            }
+                            const pRef = db.collection(pBase).doc(personId);
+                            const pSnap = await pRef.get();
+                            if (!pSnap.exists) {
+                                return { ok: false, action: "needs_clarification", missingFields: ["personRef"], summary: `Pessoa não encontrada: ${personId}` };
+                            }
+                            let patchData = { updatedAt: ts };
+                            const reason = payload.reason || payload.notes || requestData.summary;
+                            if (reason)
+                                patchData.notes = reason;
+                            if (type === "update_person") {
+                                const patch = payload.patch || payload;
+                                const allowedKeys = ["name", "role", "relationshipToFe", "importance", "status", "areaRef", "projectRef", "notes"];
+                                allowedKeys.forEach(k => {
+                                    if (patch[k] !== undefined)
+                                        patchData[k] = patch[k];
+                                });
+                            }
+                            else if (type === "archive_person") {
+                                patchData.archived = true;
+                                patchData.status = "inactive";
+                            }
+                            else if (type === "link_person_to_project") {
+                                const projRef = payload.projectRef || requestData.projectRef;
+                                if (!projRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["projectRef"], summary: "projectRef obrigatório para vínculo." };
+                                patchData.projectRef = projRef;
+                            }
+                            else if (type === "unlink_person_from_project") {
+                                patchData.projectRef = null;
+                            }
+                            else if (type === "link_person_to_area") {
+                                const aRef = payload.areaRef || requestData.areaRef;
+                                if (!aRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["areaRef"], summary: "areaRef obrigatório para vínculo." };
+                                patchData.areaRef = aRef;
+                            }
+                            else if (type === "unlink_person_from_area") {
+                                patchData.areaRef = null;
+                            }
+                            await pRef.update(sanitize(patchData));
+                            return { ...matResult, action: "updated", entityType: "person", entityRef: personId, entityPath: `${pBase}/${personId}`, patch: patchData };
+                        }
+                        // ── MATURIDADE OPERACIONAL: PROJETOS ───────────────────────────
+                        case "update_project":
+                        case "archive_project":
+                        case "change_project_status":
+                        case "change_project_priority":
+                        case "link_project_to_area": {
+                            const prjBase = `workspaces/${WORKSPACE_ID}/pulso_projects`;
+                            const projectId = payload.projectRef || requestData.projectRef;
+                            if (!projectId) {
+                                return { ok: false, action: "needs_clarification", missingFields: ["projectRef"], summary: "projectRef obrigatório para operação em projeto." };
+                            }
+                            const prjRef = db.collection(prjBase).doc(projectId);
+                            const prjSnap = await prjRef.get();
+                            if (!prjSnap.exists) {
+                                return { ok: false, action: "needs_clarification", missingFields: ["projectRef"], summary: `Projeto não encontrado: ${projectId}` };
+                            }
+                            let patchData = { updatedAt: ts };
+                            if (type === "update_project") {
+                                const patch = payload.patch || payload;
+                                const allowedKeys = ["name", "status", "stage", "priority", "objective", "areaRef", "nextStep", "riskSummary"];
+                                allowedKeys.forEach(k => {
+                                    if (patch[k] !== undefined)
+                                        patchData[k] = patch[k];
+                                });
+                            }
+                            else if (type === "archive_project") {
+                                patchData.archived = true;
+                                patchData.status = "archived";
+                            }
+                            else if (type === "change_project_status") {
+                                if (!payload.status)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["status"], summary: "status obrigatório." };
+                                patchData.status = payload.status;
+                            }
+                            else if (type === "change_project_priority") {
+                                if (!payload.priority)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["priority"], summary: "priority obrigatório." };
+                                patchData.priority = payload.priority;
+                            }
+                            else if (type === "link_project_to_area") {
+                                if (!payload.areaRef && !requestData.areaRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["areaRef"], summary: "areaRef obrigatório." };
+                                patchData.areaRef = payload.areaRef || requestData.areaRef;
+                            }
+                            await prjRef.update(sanitize(patchData));
+                            return { ...matResult, action: "updated", entityType: "project", entityRef: projectId, entityPath: `${prjBase}/${projectId}`, patch: patchData };
+                        }
+                        // ── MATURIDADE OPERACIONAL: TAREFAS ────────────────────────────
+                        case "update_task":
+                        case "complete_task":
+                        case "archive_task":
+                        case "link_task_to_project":
+                        case "link_task_to_area": {
+                            const tBase = `workspaces/${WORKSPACE_ID}/pulso_tasks`;
+                            let taskId = payload.taskRef || requestData.taskRef;
+                            if (!taskId && payload.title) {
+                                const tQuery = await db.collection(tBase).where("slug", "==", slugify(payload.title)).limit(1).get();
+                                if (!tQuery.empty)
+                                    taskId = tQuery.docs[0].id;
+                            }
+                            if (!taskId) {
+                                return { ok: false, action: "needs_clarification", missingFields: ["taskRef"], summary: "taskRef ou title resolvível obrigatório." };
+                            }
+                            const tRef = db.collection(tBase).doc(taskId);
+                            const tSnap = await tRef.get();
+                            if (!tSnap.exists) {
+                                return { ok: false, action: "needs_clarification", missingFields: ["taskRef"], summary: `Tarefa não encontrada: ${taskId}` };
+                            }
+                            let patchData = { updatedAt: ts };
+                            if (type === "update_task") {
+                                const patch = payload.patch || payload;
+                                const allowedKeys = ["name", "status", "priority", "notes", "areaRef", "projectRef", "dueAt"];
+                                allowedKeys.forEach(k => {
+                                    if (patch[k] !== undefined)
+                                        patchData[k] = patch[k];
+                                });
+                            }
+                            else if (type === "complete_task") {
+                                patchData.status = "completed";
+                                patchData.completedAt = ts;
+                            }
+                            else if (type === "archive_task") {
+                                patchData.archived = true;
+                            }
+                            else if (type === "link_task_to_project") {
+                                const projRef = payload.projectRef || requestData.projectRef;
+                                if (!projRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["projectRef"], summary: "projectRef obrigatório." };
+                                patchData.projectRef = projRef;
+                            }
+                            else if (type === "link_task_to_area") {
+                                const aRef = payload.areaRef || requestData.areaRef;
+                                if (!aRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["areaRef"], summary: "areaRef obrigatório." };
+                                patchData.areaRef = aRef;
+                            }
+                            await tRef.update(sanitize(patchData));
+                            return { ...matResult, action: "updated", entityType: "task", entityRef: taskId, entityPath: `${tBase}/${taskId}`, patch: patchData };
+                        }
+                        // ── MATURIDADE OPERACIONAL: FONTES ─────────────────────────────
+                        case "update_source":
+                        case "archive_source":
+                        case "link_source_to_project":
+                        case "unlink_source_from_project":
+                        case "link_source_to_area":
+                        case "unlink_source_from_area": {
+                            const sBase = `workspaces/${WORKSPACE_ID}/pulso_sources`;
+                            let sourceId = payload.sourceRef || requestData.sourceRef;
+                            if (!sourceId && payload.name)
+                                sourceId = `source_${slugify(payload.name)}`;
+                            if (!sourceId)
+                                return { ok: false, action: "needs_clarification", missingFields: ["sourceRef"], summary: "sourceRef ou name obrigatório." };
+                            const sRef = db.collection(sBase).doc(sourceId);
+                            const sSnap = await sRef.get();
+                            if (!sSnap.exists)
+                                return { ok: false, action: "needs_clarification", missingFields: ["sourceRef"], summary: `Fonte não encontrada: ${sourceId}` };
+                            let patchData = { updatedAt: ts };
+                            if (type === "update_source") {
+                                const patch = payload.patch || payload;
+                                const allowedKeys = ["name", "type", "priority", "url", "notes", "areaRef", "projectRef", "status"];
+                                allowedKeys.forEach(k => {
+                                    if (patch[k] !== undefined)
+                                        patchData[k] = patch[k];
+                                });
+                            }
+                            else if (type === "archive_source") {
+                                patchData.archived = true;
+                                patchData.status = "inactive";
+                            }
+                            else if (type === "link_source_to_project") {
+                                const projRef = payload.projectRef || requestData.projectRef;
+                                if (!projRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["projectRef"], summary: "projectRef obrigatório." };
+                                patchData.projectRef = projRef;
+                            }
+                            else if (type === "unlink_source_from_project") {
+                                patchData.projectRef = null;
+                            }
+                            else if (type === "link_source_to_area") {
+                                const aRef = payload.areaRef || requestData.areaRef;
+                                if (!aRef)
+                                    return { ok: false, action: "needs_clarification", missingFields: ["areaRef"], summary: "areaRef obrigatório." };
+                                patchData.areaRef = aRef;
+                            }
+                            else if (type === "unlink_source_from_area") {
+                                patchData.areaRef = null;
+                            }
+                            await sRef.update(sanitize(patchData));
+                            return { ...matResult, action: "updated", entityType: "source", entityRef: sourceId, entityPath: `${sBase}/${sourceId}`, patch: patchData };
                         }
                         case "create_agent": {
                             return { ok: true, action: "needs_approval", summary: "Blueprint de agente criado. Requer aprovação humana." };
@@ -326,7 +542,17 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
         // ── POST /create ───────────────────────────────────────────────────────
         if (req.method === "POST" && (path === "/create" || path === "/requests/create")) {
             const data = req.body;
-            const ALLOWED_REQUEST_TYPES = ["refresh_state", "register_source", "register_person", "create_task", "register_decision", "create_alert", "sync_area", "create_agent", "create_project", "create_area"];
+            const ALLOWED_REQUEST_TYPES = [
+                "refresh_state", "register_source", "register_person", "create_task",
+                "register_decision", "create_alert", "sync_area", "create_agent",
+                "create_project", "create_area", "update_person", "archive_person",
+                "link_person_to_project", "unlink_person_from_project", "link_person_to_area",
+                "unlink_person_from_area", "update_project", "archive_project",
+                "change_project_status", "change_project_priority", "link_project_to_area",
+                "update_task", "complete_task", "archive_task", "link_task_to_project",
+                "link_task_to_area", "update_source", "archive_source", "link_source_to_project",
+                "unlink_source_from_project", "link_source_to_area", "unlink_source_from_area"
+            ];
             if (!data.requestType || !ALLOWED_REQUEST_TYPES.includes(data.requestType)) {
                 res.status(400).send(`Invalid requestType.`);
                 return;

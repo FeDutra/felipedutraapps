@@ -257,16 +257,33 @@ export const RequestDetailDrawer = ({ request, onClose, onArchive }: RequestDeta
 
                 {/* Payload JSON */}
                 {request.payload && (
-                  <div className="w-full max-w-full min-w-0">
-                    <div className="flex items-center gap-1 mb-1.5 px-1">
-                      <Code size={10} className="text-white/20 shrink-0" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-white/20 truncate">Objeto de Payload Nativo</span>
+                  <div className="w-full max-w-full min-w-0 space-y-3">
+                    <div>
+                      <div className="flex items-center gap-1 mb-1.5 px-1">
+                        <Code size={10} className="text-white/20 shrink-0" />
+                        <span className="text-[8px] font-black uppercase tracking-widest text-white/20 truncate">Objeto de Payload Nativo</span>
+                      </div>
+                      <div className="bg-white/2 border border-white/5 rounded-2xl p-3 overflow-hidden max-w-full">
+                        <pre className="text-[9px] text-blue-300/80 font-mono leading-relaxed overflow-x-auto custom-scrollbar max-h-40">
+                          {JSON.stringify(request.payload, null, 2)}
+                        </pre>
+                      </div>
                     </div>
-                    <div className="bg-white/2 border border-white/5 rounded-2xl p-3 overflow-hidden max-w-full">
-                      <pre className="text-[9px] text-blue-300/80 font-mono leading-relaxed overflow-x-auto custom-scrollbar max-h-40">
-                        {JSON.stringify(request.payload, null, 2)}
-                      </pre>
-                    </div>
+
+                    {/* Patch Aplicado / Trilha Before-After */}
+                    {(mat?.patch || resObj.patch) && (
+                      <div className="pt-2">
+                        <div className="flex items-center gap-1 mb-1.5 px-1">
+                          <Code size={10} className="text-emerald-400/50 shrink-0" />
+                          <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400/80 truncate">Patch Aplicado (Rastreabilidade de Mutação)</span>
+                        </div>
+                        <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-3 overflow-hidden max-w-full">
+                          <pre className="text-[9px] text-emerald-300 font-mono leading-relaxed overflow-x-auto custom-scrollbar max-h-40">
+                            {JSON.stringify(mat?.patch || resObj.patch, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

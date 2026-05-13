@@ -138,6 +138,165 @@ curl -s -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
   "https://felipedutraapps.web.app/api/pulso/requests/req_123456"
 ```
 
+### 4.8 Operações de Manutenção Diária (Maturidade Operacional)
+Exemplos de envio de intenções para atualização, arquivamento e vinculação de entidades sem deleção física.
+
+#### Atualizar Projeto (`update_project`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "update_project",
+    "title": "Atualizar status e prioridade de Projeto",
+    "projectRef": "proj_reforma_escritorio",
+    "requestedBy": "agent_lotus",
+    "payload": {
+      "patch": {
+        "status": "in_progress",
+        "priority": "high",
+        "nextStep": "Aprovar orçamento elétrico final"
+      },
+      "reason": "Revisão estratégica semanal."
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Arquivar Projeto (`archive_project`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "archive_project",
+    "title": "Arquivar Projeto Concluído",
+    "projectRef": "proj_reforma_escritorio",
+    "requestedBy": "agent_lotus",
+    "payload": {
+      "reason": "Escopo entregue e faturado."
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Atualizar Pessoa (`update_person`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "update_person",
+    "title": "Atualizar cargo de Stakeholder",
+    "personRef": "person_mariana",
+    "requestedBy": "agent_lotus",
+    "payload": {
+      "patch": {
+        "role": "Diretora de Operações",
+        "importance": "critical"
+      },
+      "reason": "Promovida recentemente."
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Arquivar Pessoa (`archive_person`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "archive_person",
+    "title": "Inativar contato no ecossistema",
+    "personRef": "person_mariana",
+    "requestedBy": "agent_lotus",
+    "payload": {
+      "reason": "Desvinculada do projeto central."
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Vincular Pessoa a Projeto (`link_person_to_project`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "link_person_to_project",
+    "title": "Vincular Mariana ao Projeto de Reforma",
+    "personRef": "person_mariana",
+    "projectRef": "proj_reforma_escritorio",
+    "requestedBy": "agent_lotus"
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Concluir Tarefa (`complete_task`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "complete_task",
+    "title": "Marcar tarefa como entregue",
+    "taskRef": "task_1715000000000",
+    "requestedBy": "agent_lotus",
+    "payload": {
+      "reason": "Aprovado via WhatsApp."
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Arquivar Tarefa (`archive_task`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "archive_task",
+    "title": "Esconder tarefa cancelada",
+    "taskRef": "task_1715000000000",
+    "requestedBy": "agent_lotus"
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Atualizar Fonte (`update_source`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "update_source",
+    "title": "Atualizar URL de repositório",
+    "sourceRef": "source_planilha_base",
+    "requestedBy": "agent_lotus",
+    "payload": {
+      "patch": {
+        "url": "https://docs.google.com/spreadsheets/d/nova_url_123"
+      }
+    }
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
+#### Arquivar Fonte (`archive_source`)
+```bash
+curl -X POST -s \
+  -H "Authorization: Bearer $PULSO_INGEST_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestType": "archive_source",
+    "title": "Desativar fonte legada",
+    "sourceRef": "source_planilha_base",
+    "requestedBy": "agent_lotus"
+  }' \
+  "https://felipedutraapps.web.app/api/pulso/requests/create"
+```
+
 ---
 
 ## 5. Shape Real do Request e do Result

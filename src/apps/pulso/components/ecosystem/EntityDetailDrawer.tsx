@@ -409,20 +409,43 @@ export const EntityDetailDrawer = ({
                 {relations.tasks?.length > 0 && (
                   <RelationGroup title="Tarefas Vinculadas (Materializadas)" count={relations.tasks.length} icon={CheckSquare}>
                     <div className="space-y-2">
-                      {relations.tasks.map((t: any) => (
-                        <div key={t.id} className="p-3.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex flex-col gap-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-bold text-white/90 truncate">{t.name || t.title}</span>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0 ${t.priority === 'high' || t.priority === 'critical' ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-white/40'}`}>
-                              {t.priority || 'medium'}
-                            </span>
+                      {relations.tasks.map((t: any) => {
+                        const isCompleted = t.status === 'completed';
+                        const isArchived = t.archived === true;
+                        return (
+                          <div 
+                            key={t.id} 
+                            className={`p-3.5 border rounded-2xl flex flex-col gap-1.5 transition-all ${
+                              isCompleted 
+                                ? 'bg-emerald-500/5 border-emerald-500/20 opacity-70' 
+                                : isArchived
+                                ? 'bg-white/2 border-white/5 opacity-40 line-through'
+                                : 'bg-white/2 border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${isCompleted ? 'bg-emerald-400' : isArchived ? 'bg-white/20' : 'bg-blue-400 animate-pulse'}`} />
+                                <span className="text-xs font-bold text-white/90 truncate block">{t.name || t.title}</span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0 ${
+                                  isCompleted ? 'bg-emerald-500/10 text-emerald-400' : t.priority === 'high' || t.priority === 'critical' ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-white/40'
+                                }`}>
+                                  {t.status || 'new'}
+                                </span>
+                              </div>
+                            </div>
+                            {(t.notes || t.description) && (
+                              <p className="text-[10px] text-white/50 line-clamp-2 pl-4 italic">"{t.notes || t.description}"</p>
+                            )}
+                            <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pl-4 pt-1 border-t border-white/5">
+                              <span>ID: {t.id}</span>
+                              {t.completedAt && <span>Concluída: {safeDateStr(t.completedAt)}</span>}
+                            </div>
                           </div>
-                          {t.description && (
-                            <p className="text-[10px] text-white/40 line-clamp-2 mt-0.5">{t.description}</p>
-                          )}
-                          <span className="text-[8px] font-bold text-emerald-400/50 font-mono mt-1 block">ID: {t.id}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </RelationGroup>
                 )}
