@@ -41,7 +41,7 @@ export const UniversalFilterPanel = ({
 
   const clearAll = () => {
     setFilters({
-      status: 'all',
+      status: 'active',
       priority: 'all',
       area: 'all',
       project: 'all',
@@ -87,12 +87,13 @@ export const UniversalFilterPanel = ({
               <Tag size={10} /> Status
             </label>
             <select
-              value={filters.status || 'all'}
+              value={filters.status || 'active'}
               onChange={(e) => handleChange('status', e.target.value)}
               className="w-full bg-[#020617] border border-white/5 rounded-xl py-2 px-3 text-xs text-white/80 focus:border-blue-500/30 outline-none"
             >
-              <option value="all">Todos</option>
               <option value="active">Ativos</option>
+              <option value="archived">Arquivados</option>
+              <option value="all">Todos</option>
               <option value="completed">Concluídos</option>
               <option value="needs_approval">Aprovação Req.</option>
               <option value="needs_clarification">Esclarecimento</option>

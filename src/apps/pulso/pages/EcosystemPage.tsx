@@ -43,7 +43,7 @@ export default function EcosystemPage() {
   // Reusable Filters State
   const [showFilters, setShowFilters] = React.useState(false);
   const [filters, setFilters] = React.useState({
-    status: 'all',
+    status: 'active',
     priority: 'all',
     area: 'all',
     project: 'all',
@@ -104,8 +104,16 @@ export default function EcosystemPage() {
       if (q && !(item.name || '').toLowerCase().includes(q) && !(item.description || '').toLowerCase().includes(q)) {
         return false;
       }
-      // Status
-      if (filters.status && filters.status !== 'all' && item.status !== filters.status) return false;
+      // Status Reconciliação
+      const st = filters.status || 'active';
+      if (st === 'active') {
+        if (item.archived === true) return false;
+      } else if (st === 'archived') {
+        if (item.archived !== true) return false;
+      } else if (st !== 'all') {
+        if (item.status !== st) return false;
+        if (item.archived === true) return false;
+      }
       // Priority
       if (filters.priority && filters.priority !== 'all' && item.priority !== filters.priority) return false;
       // Area
@@ -147,11 +155,19 @@ export default function EcosystemPage() {
     });
   }, [activeTab, searchQuery, areas, projects, sources, people, filters]);
 
+  const stTab = filters.status || 'active';
+  const countHelper = (arr: any[]) => arr.filter(i => {
+    if (stTab === 'active') return i.archived !== true;
+    if (stTab === 'archived') return i.archived === true;
+    if (stTab !== 'all') return i.status === stTab && i.archived !== true;
+    return true;
+  }).length;
+
   const tabs = [
-    { id: 'areas' as const, label: 'Áreas', count: areas.length },
-    { id: 'projects' as const, label: 'Projetos', count: projects.length },
-    { id: 'sources' as const, label: 'Fontes', count: sources.length },
-    { id: 'people' as const, label: 'Pessoas', count: people.length },
+    { id: 'areas' as const, label: 'Áreas', count: countHelper(areas) },
+    { id: 'projects' as const, label: 'Projetos', count: countHelper(projects) },
+    { id: 'sources' as const, label: 'Fontes', count: countHelper(sources) },
+    { id: 'people' as const, label: 'Pessoas', count: countHelper(people) },
   ];
 
   return (
