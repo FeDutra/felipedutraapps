@@ -149,7 +149,7 @@ export default function HealthPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
           <div className="flex items-center gap-4 mb-2">
-            <h1 className="text-3xl font-black text-white">Health Center</h1>
+            <h1 className="text-3xl font-black text-white">Saúde / Riscos</h1>
             <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
               stats.systemStatus === 'healthy' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               stats.systemStatus === 'attention' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :

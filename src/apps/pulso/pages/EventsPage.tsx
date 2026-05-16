@@ -187,9 +187,9 @@ export default function EventsPage() {
       {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8 w-full max-w-full min-w-0">
         <div>
-          <h1 className="text-3xl font-black text-white mb-2">Barramento de Eventos</h1>
+          <h1 className="text-3xl font-black text-white mb-2">Bastidor Técnico</h1>
           <p className="text-sm text-white/40 max-w-lg">
-            Auditoria, sincronização e ingestão OpenClaw → PULSO.
+            Logs, eventos, debug, requests bridge, auditorias técnicas e bastidores do sistema.
           </p>
         </div>
 

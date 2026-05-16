@@ -88,9 +88,9 @@ export default function MetabolismPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
-          <h1 className="text-3xl font-black text-white mb-2">Metabolismo</h1>
+          <h1 className="text-3xl font-black text-white mb-2">Agentes</h1>
           <p className="text-sm text-white/40 max-w-lg">
-            Gestão dos agentes, rotinas e crons que mantêm o ecossistema ÉDEN em movimento e sincronia.
+            Central de trabalho dos agentes, rotinas, estado e execução.
           </p>
         </div>
         <div className="flex items-center gap-3">

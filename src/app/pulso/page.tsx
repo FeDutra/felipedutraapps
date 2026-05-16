@@ -1,12 +1,5 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import React from 'react';
-import { DashboardPage } from '@/apps/pulso';
-
-export default function PulsoDashboardPage() {
-  return (
-    <div className="pb-20">
-      <DashboardPage />
-    </div>
-  );
+export default function PulsoRootPage() {
+  redirect('/pulso/cockpit');
 }

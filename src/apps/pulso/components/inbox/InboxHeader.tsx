@@ -17,10 +17,10 @@ export const InboxHeader = ({
           <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
             <Inbox size={20} className="text-blue-400" />
           </div>
-          <h1 className="text-2xl font-black tracking-tighter text-white">Inbox Universal</h1>
+          <h1 className="text-2xl font-black tracking-tighter text-white">Registro da Lótus</h1>
         </div>
         <p className="text-xs text-white/40 max-w-md leading-relaxed">
-          Central de captura e triagem. Transforme sinais brutos em ações estruturadas no seu ecossistema.
+          Histórico do que a Lótus inseriu, atualizou, arquivou, percebeu ou deixou aguardando decisão.
         </p>
       </div>
 

@@ -8,6 +8,16 @@ import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
 import { authService } from '@/shared/services/authService';
 import { User } from 'firebase/auth';
 
+export const PULSO_NAV_ITEMS = [
+  { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
+  { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
+  { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
+  { href: '/pulso/inbox', label: 'Registro da Lótus', icon: Inbox },
+  { href: '/pulso/metabolismo', label: 'Agentes', icon: Zap },
+  { href: '/pulso/health', label: 'Saúde / Riscos', icon: HeartPulse },
+  { href: '/pulso/eventos', label: 'Bastidor Técnico', icon: Activity },
+];
+
 export default function PulsoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = React.useState<User | null>(null);
@@ -21,16 +31,6 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     });
     return () => unsubscribe();
   }, []);
-
-  const navItems = [
-    { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
-    { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
-    { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
-    { href: '/pulso/inbox', label: 'Registro da Lótus', icon: Inbox },
-    { href: '/pulso/metabolismo', label: 'Agentes', icon: Zap },
-    { href: '/pulso/health', label: 'Saúde / Riscos', icon: HeartPulse },
-    { href: '/pulso/eventos', label: 'Bastidor Técnico', icon: Activity },
-  ];
 
   return (
     <div className="min-h-screen bg-[#020617] text-white selection:bg-blue-500/30 w-full max-w-full flex flex-col xl:flex-row overflow-x-hidden">
@@ -79,8 +79,8 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
 
         {/* Center Section: Navigation pill container */}
         <div className="flex items-center justify-start sm:justify-center gap-1 bg-white/2 p-1 rounded-xl border border-white/5 w-full max-w-full overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
+          {PULSO_NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link 
                 key={item.href}
@@ -125,8 +125,8 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
           {/* Vertical Navigation items */}
           <div className="flex flex-col gap-1.5 mt-2">
             <p className="text-[8px] font-black uppercase tracking-widest text-white/20 px-3 mb-1">Navegação</p>
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
+            {PULSO_NAV_ITEMS.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link 
                   key={item.href}
