@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 
 /**
  * @file PulseRadar.tsx
- * @description Central radial visualization for the PULSO dashboard.
+ * @description Safe central radial visualization for the PULSO dashboard.
  */
 
 interface RadarBlip {
@@ -18,6 +18,8 @@ interface RadarBlip {
 }
 
 export const PulseRadar = ({ blips = [] }: { blips?: RadarBlip[] }) => {
+  const safeBlips = Array.isArray(blips) ? blips.filter(Boolean) : [];
+
   return (
     <div className="relative w-full aspect-square max-w-[400px] mx-auto flex items-center justify-center overflow-visible">
       {/* Background Rings */}
@@ -58,29 +60,37 @@ export const PulseRadar = ({ blips = [] }: { blips?: RadarBlip[] }) => {
       />
 
       {/* Blips */}
-      {blips.map((blip) => {
-        const x = 50 + (blip.distance / 2) * Math.cos((blip.angle * Math.PI) / 180);
-        const y = 50 + (blip.distance / 2) * Math.sin((blip.angle * Math.PI) / 180);
+      {safeBlips.map((blip, idx) => {
+        const id = blip.id || `blip-${idx}`;
+        const distance = typeof blip.distance === 'number' ? blip.distance : 0;
+        const angle = typeof blip.angle === 'number' ? blip.angle : 0;
+        const color = blip.color || 'bg-blue-400';
+        const label = blip.label || '';
+
+        const x = 50 + (distance / 2) * Math.cos((angle * Math.PI) / 180);
+        const y = 50 + (distance / 2) * Math.sin((angle * Math.PI) / 180);
 
         return (
           <motion.div
-            key={blip.id}
+            key={id}
             initial={{ opacity: 0, scale: 0 }}
             animate={{ opacity: 1, scale: 1 }}
             className="absolute z-20 group"
             style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
           >
             <div 
-              className={`w-2 h-2 rounded-full ${blip.color} shadow-lg`} 
-              style={{ boxShadow: `0 0 10px ${blip.color.replace('bg-', '')}` }}
+              className={`w-2 h-2 rounded-full ${color} shadow-lg`} 
+              style={{ boxShadow: `0 0 10px ${color.replace('bg-', '')}` }}
             />
             
             {/* Tooltip-like Label */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <span className="bg-black/80 backdrop-blur-md border border-white/10 px-2 py-1 rounded text-[9px] font-bold text-white uppercase tracking-wider">
-                {blip.label}
-              </span>
-            </div>
+            {label && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <span className="bg-black/80 backdrop-blur-md border border-white/10 px-2 py-1 rounded text-[9px] font-bold text-white uppercase tracking-wider">
+                  {label}
+                </span>
+              </div>
+            )}
           </motion.div>
         );
       })}

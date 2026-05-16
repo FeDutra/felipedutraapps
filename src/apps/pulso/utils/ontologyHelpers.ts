@@ -11,79 +11,87 @@ import {
 
 /**
  * @file ontologyHelpers.ts
- * @description Helper functions for navigating the PULSO ecosystem relationships.
+ * @description Safe helper functions for navigating the PULSO ecosystem relationships.
  */
+
+function safeArray<T>(arr: any): T[] {
+  return Array.isArray(arr) ? (arr.filter(Boolean) as T[]) : [];
+}
 
 export const ontologyHelpers = {
   // --- Area Helpers ---
-  getCriticalAreas: (areas: Area[]): Area[] => {
-    return areas.filter(a => a.importance === 'critical' && a.status === 'active');
+  getCriticalAreas: (areas: any): Area[] => {
+    return safeArray<Area>(areas).filter(a => a && a.importance === 'critical' && a.status === 'active');
   },
 
   // --- Project Helpers ---
-  getProjectsByArea: (projects: Project[], areaId: string): Project[] => {
-    return projects.filter(p => p.areaRef === areaId || p.secondaryAreaRefs?.includes(areaId));
+  getProjectsByArea: (projects: any, areaId: string): Project[] => {
+    return safeArray<Project>(projects).filter(p => 
+      p && (p.areaRef === areaId || (Array.isArray(p.secondaryAreaRefs) && p.secondaryAreaRefs.includes(areaId)))
+    );
   },
 
-  getProjectHealth: (project: Project, tasks: Task[], alerts: Alert[]): 'healthy' | 'warning' | 'critical' => {
-    const projectAlerts = alerts.filter(a => a.projectRef === project.id && a.status === 'open');
-    if (projectAlerts.some(a => a.severity === 'critical')) return 'critical';
+  getProjectHealth: (project: any, tasks: any, alerts: any): 'healthy' | 'warning' | 'critical' => {
+    if (!project) return 'healthy';
+    const projectAlerts = safeArray<Alert>(alerts).filter(a => a && a.projectRef === project.id && a.status === 'open');
+    if (projectAlerts.some(a => a && a.severity === 'critical')) return 'critical';
     if (projectAlerts.length > 0) return 'warning';
     
-    const blockedTasks = tasks.filter(t => t.projectRef === project.id && t.status === 'blocked');
+    const blockedTasks = safeArray<Task>(tasks).filter(t => t && t.projectRef === project.id && t.status === 'blocked');
     if (blockedTasks.length > 0) return 'warning';
     
     return 'healthy';
   },
 
   // --- Task & Decision Helpers ---
-  getTasksByProject: (tasks: Task[], projectId: string): Task[] => {
-    return tasks.filter(t => t.projectRef === projectId);
+  getTasksByProject: (tasks: any, projectId: string): Task[] => {
+    return safeArray<Task>(tasks).filter(t => t && t.projectRef === projectId);
   },
 
-  getDecisionsByProject: (decisions: Decision[], projectId: string): Decision[] => {
-    return decisions.filter(d => d.projectRef === projectId);
+  getDecisionsByProject: (decisions: any, projectId: string): Decision[] => {
+    return safeArray<Decision>(decisions).filter(d => d && d.projectRef === projectId);
   },
 
   // --- Source Helpers ---
-  getSourcesByProject: (sources: Source[], project: Project): Source[] => {
-    return sources.filter(s => 
-      s.projectRef === project.id || 
-      project.sourceRefs?.includes(s.id)
+  getSourcesByProject: (sources: any, project: any): Source[] => {
+    if (!project) return [];
+    return safeArray<Source>(sources).filter(s => 
+      s && (s.projectRef === project.id || (Array.isArray(project.sourceRefs) && project.sourceRefs.includes(s.id)))
     );
   },
 
   // --- Inbox & Laterality Helpers ---
-  getRecurringLateralities: (inbox: InboxItem[]): InboxItem[] => {
-    return inbox.filter(i => 
-      i.type === 'laterality' && 
-      i.lateralityState !== 'captured'
+  getRecurringLateralities: (inbox: any): InboxItem[] => {
+    return safeArray<InboxItem>(inbox).filter(i => 
+      i && i.type === 'laterality' && i.lateralityState !== 'captured'
     );
   },
 
-  getInboxCountByType: (inbox: InboxItem[]): Record<string, number> => {
-    return inbox.reduce((acc, item) => {
-      acc[item.type] = (acc[item.type] || 0) + 1;
+  getInboxCountByType: (inbox: any): Record<string, number> => {
+    return safeArray<InboxItem>(inbox).reduce((acc, item) => {
+      if (item && item.type) {
+        acc[item.type] = (acc[item.type] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
   },
 
   // --- Health Helpers ---
-  getAlertsByArea: (alerts: Alert[], areaId: string): Alert[] => {
-    return alerts.filter(a => a.areaRef === areaId);
+  getAlertsByArea: (alerts: any, areaId: string): Alert[] => {
+    return safeArray<Alert>(alerts).filter(a => a && a.areaRef === areaId);
   },
 
-  getBrokenRoutines: (routines: Routine[]): Routine[] => {
-    return routines.filter(r => r.status === 'broken');
+  getBrokenRoutines: (routines: any): Routine[] => {
+    return safeArray<Routine>(routines).filter(r => r && r.status === 'broken');
   },
 
-  getOpenAlertsBySeverity: (alerts: Alert[]): Record<string, Alert[]> => {
-    const open = alerts.filter(a => a.status === 'open');
+  getOpenAlertsBySeverity: (alerts: any): Record<string, Alert[]> => {
+    const open = safeArray<Alert>(alerts).filter(a => a && a.status === 'open');
     return {
-      critical: open.filter(a => a.severity === 'critical'),
-      high: open.filter(a => a.severity === 'high'),
-      medium: open.filter(a => a.severity === 'medium'),
-      info: open.filter(a => a.severity === 'info')
+      critical: open.filter(a => a && a.severity === 'critical'),
+      high: open.filter(a => a && a.severity === 'high'),
+      medium: open.filter(a => a && a.severity === 'medium'),
+      info: open.filter(a => a && a.severity === 'info')
     };
   }
 };

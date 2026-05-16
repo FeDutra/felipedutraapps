@@ -34,23 +34,25 @@ export {
   requestsService
 };
 
+const safeArray = (arr: any) => Array.isArray(arr) ? arr.filter(Boolean) : [];
+
 // Main Pulso Service for Global State
 export const pulsoService = {
   getDashboardState: async () => {
     const [areas, projects, tasks, inbox, alerts] = await Promise.all([
-      areasService.getAll(),
-      projectsService.getAll(),
-      tasksService.getAll(),
-      inboxService.getAll(),
-      healthService.getAlerts()
+      areasService.getAll().catch(e => { console.error(e); return []; }),
+      projectsService.getAll().catch(e => { console.error(e); return []; }),
+      tasksService.getAll().catch(e => { console.error(e); return []; }),
+      inboxService.getAll().catch(e => { console.error(e); return []; }),
+      healthService.getAlerts().catch(e => { console.error(e); return []; })
     ]);
 
     return {
-      activeAreas: areas.filter(a => a.status === 'active'),
-      activeProjects: projects.filter(p => p.status === 'active'),
-      openTasks: tasks.filter(t => t.status !== 'completed'),
-      pendingInbox: inbox.filter(i => i.status === 'new'),
-      activeAlerts: alerts.filter(a => a.status === 'open')
+      activeAreas: safeArray(areas).filter(a => a && a.status === 'active'),
+      activeProjects: safeArray(projects).filter(p => p && p.status === 'active'),
+      openTasks: safeArray(tasks).filter(t => t && t.status !== 'completed'),
+      pendingInbox: safeArray(inbox).filter(i => i && i.status === 'new'),
+      activeAlerts: safeArray(alerts).filter(a => a && a.status === 'open')
     };
   },
   
