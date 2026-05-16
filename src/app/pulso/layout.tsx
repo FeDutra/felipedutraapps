@@ -24,7 +24,6 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
-    { href: '/pulso/projetos', label: 'Projetos', icon: Globe },
     { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
     { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
     { href: '/pulso/inbox', label: 'Registro da Lótus', icon: Inbox },

@@ -128,30 +128,30 @@ export default function CockpitPage() {
         <div className="lg:col-span-4 space-y-8">
           <div className="grid grid-cols-2 gap-4">
             <StateCard 
-              title="Inbox Pendente" 
+              title="Ações da Lótus" 
               value={state.pendingInbox.length} 
-              subtitle="Registros aguardando triagem" 
+              subtitle="Aguardando sua decisão" 
               icon={Inbox} 
               colorClass="text-amber-400"
             />
             <StateCard 
-              title="Projetos Ativos" 
+              title="Projetos Vivos" 
               value={state.activeProjects.length} 
               subtitle="Frentes em movimento" 
               icon={Layers} 
               colorClass="text-blue-400"
             />
             <StateCard 
-              title="Tarefas Abertas" 
+              title="Depende do Fe" 
               value={state.openTasks.length} 
-              subtitle="Itens de execução" 
+              subtitle="Tarefas ativas para você" 
               icon={CheckSquare} 
               colorClass="text-emerald-400"
             />
             <StateCard 
-              title="Alertas Críticos" 
+              title="Riscos & Travas" 
               value={state.activeAlerts.length} 
-              subtitle="Sinais pedem atenção" 
+              subtitle="Sinais que pedem atenção" 
               icon={AlertCircle} 
               colorClass="text-red-500"
             />
@@ -159,8 +159,8 @@ export default function CockpitPage() {
 
           <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col items-center justify-center min-h-[400px]">
              <div className="text-center mb-8">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30">Estado Radial</h3>
-                <p className="text-xs text-white/50 mt-1">Visão sistêmica do ecossistema</p>
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30">O que está vivo agora</h3>
+                <p className="text-xs text-white/50 mt-1">Radar operacional em tempo real</p>
              </div>
              <PulseRadar blips={radarBlips} />
           </div>
@@ -175,8 +175,8 @@ export default function CockpitPage() {
 
           <div className="bg-white/2 border border-white/5 rounded-3xl p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Áreas em Pulso</h3>
-              <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Total 10</span>
+              <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Mapa da Operação</h3>
+              <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Total {state.allAreas.length} Áreas</span>
             </div>
             <div className="grid grid-cols-1 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
               {state.allAreas.map((area: any) => (
@@ -206,15 +206,15 @@ export default function CockpitPage() {
             <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/10">
                <Activity size={20} className="text-white/40" />
             </div>
-            <h4 className="text-sm font-bold text-white mb-2">Novo Registro</h4>
+            <h4 className="text-sm font-bold text-white mb-2">Registro da Lótus</h4>
             <p className="text-[10px] text-white/40 mb-4 px-4 leading-relaxed">
-              Capture uma tarefa, semente ou decisão instantaneamente.
+              Veja as últimas percepções, rascunhos e ações realizadas.
             </p>
             <button 
               onClick={() => router.push('/pulso/inbox')}
               className="w-full py-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-500/20 transition-all backdrop-blur-sm flex items-center justify-center gap-2 group"
             >
-              Abrir Inbox
+              Abrir Registro
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
             </button>
           </div>
