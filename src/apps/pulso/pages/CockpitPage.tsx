@@ -123,15 +123,15 @@ export default function CockpitPage() {
     );
   }
 
-  // Pre-extract collections with strict array guarantees
-  const activeAlerts = safeArray(state?.activeAlerts);
-  const activeProjects = safeArray(state?.activeProjects);
-  const openTasks = safeArray(state?.openTasks);
-  const pendingInbox = safeArray(state?.pendingInbox);
-  const allAreas = safeArray(state?.allAreas);
-  const allRoutines = safeArray(state?.allRoutines);
-  const allAgents = safeArray(state?.allAgents);
-  const allLogs = safeArray(state?.allLogs);
+  // Pre-extract collections with strict array guarantees and client-side soft filters
+  const activeAlerts = safeArray(state?.activeAlerts).filter((a: any) => a && a.archived !== true);
+  const activeProjects = safeArray(state?.activeProjects).filter((p: any) => p && p.archived !== true);
+  const openTasks = safeArray(state?.openTasks).filter((t: any) => t && t.archived !== true);
+  const pendingInbox = safeArray(state?.pendingInbox).filter((i: any) => i && i.archived !== true);
+  const allAreas = safeArray(state?.allAreas).filter((a: any) => a && a.archived !== true && a.status === 'active');
+  const allRoutines = safeArray(state?.allRoutines).filter((r: any) => r && r.archived !== true);
+  const allAgents = safeArray(state?.allAgents).filter((ag: any) => ag && ag.archived !== true);
+  const allLogs = safeArray(state?.allLogs).slice(0, 5); // strict visual limit
 
   // Generate Radar Blips safely
   const radarBlips = [
@@ -165,7 +165,7 @@ export default function CockpitPage() {
   const feTasks = openTasks.filter((t: any) => {
     if (!t || t.status === 'completed' || t.archived === true) return false;
     const refs = t.ownerRefs;
-    if (!refs || !Array.isArray(refs) || refs.length === 0) return true;
+    if (!refs || !Array.isArray(refs) || refs.length === 0) return true; // Default fallback if no owners
     return refs.includes('felipe') || refs.includes('Felipe');
   });
 
