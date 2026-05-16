@@ -70,13 +70,13 @@ export default function CockpitPage() {
           eventsService.getRecent(100)
         ]);
         
-        setTasks(allTasks);
-        setProjects(allProjects);
-        setRequests(allRequests);
-        setAgents(allAgents);
-        setRoutines(allRoutines);
-        setAlerts(allAlerts);
-        setEvents(allEvents);
+        setTasks(Array.isArray(allTasks) ? allTasks : []);
+        setProjects(Array.isArray(allProjects) ? allProjects : []);
+        setRequests(Array.isArray(allRequests) ? allRequests : []);
+        setAgents(Array.isArray(allAgents) ? allAgents : []);
+        setRoutines(Array.isArray(allRoutines) ? allRoutines : []);
+        setAlerts(Array.isArray(allAlerts) ? allAlerts : []);
+        setEvents(Array.isArray(allEvents) ? allEvents : []);
 
       } catch (err: any) {
         console.error('Cockpit load error:', err);
@@ -122,18 +122,18 @@ export default function CockpitPage() {
   
   // Tasks (no owner or owned by felipe + open)
   const feTasks = tasks.filter(t => 
-    !t.archived && 
+    t && !t.archived && 
     t.status !== 'completed' && 
-    (!t.ownerRefs || t.ownerRefs.length === 0 || t.ownerRefs.includes('felipe') || t.ownerRefs.includes('Felipe'))
+    (!t.ownerRefs || !Array.isArray(t.ownerRefs) || t.ownerRefs.length === 0 || t.ownerRefs.includes('felipe') || t.ownerRefs.includes('Felipe'))
   );
   feTasks.forEach(t => dependeDoFeItems.push({ type: 'task', id: t.id, title: t.title || t.name, detail: 'Tarefa sob sua guarda', urgency: isPast(t.dueAt || t.dueDate || new Date(9999,11,31)) ? 'high' : 'medium', raw: t }));
 
   // Requests (needs_approval or needs_clarification)
-  const pendingRequests = requests.filter(r => !r.archived && (r.status === 'needs_approval' || r.status === 'needs_clarification'));
+  const pendingRequests = requests.filter(r => r && !r.archived && (r.status === 'needs_approval' || r.status === 'needs_clarification'));
   pendingRequests.forEach(r => dependeDoFeItems.push({ type: 'request', id: r.id, title: r.title, detail: `Aguardando ${r.status === 'needs_approval' ? 'Aprovação' : 'Clarificação'}`, urgency: 'high', raw: r }));
 
   // Alerts (critical/high open)
-  const criticalAlerts = alerts.filter(a => !a.archived && a.status === 'open' && (a.severity === 'critical' || a.severity === 'high'));
+  const criticalAlerts = alerts.filter(a => a && !a.archived && a.status === 'open' && (a.severity === 'critical' || a.severity === 'high'));
   criticalAlerts.forEach(a => dependeDoFeItems.push({ type: 'alert', id: a.id, title: a.name, detail: 'Alerta Operacional Crítico', urgency: 'critical', raw: a }));
 
   // Sort Depende do Fê by urgency (critical > high > medium)
@@ -142,22 +142,30 @@ export default function CockpitPage() {
     return (val[b.urgency as keyof typeof val] || 0) - (val[a.urgency as keyof typeof val] || 0);
   });
 
+  const getSafeTime = (date: any) => {
+    if (!date) return 0;
+    try {
+      const d = typeof date.toDate === 'function' ? date.toDate() : new Date(date);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    } catch {
+      return 0;
+    }
+  };
+
   // 2. Ações recentes da Lótus
-  // Combine completed requests by agent and recent openclaw events
   const lotusEvents = events
-    .filter(e => !e.archived && (e.origin === 'openclaw' || e.actorType === 'agent'))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .filter(e => e && !e.archived && (e.origin === 'openclaw' || e.actorType === 'agent'))
+    .sort((a, b) => getSafeTime(b.createdAt) - getSafeTime(a.createdAt))
     .slice(0, 5);
     
-  // Also include recent requests processed by system/agent
   const lotusRequests = requests
-    .filter(r => !r.archived && r.status === 'completed' && r.processedBy === 'system')
-    .sort((a, b) => (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) - (a.updatedAt ? new Date(a.updatedAt).getTime() : 0))
+    .filter(r => r && !r.archived && r.status === 'completed' && r.processedBy === 'system')
+    .sort((a, b) => getSafeTime(b.updatedAt) - getSafeTime(a.updatedAt))
     .slice(0, 3);
 
   // 3. Projetos em movimento
-  const activeProjects = projects.filter(p => !p.archived && p.status === 'active');
-  const projectTasksMap = tasks.reduce((acc, t) => {
+  const activeProjects = projects.filter(p => p && !p.archived && p.status === 'active');
+  const projectTasksMap = tasks.reduce((acc, t) => { if (!t) return acc;
     if (!t.archived && t.status !== 'completed' && t.projectRef) {
       acc[t.projectRef] = (acc[t.projectRef] || 0) + 1;
     }
@@ -165,24 +173,28 @@ export default function CockpitPage() {
   }, {} as Record<string, number>);
 
   // 4. Tarefas críticas
-  const openTasks = tasks.filter(t => !t.archived && t.status !== 'completed');
+  const openTasks = tasks.filter(t => t && !t.archived && t.status !== 'completed');
   const criticalTasks = openTasks
-    .filter(t => t.priority === 'critical' || t.priority === 'high' || (t.dueDate && isPast(new Date(t.dueDate))))
-    .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 9999999999999) - (b.dueDate ? new Date(b.dueDate).getTime() : 9999999999999))
+    .filter(t => t && (t.priority === 'critical' || t.priority === 'high' || (t.dueDate && isPast(t.dueDate))))
+    .sort((a, b) => {
+      const timeA = a.dueDate ? getSafeTime(a.dueDate) : 9999999999999;
+      const timeB = b.dueDate ? getSafeTime(b.dueDate) : 9999999999999;
+      return timeA - timeB;
+    })
     .slice(0, 6);
 
   // 5. Agentes em operação
-  const activeAgents = agents.filter(a => !a.archived && a.status === 'active');
-  const activeRoutines = routines.filter(r => !r.archived && r.status === 'active');
-  const failingRoutines = routines.filter(r => !r.archived && r.status === 'broken');
+  const activeAgents = agents.filter(a => a && !a.archived && a.status === 'active');
+  const activeRoutines = routines.filter(r => r && !r.archived && r.status === 'active');
+  const failingRoutines = routines.filter(r => r && !r.archived && r.status === 'broken');
 
   // 6. Riscos reais
   const risks: any[] = [];
-  agents.filter(a => a.status === 'paused' || a.status === 'broken').forEach(a => risks.push({ type: 'agent', label: 'Agente Inativo/Falho', desc: a.name }));
-  failingRoutines.forEach(r => risks.push({ type: 'routine', label: 'Rotina Falhando', desc: r.name }));
-  activeProjects.filter(p => !p.nextStep).forEach(p => risks.push({ type: 'project', label: 'Projeto sem Próximo Passo', desc: p.name }));
-  const oldRequests = requests.filter(r => !r.archived && r.status === 'running');
-  oldRequests.forEach(r => risks.push({ type: 'request', label: 'Request Travado', desc: r.title }));
+  agents.filter(a => a && (a.status === 'paused' || a.status === 'broken')).forEach(a => risks.push({ type: 'agent', label: 'Agente Inativo/Falho', desc: a.name || 'Sem nome' }));
+  failingRoutines.forEach(r => risks.push({ type: 'routine', label: 'Rotina Falhando', desc: r.name || 'Sem nome' }));
+  activeProjects.filter(p => p && !p.nextStep).forEach(p => risks.push({ type: 'project', label: 'Projeto sem Próximo Passo', desc: p.name || 'Sem nome' }));
+  const oldRequests = requests.filter(r => r && !r.archived && r.status === 'running');
+  oldRequests.forEach(r => risks.push({ type: 'request', label: 'Request Travado', desc: r.title || 'Sem título' }));
 
 
   // Formatter and Date helpers
@@ -287,7 +299,7 @@ export default function CockpitPage() {
                </div>
             ) : (
               <div className="space-y-3">
-                {dependeDoFeItems.slice(0, 10).map((item, idx) => (
+                {dependeDoFeItems.slice(0, 10).filter(Boolean).map((item, idx) => (
                   <div key={`${item.type}-${item.id}-${idx}`} className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 bg-white/5 border border-white/5 hover:border-amber-500/30 transition-colors rounded-2xl cursor-pointer group w-full min-w-0">
                     <div className="hidden sm:block pt-0.5 shrink-0">
                       {item.type === 'task' ? <CheckSquare size={16} className="text-emerald-400" /> : 
@@ -313,7 +325,7 @@ export default function CockpitPage() {
                           {item.detail}
                         </span>
                         <span className="text-[10px] text-white/30 truncate hidden sm:inline">
-                          ID: {item.id.substring(0, 6)}
+                          ID: {item.id ? item.id.substring(0, 6) : '---'}
                         </span>
                       </div>
                     </div>
@@ -341,7 +353,7 @@ export default function CockpitPage() {
                </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeProjects.map(p => (
+                {activeProjects.filter(Boolean).map(p => (
                   <div key={p.id} className="p-4 bg-white/5 border border-white/5 hover:border-blue-500/30 transition-colors rounded-2xl cursor-pointer flex flex-col justify-between w-full min-w-0">
                     <div>
                       <div className="flex justify-between items-start gap-2 mb-2">
@@ -389,7 +401,7 @@ export default function CockpitPage() {
                </div>
             ) : (
               <div className="space-y-3">
-                {criticalTasks.map(t => (
+                {criticalTasks.filter(Boolean).map(t => (
                   <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white/5 border border-white/5 rounded-2xl hover:border-emerald-500/30 transition-colors group cursor-pointer w-full min-w-0">
                     <div className="min-w-0 flex-1 w-full">
                       <h4 className="text-sm font-bold text-white truncate group-hover:text-emerald-400 transition-colors break-words leading-tight">{t.title || t.name}</h4>
@@ -411,7 +423,7 @@ export default function CockpitPage() {
                     {t.dueDate && (
                       <div className="text-[10px] flex items-center gap-1.5 text-white/40 shrink-0">
                         <Clock size={12} />
-                        <span className={isPast(new Date(t.dueDate)) ? 'text-red-400 font-bold whitespace-nowrap' : 'whitespace-nowrap'}>
+                        <span className={isPast(t.dueDate) ? 'text-red-400 font-bold whitespace-nowrap' : 'whitespace-nowrap'}>
                           {formatDate(t.dueDate)}
                         </span>
                       </div>
@@ -453,7 +465,7 @@ export default function CockpitPage() {
                </div>
             ) : (
               <div className="space-y-5">
-                {lotusRequests.map(r => (
+                {lotusRequests.filter(Boolean).map(r => (
                   <div key={`req-${r.id}`} className="relative pl-5 border-l border-purple-500/30">
                     <div className="absolute -left-1 top-1.5 w-2 h-2 rounded-full bg-purple-400" />
                     <p className="text-[9px] text-white/30 uppercase tracking-widest font-black mb-1">{formatDate(r.updatedAt || r.requestedAt)}</p>
@@ -461,7 +473,7 @@ export default function CockpitPage() {
                     <p className="text-[10px] text-emerald-400 font-bold mt-1">Request Completado</p>
                   </div>
                 ))}
-                {lotusEvents.map(e => (
+                {lotusEvents.filter(Boolean).map(e => (
                   <div key={`evt-${e.id}`} className="relative pl-5 border-l border-white/10">
                     <div className="absolute -left-1 top-1.5 w-2 h-2 rounded-full bg-white/20" />
                     <p className="text-[9px] text-white/30 uppercase tracking-widest font-black mb-1">{formatDate(e.createdAt)}</p>
@@ -501,7 +513,7 @@ export default function CockpitPage() {
                </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                {risks.map((r, i) => (
+                {risks.filter(Boolean).map((r, i) => (
                   <div key={i} className="p-3 bg-red-500/10 border border-red-500/10 rounded-xl">
                     <span className="text-[9px] font-black uppercase tracking-widest text-red-400 mb-1.5 block whitespace-nowrap">
                       {r.label}
@@ -531,8 +543,8 @@ export default function CockpitPage() {
                </div>
             ) : (
               <div className="space-y-2">
-                {agents.map(a => {
-                  const agentRoutines = routines.filter(r => r.agentRefs?.includes(a.id));
+                {agents.filter(Boolean).map(a => {
+                  const agentRoutines = routines.filter(r => Array.isArray(r.agentRefs) && r.agentRefs.includes(a.id));
                   return (
                     <div key={a.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl min-w-0">
                       <div className="flex items-center gap-3 min-w-0 pr-2">
