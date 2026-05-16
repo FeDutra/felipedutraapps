@@ -23,13 +23,14 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
   }, []);
 
   const navItems = [
-    { href: '/pulso', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Globe },
-    { href: '/pulso/inbox', label: 'Inbox', icon: Inbox },
+    { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
+    { href: '/pulso/projetos', label: 'Projetos', icon: Globe },
     { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
-    { href: '/pulso/eventos', label: 'Eventos', icon: Activity },
-    { href: '/pulso/health', label: 'Health', icon: HeartPulse },
-    { href: '/pulso/metabolismo', label: 'Metabolismo', icon: Zap },
+    { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
+    { href: '/pulso/inbox', label: 'Registro da Lótus', icon: Inbox },
+    { href: '/pulso/metabolismo', label: 'Agentes', icon: Zap },
+    { href: '/pulso/health', label: 'Saúde / Riscos', icon: HeartPulse },
+    { href: '/pulso/eventos', label: 'Bastidor Técnico', icon: Activity },
   ];
 
   return (
