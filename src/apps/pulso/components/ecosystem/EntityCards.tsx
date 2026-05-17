@@ -48,7 +48,21 @@ export const AreaCard = ({ area, stats, onClick }: { area: Area, stats?: any, on
 };
 
 // --- PROJECT CARD ---
-export const ProjectCard = ({ project, areaName, onClick }: { project: Project, areaName?: string, onClick: () => void }) => {
+export const ProjectCard = ({ 
+  project, 
+  areaName, 
+  openTasksCount = 0,
+  overdueTasksCount = 0,
+  unassignedTasksCount = 0,
+  onClick 
+}: { 
+  project: Project, 
+  areaName?: string, 
+  openTasksCount?: number,
+  overdueTasksCount?: number,
+  unassignedTasksCount?: number,
+  onClick: () => void 
+}) => {
 
   return (
     <motion.div 
@@ -61,18 +75,44 @@ export const ProjectCard = ({ project, areaName, onClick }: { project: Project, 
           <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
             <Layers size={16} className="text-blue-400" />
           </div>
-          <span className="text-[9px] font-black uppercase tracking-widest text-white/20">{getStageLabel(project.stage)}</span>
+          <div className="flex flex-col">
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/20">{getStageLabel(project.stage)}</span>
+            <span className={`text-[8px] font-black uppercase tracking-widest ${
+              project.status === 'active' ? 'text-emerald-400/80 animate-pulse' : 'text-white/40'
+            }`}>{project.status === 'active' ? 'Ativo' : project.status || 'Pendente'}</span>
+          </div>
         </div>
         <PriorityBadge priority={project.priority} />
       </div>
 
-      <h3 className="text-base font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">{project.name}</h3>
+      <h3 className="text-base font-bold text-white mb-2 group-hover:text-blue-400 transition-colors line-clamp-1">{project.name}</h3>
       <p className="text-xs text-white/40 line-clamp-2 mb-4 leading-relaxed">{project.objective}</p>
 
-      {!project.nextStep && (
-        <div className="mb-4 py-1.5 px-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-center justify-between">
+      {/* Linked Tasks Metrics */}
+      <div className="grid grid-cols-3 gap-1 bg-black/40 border border-white/5 rounded-2xl p-2.5 mb-4 text-center mt-2 shrink-0">
+        <div>
+          <span className="block text-[8px] font-black text-white/20 uppercase tracking-tighter">Abertas</span>
+          <span className="text-xs font-black text-white font-mono">{openTasksCount}</span>
+        </div>
+        <div className="border-x border-white/5">
+          <span className="block text-[8px] font-black text-white/20 uppercase tracking-tighter">Vencidas</span>
+          <span className={`text-xs font-black font-mono ${overdueTasksCount > 0 ? 'text-red-400' : 'text-white/40'}`}>{overdueTasksCount}</span>
+        </div>
+        <div>
+          <span className="block text-[8px] font-black text-white/20 uppercase tracking-tighter">Sem Dono</span>
+          <span className={`text-xs font-black font-mono ${unassignedTasksCount > 0 ? 'text-purple-400' : 'text-white/40'}`}>{unassignedTasksCount}</span>
+        </div>
+      </div>
+
+      {project.nextStep ? (
+        <div className="mb-4 py-2 px-3 bg-blue-500/5 border border-blue-500/10 rounded-xl shrink-0">
+          <span className="block text-[8px] font-black uppercase tracking-widest text-blue-400 mb-0.5">Próximo Passo</span>
+          <p className="text-[10px] font-bold text-white/70 line-clamp-1 leading-snug">{project.nextStep}</p>
+        </div>
+      ) : (
+        <div className="mb-4 py-1.5 px-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-center justify-between shrink-0">
           <span className="text-[9px] font-black uppercase tracking-widest text-amber-500/90">
-            Sem Próximo Passo
+            ⚠️ Sem próximo passo
           </span>
           <span className="text-[8px] text-white/30 font-medium">Gargalo</span>
         </div>

@@ -5,13 +5,15 @@ import { areasService } from '../services/areasService';
 import { projectsService } from '../services/projectsService';
 import { sourcesService } from '../services/sourcesService';
 import { peopleService } from '../services/peopleService';
+import { tasksService } from '../services/tasksService';
 import { authService } from '../../../shared/services/authService';
 import { AlertCircle, Search, SlidersHorizontal, Database, UserPlus } from 'lucide-react';
 import { 
   Area, 
   Project, 
   Source, 
-  Person 
+  Person,
+  Task
 } from '../types/pulso.types';
 import { EcosystemTabs, EcosystemTabType } from '../components/ecosystem/EcosystemTabs';
 import { AreaCard, ProjectCard, SourceCard, PersonCard } from '../components/ecosystem/EntityCards';
@@ -31,6 +33,7 @@ export default function EcosystemPage() {
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [sources, setSources] = React.useState<Source[]>([]);
   const [people, setPeople] = React.useState<Person[]>([]);
+  const [tasks, setTasks] = React.useState<Task[]>([]);
   const [areaStats, setAreaStats] = React.useState<Record<string, any>>({});
 
   // Selection
@@ -60,17 +63,19 @@ export default function EcosystemPage() {
         
         await authService.ensurePulsoAuthReady();
         
-        const [allAreas, allProjects, allSources, allPeople] = await Promise.all([
+        const [allAreas, allProjects, allSources, allPeople, allTasks] = await Promise.all([
           areasService.getAll(),
           projectsService.getAll(),
           sourcesService.getAll(),
-          peopleService.getAll()
+          peopleService.getAll(),
+          tasksService.getAll(true)
         ]);
         
         setAreas(allAreas);
         setProjects(allProjects);
         setSources(allSources);
         setPeople(allPeople);
+        setTasks(allTasks);
 
         // Load stats for areas
         const statsMap: any = {};
@@ -170,6 +175,37 @@ export default function EcosystemPage() {
     { id: 'people' as const, label: 'Pessoas', count: countHelper(people) },
   ];
 
+  const getProjectTaskStats = React.useCallback((projectId: string) => {
+    const projectTasks = tasks.filter(t => t.projectRef === projectId);
+    
+    const safeDate = (val: any): Date | null => {
+      if (!val) return null;
+      try {
+        if (val instanceof Date) return val;
+        if (typeof val.toDate === 'function') return val.toDate();
+        if (val.seconds) return new Date(val.seconds * 1000);
+        const d = new Date(val);
+        if (isNaN(d.getTime())) return null;
+        return d;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const isOverdue = (t: Task): boolean => {
+      if (t.status === 'completed' || t.archived) return false;
+      const targetDate = safeDate(t.dueDate || t.dueAt);
+      if (!targetDate) return false;
+      return targetDate.getTime() < Date.now();
+    };
+
+    const openCount = projectTasks.filter(t => !t.archived && t.status !== 'completed').length;
+    const overdueCount = projectTasks.filter(t => isOverdue(t)).length;
+    const unassignedCount = projectTasks.filter(t => !t.archived && t.status !== 'completed' && (!t.ownerRefs || t.ownerRefs.length === 0)).length;
+
+    return { openCount, overdueCount, unassignedCount };
+  }, [tasks]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 w-full max-w-full">
       {/* Header & Fully Responsive Mobile Action Buttons/Tabs Layout */}
@@ -268,14 +304,20 @@ export default function EcosystemPage() {
             {activeTab === 'areas' && filteredData.map((a: any) => (
               <AreaCard key={a.id} area={a} stats={areaStats[a.id]} onClick={() => setSelectedEntity({ type: 'area', id: a.id })} />
             ))}
-            {activeTab === 'projects' && filteredData.map((p: any) => (
-              <ProjectCard 
-                key={p.id} 
-                project={p} 
-                areaName={areas.find(a => a.id === p.areaRef)?.name}
-                onClick={() => setSelectedEntity({ type: 'project', id: p.id })} 
-              />
-            ))}
+            {activeTab === 'projects' && filteredData.map((p: any) => {
+              const stats = getProjectTaskStats(p.id);
+              return (
+                <ProjectCard 
+                  key={p.id} 
+                  project={p} 
+                  areaName={areas.find(a => a.id === p.areaRef)?.name}
+                  openTasksCount={stats.openCount}
+                  overdueTasksCount={stats.overdueCount}
+                  unassignedTasksCount={stats.unassignedCount}
+                  onClick={() => setSelectedEntity({ type: 'project', id: p.id })} 
+                />
+              );
+            })}
             {activeTab === 'sources' && filteredData.map((s: any) => (
               <SourceCard key={s.id} source={s} onClick={() => setSelectedEntity({ type: 'source', id: s.id })} />
             ))}
