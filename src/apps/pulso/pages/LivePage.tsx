@@ -28,7 +28,9 @@ import {
   Volume2,
   Lock,
   RefreshCw,
-  Clock
+  Clock,
+  Copy,
+  Check
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -93,6 +95,19 @@ interface Message {
     requiresConfirmation: boolean;
     canExecuteNow: boolean;
     suggestedReply: string;
+    handoff?: {
+      target: string;
+      mode: string;
+      canExecuteNow: boolean;
+      requiresHumanConfirmation: boolean;
+      intent: string;
+      domain: string;
+      riskLevel: string;
+      actionType: string;
+      entitiesMentioned: string[];
+      suggestedNextStep: string;
+      executionPrompt: string;
+    };
   };
 }
 
@@ -111,7 +126,15 @@ export default function LivePage() {
     }
   ]);
   const [isTyping, setIsTyping] = React.useState(false);
+  const [copiedPromptId, setCopiedPromptId] = React.useState<string | null>(null);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  const handleCopyPrompt = (msgId: string, prompt: string) => {
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopiedPromptId(msgId);
+      setTimeout(() => setCopiedPromptId(null), 2000);
+    }).catch(() => {/* clipboard unavailable */});
+  };
 
   // Auto-scroll chat to bottom
   React.useEffect(() => {
@@ -469,7 +492,10 @@ export default function LivePage() {
         updatedAt: new Date(),
         origin: 'lotus_live' as any,
         source: 'pulso_live' as any,
-        interpretation
+        archived: false,
+        interpretation,
+        // v1.3: OpenClaw handoff contract — proposal_only, no execution triggered
+        handoff: interpretation.handoff
       };
 
       const newRequest = await requestsService.createRequest(reqPayload);
@@ -614,27 +640,68 @@ export default function LivePage() {
                           </div>
                           
                           <div className="grid grid-cols-2 gap-2 text-[9px] text-white/40">
-                            <div>
-                              <span className="font-semibold text-white/30">Domínio:</span> <span className="text-white/60">{msg.interpretation.domain}</span>
-                            </div>
-                            <div>
-                              <span className="font-semibold text-white/30">Confirmação:</span> <span className="text-white/60">{msg.interpretation.requiresConfirmation ? 'Sim' : 'Não'}</span>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="font-semibold text-white/30">Ação Executada:</span> <span className="text-white/60">Nenhuma, apenas leitura/proposta</span>
-                            </div>
-                            {msg.interpretation.sourcesNeeded && msg.interpretation.sourcesNeeded.length > 0 && (
-                              <div className="col-span-2">
-                                <span className="font-semibold text-white/30">Fontes Consultadas:</span> <span className="text-white/60">{msg.interpretation.sourcesNeeded.join(', ')}</span>
-                              </div>
-                            )}
-                          </div>
+                             <div>
+                               <span className="font-semibold text-white/30">Domínio:</span> <span className="text-white/60">{msg.interpretation.domain}</span>
+                             </div>
+                             <div>
+                               <span className="font-semibold text-white/30">Confirmação:</span> <span className="text-white/60">{msg.interpretation.requiresConfirmation ? 'Sim' : 'Não'}</span>
+                             </div>
+                             {msg.interpretation.handoff && (
+                               <div>
+                                 <span className="font-semibold text-white/30">Tipo de Ação:</span> <span className="text-white/60">{msg.interpretation.handoff.actionType}</span>
+                               </div>
+                             )}
+                             <div className="col-span-2">
+                               <span className="font-semibold text-white/30">Ação Executada:</span> <span className="text-white/60">Nenhuma — modo proposta</span>
+                             </div>
+                             {msg.interpretation.handoff?.entitiesMentioned && msg.interpretation.handoff.entitiesMentioned.length > 0 && (
+                               <div className="col-span-2">
+                                 <span className="font-semibold text-white/30">Entidades:</span> <span className="text-white/60">{msg.interpretation.handoff.entitiesMentioned.join(', ')}</span>
+                               </div>
+                             )}
+                             {msg.interpretation.sourcesNeeded && msg.interpretation.sourcesNeeded.length > 0 && (
+                               <div className="col-span-2">
+                                 <span className="font-semibold text-white/30">Fontes Consultadas:</span> <span className="text-white/60">{msg.interpretation.sourcesNeeded.join(', ')}</span>
+                               </div>
+                             )}
+                           </div>
+                           
+                           {/* v1.3: executionPrompt — handoff contract for OpenClaw */}
+                           {msg.interpretation.handoff?.executionPrompt && (
+                             <div className="mt-2 pt-2 border-t border-white/5">
+                               <div className="flex items-center justify-between mb-1.5">
+                                 <span className="text-[8px] font-black uppercase tracking-widest text-purple-400/70">
+                                   Handoff → OpenClaw
+                                 </span>
+                                 <button
+                                   onClick={() => handleCopyPrompt(msg.id, msg.interpretation!.handoff!.executionPrompt)}
+                                   className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/20 text-[8px] font-bold text-white/30 hover:text-purple-400 transition-all"
+                                   title="Copiar executionPrompt"
+                                 >
+                                   {copiedPromptId === msg.id ? (
+                                     <><Check size={9} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
+                                   ) : (
+                                     <><Copy size={9} /><span>Copiar Prompt</span></>
+                                   )}
+                                 </button>
+                               </div>
+                               <p className="text-[9px] text-white/40 leading-relaxed font-mono bg-black/20 rounded-lg px-3 py-2 border border-white/5">
+                                 {msg.interpretation.handoff.executionPrompt}
+                               </p>
+                               {msg.interpretation.handoff.suggestedNextStep && (
+                                 <p className="mt-1.5 text-[8px] text-white/30 leading-relaxed">
+                                   <span className="font-semibold text-white/25">Próx. passo: </span>
+                                   {msg.interpretation.handoff.suggestedNextStep}
+                                 </p>
+                               )}
+                             </div>
+                           )}
+
+                          <span className="block text-[8px] text-white/20 text-right mt-2 font-medium">
+                            {msg.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
                       )}
-
-                      <span className="block text-[8px] text-white/20 text-right mt-2 font-medium">
-                        {msg.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
                     </div>
                   </div>
                 </div>
