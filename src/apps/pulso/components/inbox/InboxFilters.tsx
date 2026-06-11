@@ -6,11 +6,19 @@ import { Search, Calendar, Filter } from 'lucide-react';
 export const InboxFilters = ({ 
   filters, 
   setFilters,
-  onSearch 
+  onSearch,
+  availableAreas = [],
+  availableProjects = [],
+  availablePeople = [],
+  availableSources = []
 }: { 
   filters: any, 
   setFilters: (f: any) => void,
-  onSearch: (q: string) => void 
+  onSearch: (q: string) => void,
+  availableAreas?: any[],
+  availableProjects?: any[],
+  availablePeople?: any[],
+  availableSources?: any[]
 }) => {
   const primaryStatuses = ['new', 'all', 'triaged', 'converted', 'requests'];
 
@@ -34,6 +42,7 @@ export const InboxFilters = ({
     { id: 'needs_clarification', label: 'Clarification' },
     { id: 'completed', label: 'Completed' },
     { id: 'failed', label: 'Failed' },
+    { id: 'test', label: 'Testes' },
     { id: 'archived', label: 'Arquivados' }
   ];
 
@@ -96,8 +105,8 @@ export const InboxFilters = ({
         </div>
       )}
 
-      {/* 3. Advanced Filters (Type / Priority / Date Range) */}
-      <div className="flex flex-wrap items-center gap-4 px-2 py-1 border-t border-white/5 pt-3">
+      {/* 3. Advanced Filters (Type / Priority / Area / Project / Person / Source / Origin / Date Range) */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-2 py-2 border-t border-white/5 pt-3 w-full">
          <div className="flex items-center gap-1.5">
             <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Tipo:</span>
             <select 
@@ -129,8 +138,84 @@ export const InboxFilters = ({
             </select>
          </div>
 
+         {/* Area Dropdown */}
+         <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Área:</span>
+            <select 
+              value={filters.area || 'all'} 
+              onChange={(e) => setFilters({ ...filters, area: e.target.value })}
+              className="bg-transparent border-none text-[10px] font-bold text-white/60 focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none max-w-[120px] truncate"
+            >
+              <option value="all" className="bg-[#020617]">Todas</option>
+              {availableAreas.map(a => (
+                <option key={a.id} value={a.id} className="bg-[#020617]">{a.name}</option>
+              ))}
+            </select>
+         </div>
+
+         {/* Project Dropdown */}
+         <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Projeto:</span>
+            <select 
+              value={filters.project || 'all'} 
+              onChange={(e) => setFilters({ ...filters, project: e.target.value })}
+              className="bg-transparent border-none text-[10px] font-bold text-white/60 focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none max-w-[120px] truncate"
+            >
+              <option value="all" className="bg-[#020617]">Todos</option>
+              {availableProjects.map(p => (
+                <option key={p.id} value={p.id} className="bg-[#020617]">{p.name}</option>
+              ))}
+            </select>
+         </div>
+
+         {/* Person Dropdown */}
+         <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Pessoa:</span>
+            <select 
+              value={filters.person || 'all'} 
+              onChange={(e) => setFilters({ ...filters, person: e.target.value })}
+              className="bg-transparent border-none text-[10px] font-bold text-white/60 focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none max-w-[120px] truncate"
+            >
+              <option value="all" className="bg-[#020617]">Todas</option>
+              {availablePeople.map(p => (
+                <option key={p.id} value={p.id} className="bg-[#020617]">{p.name}</option>
+              ))}
+            </select>
+         </div>
+
+         {/* Source Dropdown */}
+         <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Fonte:</span>
+            <select 
+              value={filters.source || 'all'} 
+              onChange={(e) => setFilters({ ...filters, source: e.target.value })}
+              className="bg-transparent border-none text-[10px] font-bold text-white/60 focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none max-w-[120px] truncate"
+            >
+              <option value="all" className="bg-[#020617]">Todas</option>
+              {availableSources.map(s => (
+                <option key={s.id} value={s.id} className="bg-[#020617]">{s.name}</option>
+              ))}
+            </select>
+         </div>
+
+         {/* Origin/Channel Dropdown */}
+         <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Origem:</span>
+            <select 
+              value={filters.origin || 'all'} 
+              onChange={(e) => setFilters({ ...filters, origin: e.target.value })}
+              className="bg-transparent border-none text-[10px] font-bold text-white/60 focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none"
+            >
+              <option value="all" className="bg-[#020617]">Todas</option>
+              <option value="whatsapp" className="bg-[#020617]">WhatsApp</option>
+              <option value="voice" className="bg-[#020617]">Voz</option>
+              <option value="routine" className="bg-[#020617]">Rotina / Cron</option>
+              <option value="system" className="bg-[#020617]">Sistema / UI</option>
+            </select>
+         </div>
+
          {/* Required Filter by Date Range */}
-         <div className="flex items-center gap-1.5 ml-auto">
+         <div className="flex items-center gap-1.5 sm:ml-auto">
             <Calendar size={10} className="text-white/20" />
             <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Data:</span>
             <select 

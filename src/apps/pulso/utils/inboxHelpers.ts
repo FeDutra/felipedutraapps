@@ -12,6 +12,9 @@ export const inboxHelpers = {
       if (filters.type && filters.type !== 'all' && item.type !== filters.type) return false;
       if (filters.priority && filters.priority !== 'all' && item.priority !== filters.priority) return false;
       if (filters.area && filters.area !== 'all' && item.areaRef !== filters.area) return false;
+      if (filters.project && filters.project !== 'all' && (item as any).projectRef !== filters.project) return false;
+      if (filters.person && filters.person !== 'all' && !((item as any).ownerRefs || []).includes(filters.person)) return false;
+      if (filters.source && filters.source !== 'all' && (item as any).sourceRef !== filters.source) return false;
       if (filters.origin && filters.origin !== 'all' && item.originChannel !== filters.origin) return false;
       
       if (filters.dateRange && filters.dateRange !== 'all') {

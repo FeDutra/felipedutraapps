@@ -1,9 +1,17 @@
 'use client';
 
 import React from 'react';
-import { inboxService, requestsService } from '../services/pulsoService';
+import { 
+  inboxService, 
+  requestsService,
+  areasService,
+  projectsService,
+  peopleService,
+  sourcesService
+} from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
 import { AlertCircle } from 'lucide-react';
+import { safeConvertToDate } from '../utils/formatters';
 import { inboxHelpers } from '../utils/inboxHelpers';
 import { InboxItem, PulsoRequest } from '../types/pulso.types';
 import { InboxHeader } from '../components/inbox/InboxHeader';
@@ -30,11 +38,22 @@ export default function InboxPage() {
   const [selectedRequest, setSelectedRequest] = React.useState<PulsoRequest | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  
+  const [areas, setAreas] = React.useState<any[]>([]);
+  const [projects, setProjects] = React.useState<any[]>([]);
+  const [people, setPeople] = React.useState<any[]>([]);
+  const [sources, setSources] = React.useState<any[]>([]);
+
   const [filters, setFilters] = React.useState({
     status: 'new',
     type: 'all',
     priority: 'all',
     area: 'all',
+    project: 'all',
+    person: 'all',
+    source: 'all',
+    origin: 'all',
+    dateRange: 'all',
     requestStatus: 'active' // sub-filter default initialized
   });
   const [feedback, setFeedback] = React.useState<{ message: string, type: 'success' | 'error' } | null>(null);
@@ -48,14 +67,22 @@ export default function InboxPage() {
     setLoading(true);
     try {
       await authService.ensurePulsoAuthReady();
-      const [inboxData, requestsData, rawData] = await Promise.all([
+      const [inboxData, requestsData, rawData, allAreas, allProjects, allPeople, allSources] = await Promise.all([
         inboxService.getAll(),
         requestsService.getRequests(100, true), // Fetch history inclusive of archived tests
-        requestsService.getRawRequests(20)
+        requestsService.getRawRequests(20),
+        areasService.getAll().catch(() => []),
+        projectsService.getAll().catch(() => []),
+        peopleService.getAll().catch(() => []),
+        sourcesService.getAll().catch(() => [])
       ]);
       setItems([...inboxData]);
       setRequests([...requestsData]);
       setRawDocs([...rawData]);
+      setAreas([...allAreas]);
+      setProjects([...allProjects]);
+      setPeople([...allPeople]);
+      setSources([...allSources]);
     } catch (err: any) {
       console.error('Inbox load error:', err);
       showFeedback(err.message || 'Erro ao carregar itens do Inbox', 'error');
@@ -80,18 +107,28 @@ export default function InboxPage() {
     return requests.filter(r => {
       if (!r) return false;
       
+      // Test filter detection
+      const titleStr = (r.title || '').toLowerCase();
+      const dkStr = (r.dedupeKey || '').toLowerCase();
+      const summaryStr = (r.summary || '').toLowerCase();
+      const isTestReq = (r as any).isTest || titleStr.includes('teste') || dkStr.includes('teste') || summaryStr.includes('teste');
+
       // 1. Sub-filter matching logic
       const reqSt = filters.requestStatus || 'active';
       if (reqSt === 'active') {
         if (r.archived) return false;
+        if (isTestReq) return false; // Hide tests from default active view
         const activeStatuses = ['requested', 'running', 'needs_approval', 'needs_clarification'];
         if (!activeStatuses.includes(r.status)) return false;
+      } else if (reqSt === 'test') {
+        if (!isTestReq) return false; // Show ONLY tests under tests sub-filter
       } else if (reqSt === 'archived') {
         if (!r.archived) return false;
       } else {
         // Direct status filter (running, needs_approval, needs_clarification, completed, etc)
         if (r.status !== reqSt) return false;
         if (r.archived) return false;
+        if (isTestReq) return false; // Hide tests from status views
       }
 
       // 2. Type matching logic
@@ -108,20 +145,75 @@ export default function InboxPage() {
         if ((r.priority || 'medium') !== filters.priority) return false;
       }
 
-      // 4. Safe Textual search mapping
+      // 4. Area matching logic
+      if (filters.area && filters.area !== 'all') {
+        const areaRefVal = r.areaRef || r.payload?.areaRef || r.result?.areaRef;
+        if (areaRefVal !== filters.area) return false;
+      }
+
+      // 5. Project matching logic
+      if (filters.project && filters.project !== 'all') {
+        const projectRefVal = r.projectRef || r.payload?.projectRef || r.result?.projectRef;
+        if (projectRefVal !== filters.project) return false;
+      }
+
+      // 6. Person matching logic
+      if (filters.person && filters.person !== 'all') {
+        const matchesPerson = r.createdById === filters.person || 
+                              r.requestedBy === filters.person || 
+                              r.payload?.personRef === filters.person ||
+                              (Array.isArray(r.payload?.ownerRefs) && r.payload.ownerRefs.includes(filters.person));
+        if (!matchesPerson) return false;
+      }
+
+      // 7. Source matching logic
+      if (filters.source && filters.source !== 'all') {
+        const matchesSource = r.sourceRef === filters.source || 
+                              r.payload?.sourceRef === filters.source || 
+                              r.result?.sourceRef === filters.source;
+        if (!matchesSource) return false;
+      }
+
+      // 8. Origin matching logic
+      if (filters.origin && filters.origin !== 'all') {
+        const originVal = r.origin?.channel || (r as any).originChannel || (r as any).channel;
+        if (originVal !== filters.origin) return false;
+      }
+
+      // 9. Date Range recency logic
+      if (filters.dateRange && filters.dateRange !== 'all') {
+        const dVal = r.requestedAt || (r as any).createdAt || r.updatedAt || r.processedAt;
+        const dateObj = safeConvertToDate(dVal);
+        if (!dateObj) return false;
+        
+        const now = new Date();
+        if (filters.dateRange === 'today') {
+          if (dateObj.toDateString() !== now.toDateString()) return false;
+        } else if (filters.dateRange === '7d') {
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (dateObj < sevenDaysAgo) return false;
+        } else if (filters.dateRange === '30d') {
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (dateObj < thirtyDaysAgo) return false;
+        } else if (filters.dateRange === 'month') {
+          if (dateObj.getMonth() !== now.getMonth() || dateObj.getFullYear() !== now.getFullYear()) return false;
+        }
+      }
+
+      // 10. Safe Textual search mapping
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
-      const titleStr = r.title || '';
-      const summaryStr = r.summary || '';
-      const dedupeStr = r.dedupeKey || '';
-      const refStr = r.result?.entityRef || r.result?.matResult?.entityRef || '';
-      const typeStr = r.requestType || '';
+      const titleStrLower = r.title || '';
+      const summaryStrLower = r.summary || '';
+      const dedupeStrLower = r.dedupeKey || '';
+      const refStrLower = r.result?.entityRef || r.result?.matResult?.entityRef || '';
+      const typeStrLower = r.requestType || '';
 
-      return titleStr.toLowerCase().includes(q) || 
-             summaryStr.toLowerCase().includes(q) ||
-             dedupeStr.toLowerCase().includes(q) ||
-             refStr.toLowerCase().includes(q) ||
-             typeStr.toLowerCase().includes(q);
+      return titleStrLower.toLowerCase().includes(q) || 
+             summaryStrLower.toLowerCase().includes(q) ||
+             dedupeStrLower.toLowerCase().includes(q) ||
+             refStrLower.toLowerCase().includes(q) ||
+             typeStrLower.toLowerCase().includes(q);
     });
   }, [requests, filters, searchQuery]);
 
@@ -258,6 +350,10 @@ export default function InboxPage() {
         filters={filters} 
         setFilters={setFilters} 
         onSearch={setSearchQuery} 
+        availableAreas={areas}
+        availableProjects={projects}
+        availablePeople={people}
+        availableSources={sources}
       />
 
       {filters.status === 'requests' && (

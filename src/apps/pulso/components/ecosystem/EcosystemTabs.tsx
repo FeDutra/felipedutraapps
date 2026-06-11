@@ -21,14 +21,14 @@ export const EcosystemTabs = ({
   tabs: Tab[]
 }) => {
   return (
-    <div className="flex items-center gap-1 bg-white/2 p-1 border border-white/5 rounded-2xl">
+    <div className="flex items-center gap-1 bg-white/2 p-1 border border-white/5 rounded-2xl overflow-x-auto no-scrollbar flex-nowrap w-full max-w-full">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            className={`relative px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`relative px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
               isActive ? 'text-white' : 'text-white/30 hover:text-white/60'
             }`}
           >

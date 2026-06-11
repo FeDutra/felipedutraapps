@@ -234,21 +234,25 @@ export default function LivePage() {
     const type = req.requestType || '';
     const title = req.title || req.summary || '';
     
-    switch (req.status) {
-      case 'requested':
-        desc = `Registrou solicitação para: ${title || type}`;
-        break;
-      case 'needs_approval':
-        desc = `Solicitou sua aprovação para: ${title || type}`;
-        break;
-      case 'completed':
-        desc = `Concluiu e materializou: ${title || type}`;
-        break;
-      case 'failed':
-        desc = `Falhou ao processar: ${title || type}`;
-        break;
-      default:
-        desc = `Registrou movimentação em solicitação: ${title || type}`;
+    if (type === 'conversation_command') {
+      desc = `Comando conversacional recebido: "${title}"`;
+    } else {
+      switch (req.status) {
+        case 'requested':
+          desc = `Registrou solicitação para: ${title || type}`;
+          break;
+        case 'needs_approval':
+          desc = `Solicitou sua aprovação para: ${title || type}`;
+          break;
+        case 'completed':
+          desc = `Concluiu e materializou: ${title || type}`;
+          break;
+        case 'failed':
+          desc = `Falhou ao processar: ${title || type}`;
+          break;
+        default:
+          desc = `Registrou movimentação em solicitação: ${title || type}`;
+      }
     }
     feedItems.push({
       id: req.id || `feed-req-${Math.random()}`,
@@ -360,9 +364,12 @@ export default function LivePage() {
   }
 
   // Handle conversational input submission
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const rawMsg = textToSend || inputMessage;
     if (!rawMsg.trim()) return;
+
+    // Clear input
+    setInputMessage('');
 
     // Append Fê's message
     const userMsg: Message = {
@@ -372,86 +379,119 @@ export default function LivePage() {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMsg]);
-    setInputMessage('');
     setIsTyping(true);
 
-    // Simulate Lótus response with real data binding
-    setTimeout(() => {
-      let responseText = '';
-      const textNormalized = rawMsg.toLowerCase().trim();
+    try {
+      const currentUser = authService.getCurrentUser();
+      const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
 
-      if (textNormalized.includes('dia') || textNormalized.includes('resumo') || textNormalized.includes('como está') || textNormalized.includes('status')) {
-        responseText = `Fê, aqui está o resumo operacional do momento:
+      // Build the Request object matching Step 3
+      const reqPayload = {
+        requestType: 'conversation_command' as any,
+        title: rawMsg.length > 80 ? rawMsg.substring(0, 80) + '...' : rawMsg,
+        summary: rawMsg,
+        status: 'requested' as any,
+        priority: 'medium' as any,
+        requestedBy: userRef,
+        requestedAt: new Date(),
+        updatedAt: new Date(),
+        origin: 'lotus_live' as any,
+        source: 'pulso_live' as any
+      };
+
+      const newRequest = await requestsService.createRequest(reqPayload);
+
+      // Instantly inject the new request to the active state so the feed shows it immediately
+      if (state) {
+        setState((prev: any) => {
+          if (!prev) return prev;
+          const updatedRequests = [newRequest, ...(prev.allRequests || [])];
+          return {
+            ...prev,
+            allRequests: updatedRequests
+          };
+        });
+      }
+
+      // Simulate Lótus response with real data binding
+      setTimeout(() => {
+        let responseText = '';
+        const textNormalized = rawMsg.toLowerCase().trim();
+
+        if (textNormalized.includes('dia') || textNormalized.includes('resumo') || textNormalized.includes('como está') || textNormalized.includes('status')) {
+          responseText = `Fê, aqui está o resumo operacional do momento:
 • Você possui **${feTasks.length}** tarefas ativas atribuídas diretamente a você.
 • Existem **${activeProjects.length}** projetos ativos em andamento nas suas Áreas.
 • Foram identificadas **${totalRisksCount}** travas operacionais (atrasos, alertas ou projetos sem foco definido).
 • Há **${pendingInbox.length}** novos itens capturados e aguardando triagem.
 • O status de batimento dos sistemas e crons está estável (Metabolismo regular com ${allRoutines.length} rotinas ativas).`;
-      } 
-      else if (textNormalized.includes('depende de mim') || textNormalized.includes('minhas tarefas') || textNormalized.includes('tarefa')) {
-        responseText = `Achei as seguintes tarefas ativas sob sua responsabilidade direta:
+        } 
+        else if (textNormalized.includes('depende de mim') || textNormalized.includes('minhas tarefas') || textNormalized.includes('tarefa')) {
+          responseText = `Achei as seguintes tarefas ativas sob sua responsabilidade direta:
 ${feTasks.length > 0 
   ? feTasks.slice(0, 8).map(t => `• **${t.title || t.name}** (Prioridade: ${t.priority || 'média'})`).join('\n')
   : '• Nenhuma tarefa ativa sob sua responsabilidade direta no momento. Bom trabalho!'}`;
-      }
-      else if (textNormalized.includes('travad') || textNormalized.includes('risco') || textNormalized.includes('alerta') || textNormalized.includes('problema')) {
-        responseText = `Identifiquei as seguintes travas operacionais pendentes de resolução:
+        }
+        else if (textNormalized.includes('travad') || textNormalized.includes('risco') || textNormalized.includes('alerta') || textNormalized.includes('problema')) {
+          responseText = `Identifiquei as seguintes travas operacionais pendentes de resolução:
 ${attentionSignals.length > 0
   ? attentionSignals.slice(0, 6).map(sig => `• **${sig.title}**: ${sig.subtitle}`).join('\n')
   : '• Nenhuma trava crítica encontrada. Nossos sistemas e prazos estão sob controle.'}`;
-      }
-      else if (textNormalized.includes('lótus fez') || textNormalized.includes('fez') || textNormalized.includes('recent') || textNormalized.includes('feed') || textNormalized.includes('atividade')) {
-        responseText = `Minhas últimas ações e atualizações registradas no PULSO:
+        }
+        else if (textNormalized.includes('lótus fez') || textNormalized.includes('fez') || textNormalized.includes('recent') || textNormalized.includes('feed') || textNormalized.includes('atividade')) {
+          responseText = `Minhas últimas ações e atualizações registradas no PULSO:
 ${sortedFeed.length > 0
   ? sortedFeed.map(f => `• **[${f.system}]** ${f.event}`).join('\n')
   : '• Nenhuma ação recente registrada nos logs de atividades.'}`;
-      }
-      else if (textNormalized.includes('projetos') || textNormalized.includes('vivos') || textNormalized.includes('projeto')) {
-        responseText = `Aqui estão os projetos ativos no ecossistema:
+        }
+        else if (textNormalized.includes('projetos') || textNormalized.includes('vivos') || textNormalized.includes('projeto')) {
+          responseText = `Aqui estão os projetos ativos no ecossistema:
 ${activeProjects.length > 0
   ? activeProjects.slice(0, 6).map(p => `• **${p.name}**\n  *Próximo passo:* ${p.nextStep || '⚠️ Sem próximo passo configurado'}`).join('\n\n')
   : '• Nenhum projeto ativo registrado no momento.'}`;
-      }
-      else if (textNormalized.includes('agente') || textNormalized.includes('metabolismo') || textNormalized.includes('cron') || textNormalized.includes('rotina')) {
-        responseText = `Situação atual dos nossos agentes e crons de automação:
+        }
+        else if (textNormalized.includes('agente') || textNormalized.includes('metabolismo') || textNormalized.includes('cron') || textNormalized.includes('rotina')) {
+          responseText = `Situação atual dos nossos agentes e crons de automação:
 • **Agentes Operacionais (${allAgents.length})**: ${allAgents.map(ag => `${ag.name} (${ag.status === 'active' ? '🟢 Operando' : '⚪ Inativo'})`).join(', ')}
 • **Rotinas Agendadas (${allRoutines.length})**: ${brokenRoutines.length > 0 ? `⚠️ ${brokenRoutines.length} em falha` : '🟢 Saudáveis'}
 • **Mensagens no Outbox**: Sincronização operacional rodando de forma estável.`;
-      }
-      else if (textNormalized.includes('fonte') || textNormalized.includes('notion') || textNormalized.includes('obsidian') || textNormalized.includes('whatsapp') || textNormalized.includes('calendar') || textNormalized.includes('gmail') || textNormalized.includes('sheets')) {
-        responseText = `Fontes de dados sintonizadas e conectadas:
+        }
+        else if (textNormalized.includes('fonte') || textNormalized.includes('notion') || textNormalized.includes('obsidian') || textNormalized.includes('whatsapp') || textNormalized.includes('calendar') || textNormalized.includes('gmail') || textNormalized.includes('sheets')) {
+          responseText = `Fontes de dados sintonizadas e conectadas:
 ${monitoredSources.map(s => `• **${s.name}**: ${s.connected ? '🟢 Ativo' : '⚪ Aguardando Fonte'}`).join('\n')}`;
-      }
-      else if (textNormalized.includes('aprovar') || textNormalized.includes('reprovar') || textNormalized.includes('request') || textNormalized.includes('solicita')) {
-        responseText = `Você possui **${pendingApprovals.length}** solicitações que exigem aprovação manual para materialização no ecossistema:
+        }
+        else if (textNormalized.includes('aprovar') || textNormalized.includes('reprovar') || textNormalized.includes('request') || textNormalized.includes('solicita')) {
+          responseText = `Você possui **${pendingApprovals.length}** solicitações que exigem aprovação manual para materialização no ecossistema:
 ${pendingApprovals.length > 0
   ? pendingApprovals.map(req => `• **[${req.requestType}]** ${req.title || req.summary} (ID: ${req.id})`).join('\n')
   : '• Nenhuma solicitação pendente de aprovação.'}
 Você pode aprovar clicando em "Revisar" nos cartões de Próxima Ação ou acessando a tela de Registro da Lótus.`;
-      }
-      else {
-        responseText = `Comando recebido: "${rawMsg}"
+        }
+        else {
+          responseText = `Registrei o comando "${rawMsg}" para processamento operacional. Como estamos na versão inicial, a execução automática da Lótus está em desenvolvimento.`;
+        }
 
-Como estamos na versão inicial (text-first experimental), as ações diretas via linguagem natural ainda não estão conectadas à execução da Lótus.
-Use um dos comandos sugeridos abaixo para ver os dados reais do seu ecossistema:
-- "Como está meu dia?" (Resumo operacional)
-- "O que depende de mim?" (Suas tarefas ativas)
-- "O que está travado?" (Listar riscos e atrasos)
-- "O que a Lótus fez?" (Feed de atividade recente)
-- "Quais projetos estão vivos?" (Frentes em andamento)
-- "Quais agentes estão trabalhando?" (Status do metabolismo)
-- "Quais fontes foram consultadas?" (Conectores sintonizados)`;
-      }
+        const lotusMsg: Message = {
+          id: `lotus-msg-${Date.now()}`,
+          sender: 'lotus',
+          text: responseText,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, lotusMsg]);
+        setIsTyping(false);
+      }, 800);
 
-      const lotusMsg: Message = {
-        id: `lotus-msg-${Date.now()}`,
+    } catch (err: any) {
+      console.error('Error saving conversation request:', err);
+      const lotusErrorMsg: Message = {
+        id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
-        text: responseText,
+        text: `Falha ao registrar o comando no barramento: ${err?.message || 'Erro de persistência'}.`,
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, lotusMsg]);
+      setMessages(prev => [...prev, lotusErrorMsg]);
       setIsTyping(false);
-    }, 800);
+    }
   };
 
   return (

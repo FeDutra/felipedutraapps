@@ -14,11 +14,11 @@ export const getRepository = (): IPulsoRepository => {
   if (repository) return repository;
   
   if (DATA_MODE === 'firestore' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-    // console.log('PULSO: Modo Firestore Ativo');
+    console.log('PULSO: Modo Firestore Ativo. API KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
     const { FirestorePulsoRepository } = require("./firestorePulsoRepository");
     repository = new FirestorePulsoRepository();
   } else {
-    // console.log('PULSO: Modo Mock Ativo');
+    console.log('PULSO: Modo Mock Ativo. DATA_MODE:', DATA_MODE, 'API_KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
     repository = new MockPulsoRepository();
   }
   return repository;

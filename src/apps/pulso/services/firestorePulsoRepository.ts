@@ -58,16 +58,17 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       
       if (isIndexError) {
         console.warn(`Firestore: Query missing index for ${colRef.path}. Falling back to un-ordered query.`);
-        const qSimple = query(colRef, ...baseConstraints, limit(limitCount));
+        const qSimple = query(colRef, ...baseConstraints); // No limit during Firestore query
         const snapSimple = await getDocs(qSimple);
         const results = snapSimple.docs.map(d => this.toData<T>(d));
         
         // Manual sort in memory
-        return results.sort((a: any, b: any) => {
+        const sorted = results.sort((a: any, b: any) => {
           const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
           const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
           return dateB - dateA;
         });
+        return sorted.slice(0, limitCount);
       }
       throw error;
     }
@@ -497,6 +498,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
   }
 
   async getRequests(limitCount = 20, includeArchived?: boolean) {
+    console.log('FirestorePulsoRepository: getRequests called with limitCount:', limitCount, 'includeArchived:', includeArchived, 'Path:', firestorePaths.requests());
     const constraints: any[] = [];
     if (!includeArchived) {
       constraints.push(where("archived", "==", false));
@@ -504,16 +506,21 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     try {
       const q = query(collection(db!, firestorePaths.requests()), ...constraints, orderBy("requestedAt", "desc"), limit(limitCount));
       const snap = await getDocs(q);
-      return snap.docs.map(d => this.toData<PulsoRequest>(d));
+      const docs = snap.docs.map(d => this.toData<PulsoRequest>(d));
+      console.log('FirestorePulsoRepository: getRequests successfully fetched', docs.length, 'documents with index query');
+      return docs;
     } catch (error: any) {
-      const qSimple = query(collection(db!, firestorePaths.requests()), ...constraints, limit(limitCount));
+      console.warn('FirestorePulsoRepository: getRequests index query failed, falling back to simple query. Error:', error);
+      const qSimple = query(collection(db!, firestorePaths.requests()), ...constraints); // No limit during Firestore query
       const snapSimple = await getDocs(qSimple);
       const results = snapSimple.docs.map(d => this.toData<PulsoRequest>(d));
-      return results.sort((a: any, b: any) => {
+      console.log('FirestorePulsoRepository: getRequests successfully fetched', results.length, 'documents with simple fallback query');
+      const sorted = results.sort((a: any, b: any) => {
         const tA = a.requestedAt?.getTime?.() || (a as any).createdAt?.getTime?.() || a.updatedAt?.getTime?.() || 0;
         const tB = b.requestedAt?.getTime?.() || (b as any).createdAt?.getTime?.() || b.updatedAt?.getTime?.() || 0;
         return tB - tA;
       });
+      return sorted.slice(0, limitCount);
     }
   }
 
@@ -524,14 +531,15 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       const snap = await getDocs(q);
       return snap.docs.map(d => this.toData<PulsoRequest>(d));
     } catch (error: any) {
-      const qSimple = query(collection(db!, firestorePaths.requests()), ...constraints, limit(50));
+      const qSimple = query(collection(db!, firestorePaths.requests()), ...constraints); // No limit during query
       const snapSimple = await getDocs(qSimple);
       const results = snapSimple.docs.map(d => this.toData<PulsoRequest>(d));
-      return results.sort((a: any, b: any) => {
+      const sorted = results.sort((a: any, b: any) => {
         const tA = a.requestedAt?.getTime?.() || (a as any).createdAt?.getTime?.() || a.updatedAt?.getTime?.() || 0;
         const tB = b.requestedAt?.getTime?.() || (b as any).createdAt?.getTime?.() || b.updatedAt?.getTime?.() || 0;
         return tB - tA;
       });
+      return sorted.slice(0, 50);
     }
   }
 
@@ -550,7 +558,15 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       requestedAt: serverTimestamp(),
       updatedAt: serverTimestamp() 
     };
-    await setDoc(doc(db!, firestorePaths.request(id)), data);
+    
+    console.log('FirestorePulsoRepository: Attempting saveRequest with ID:', id, 'Path:', firestorePaths.request(id), 'Data:', data);
+    try {
+      await setDoc(doc(db!, firestorePaths.request(id)), data);
+      console.log('FirestorePulsoRepository: Successfully wrote document:', id);
+    } catch (err) {
+      console.error('FirestorePulsoRepository: Error in setDoc for saveRequest:', err);
+      throw err;
+    }
     return { ...data, requestedAt: new Date(), updatedAt: new Date() } as any;
   }
 
