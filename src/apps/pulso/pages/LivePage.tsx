@@ -120,6 +120,10 @@ interface Message {
   };
   /** v1.4: the request status for showing handoff state in the bubble */
   handoffStatus?: string;
+  /** v1.5: pulso_requests document ID — needed for response registration */
+  requestId?: string;
+  /** v1.5: the raw command text the user typed — used for copy package */
+  originalCommand?: string;
 }
 
 export default function LivePage() {
@@ -138,6 +142,14 @@ export default function LivePage() {
   ]);
   const [isTyping, setIsTyping] = React.useState(false);
   const [copiedPromptId, setCopiedPromptId] = React.useState<string | null>(null);
+  /** v1.5: state for full package copy feedback */
+  const [copiedPackageId, setCopiedPackageId] = React.useState<string | null>(null);
+  /** v1.5: which message has the register-response panel open */
+  const [registeringForId, setRegisteringForId] = React.useState<string | null>(null);
+  /** v1.5: draft text for the manual OpenClaw response */
+  const [openclawDraft, setOpenclawDraft] = React.useState('');
+  /** v1.5: submission in-progress flag */
+  const [submittingResponse, setSubmittingResponse] = React.useState(false);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   const handleCopyPrompt = (msgId: string, prompt: string) => {
@@ -145,6 +157,98 @@ export default function LivePage() {
       setCopiedPromptId(msgId);
       setTimeout(() => setCopiedPromptId(null), 2000);
     }).catch(() => {/* clipboard unavailable */});
+  };
+
+  /** v1.5: Builds full handoff package JSON for OpenClaw consumption */
+  const buildHandoffPackage = (msg: Message): string => {
+    return JSON.stringify({
+      meta: {
+        version: 'v1.5',
+        generatedAt: new Date().toISOString(),
+        mode: 'proposal_only',
+        securityConstraints: {
+          canExecuteNow: false,
+          noDirectMutations: true,
+          noExternalMessages: true,
+          responseTarget: `pulso_requests/${msg.requestId}.openclawResult`,
+          onlyAllowedActions: ['read', 'create_proposal', 'update_proposal']
+        }
+      },
+      request: {
+        id: msg.requestId || null,
+        command: msg.originalCommand || msg.text,
+        origin: 'lotus_live',
+        source: 'pulso_live'
+      },
+      handoff: msg.interpretation?.handoff ? {
+        target: msg.interpretation.handoff.target,
+        intent: msg.interpretation.handoff.intent,
+        domain: msg.interpretation.handoff.domain,
+        riskLevel: msg.interpretation.handoff.riskLevel,
+        actionType: msg.interpretation.handoff.actionType,
+        requiresHumanConfirmation: msg.interpretation.handoff.requiresHumanConfirmation,
+        entitiesMentioned: msg.interpretation.handoff.entitiesMentioned,
+        suggestedNextStep: msg.interpretation.handoff.suggestedNextStep,
+        executionPrompt: msg.interpretation.handoff.executionPrompt
+      } : null,
+      responseSchema: {
+        processedBy: 'openclaw',
+        responseText: '<string: resposta em linguagem natural>',
+        statusTransition: 'proposal_ready | waiting_user_approval | completed | failed',
+        sourcesConsulted: ['<array de strings>'],
+        proposedMutation: null,
+        auditLog: {
+          model: '<opcional: gemini-2.0-flash ou similar>',
+          skillUsed: '<opcional: nome da skill usada>',
+          confidence: 'high | medium | low'
+        }
+      }
+    }, null, 2);
+  };
+
+  const handleCopyPackage = (msgId: string, msg: Message) => {
+    const pkg = buildHandoffPackage(msg);
+    navigator.clipboard.writeText(pkg).then(() => {
+      setCopiedPackageId(msgId);
+      setTimeout(() => setCopiedPackageId(null), 2500);
+    }).catch(() => {/* clipboard unavailable */});
+  };
+
+  /** v1.5: Registers OpenClaw's response back into pulso_requests */
+  const handleRegisterOpenClawResponse = async (msg: Message) => {
+    if (!openclawDraft.trim() || !msg.requestId) return;
+    setSubmittingResponse(true);
+    try {
+      const needsApproval = msg.interpretation?.handoff?.requiresHumanConfirmation ?? false;
+      const newStatus = needsApproval ? 'waiting_user_approval' : 'proposal_ready';
+      const result = {
+        processedBy: 'openclaw',
+        processedAt: new Date(),
+        responseText: openclawDraft.trim(),
+        statusTransition: newStatus,
+        auditLog: {
+          confidence: 'medium' as const,
+          notes: 'Registrado manualmente via Lótus Live — retorno assistido v1.5'
+        }
+      };
+      await requestsService.updateRequest(msg.requestId, {
+        openclawResult: result as any,
+        status: newStatus as any,
+        updatedAt: new Date()
+      });
+      // Update message in local state — show response immediately
+      setMessages(prev => prev.map(m =>
+        m.id === msg.id
+          ? { ...m, openclawResult: result, handoffStatus: newStatus, text: result.responseText }
+          : m
+      ));
+      setRegisteringForId(null);
+      setOpenclawDraft('');
+    } catch (err: any) {
+      console.error('[v1.5] Error registering OpenClaw response:', err);
+    } finally {
+      setSubmittingResponse(false);
+    }
   };
 
   // Auto-scroll chat to bottom
@@ -205,7 +309,9 @@ export default function LivePage() {
             timestamp: safeConvertToDate(req.updatedAt) || reqTime,
             interpretation: req.interpretation,
             openclawResult: req.openclawResult || undefined,
-            handoffStatus: req.status
+            handoffStatus: req.status,
+            requestId: req.id || undefined,
+            originalCommand: req.summary || req.title || undefined
           });
         });
 
@@ -536,7 +642,9 @@ export default function LivePage() {
           sender: 'lotus',
           text: interpretation.suggestedReply,
           timestamp: new Date(),
-          interpretation
+          interpretation,
+          requestId: newRequest?.id || undefined,
+          originalCommand: rawMsg
         };
         setMessages(prev => [...prev, lotusMsg]);
         setIsTyping(false);
@@ -669,13 +777,75 @@ export default function LivePage() {
                         </div>
                       )}
 
-                      {/* v1.4: Handoff status badge — shown when interpretation exists but no openclawResult yet */}
+                      {/* v1.5: Handoff status badge + Copy Package + Register Response */}
                       {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (
-                        <div className="mt-2 flex items-center gap-1.5">
-                          <div className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-                          <span className="text-[8px] text-amber-400/70 font-semibold uppercase tracking-widest">
-                            Pacote pronto — aguardando OpenClaw
-                          </span>
+                        <div className="mt-2 space-y-2">
+                          {/* Status line */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+                              <span className="text-[8px] text-amber-400/70 font-semibold uppercase tracking-widest">
+                                Pacote pronto — aguardando OpenClaw
+                              </span>
+                            </div>
+                            {/* Copy full package button */}
+                            <button
+                              onClick={() => handleCopyPackage(msg.id, msg)}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/20 text-[8px] font-bold text-white/30 hover:text-indigo-400 transition-all"
+                              title="Copiar pacote completo para OpenClaw"
+                            >
+                              {copiedPackageId === msg.id ? (
+                                <><Check size={9} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
+                              ) : (
+                                <><Copy size={9} /><span>Copiar Pacote</span></>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Register response panel */}
+                          {registeringForId === msg.id ? (
+                            <div className="mt-1.5 space-y-1.5">
+                              <textarea
+                                value={openclawDraft}
+                                onChange={e => setOpenclawDraft(e.target.value)}
+                                placeholder="Cole aqui a resposta da OpenClaw (responseText)..."
+                                className="w-full text-[9px] text-white/70 bg-black/20 border border-white/10 focus:border-purple-500/30 rounded-lg px-3 py-2 resize-none outline-none placeholder-white/20 font-mono leading-relaxed transition-colors"
+                                rows={4}
+                                disabled={submittingResponse}
+                              />
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[7px] text-white/20 font-mono">→ {msg.requestId}</span>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
+                                    className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[8px] text-white/30 hover:text-white/60 transition-all"
+                                    disabled={submittingResponse}
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={() => handleRegisterOpenClawResponse(msg)}
+                                    disabled={!openclawDraft.trim() || submittingResponse}
+                                    className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-[8px] font-bold text-purple-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                  >
+                                    {submittingResponse ? (
+                                      <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
+                                    ) : (
+                                      <><Zap size={9} /><span>Registrar Resposta</span></>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setRegisteringForId(msg.id)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/20 text-[8px] font-bold text-purple-400/60 hover:text-purple-400 transition-all w-full justify-center"
+                            >
+                              <Zap size={9} />
+                              <span>Registrar Retorno da OpenClaw</span>
+                            </button>
+                          )}
                         </div>
                       )}
 

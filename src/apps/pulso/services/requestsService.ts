@@ -43,6 +43,13 @@ export const requestsService = {
   },
 
   /**
+   * v1.5: Partial update of any request fields — used for registering OpenClaw responses
+   */
+  updateRequest: async (id: string, data: Partial<PulsoRequest>) => {
+    return pulsoRepository.updateRequest(id, data);
+  },
+
+  /**
    * Archives a request (soft delete to hide tests or technical tasks)
    */
   archiveRequest: async (id: string) => {
