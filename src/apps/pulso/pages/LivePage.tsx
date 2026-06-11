@@ -31,7 +31,7 @@ import {
   Clock
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
-import { interpretIntent } from '../utils/intentInterpreter';
+import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -431,8 +431,20 @@ export default function LivePage() {
       const currentUser = authService.getCurrentUser();
       const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
 
-      // Interpret the command using deterministic matching
-      const interpretation = interpretIntent(rawMsg);
+      // Build context from current real state safely
+      const context = {
+        tasks: state?.allTasks || [],
+        projects: state?.allProjects || state?.activeProjects || [],
+        areas: state?.allAreas || [],
+        agents: state?.allAgents || [],
+        routines: state?.allRoutines || [],
+        requests: state?.allRequests || [],
+        logs: state?.allLogs || [],
+        sources: state?.allSources || []
+      };
+
+      // Interpret the command using deterministic matching and real data context
+      const interpretation = interpretLiveIntent(rawMsg, context);
 
       // Build the Request object matching Step 3 with interpretation block
       const reqPayload = {
@@ -594,9 +606,15 @@ export default function LivePage() {
                             <div>
                               <span className="font-semibold text-white/30">Domínio:</span> <span className="text-white/60">{msg.interpretation.domain}</span>
                             </div>
+                            <div>
+                              <span className="font-semibold text-white/30">Confirmação:</span> <span className="text-white/60">{msg.interpretation.requiresConfirmation ? 'Sim' : 'Não'}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="font-semibold text-white/30">Ação Executada:</span> <span className="text-white/60">Nenhuma, apenas leitura/proposta</span>
+                            </div>
                             {msg.interpretation.sourcesNeeded && msg.interpretation.sourcesNeeded.length > 0 && (
                               <div className="col-span-2">
-                                <span className="font-semibold text-white/30">Fontes Necessárias:</span> <span className="text-white/60">{msg.interpretation.sourcesNeeded.join(', ')}</span>
+                                <span className="font-semibold text-white/30">Fontes Consultadas:</span> <span className="text-white/60">{msg.interpretation.sourcesNeeded.join(', ')}</span>
                               </div>
                             )}
                           </div>
