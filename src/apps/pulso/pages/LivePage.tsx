@@ -69,6 +69,17 @@ const safeConvertToDate = (dateInput: any): Date | null => {
   return null;
 };
 
+// Lightweight inline markdown renderer: converts **bold** to <strong>
+const renderMarkdown = (text: string): React.ReactNode[] => {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-bold text-white/95">{part.slice(2, -2)}</strong>;
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+};
+
 interface Message {
   id: string;
   sender: 'user' | 'lotus';
@@ -577,7 +588,7 @@ export default function LivePage() {
                         ? 'bg-white/2 border-white/5 text-white/80' 
                         : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/15 text-white/95 shadow-md shadow-blue-950/20'
                     }`}>
-                      <div>{msg.text}</div>
+                      <div className="leading-relaxed">{renderMarkdown(msg.text)}</div>
                       
                       {isLotus && msg.interpretation && (
                         <div className="mt-3 pt-2.5 border-t border-white/5 space-y-2">
