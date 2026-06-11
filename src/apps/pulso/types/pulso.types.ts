@@ -123,7 +123,51 @@ export type RequestStatus =
   | 'completed'
   | 'failed'
   | 'cancelled'
-  | 'archived';
+  | 'archived'
+  // v1.4: Lótus Live → OpenClaw lifecycle
+  | 'queued_for_openclaw'
+  | 'picked_by_openclaw'
+  | 'proposal_ready'
+  | 'waiting_user_approval';
+
+
+/**
+ * @interface OpenClawResult
+ * @description Structured response written back by OpenClaw after processing a conversation_command handoff.
+ * Stored in pulso_requests[id].openclawResult. Never triggers automatic execution.
+ * v1.4 — Read-only response layer.
+ */
+export interface OpenClawResult {
+  processedBy: 'openclaw';
+  processedAt: Date;
+  /** Natural-language response to surface in the Lótus Live chat bubble */
+  responseText: string;
+  /** Ordered action plan, if applicable */
+  actionPlan?: {
+    steps: string[];
+    estimatedRisk: 'low' | 'medium' | 'high';
+    requiresConfirmation: boolean;
+  };
+  /** Firestore collections or external sources that were consulted */
+  sourcesConsulted?: string[];
+  /**
+   * Proposed mutation payload — only present for create_proposal / update_proposal / external_message_proposal.
+   * OpenClaw MUST NOT execute this automatically. It is a preview for human approval.
+   */
+  proposedMutation?: {
+    type: string;
+    payload: Record<string, any>;
+    previewLabel: string;
+  };
+  /** Status the OpenClaw recommends transitioning to */
+  statusTransition: RequestStatus;
+  auditLog: {
+    model?: string;
+    skillUsed?: string;
+    confidence: 'high' | 'medium' | 'low';
+    notes?: string;
+  };
+}
 
 export interface PulsoRequest {
   id: string;
@@ -157,6 +201,12 @@ export interface PulsoRequest {
   };
   createdByType?: ActorType;
   createdById?: string;
+  /**
+   * v1.4: OpenClaw response written back after processing a conversation_command handoff.
+   * Optional — only present after OpenClaw has consumed and responded to the handoff.
+   * Read by LivePage to display the result in the chat bubble.
+   */
+  openclawResult?: OpenClawResult;
 }
 
 export type ActorType = 'user' | 'agent' | 'system';

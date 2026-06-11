@@ -109,6 +109,17 @@ interface Message {
       executionPrompt: string;
     };
   };
+  /** v1.4: populated when OpenClaw has processed and responded to this handoff */
+  openclawResult?: {
+    processedBy: string;
+    responseText: string;
+    statusTransition: string;
+    sourcesConsulted?: string[];
+    proposedMutation?: { type: string; previewLabel: string; payload: any };
+    auditLog?: { model?: string; skillUsed?: string; confidence: string; notes?: string };
+  };
+  /** v1.4: the request status for showing handoff state in the bubble */
+  handoffStatus?: string;
 }
 
 export default function LivePage() {
@@ -180,15 +191,21 @@ export default function LivePage() {
             timestamp: reqTime
           });
           
-          const replyText = req.interpretation?.suggestedReply || 
-            `Registrei o comando "${req.summary || req.title}" para processamento operacional.`;
+          // v1.4: if OpenClaw already responded, use its responseText; otherwise fall back to local reply
+          const hasOpenClawResponse = !!req.openclawResult?.responseText;
+          const replyText = hasOpenClawResponse
+            ? req.openclawResult.responseText
+            : (req.interpretation?.suggestedReply || 
+               `Registrei o comando "${req.summary || req.title}" para processamento operacional.`);
           
           chatHistory.push({
             id: `lotus-${req.id || Math.random()}`,
             sender: 'lotus',
             text: replyText,
             timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-            interpretation: req.interpretation
+            interpretation: req.interpretation,
+            openclawResult: req.openclawResult || undefined,
+            handoffStatus: req.status
           });
         });
 
@@ -616,8 +633,55 @@ export default function LivePage() {
                     }`}>
                       <div className="leading-relaxed">{renderMarkdown(msg.text)}</div>
                       
+                      {/* v1.4: OpenClaw response block — shown when openclawResult is present */}
+                      {isLotus && msg.openclawResult && (
+                        <div className="mt-3 pt-2.5 border-t border-purple-500/10 space-y-2">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Zap size={9} className="text-purple-400" />
+                            <span className="text-[8px] font-black uppercase tracking-widest text-purple-400">OpenClaw respondeu</span>
+                            {msg.openclawResult.auditLog?.confidence && (
+                              <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${
+                                msg.openclawResult.auditLog.confidence === 'high'
+                                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                  : msg.openclawResult.auditLog.confidence === 'medium'
+                                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                  : 'bg-white/5 border-white/10 text-white/40'
+                              }`}>
+                                Confiança {msg.openclawResult.auditLog.confidence}
+                              </span>
+                            )}
+                          </div>
+                          {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
+                            <p className="text-[8px] text-white/30">
+                              <span className="font-semibold text-white/25">Fontes consultadas: </span>
+                              {msg.openclawResult.sourcesConsulted.join(', ')}
+                            </p>
+                          )}
+                          {msg.openclawResult.proposedMutation && (
+                            <div className="p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl">
+                              <p className="text-[8px] font-black uppercase tracking-widest text-amber-400 mb-1">Proposta de Ação</p>
+                              <p className="text-[9px] text-white/70">{msg.openclawResult.proposedMutation.previewLabel}</p>
+                            </div>
+                          )}
+                          {msg.openclawResult.auditLog?.skillUsed && (
+                            <p className="text-[8px] text-white/20 font-mono">skill: {msg.openclawResult.auditLog.skillUsed}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* v1.4: Handoff status badge — shown when interpretation exists but no openclawResult yet */}
+                      {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <div className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="text-[8px] text-amber-400/70 font-semibold uppercase tracking-widest">
+                            Pacote pronto — aguardando OpenClaw
+                          </span>
+                        </div>
+                      )}
+
                       {isLotus && msg.interpretation && (
                         <div className="mt-3 pt-2.5 border-t border-white/5 space-y-2">
+
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Análise:</span>
                             <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[8px] font-black tracking-widest uppercase">
