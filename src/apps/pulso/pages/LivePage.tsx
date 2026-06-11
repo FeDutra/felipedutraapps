@@ -31,6 +31,7 @@ import {
   Clock
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
+import { interpretIntent } from '../utils/intentInterpreter';
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -73,6 +74,15 @@ interface Message {
   sender: 'user' | 'lotus';
   text: string;
   timestamp: Date;
+  interpretation?: {
+    intent: string;
+    domain: string;
+    sourcesNeeded: string[];
+    riskLevel: string;
+    requiresConfirmation: boolean;
+    canExecuteNow: boolean;
+    suggestedReply: string;
+  };
 }
 
 export default function LivePage() {
@@ -121,6 +131,42 @@ export default function LivePage() {
           allSources: safeArray(allSources),
           allTasks: safeArray(allTasks)
         });
+
+        const chatHistory: Message[] = [];
+        const commandRequests = safeArray(allRequests)
+          .filter((req: any) => req && req.requestType === 'conversation_command' && !req.archived)
+          .sort((a, b) => safeGetTime(a.requestedAt) - safeGetTime(b.requestedAt));
+
+        commandRequests.forEach((req: any) => {
+          const reqTime = safeConvertToDate(req.requestedAt) || new Date();
+          chatHistory.push({
+            id: `user-${req.id || Math.random()}`,
+            sender: 'user',
+            text: req.summary || req.title || '',
+            timestamp: reqTime
+          });
+          
+          const replyText = req.interpretation?.suggestedReply || 
+            `Registrei o comando "${req.summary || req.title}" para processamento operacional.`;
+          
+          chatHistory.push({
+            id: `lotus-${req.id || Math.random()}`,
+            sender: 'lotus',
+            text: replyText,
+            timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+            interpretation: req.interpretation
+          });
+        });
+
+        setMessages([
+          {
+            id: 'welcome',
+            sender: 'lotus',
+            text: 'Olá Fê! Sou a Lótus. Sintonizei a central viva do PULSO. Como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+            timestamp: new Date()
+          },
+          ...chatHistory
+        ]);
       } catch (err: any) {
         console.error('Lótus Live load error:', err);
         setError(err?.message || 'Erro de sintonização na Lótus Live.');
@@ -385,7 +431,10 @@ export default function LivePage() {
       const currentUser = authService.getCurrentUser();
       const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
 
-      // Build the Request object matching Step 3
+      // Interpret the command using deterministic matching
+      const interpretation = interpretIntent(rawMsg);
+
+      // Build the Request object matching Step 3 with interpretation block
       const reqPayload = {
         requestType: 'conversation_command' as any,
         title: rawMsg.length > 80 ? rawMsg.substring(0, 80) + '...' : rawMsg,
@@ -396,7 +445,8 @@ export default function LivePage() {
         requestedAt: new Date(),
         updatedAt: new Date(),
         origin: 'lotus_live' as any,
-        source: 'pulso_live' as any
+        source: 'pulso_live' as any,
+        interpretation
       };
 
       const newRequest = await requestsService.createRequest(reqPayload);
@@ -413,69 +463,14 @@ export default function LivePage() {
         });
       }
 
-      // Simulate Lótus response with real data binding
+      // Simulate Lótus response with interpreted suggested reply
       setTimeout(() => {
-        let responseText = '';
-        const textNormalized = rawMsg.toLowerCase().trim();
-
-        if (textNormalized.includes('dia') || textNormalized.includes('resumo') || textNormalized.includes('como está') || textNormalized.includes('status')) {
-          responseText = `Fê, aqui está o resumo operacional do momento:
-• Você possui **${feTasks.length}** tarefas ativas atribuídas diretamente a você.
-• Existem **${activeProjects.length}** projetos ativos em andamento nas suas Áreas.
-• Foram identificadas **${totalRisksCount}** travas operacionais (atrasos, alertas ou projetos sem foco definido).
-• Há **${pendingInbox.length}** novos itens capturados e aguardando triagem.
-• O status de batimento dos sistemas e crons está estável (Metabolismo regular com ${allRoutines.length} rotinas ativas).`;
-        } 
-        else if (textNormalized.includes('depende de mim') || textNormalized.includes('minhas tarefas') || textNormalized.includes('tarefa')) {
-          responseText = `Achei as seguintes tarefas ativas sob sua responsabilidade direta:
-${feTasks.length > 0 
-  ? feTasks.slice(0, 8).map(t => `• **${t.title || t.name}** (Prioridade: ${t.priority || 'média'})`).join('\n')
-  : '• Nenhuma tarefa ativa sob sua responsabilidade direta no momento. Bom trabalho!'}`;
-        }
-        else if (textNormalized.includes('travad') || textNormalized.includes('risco') || textNormalized.includes('alerta') || textNormalized.includes('problema')) {
-          responseText = `Identifiquei as seguintes travas operacionais pendentes de resolução:
-${attentionSignals.length > 0
-  ? attentionSignals.slice(0, 6).map(sig => `• **${sig.title}**: ${sig.subtitle}`).join('\n')
-  : '• Nenhuma trava crítica encontrada. Nossos sistemas e prazos estão sob controle.'}`;
-        }
-        else if (textNormalized.includes('lótus fez') || textNormalized.includes('fez') || textNormalized.includes('recent') || textNormalized.includes('feed') || textNormalized.includes('atividade')) {
-          responseText = `Minhas últimas ações e atualizações registradas no PULSO:
-${sortedFeed.length > 0
-  ? sortedFeed.map(f => `• **[${f.system}]** ${f.event}`).join('\n')
-  : '• Nenhuma ação recente registrada nos logs de atividades.'}`;
-        }
-        else if (textNormalized.includes('projetos') || textNormalized.includes('vivos') || textNormalized.includes('projeto')) {
-          responseText = `Aqui estão os projetos ativos no ecossistema:
-${activeProjects.length > 0
-  ? activeProjects.slice(0, 6).map(p => `• **${p.name}**\n  *Próximo passo:* ${p.nextStep || '⚠️ Sem próximo passo configurado'}`).join('\n\n')
-  : '• Nenhum projeto ativo registrado no momento.'}`;
-        }
-        else if (textNormalized.includes('agente') || textNormalized.includes('metabolismo') || textNormalized.includes('cron') || textNormalized.includes('rotina')) {
-          responseText = `Situação atual dos nossos agentes e crons de automação:
-• **Agentes Operacionais (${allAgents.length})**: ${allAgents.map(ag => `${ag.name} (${ag.status === 'active' ? '🟢 Operando' : '⚪ Inativo'})`).join(', ')}
-• **Rotinas Agendadas (${allRoutines.length})**: ${brokenRoutines.length > 0 ? `⚠️ ${brokenRoutines.length} em falha` : '🟢 Saudáveis'}
-• **Mensagens no Outbox**: Sincronização operacional rodando de forma estável.`;
-        }
-        else if (textNormalized.includes('fonte') || textNormalized.includes('notion') || textNormalized.includes('obsidian') || textNormalized.includes('whatsapp') || textNormalized.includes('calendar') || textNormalized.includes('gmail') || textNormalized.includes('sheets')) {
-          responseText = `Fontes de dados sintonizadas e conectadas:
-${monitoredSources.map(s => `• **${s.name}**: ${s.connected ? '🟢 Ativo' : '⚪ Aguardando Fonte'}`).join('\n')}`;
-        }
-        else if (textNormalized.includes('aprovar') || textNormalized.includes('reprovar') || textNormalized.includes('request') || textNormalized.includes('solicita')) {
-          responseText = `Você possui **${pendingApprovals.length}** solicitações que exigem aprovação manual para materialização no ecossistema:
-${pendingApprovals.length > 0
-  ? pendingApprovals.map(req => `• **[${req.requestType}]** ${req.title || req.summary} (ID: ${req.id})`).join('\n')
-  : '• Nenhuma solicitação pendente de aprovação.'}
-Você pode aprovar clicando em "Revisar" nos cartões de Próxima Ação ou acessando a tela de Registro da Lótus.`;
-        }
-        else {
-          responseText = `Registrei o comando "${rawMsg}" para processamento operacional. Como estamos na versão inicial, a execução automática da Lótus está em desenvolvimento.`;
-        }
-
         const lotusMsg: Message = {
           id: `lotus-msg-${Date.now()}`,
           sender: 'lotus',
-          text: responseText,
-          timestamp: new Date()
+          text: interpretation.suggestedReply,
+          timestamp: new Date(),
+          interpretation
         };
         setMessages(prev => [...prev, lotusMsg]);
         setIsTyping(false);
@@ -570,7 +565,44 @@ Você pode aprovar clicando em "Revisar" nos cartões de Próxima Ação ou aces
                         ? 'bg-white/2 border-white/5 text-white/80' 
                         : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/15 text-white/95 shadow-md shadow-blue-950/20'
                     }`}>
-                      {msg.text}
+                      <div>{msg.text}</div>
+                      
+                      {isLotus && msg.interpretation && (
+                        <div className="mt-3 pt-2.5 border-t border-white/5 space-y-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Análise:</span>
+                            <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[8px] font-black tracking-widest uppercase">
+                              {msg.interpretation.intent}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase border ${
+                              msg.interpretation.riskLevel === 'high' 
+                                ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                                : msg.interpretation.riskLevel === 'medium'
+                                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                            }`}>
+                              Risco {msg.interpretation.riskLevel}
+                            </span>
+                            {msg.interpretation.requiresConfirmation && (
+                              <span className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[8px] font-black tracking-widest uppercase animate-pulse">
+                                Requer Confirmação
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-[9px] text-white/40">
+                            <div>
+                              <span className="font-semibold text-white/30">Domínio:</span> <span className="text-white/60">{msg.interpretation.domain}</span>
+                            </div>
+                            {msg.interpretation.sourcesNeeded && msg.interpretation.sourcesNeeded.length > 0 && (
+                              <div className="col-span-2">
+                                <span className="font-semibold text-white/30">Fontes Necessárias:</span> <span className="text-white/60">{msg.interpretation.sourcesNeeded.join(', ')}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <span className="block text-[8px] text-white/20 text-right mt-2 font-medium">
                         {msg.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </span>
