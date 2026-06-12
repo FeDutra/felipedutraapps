@@ -113,10 +113,16 @@ interface Message {
   openclawResult?: {
     processedBy: string;
     responseText: string;
-    statusTransition: string;
+    summary?: string;
+    confidence?: string;
+    riskLevel?: string;
+    requiresHumanApproval?: boolean;
+    statusTransition?: string;
     sourcesConsulted?: string[];
+    proposedActions?: Array<{ label: string; description?: string; riskLevel?: string }>;
     proposedMutation?: { type: string; previewLabel: string; payload: any };
-    auditLog?: { model?: string; skillUsed?: string; confidence: string; notes?: string };
+    errors?: string[];
+    auditLog?: { model?: string; skillUsed?: string; confidence?: string; notes?: string };
   };
   /** v1.4: the request status for showing handoff state in the bubble */
   handoffStatus?: string;
@@ -144,6 +150,8 @@ export default function LivePage() {
   const [copiedPromptId, setCopiedPromptId] = React.useState<string | null>(null);
   /** v1.5: state for full package copy feedback */
   const [copiedPackageId, setCopiedPackageId] = React.useState<string | null>(null);
+  /** v1.6: state for openclaw result copy feedback */
+  const [copiedResultId, setCopiedResultId] = React.useState<string | null>(null);
   /** v1.5: which message has the register-response panel open */
   const [registeringForId, setRegisteringForId] = React.useState<string | null>(null);
   /** v1.5: draft text for the manual OpenClaw response */
@@ -741,113 +749,229 @@ export default function LivePage() {
                     }`}>
                       <div className="leading-relaxed">{renderMarkdown(msg.text)}</div>
                       
-                      {/* v1.4: OpenClaw response block — shown when openclawResult is present */}
+                      {/* v1.6: OpenClaw response block — 5-state lifecycle display */}
                       {isLotus && msg.openclawResult && (
                         <div className="mt-3 pt-2.5 border-t border-purple-500/10 space-y-2">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Zap size={9} className="text-purple-400" />
-                            <span className="text-[8px] font-black uppercase tracking-widest text-purple-400">OpenClaw respondeu</span>
-                            {msg.openclawResult.auditLog?.confidence && (
-                              <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${
-                                msg.openclawResult.auditLog.confidence === 'high'
-                                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                  : msg.openclawResult.auditLog.confidence === 'medium'
-                                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                  : 'bg-white/5 border-white/10 text-white/40'
+                          {/* Header row */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              {msg.openclawResult.errors && msg.openclawResult.errors.length > 0 ? (
+                                <AlertTriangle size={9} className="text-red-400" />
+                              ) : msg.handoffStatus === 'waiting_user_approval' ? (
+                                <Clock size={9} className="text-orange-400" />
+                              ) : (
+                                <Zap size={9} className="text-purple-400" />
+                              )}
+                              <span className={`text-[8px] font-black uppercase tracking-widest ${
+                                msg.openclawResult.errors && msg.openclawResult.errors.length > 0
+                                  ? 'text-red-400'
+                                  : msg.handoffStatus === 'waiting_user_approval'
+                                  ? 'text-orange-400'
+                                  : 'text-purple-400'
                               }`}>
-                                Confiança {msg.openclawResult.auditLog.confidence}
+                                {msg.openclawResult.errors && msg.openclawResult.errors.length > 0
+                                  ? 'Falha no retorno'
+                                  : msg.handoffStatus === 'waiting_user_approval'
+                                  ? 'Aguarda aprovação humana'
+                                  : 'OpenClaw respondeu'}
                               </span>
-                            )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {/* Confidence badge */}
+                              {(msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence) && (
+                                <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${
+                                  (msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence) === 'high'
+                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                    : (msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence) === 'medium'
+                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                    : 'bg-white/5 border-white/10 text-white/40'
+                                }`}>
+                                  {msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence}
+                                </span>
+                              )}
+                              {/* Risk badge */}
+                              {msg.openclawResult.riskLevel && (
+                                <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${
+                                  msg.openclawResult.riskLevel === 'high'
+                                    ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                    : msg.openclawResult.riskLevel === 'medium'
+                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                    : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400/60'
+                                }`}>
+                                  risco {msg.openclawResult.riskLevel}
+                                </span>
+                              )}
+                              {/* Copy result button */}
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(JSON.stringify(msg.openclawResult, null, 2))
+                                    .then(() => { setCopiedResultId(msg.id); setTimeout(() => setCopiedResultId(null), 2000); })
+                                    .catch(() => {});
+                                }}
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/3 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/20 text-[7px] font-bold text-white/20 hover:text-purple-400 transition-all"
+                                title="Copiar retorno da OpenClaw"
+                              >
+                                {copiedResultId === msg.id ? (
+                                  <><Check size={8} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
+                                ) : (
+                                  <><Copy size={8} /><span>Retorno</span></>
+                                )}
+                              </button>
+                            </div>
                           </div>
+
+                          {/* Summary (if present) */}
+                          {msg.openclawResult.summary && (
+                            <p className="text-[9px] text-white/50 italic border-l-2 border-purple-500/20 pl-2">
+                              {msg.openclawResult.summary}
+                            </p>
+                          )}
+
+                          {/* Errors block */}
+                          {msg.openclawResult.errors && msg.openclawResult.errors.length > 0 && (
+                            <div className="p-2 bg-red-500/5 border border-red-500/15 rounded-lg">
+                              <p className="text-[8px] font-black uppercase tracking-widest text-red-400 mb-1">Erros</p>
+                              {msg.openclawResult.errors.map((err, i) => (
+                                <p key={i} className="text-[8px] text-red-300/70 font-mono">{err}</p>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Fontes consultadas */}
                           {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
                             <p className="text-[8px] text-white/30">
-                              <span className="font-semibold text-white/25">Fontes consultadas: </span>
+                              <span className="font-semibold text-white/25">Fontes: </span>
                               {msg.openclawResult.sourcesConsulted.join(', ')}
                             </p>
                           )}
+
+                          {/* Proposed actions (v1.6) */}
+                          {msg.openclawResult.proposedActions && msg.openclawResult.proposedActions.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70">Ações propostas</p>
+                              {msg.openclawResult.proposedActions.map((action, i) => (
+                                <div key={i} className="flex items-start gap-1.5 text-[8px] text-white/60">
+                                  <span className="text-amber-400/50 mt-0.5">›</span>
+                                  <span>{action.label}</span>
+                                  {action.riskLevel && action.riskLevel !== 'low' && (
+                                    <span className={`ml-auto text-[7px] font-black uppercase ${
+                                      action.riskLevel === 'high' ? 'text-red-400' : 'text-amber-400'
+                                    }`}>{action.riskLevel}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Proposed mutation (legacy) */}
                           {msg.openclawResult.proposedMutation && (
                             <div className="p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl">
                               <p className="text-[8px] font-black uppercase tracking-widest text-amber-400 mb-1">Proposta de Ação</p>
                               <p className="text-[9px] text-white/70">{msg.openclawResult.proposedMutation.previewLabel}</p>
                             </div>
                           )}
+
+                          {/* Human approval required banner */}
+                          {msg.openclawResult.requiresHumanApproval && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-orange-500/5 border border-orange-500/20 rounded-lg">
+                              <Lock size={9} className="text-orange-400 shrink-0" />
+                              <span className="text-[8px] text-orange-400/80 font-semibold">Requer aprovação humana antes de qualquer ação</span>
+                            </div>
+                          )}
+
+                          {/* Skill used */}
                           {msg.openclawResult.auditLog?.skillUsed && (
-                            <p className="text-[8px] text-white/20 font-mono">skill: {msg.openclawResult.auditLog.skillUsed}</p>
+                            <p className="text-[7px] text-white/15 font-mono">skill: {msg.openclawResult.auditLog.skillUsed}</p>
                           )}
                         </div>
                       )}
 
-                      {/* v1.5: Handoff status badge + Copy Package + Register Response */}
-                      {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (
-                        <div className="mt-2 space-y-2">
-                          {/* Status line */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-                              <span className="text-[8px] text-amber-400/70 font-semibold uppercase tracking-widest">
-                                Pacote pronto — aguardando OpenClaw
-                              </span>
-                            </div>
-                            {/* Copy full package button */}
-                            <button
-                              onClick={() => handleCopyPackage(msg.id, msg)}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/20 text-[8px] font-bold text-white/30 hover:text-indigo-400 transition-all"
-                              title="Copiar pacote completo para OpenClaw"
-                            >
-                              {copiedPackageId === msg.id ? (
-                                <><Check size={9} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
-                              ) : (
-                                <><Copy size={9} /><span>Copiar Pacote</span></>
-                              )}
-                            </button>
-                          </div>
+                      {/* v1.6: Handoff status badge — 5-state lifecycle */}
+                      {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (() => {
+                        const s = msg.handoffStatus || 'requested';
+                        const isQueued = s === 'requested' || s === 'queued_for_openclaw';
+                        const isProcessing = s === 'processing_by_openclaw';
+                        const isFailed = s === 'openclaw_failed';
+                        const isApproval = s === 'waiting_user_approval';
 
-                          {/* Register response panel */}
-                          {registeringForId === msg.id ? (
-                            <div className="mt-1.5 space-y-1.5">
-                              <textarea
-                                value={openclawDraft}
-                                onChange={e => setOpenclawDraft(e.target.value)}
-                                placeholder="Cole aqui a resposta da OpenClaw (responseText)..."
-                                className="w-full text-[9px] text-white/70 bg-black/20 border border-white/10 focus:border-purple-500/30 rounded-lg px-3 py-2 resize-none outline-none placeholder-white/20 font-mono leading-relaxed transition-colors"
-                                rows={4}
-                                disabled={submittingResponse}
-                              />
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[7px] text-white/20 font-mono">→ {msg.requestId}</span>
-                                <div className="flex gap-1.5">
-                                  <button
-                                    onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
-                                    className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[8px] text-white/30 hover:text-white/60 transition-all"
-                                    disabled={submittingResponse}
-                                  >
-                                    Cancelar
-                                  </button>
-                                  <button
-                                    onClick={() => handleRegisterOpenClawResponse(msg)}
-                                    disabled={!openclawDraft.trim() || submittingResponse}
-                                    className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-[8px] font-bold text-purple-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                  >
-                                    {submittingResponse ? (
-                                      <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
-                                    ) : (
-                                      <><Zap size={9} /><span>Registrar Resposta</span></>
-                                    )}
-                                  </button>
-                                </div>
+                        const statusConfig = {
+                          label: isProcessing ? 'Processando...' : isFailed ? 'Falha no retorno' : isApproval ? 'Aguardando aprovação' : 'Aguardando OpenClaw',
+                          color: isFailed ? 'text-red-400/70' : isApproval ? 'text-orange-400/70' : isProcessing ? 'text-blue-400/70' : 'text-amber-400/70',
+                          dot: isFailed ? 'bg-red-500' : isApproval ? 'bg-orange-400 animate-pulse' : isProcessing ? 'bg-blue-400 animate-pulse' : 'bg-amber-400 animate-pulse',
+                        };
+
+                        return (
+                          <div className="mt-2 space-y-2">
+                            {/* Status + Copy Package row */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <div className={`w-1 h-1 rounded-full ${statusConfig.dot}`} />
+                                <span className={`text-[8px] font-semibold uppercase tracking-widest ${statusConfig.color}`}>
+                                  {statusConfig.label}
+                                </span>
                               </div>
+                              <button
+                                onClick={() => handleCopyPackage(msg.id, msg)}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/20 text-[8px] font-bold text-white/30 hover:text-indigo-400 transition-all"
+                                title="Copiar pacote completo para OpenClaw"
+                              >
+                                {copiedPackageId === msg.id ? (
+                                  <><Check size={9} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
+                                ) : (
+                                  <><Copy size={9} /><span>Copiar Pacote</span></>
+                                )}
+                              </button>
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => setRegisteringForId(msg.id)}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/20 text-[8px] font-bold text-purple-400/60 hover:text-purple-400 transition-all w-full justify-center"
-                            >
-                              <Zap size={9} />
-                              <span>Registrar Retorno da OpenClaw</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+
+                            {/* Register panel — only shown when queued or failed */}
+                            {(isQueued || isFailed) && (
+                              registeringForId === msg.id ? (
+                                <div className="mt-1.5 space-y-1.5">
+                                  <textarea
+                                    value={openclawDraft}
+                                    onChange={e => setOpenclawDraft(e.target.value)}
+                                    placeholder="Cole aqui a resposta da OpenClaw (responseText)..."
+                                    className="w-full text-[9px] text-white/70 bg-black/20 border border-white/10 focus:border-purple-500/30 rounded-lg px-3 py-2 resize-none outline-none placeholder-white/20 font-mono leading-relaxed transition-colors"
+                                    rows={4}
+                                    disabled={submittingResponse}
+                                  />
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[7px] text-white/20 font-mono">→ {msg.requestId}</span>
+                                    <div className="flex gap-1.5">
+                                      <button
+                                        onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
+                                        className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[8px] text-white/30 hover:text-white/60 transition-all"
+                                        disabled={submittingResponse}
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        onClick={() => handleRegisterOpenClawResponse(msg)}
+                                        disabled={!openclawDraft.trim() || submittingResponse}
+                                        className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-[8px] font-bold text-purple-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                      >
+                                        {submittingResponse ? (
+                                          <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
+                                        ) : (
+                                          <><Zap size={9} /><span>Registrar Resposta</span></>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setRegisteringForId(msg.id)}
+                                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/20 text-[8px] font-bold text-purple-400/60 hover:text-purple-400 transition-all w-full justify-center"
+                                >
+                                  <Zap size={9} />
+                                  <span>Registrar Retorno da OpenClaw</span>
+                                </button>
+                              )
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {isLotus && msg.interpretation && (
                         <div className="mt-3 pt-2.5 border-t border-white/5 space-y-2">

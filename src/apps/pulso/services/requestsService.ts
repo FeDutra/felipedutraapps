@@ -115,5 +115,29 @@ export const requestsService = {
       payload: answers as any, // Simple drop-in merge or payload enrichment
       result: { action: "clarified", summary: "Esclarecido pelo Cockpit. Retomando máquina." } as any
     });
+  },
+
+  /**
+   * v1.6: Returns the OpenClaw processing queue.
+   * Fetches conversation_command requests from lotus_live that have not yet been
+   * picked by OpenClaw (status: requested | queued_for_openclaw), are not archived,
+   * and contain a handoff contract targeting OpenClaw in proposal_only mode.
+   *
+   * Uses local filtering to avoid requiring a composite Firestore index.
+   * This is read-only — does NOT mutate any document.
+   */
+  getOpenClawQueue: async (limitCount = 20): Promise<PulsoRequest[]> => {
+    const all = await pulsoRepository.getRawRequests(limitCount * 3);
+    const ELIGIBLE_STATUSES: string[] = ['requested', 'queued_for_openclaw'];
+    return (all as PulsoRequest[])
+      .filter((r) => {
+        if (r.archived) return false;
+        if (!ELIGIBLE_STATUSES.includes(r.status)) return false;
+        if ((r.requestType as string) !== 'conversation_command') return false;
+        if ((r.origin as string) !== 'lotus_live' && (r as any).origin !== 'lotus_live') return false;
+        return true;
+      })
+      .slice(0, limitCount);
   }
 };
+
