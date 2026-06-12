@@ -130,6 +130,14 @@ interface Message {
   requestId?: string;
   /** v1.5: the raw command text the user typed — used for copy package */
   originalCommand?: string;
+  /** v1.7: human approval decision — set locally after approve/reject */
+  userApproval?: {
+    approved: boolean;
+    approvedAt?: string;
+    rejectedAt?: string;
+    note?: string;
+    reason?: string;
+  };
 }
 
 export default function LivePage() {
@@ -158,6 +166,10 @@ export default function LivePage() {
   const [openclawDraft, setOpenclawDraft] = React.useState('');
   /** v1.5: submission in-progress flag */
   const [submittingResponse, setSubmittingResponse] = React.useState(false);
+  /** v1.7: approval note/reason draft per message id */
+  const [approvalNotes, setApprovalNotes] = React.useState<Record<string, string>>({});
+  /** v1.7: which messageId is currently submitting an approval/rejection */
+  const [submittingApprovalId, setSubmittingApprovalId] = React.useState<string | null>(null);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   const handleCopyPrompt = (msgId: string, prompt: string) => {
@@ -233,10 +245,11 @@ export default function LivePage() {
         processedBy: 'openclaw',
         processedAt: new Date(),
         responseText: openclawDraft.trim(),
+        requiresHumanApproval: needsApproval,
         statusTransition: newStatus,
         auditLog: {
           confidence: 'medium' as const,
-          notes: 'Registrado manualmente via Lótus Live — retorno assistido v1.5'
+          notes: 'Registrado manualmente via Lótus Live — retorno assistido v1.7'
         }
       };
       await requestsService.updateRequest(msg.requestId, {
@@ -253,9 +266,52 @@ export default function LivePage() {
       setRegisteringForId(null);
       setOpenclawDraft('');
     } catch (err: any) {
-      console.error('[v1.5] Error registering OpenClaw response:', err);
+      console.error('[v1.7] Error registering OpenClaw response:', err);
     } finally {
       setSubmittingResponse(false);
+    }
+  };
+
+
+  /** v1.7: Approve an OpenClaw proposal — recording only, no execution */
+  const handleApproveProposal = async (msg: Message) => {
+    if (!msg.requestId || submittingApprovalId) return;
+    setSubmittingApprovalId(msg.id);
+    const now = new Date().toISOString();
+    const note = approvalNotes[msg.id]?.trim() || undefined;
+    try {
+      await requestsService.approveOpenClawProposal(msg.requestId, note);
+      setMessages(prev => prev.map(m =>
+        m.id === msg.id
+          ? { ...m, handoffStatus: 'approved_by_user', userApproval: { approved: true, approvedAt: now, note } }
+          : m
+      ));
+      setApprovalNotes(prev => { const n = { ...prev }; delete n[msg.id]; return n; });
+    } catch (err: any) {
+      console.error('[v1.7] Error approving proposal:', err);
+    } finally {
+      setSubmittingApprovalId(null);
+    }
+  };
+
+  /** v1.7: Reject an OpenClaw proposal — recording only, no execution */
+  const handleRejectProposal = async (msg: Message) => {
+    if (!msg.requestId || submittingApprovalId) return;
+    setSubmittingApprovalId(msg.id);
+    const now = new Date().toISOString();
+    const reason = approvalNotes[msg.id]?.trim() || undefined;
+    try {
+      await requestsService.rejectOpenClawProposal(msg.requestId, reason);
+      setMessages(prev => prev.map(m =>
+        m.id === msg.id
+          ? { ...m, handoffStatus: 'rejected_by_user', userApproval: { approved: false, rejectedAt: now, reason } }
+          : m
+      ));
+      setApprovalNotes(prev => { const n = { ...prev }; delete n[msg.id]; return n; });
+    } catch (err: any) {
+      console.error('[v1.7] Error rejecting proposal:', err);
+    } finally {
+      setSubmittingApprovalId(null);
     }
   };
 
@@ -871,13 +927,92 @@ export default function LivePage() {
                             </div>
                           )}
 
-                          {/* Human approval required banner */}
-                          {msg.openclawResult.requiresHumanApproval && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-orange-500/5 border border-orange-500/20 rounded-lg">
-                              <Lock size={9} className="text-orange-400 shrink-0" />
-                              <span className="text-[8px] text-orange-400/80 font-semibold">Requer aprovação humana antes de qualquer ação</span>
-                            </div>
-                          )}
+                          {/* v1.7: Human Approval — interactive approval/rejection UI */}
+                          {msg.openclawResult.requiresHumanApproval && (() => {
+                            const isApproved = msg.userApproval?.approved === true || msg.handoffStatus === 'approved_by_user';
+                            const isRejected = msg.userApproval?.approved === false || msg.handoffStatus === 'rejected_by_user';
+                            const hasDecision = isApproved || isRejected;
+                            const isSubmitting = submittingApprovalId === msg.id;
+
+                            if (isApproved) {
+                              return (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
+                                    <Check size={9} className="text-emerald-400 shrink-0" />
+                                    <div>
+                                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Proposta aprovada por você</p>
+                                      <p className="text-[7px] text-emerald-400/50 mt-0.5">Aguardando etapa futura de execução assistida — nenhuma ação real executada</p>
+                                    </div>
+                                  </div>
+                                  {msg.userApproval?.note && (
+                                    <p className="text-[7px] text-white/25 italic pl-2">Nota: {msg.userApproval.note}</p>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            if (isRejected) {
+                              return (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-red-500/8 border border-red-500/20 rounded-lg">
+                                    <AlertTriangle size={9} className="text-red-400 shrink-0" />
+                                    <div>
+                                      <p className="text-[8px] font-black uppercase tracking-widest text-red-400">Proposta rejeitada</p>
+                                      <p className="text-[7px] text-red-400/50 mt-0.5">Nenhuma ação foi executada</p>
+                                    </div>
+                                  </div>
+                                  {msg.userApproval?.reason && (
+                                    <p className="text-[7px] text-white/25 italic pl-2">Motivo: {msg.userApproval.reason}</p>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // Pending decision UI
+                            return (
+                              <div className="space-y-2 pt-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Lock size={8} className="text-orange-400 shrink-0" />
+                                  <span className="text-[8px] text-orange-400/80 font-black uppercase tracking-widest">Aguardando sua decisão</span>
+                                </div>
+
+                                {/* Optional note/reason field */}
+                                <input
+                                  type="text"
+                                  value={approvalNotes[msg.id] || ''}
+                                  onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                                  placeholder="Nota opcional (aprovação) ou motivo (rejeição)..."
+                                  className="w-full text-[8px] text-white/60 bg-black/20 border border-white/8 focus:border-orange-500/30 rounded-lg px-2.5 py-1.5 outline-none placeholder-white/20 transition-colors"
+                                  disabled={isSubmitting}
+                                />
+
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleApproveProposal(msg)}
+                                    disabled={isSubmitting || !msg.requestId}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/35 text-[8px] font-black uppercase tracking-widest text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                  >
+                                    {isSubmitting ? (
+                                      <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
+                                    ) : (
+                                      <><Check size={9} /><span>Aprovar proposta</span></>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectProposal(msg)}
+                                    disabled={isSubmitting || !msg.requestId}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 hover:bg-red-500/15 border border-red-500/15 hover:border-red-500/30 text-[8px] font-black uppercase tracking-widest text-red-400/70 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                  >
+                                    <AlertTriangle size={9} />
+                                    <span>Rejeitar</span>
+                                  </button>
+                                </div>
+                                <p className="text-[7px] text-white/15 text-center">
+                                  Aprovar não executa nenhuma ação — apenas registra sua decisão
+                                </p>
+                              </div>
+                            );
+                          })()}
 
                           {/* Skill used */}
                           {msg.openclawResult.auditLog?.skillUsed && (

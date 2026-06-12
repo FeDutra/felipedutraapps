@@ -1,5 +1,5 @@
 import { pulsoRepository } from "./pulsoRepositoryInstance";
-import { PulsoRequest, RequestStatus } from "../types/pulso.types";
+import { PulsoRequest, RequestStatus, UserApproval } from "../types/pulso.types";
 
 /**
  * @file requestsService.ts
@@ -138,6 +138,66 @@ export const requestsService = {
         return true;
       })
       .slice(0, limitCount);
+  },
+
+  /**
+   * v1.7: Human Governance — Approve an OpenClaw proposal.
+   *
+   * Records the user's approval in userApproval and transitions the lifecycle
+   * to approved_by_user. Does NOT create tasks, projects, persons, or any entity.
+   * Does NOT call external endpoints. Does NOT execute the proposal.
+   *
+   * @param requestId  The pulso_requests document ID
+   * @param note       Optional free-text approval note
+   * @param approvedBy User identifier (defaults to 'felipe@dutra')
+   */
+  approveOpenClawProposal: async (
+    requestId: string,
+    note?: string,
+    approvedBy = 'felipe@dutra'
+  ) => {
+    const now = new Date().toISOString();
+    const approval: UserApproval = {
+      approved: true,
+      approvedBy,
+      approvedAt: now,
+      ...(note ? { note } : {}),
+    };
+    return pulsoRepository.updateRequest(requestId, {
+      status: 'approved_by_user' as RequestStatus,
+      userApproval: approval as any,
+      updatedAt: new Date(),
+    });
+  },
+
+  /**
+   * v1.7: Human Governance — Reject an OpenClaw proposal.
+   *
+   * Records the user's rejection in userApproval and transitions the lifecycle
+   * to rejected_by_user. Does NOT create tasks, projects, persons, or any entity.
+   * Does NOT call external endpoints. Does NOT execute anything.
+   *
+   * @param requestId   The pulso_requests document ID
+   * @param reason      Optional reason for rejection
+   * @param rejectedBy  User identifier (defaults to 'felipe@dutra')
+   */
+  rejectOpenClawProposal: async (
+    requestId: string,
+    reason?: string,
+    rejectedBy = 'felipe@dutra'
+  ) => {
+    const now = new Date().toISOString();
+    const approval: UserApproval = {
+      approved: false,
+      rejectedBy,
+      rejectedAt: now,
+      ...(reason ? { reason } : {}),
+    };
+    return pulsoRepository.updateRequest(requestId, {
+      status: 'rejected_by_user' as RequestStatus,
+      userApproval: approval as any,
+      updatedAt: new Date(),
+    });
   }
 };
 

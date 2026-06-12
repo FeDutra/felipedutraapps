@@ -131,7 +131,10 @@ export type RequestStatus =
   | 'proposal_ready'
   | 'waiting_user_approval'
   // v1.6: failure state
-  | 'openclaw_failed';
+  | 'openclaw_failed'
+  // v1.7: human approval decisions
+  | 'approved_by_user'
+  | 'rejected_by_user';
 
 
 /**
@@ -193,6 +196,27 @@ export interface OpenClawResult {
     confidence?: 'high' | 'medium' | 'low';
     notes?: string;
   };
+}
+
+/**
+ * @interface UserApproval
+ * @description Human approval or rejection decision recorded after OpenClaw returns a proposal.
+ * Stored in pulso_requests[id].userApproval.
+ * v1.7 — Governance layer. Recording ONLY — never triggers automatic execution.
+ */
+export interface UserApproval {
+  /** Whether the user approved (true) or rejected (false) the proposal */
+  approved: boolean;
+  approvedBy?: string;
+  rejectedBy?: string;
+  /** ISO timestamp of approval */
+  approvedAt?: string;
+  /** ISO timestamp of rejection */
+  rejectedAt?: string;
+  /** Optional free-text note from the approver */
+  note?: string;
+  /** Optional reason for rejection */
+  reason?: string;
 }
 
 export interface PulsoRequest {
@@ -260,6 +284,12 @@ export interface PulsoRequest {
    * Read by LivePage to display the result in the chat bubble.
    */
   openclawResult?: OpenClawResult;
+  /**
+   * v1.7: Human approval/rejection decision.
+   * Recorded after OpenClaw returns a proposal with requiresHumanApproval = true.
+   * NEVER triggers automatic execution of the proposal.
+   */
+  userApproval?: UserApproval;
 }
 
 export type ActorType = 'user' | 'agent' | 'system';
