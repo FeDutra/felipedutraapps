@@ -208,98 +208,101 @@ body {
   color: var(--foreground-her);
 }
 
-/* Organic Breathing / Floating animations for Lótus Circle SVG */
-@keyframes lotus-breathe {
+/* Organic Breathing / Floating animations for Lótus HTML Div Shape */
+@keyframes organic-breathe {
   0%, 100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1) rotate(0deg);
-    stroke: var(--coral-her);
-    stroke-width: 7;
+    filter: drop-shadow(0 0 8px rgba(251, 249, 245, 0.2));
+  }
+  33% {
+    border-radius: 54% 46% 52% 48% / 48% 53% 47% 52%;
+    transform: scale(1.02) rotate(1.5deg);
+    filter: drop-shadow(0 0 14px rgba(251, 249, 245, 0.3));
+  }
+  66% {
+    border-radius: 47% 53% 48% 52% / 53% 47% 53% 47%;
+    transform: scale(0.98) rotate(-1.5deg);
     filter: drop-shadow(0 0 10px rgba(251, 249, 245, 0.25));
   }
-  50% {
-    transform: scale(1.04) rotate(3deg);
-    stroke: var(--coral-muted-her);
-    stroke-width: 9;
-    filter: drop-shadow(0 0 18px rgba(251, 249, 245, 0.45));
-  }
 }
 
-@keyframes lotus-listen {
+@keyframes organic-listen {
   0%, 100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.03) rotate(0deg);
-    stroke: var(--coral-her);
-    stroke-width: 9;
-    stroke-dasharray: 290 10;
-    stroke-dashoffset: 0;
-  }
-  50% {
-    transform: scale(1.1) rotate(90deg);
-    stroke: var(--coral-deep-her);
-    stroke-width: 12;
-    stroke-dasharray: 240 60;
-    stroke-dashoffset: 40;
-    filter: drop-shadow(0 0 25px rgba(251, 249, 245, 0.6));
-  }
-}
-
-@keyframes lotus-think {
-  0% {
-    transform: scale(1.05) rotate(0deg);
-    stroke: var(--coral-muted-her);
-    stroke-width: 8;
-    stroke-dasharray: 120 180;
-    stroke-dashoffset: 0;
-  }
-  50% {
-    transform: scale(0.97) rotate(180deg);
-    stroke: var(--coral-her);
-    stroke-width: 11;
-    stroke-dasharray: 200 100;
-    stroke-dashoffset: -90;
-    filter: drop-shadow(0 0 20px rgba(251, 249, 245, 0.5));
-  }
-  100% {
-    transform: scale(1.05) rotate(360deg);
-    stroke: var(--coral-muted-her);
-    stroke-width: 8;
-    stroke-dasharray: 120 180;
-    stroke-dashoffset: -300;
-  }
-}
-
-@keyframes lotus-speak {
-  0%, 100% {
-    transform: scale(1.04) translateY(0);
-    stroke: var(--coral-her);
-    stroke-width: 8;
     filter: drop-shadow(0 0 15px rgba(251, 249, 245, 0.35));
   }
+  25% {
+    border-radius: 58% 42% 62% 38% / 45% 55% 45% 55%;
+    transform: scale(1.09) rotate(3deg);
+    filter: drop-shadow(0 0 25px rgba(251, 249, 245, 0.5));
+  }
   50% {
-    transform: scale(1.11) translateY(-2px);
-    stroke: var(--coral-deep-her);
-    stroke-width: 13;
-    filter: drop-shadow(0 0 28px rgba(251, 249, 245, 0.65));
+    border-radius: 42% 58% 38% 62% / 55% 45% 55% 45%;
+    transform: scale(1.01) rotate(-3deg);
+  }
+  75% {
+    border-radius: 46% 54% 53% 47% / 48% 52% 48% 52%;
+    transform: scale(1.06) rotate(2deg);
+  }
+}
+
+@keyframes organic-think {
+  0% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+    transform: scale(1.02) rotate(0deg);
+    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.3));
+  }
+  50% {
+    border-radius: 45% 55% 48% 52% / 52% 45% 55% 48%;
+    transform: scale(0.96) rotate(180deg);
+    filter: drop-shadow(0 0 20px rgba(251, 249, 245, 0.45));
+  }
+  100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+    transform: scale(1.02) rotate(360deg);
+    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.3));
+  }
+}
+
+@keyframes organic-speak {
+  0%, 100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+    transform: scale(1.02) translateY(0);
+    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.3));
+  }
+  50% {
+    border-radius: 55% 45% 53% 47% / 49% 56% 44% 51%;
+    transform: scale(1.1) translateY(-3px);
+    filter: drop-shadow(0 0 26px rgba(251, 249, 245, 0.55));
   }
 }
 
 .lotus-idle-anim {
-  animation: lotus-breathe 6s ease-in-out infinite;
+  animation: organic-breathe 7s ease-in-out infinite;
   transform-origin: center;
 }
 
 .lotus-listening-anim {
-  animation: lotus-listen 2.5s ease-in-out infinite;
+  animation: organic-listen 2.5s ease-in-out infinite;
   transform-origin: center;
 }
 
 .lotus-thinking-anim {
-  animation: lotus-think 3.5s linear infinite;
+  animation: organic-think 4.5s linear infinite;
   transform-origin: center;
 }
 
 .lotus-responding-anim {
-  animation: lotus-speak 1.8s ease-in-out infinite;
+  animation: organic-speak 1.6s ease-in-out infinite;
   transform-origin: center;
+}
+
+/* Chat fade dissolving mask */
+.chat-fade-mask {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
 }
 
 

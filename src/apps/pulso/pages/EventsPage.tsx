@@ -42,37 +42,35 @@ function isOpenClaw(event: any): boolean {
 /** Icon per event/oc-type */
 function EventIcon({ event }: { event: any }) {
   const oc = resolveOcType(event);
-  const base = 'w-10 h-10 rounded-xl flex items-center justify-center border shrink-0';
-  if (oc === 'alert') return <div className={`${base} bg-red-500/10 border-red-500/20 text-red-400`}><AlertTriangle size={18} /></div>;
-  if (oc === 'task')  return <div className={`${base} bg-blue-500/10 border-blue-500/20 text-blue-400`}><ClipboardList size={18} /></div>;
-  if (oc === 'agent_update') return <div className={`${base} bg-violet-500/10 border-violet-500/20 text-violet-400`}><Bot size={18} /></div>;
-  if ((event.eventType || '').includes('created')) return <div className={`${base} bg-blue-500/10 border-blue-500/20 text-blue-400`}><Activity size={18} /></div>;
-  if ((event.eventType || '').includes('updated')) return <div className={`${base} bg-amber-500/10 border-amber-500/20 text-amber-400`}><Activity size={18} /></div>;
-  if (isOpenClaw(event)) return <div className={`${base} bg-cyan-500/10 border-cyan-500/20 text-cyan-400`}><Package size={18} /></div>;
-  return <div className={`${base} bg-white/5 border-white/10 text-white/40`}><Activity size={18} /></div>;
+  const base = 'w-10 h-10 rounded-xl flex items-center justify-center border border-white/15 bg-white/5 text-[#fbf9f5] shrink-0';
+  if (oc === 'alert') return <div className={base}><AlertTriangle size={16} strokeWidth={1.5} /></div>;
+  if (oc === 'task')  return <div className={base}><ClipboardList size={16} strokeWidth={1.5} /></div>;
+  if (oc === 'agent_update') return <div className={base}><Bot size={16} strokeWidth={1.5} /></div>;
+  if (isOpenClaw(event)) return <div className={base}><Package size={16} strokeWidth={1.5} /></div>;
+  return <div className={base}><Activity size={16} strokeWidth={1.5} /></div>;
 }
 
 /** Chip for outbox status */
 const STATUS_CHIP: Record<string, string> = {
-  pending:    'border-amber-500/20 text-amber-400 bg-amber-500/5',
-  processed:  'border-emerald-500/20 text-emerald-400 bg-emerald-500/5',
-  failed:     'border-red-500/20 text-red-400 bg-red-500/5',
-  ignored:    'border-white/10 text-white/20 bg-white/5',
-  processing: 'border-blue-500/20 text-blue-400 bg-blue-500/5',
+  pending:    'border-white/15 text-[#fbf9f5]/60 bg-white/5',
+  processed:  'border-white/35 text-white bg-white/15',
+  failed:     'border-white/15 text-[#fbf9f5]/55 bg-white/5',
+  ignored:    'border-white/10 text-[#fbf9f5]/40 bg-white/3',
+  processing: 'border-white/15 text-[#fbf9f5]/60 bg-white/5',
 };
 
 /** Chip for oc event_type */
 const OC_TYPE_CHIP: Record<string, string> = {
-  agent_update:  'border-violet-500/20 text-violet-400 bg-violet-500/5',
-  task:          'border-blue-500/20 text-blue-400 bg-blue-500/5',
-  alert:         'border-red-500/20 text-red-400 bg-red-500/5',
-  decision:      'border-amber-500/20 text-amber-400 bg-amber-500/5',
-  health_signal: 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5',
+  agent_update:  'border-white/15 text-[#fbf9f5]/70 bg-white/5',
+  task:          'border-white/15 text-[#fbf9f5]/70 bg-white/5',
+  alert:         'border-white/30 text-white bg-white/10 font-bold',
+  decision:      'border-white/15 text-[#fbf9f5]/70 bg-white/5',
+  health_signal: 'border-white/15 text-[#fbf9f5]/70 bg-white/5',
 };
 
 function Chip({ label, style }: { label: string; style?: string }) {
   return (
-    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border shrink-0 ${style || 'border-white/10 text-white/30 bg-white/5'}`}>
+    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border shrink-0 ${style || 'border-white/10 text-[#fbf9f5]/50 bg-white/5'}`}>
       {label}
     </span>
   );
@@ -183,32 +181,32 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 w-full max-w-full">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 w-full max-w-full text-[#fbf9f5]">
       {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8 w-full max-w-full min-w-0">
         <div>
-          <h1 className="text-3xl font-black text-white mb-2">Bastidor Técnico</h1>
-          <p className="text-sm text-white/40 max-w-lg">
-            Logs, eventos, debug, requests bridge, auditorias técnicas e bastidores do sistema.
+          <h1 className="text-2xl font-black text-[#fbf9f5] mb-2 lowercase tracking-tight">bastidor técnico</h1>
+          <p className="text-xs text-[#fbf9f5]/60 max-w-lg font-light lowercase">
+            logs, eventos, debug, requests bridge, auditorias técnicas e bastidores do sistema.
           </p>
         </div>
 
         {/* Filters Container with full horizontal layout responsiveness */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto min-w-0">
           {/* Horizontal scrollable status filters bar */}
-          <div className="flex bg-white/2 border border-white/5 p-1 rounded-xl overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto">
+          <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto">
             {([
-              { key: 'all',       label: 'Todos' },
-              { key: 'openclaw',  label: `OpenClaw (${ocCount})` },
-              { key: 'pending',   label: 'Pendentes' },
-              { key: 'processed', label: 'Processados' },
-              { key: 'failed',    label: 'Falhos' },
+              { key: 'all',       label: 'todos' },
+              { key: 'openclaw',  label: `openclaw (${ocCount})` },
+              { key: 'pending',   label: 'pendentes' },
+              { key: 'processed', label: 'processados' },
+              { key: 'failed',    label: 'falhos' },
             ] as const).map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setFilter(key as any)}
-                className={`px-3.5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
-                  filter === key ? 'bg-white/5 text-white shadow-[0_0_10px_rgba(255,255,255,0.05)]' : 'text-white/20 hover:text-white/40'
+                className={`px-3.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
+                  filter === key ? 'bg-white/10 text-white border border-white/10' : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]'
                 }`}
               >
                 {label}
@@ -217,19 +215,19 @@ export default function EventsPage() {
           </div>
 
           {/* Mandatory Recency Date filter selector */}
-          <div className="flex items-center gap-2 bg-white/2 border border-white/5 px-3 py-2 rounded-xl shrink-0 self-start sm:self-center">
-            <Calendar size={12} className="text-blue-400" />
-            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Data:</span>
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shrink-0 self-start sm:self-center">
+            <Calendar size={12} className="text-[#fbf9f5]/60" strokeWidth={1.5} />
+            <span className="text-[8px] font-black uppercase tracking-widest text-[#fbf9f5]/40">Data:</span>
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="bg-transparent border-none text-[10px] font-bold text-blue-400 focus:ring-0 p-0 cursor-pointer hover:text-blue-300 transition-colors outline-none"
+              className="bg-transparent border-none text-[10px] font-bold text-[#fbf9f5] focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none lowercase"
             >
-              <option value="all" className="bg-[#020617]">Sempre</option>
-              <option value="today" className="bg-[#020617]">Hoje</option>
-              <option value="7d" className="bg-[#020617]">Últimos 7 dias</option>
-              <option value="30d" className="bg-[#020617]">Últimos 30 dias</option>
-              <option value="month" className="bg-[#020617]">Este mês</option>
+              <option value="all" className="bg-[#cf735c]">sempre</option>
+              <option value="today" className="bg-[#cf735c]">hoje</option>
+              <option value="7d" className="bg-[#cf735c]">últimos 7 dias</option>
+              <option value="30d" className="bg-[#cf735c]">últimos 30 dias</option>
+              <option value="month" className="bg-[#cf735c]">este mês</option>
             </select>
           </div>
         </div>
@@ -256,10 +254,10 @@ export default function EventsPage() {
         {/* Events list */}
         <div className="lg:col-span-8 space-y-3 w-full max-w-full min-w-0">
           <div className="flex items-center justify-between mb-2 px-1">
-            <h3 className="text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-1.5">
-              <Terminal size={10} /> Fluxo do Outbox
+            <h3 className="text-[9px] font-black uppercase tracking-widest text-[#fbf9f5]/40 flex items-center gap-1.5">
+              <Terminal size={10} strokeWidth={1.5} /> fluxo do outbox
             </h3>
-            <span className="text-[9px] font-bold text-white/20 uppercase">{filteredEvents.length} Eventos</span>
+            <span className="text-[9px] font-bold text-[#fbf9f5]/30 uppercase">{filteredEvents.length} eventos</span>
           </div>
 
           <div className="space-y-3 w-full max-w-full min-w-0">
@@ -268,7 +266,7 @@ export default function EventsPage() {
             ))}
             {filteredEvents.length === 0 && (
               <div className="py-20 text-center border border-dashed border-white/5 rounded-2xl mt-2">
-                <p className="text-white/20 text-xs italic">Nenhum evento encontrado para estes filtros.</p>
+                <p className="text-[#fbf9f5]/40 text-xs italic">Nenhum evento encontrado para estes filtros.</p>
               </div>
             )}
           </div>
@@ -277,12 +275,12 @@ export default function EventsPage() {
         {/* Right column */}
         <div className="lg:col-span-4 space-y-6 w-full max-w-full min-w-0">
           {/* Ingestion stream */}
-          <section className="bg-white/2 border border-white/5 rounded-3xl p-6 w-full max-w-full min-w-0">
+          <section className="bg-white/3 border border-white/5 rounded-3xl p-6 w-full max-w-full min-w-0">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-1.5">
-                <Zap size={10} /> Ingestão (OpenClaw)
+              <h3 className="text-[9px] font-black uppercase tracking-widest text-[#fbf9f5]/40 flex items-center gap-1.5">
+                <Zap size={10} strokeWidth={1.5} /> ingestão (openclaw)
               </h3>
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+              <div className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
             </div>
             <div className="space-y-5">
               {ingestions.map(ingest => {
@@ -295,43 +293,43 @@ export default function EventsPage() {
                 return (
                   <div key={ingest.id} className="relative pl-5 pb-5 border-l border-white/5 last:pb-0 min-w-0">
                     <div className={`absolute left-[-4px] top-0 w-2 h-2 rounded-full ${
-                      ingest.ingestionStatus === 'failed' ? 'bg-red-500' :
-                      ingest.ingestionStatus === 'converted_to_inbox' ? 'bg-emerald-500' :
-                      'bg-blue-500'
+                      ingest.ingestionStatus === 'failed' ? 'bg-[#3d2f2f]' :
+                      ingest.ingestionStatus === 'converted_to_inbox' ? 'bg-white' :
+                      'bg-white/50'
                     }`} />
                     <div className="flex items-center justify-between mb-1 gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[8px] font-black text-cyan-400/60 uppercase tracking-tight shrink-0">OpenClaw</span>
+                        <span className="text-[8px] font-black text-[#fbf9f5]/60 uppercase tracking-tight shrink-0">openclaw</span>
                         {ocType && (
                           <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border shrink-0 truncate ${OC_TYPE_CHIP[ocType] || 'border-white/10 text-white/30'}`}>
                             {ocType.replace(/_/g, ' ')}
                           </span>
                         )}
                       </div>
-                      <span className="text-[8px] text-white/20 shrink-0">
+                      <span className="text-[8px] text-[#fbf9f5]/30 shrink-0">
                         {ingest.createdAt ? new Date(ingest.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                       </span>
                     </div>
-                    <p className="text-xs text-white/60 font-medium line-clamp-2 break-words">{title}</p>
-                    <p className="text-[8px] text-white/30 font-bold uppercase mt-1 tracking-widest">{ingest.ingestionStatus || 'received'}</p>
+                    <p className="text-xs text-[#fbf9f5]/80 font-light line-clamp-2 break-words">{title}</p>
+                    <p className="text-[8px] text-[#fbf9f5]/40 font-bold uppercase mt-1 tracking-widest">{ingest.ingestionStatus || 'received'}</p>
                   </div>
                 );
               })}
               {ingestions.length === 0 && (
-                <p className="text-center py-10 text-[10px] text-white/20 italic">Aguardando entrada externa...</p>
+                <p className="text-center py-10 text-[10px] text-[#fbf9f5]/30 italic">Aguardando entrada externa...</p>
               )}
             </div>
           </section>
 
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/2 border border-white/5 p-4 rounded-2xl min-w-0">
-              <p className="text-[8px] font-black text-white/20 uppercase mb-0.5 truncate">OpenClaw</p>
-              <p className="text-lg font-black text-cyan-400">{ocCount}</p>
+            <div className="bg-white/3 border border-white/5 p-4 rounded-2xl min-w-0">
+              <p className="text-[8px] font-black text-[#fbf9f5]/40 uppercase mb-0.5 truncate">OpenClaw</p>
+              <p className="text-lg font-black text-white">{ocCount}</p>
             </div>
-            <div className="bg-white/2 border border-white/5 p-4 rounded-2xl min-w-0">
-              <p className="text-[8px] font-black text-white/20 uppercase mb-0.5 truncate">Pendentes</p>
-              <p className="text-lg font-black text-amber-500">{events.filter(e => e.outboxStatus === 'pending').length}</p>
+            <div className="bg-white/3 border border-white/5 p-4 rounded-2xl min-w-0">
+              <p className="text-[8px] font-black text-[#fbf9f5]/40 uppercase mb-0.5 truncate">Pendentes</p>
+              <p className="text-lg font-black text-white">{events.filter(e => e.outboxStatus === 'pending').length}</p>
             </div>
           </div>
         </div>
@@ -361,7 +359,7 @@ function EventRow({ event, onClick }: { event: any; onClick: () => void }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
-      className="group bg-white/2 border border-white/5 p-4 md:p-5 rounded-2xl hover:bg-white/5 hover:border-white/10 transition-all cursor-pointer w-full max-w-full min-w-0"
+      className="group bg-white/3 border border-white/5 p-4 md:p-5 rounded-2xl hover:bg-white/8 hover:border-white/10 transition-all cursor-pointer w-full max-w-full min-w-0"
     >
       <div className="flex items-start gap-3 md:gap-4 min-w-0">
         <EventIcon event={event} />
@@ -369,16 +367,16 @@ function EventRow({ event, onClick }: { event: any; onClick: () => void }) {
         <div className="flex-1 min-w-0">
           {/* Chips row */}
           <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-            {oc && <Chip label="OpenClaw" style="border-cyan-500/30 text-cyan-400 bg-cyan-500/5" />}
+            {oc && <Chip label="OpenClaw" style="border-white/20 text-[#fbf9f5]/70 bg-white/5" />}
             {ocType && <Chip label={ocType.replace(/_/g, ' ')} style={OC_TYPE_CHIP[ocType]} />}
             {severity && (
               <Chip
                 label={severity}
                 style={
-                  severity === 'critical' ? 'border-red-500/40 text-red-400 bg-red-500/5' :
-                  severity === 'high'     ? 'border-orange-500/30 text-orange-400 bg-orange-500/5' :
-                  severity === 'warning'  ? 'border-amber-500/30 text-amber-400 bg-amber-500/5' :
-                  'border-white/10 text-white/30 bg-white/5'
+                  severity === 'critical' ? 'border-white/40 text-white bg-white/10 font-bold' :
+                  severity === 'high'     ? 'border-white/20 text-[#fbf9f5]/80 bg-white/5' :
+                  severity === 'warning'  ? 'border-white/20 text-[#fbf9f5]/70 bg-white/5' :
+                  'border-white/15 text-[#fbf9f5]/50 bg-white/3'
                 }
               />
             )}
@@ -386,29 +384,29 @@ function EventRow({ event, onClick }: { event: any; onClick: () => void }) {
               label={event.outboxStatus || 'received'}
               style={STATUS_CHIP[event.outboxStatus || 'pending']}
             />
-            {event.areaRef && <Chip label={event.areaRef.replace('area_', '')} style="border-blue-500/20 text-blue-400 bg-blue-500/5" />}
-            {event.projectRef && <Chip label={event.projectRef.replace('proj_', '')} style="border-violet-500/20 text-violet-400 bg-violet-500/5" />}
+            {event.areaRef && <Chip label={event.areaRef.replace('area_', '')} style="border-white/15 text-[#fbf9f5]/60 bg-white/5" />}
+            {event.projectRef && <Chip label={event.projectRef.replace('proj_', '')} style="border-white/15 text-[#fbf9f5]/60 bg-white/5" />}
           </div>
 
           {/* Title */}
-          <h4 className="text-xs md:text-[13px] font-bold text-white/85 leading-snug break-words mb-1">
+          <h4 className="text-xs md:text-[13px] font-bold text-[#fbf9f5]/90 leading-snug break-words mb-1">
             {title}
           </h4>
 
           {/* Meta row */}
-          <div className="flex items-center gap-2 text-[8px] font-bold text-white/25 uppercase tracking-widest flex-wrap">
+          <div className="flex items-center gap-2 text-[8px] font-bold text-[#fbf9f5]/40 uppercase tracking-widest flex-wrap">
             {event.ocActor?.name && (
-              <span className="flex items-center gap-1 shrink-0"><Bot size={8} />{event.ocActor.name}</span>
+              <span className="flex items-center gap-1 shrink-0"><Bot size={8} strokeWidth={1.5} />{event.ocActor.name}</span>
             )}
             {!event.ocActor?.name && event.actorRef && (
-              <span className="flex items-center gap-1 shrink-0"><Shield size={8} />{event.actorRef}</span>
+              <span className="flex items-center gap-1 shrink-0"><Shield size={8} strokeWidth={1.5} />{event.actorRef}</span>
             )}
             {event.ocSource?.host && <span className="shrink-0">{event.ocSource.host}</span>}
             <span className="shrink-0">{event.createdAt ? new Date(event.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '--'}</span>
           </div>
         </div>
 
-        <ChevronRight size={14} className="text-white/10 group-hover:text-white/30 transition-colors mt-1 shrink-0 ml-1" />
+        <ChevronRight size={14} className="text-[#fbf9f5]/20 group-hover:text-[#fbf9f5]/45 transition-colors mt-1 shrink-0 ml-1" />
       </div>
     </motion.div>
   );
@@ -437,53 +435,55 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           onClick={onClose}
-          className="absolute inset-0 bg-black/80 backdrop-blur-md pointer-events-auto w-full max-w-full"
+          className="absolute inset-0 bg-[#3d2f2f]/40 backdrop-blur-md pointer-events-auto w-full max-w-full"
         />
         <motion.div
           initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-lg sm:max-w-md md:max-w-lg bg-[#020617] border-l border-white/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col shrink-0 custom-scrollbar"
+          className="relative w-full max-w-lg sm:max-w-md md:max-w-lg bg-[#fbf9f5] border-l border-[#3c2f2f]/10 h-full overflow-y-auto pointer-events-auto shadow-2xl flex flex-col shrink-0 custom-scrollbar text-[#3d2f2f]"
         >
           <div className="p-6 md:p-8 w-full max-w-full min-w-0">
             {/* Header */}
-            <div className="flex items-start justify-between mb-6 pb-2 border-b border-white/5">
+            <div className="flex items-start justify-between mb-6 pb-2 border-b border-[#3c2f2f]/10">
               <div className="flex items-center gap-3 min-w-0">
-                <EventIcon event={event} />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-[#3c2f2f]/20 bg-[#3c2f2f]/5 text-[#cf735c] shrink-0">
+                  <Activity size={16} strokeWidth={1.5} />
+                </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                    {oc    && <Chip label="OpenClaw"   style="border-cyan-500/30 text-cyan-400 bg-cyan-500/5" />}
-                    {ocType && <Chip label={ocType.replace(/_/g, ' ')} style={OC_TYPE_CHIP[ocType]} />}
+                    {oc    && <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase border border-[#3c2f2f]/20 text-[#3d2f2f]/60 bg-[#3c2f2f]/5">OpenClaw</span>}
+                    {ocType && <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase border border-[#3c2f2f]/20 text-[#3d2f2f]/60 bg-[#3c2f2f]/5">{ocType.replace(/_/g, ' ')}</span>}
                   </div>
-                  <h2 className="text-base font-black text-white leading-tight break-words">{title}</h2>
+                  <h2 className="text-base font-black text-[#3d2f2f] leading-tight break-words lowercase">{title}</h2>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 transition-colors shrink-0">
-                <X size={18} />
+              <button onClick={onClose} className="p-2 hover:bg-[#3c2f2f]/5 rounded-full text-[#3d2f2f]/40 transition-colors shrink-0">
+                <X size={18} strokeWidth={1.5} />
               </button>
             </div>
 
             {/* Status cards */}
             <div className="grid grid-cols-2 gap-3 mb-6 w-full max-w-full min-w-0">
-              <div className="bg-white/2 border border-white/5 p-3 rounded-xl min-w-0">
-                <p className="text-[8px] font-black text-white/20 uppercase mb-1 truncate">Outbox Status</p>
+              <div className="bg-[#3c2f2f]/5 border border-[#3c2f2f]/10 p-3 rounded-xl min-w-0">
+                <p className="text-[8px] font-black text-[#3d2f2f]/45 uppercase mb-1 truncate">Outbox Status</p>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${
-                    event.outboxStatus === 'processed' ? 'bg-emerald-500' :
-                    event.outboxStatus === 'failed'    ? 'bg-red-500' : 'bg-amber-500'
+                    event.outboxStatus === 'processed' ? 'bg-[#52856d]' :
+                    event.outboxStatus === 'failed'    ? 'bg-[#c9554d]' : 'bg-[#d97706]'
                   }`} />
-                  <span className="text-[9px] font-bold text-white/70 uppercase truncate">{event.outboxStatus || 'pending'}</span>
+                  <span className="text-[9px] font-bold text-[#3d2f2f]/85 uppercase truncate">{event.outboxStatus || 'pending'}</span>
                 </div>
               </div>
-              <div className="bg-white/2 border border-white/5 p-3 rounded-xl min-w-0">
-                <p className="text-[8px] font-black text-white/20 uppercase mb-1 truncate">Origem</p>
-                <span className="text-[9px] font-bold text-cyan-400 uppercase truncate block">{event.origin || 'system'}</span>
+              <div className="bg-[#3c2f2f]/5 border border-[#3c2f2f]/10 p-3 rounded-xl min-w-0">
+                <p className="text-[8px] font-black text-[#3d2f2f]/45 uppercase mb-1 truncate">Origem</p>
+                <span className="text-[9px] font-bold text-[#cf735c] uppercase truncate block">{event.origin || 'system'}</span>
               </div>
             </div>
 
             {/* Payload */}
             <div className="mb-6 w-full max-w-full min-w-0">
-              <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 truncate">Payload Snapshot</h3>
-              <pre className="p-4 bg-black/40 border border-white/5 rounded-xl text-[9px] text-blue-400 font-mono overflow-x-auto whitespace-pre-wrap break-words leading-relaxed max-h-60 custom-scrollbar">
+              <h3 className="text-[8px] font-black uppercase tracking-widest text-[#3d2f2f]/45 mb-2 truncate">Payload Snapshot</h3>
+              <pre className="p-4 bg-[#3c2f2f]/5 border border-[#3c2f2f]/10 rounded-xl text-[9px] text-[#3d2f2f]/85 font-mono overflow-x-auto whitespace-pre-wrap break-words leading-relaxed max-h-60 custom-scrollbar">
                 {JSON.stringify(p && Object.keys(p).length > 0 ? p : { info: event.payloadSummary || 'sem payload' }, null, 2)}
               </pre>
             </div>
@@ -491,10 +491,10 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             {/* OpenClaw envelope fields */}
             {oc && (
               <div className="mb-6 w-full max-w-full min-w-0">
-                <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 flex items-center gap-1 truncate">
-                  <Cpu size={10} className="shrink-0" /> Envelope OpenClaw
+                <h3 className="text-[8px] font-black uppercase tracking-widest text-[#3d2f2f]/45 mb-2 flex items-center gap-1 truncate">
+                  <Cpu size={10} strokeWidth={1.5} className="shrink-0" /> Envelope OpenClaw
                 </h3>
-                <div className="space-y-0 border border-white/5 rounded-xl overflow-hidden max-w-full min-w-0">
+                <div className="space-y-0 border border-[#3c2f2f]/10 rounded-xl overflow-hidden max-w-full min-w-0">
                   <MetaRow label="event_id"      value={event.entityRef || event.id} />
                   <MetaRow label="dedupe_key"    value={event.ocDedupeKey || '--'} />
                   <MetaRow label="event_type"    value={ocType || '--'} />
@@ -514,10 +514,10 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
 
             {/* Context & Metadata */}
             <div className="mb-6 w-full max-w-full min-w-0">
-              <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 flex items-center gap-1 truncate">
-                <Layout size={10} className="shrink-0" /> Contexto Estrutural
+              <h3 className="text-[8px] font-black uppercase tracking-widest text-[#3d2f2f]/45 mb-2 flex items-center gap-1 truncate">
+                <Layout size={10} strokeWidth={1.5} className="shrink-0" /> Contexto Estrutural
               </h3>
-              <div className="space-y-0 border border-white/5 rounded-xl overflow-hidden max-w-full min-w-0">
+              <div className="space-y-0 border border-[#3c2f2f]/10 rounded-xl overflow-hidden max-w-full min-w-0">
                 <MetaRow label="Área (areaRef)"     value={event.areaRef || '--'} />
                 <MetaRow label="Projeto (projectRef)" value={event.projectRef || '--'} />
                 <MetaRow label="entityType"          value={event.entityType || '--'} />
@@ -530,8 +530,8 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
 
             {/* System metadata */}
             <div className="mb-6 w-full max-w-full min-w-0">
-              <h3 className="text-[8px] font-black uppercase tracking-widest text-white/25 mb-2 truncate">Sistema Canônico</h3>
-              <div className="space-y-0 border border-white/5 rounded-xl overflow-hidden max-w-full min-w-0">
+              <h3 className="text-[8px] font-black uppercase tracking-widest text-[#3d2f2f]/45 mb-2 truncate">Sistema Canônico</h3>
+              <div className="space-y-0 border border-[#3c2f2f]/10 rounded-xl overflow-hidden max-w-full min-w-0">
                 <MetaRow label="pulso_event_id" value={event.id} />
                 <MetaRow label="entityRef"      value={event.entityRef || '--'} />
                 <MetaRow label="processedBy"    value={event.processedByAgents?.join(', ') || 'nenhum'} />
@@ -539,23 +539,23 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2 pt-4 border-t border-white/5 w-full max-w-full">
+            <div className="flex items-center gap-2 pt-4 border-t border-[#3c2f2f]/10 w-full max-w-full">
               <button
                 onClick={() => onUpdateStatus(event.id, 'processed')}
-                className="flex-1 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 bg-[#52856d]/10 border border-[#52856d]/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-[#52856d] hover:bg-[#52856d]/20 transition-all flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 size={12} /> Processado
+                <CheckCircle2 size={12} strokeWidth={1.5} /> Processado
               </button>
               <button
                 onClick={() => onUpdateStatus(event.id, 'failed')}
-                className="flex-1 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 bg-[#c9554d]/10 border border-[#c9554d]/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-[#c9554d] hover:bg-[#c9554d]/20 transition-all flex items-center justify-center gap-1.5"
               >
-                <X size={12} /> Falha
+                <X size={12} strokeWidth={1.5} /> Falha
               </button>
             </div>
             <button
               onClick={() => onUpdateStatus(event.id, 'ignored')}
-              className="w-full mt-2 py-3 bg-white/2 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/30 hover:bg-white/5 transition-all"
+              className="w-full mt-2 py-3 bg-[#3c2f2f]/5 border border-[#3c2f2f]/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-[#3d2f2f]/60 hover:bg-[#3c2f2f]/10 transition-all"
             >
               Ignorar Evento
             </button>
@@ -570,9 +570,9 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-2 px-3 border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors min-w-0 gap-2">
-      <span className="text-[8px] text-white/20 font-black uppercase tracking-widest shrink-0 truncate max-w-[40%]">{label}</span>
-      <span className="text-[9px] text-white/60 font-mono truncate max-w-[60%] text-right select-all">{value}</span>
+    <div className="flex items-center justify-between py-2 px-3 border-b border-[#3c2f2f]/10 last:border-0 hover:bg-[#3c2f2f]/5 transition-colors min-w-0 gap-2">
+      <span className="text-[8px] text-[#3d2f2f]/45 font-black uppercase tracking-widest shrink-0 truncate max-w-[40%]">{label}</span>
+      <span className="text-[9px] text-[#3d2f2f]/85 font-mono truncate max-w-[60%] text-right select-all">{value}</span>
     </div>
   );
 }

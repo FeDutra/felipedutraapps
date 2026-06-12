@@ -1,14 +1,12 @@
 {
   "hosting": {
-    "source": ".",
+    "public": "out",
+    "cleanUrls": true,
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "frameworksBackend": {
-      "region": "us-central1"
-    },
     "rewrites": [
       {
         "source": "/api/pulso/ingest",
@@ -17,6 +15,10 @@
       {
         "source": "/api/pulso/requests/**",
         "function": "pulsoRequests"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
       }
     ]
   },

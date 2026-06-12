@@ -898,7 +898,7 @@ export default function LivePage() {
             onClick={() => setIsSidebarOpen(true)}
             className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
           >
-            <Menu size={12} className="stroke-[1.5]" />
+            <Menu size={12} strokeWidth={1.5} />
             <span>[ sinais ]</span>
           </button>
         </div>
@@ -908,58 +908,50 @@ export default function LivePage() {
       <main className="flex-1 flex flex-col items-center justify-center max-w-2xl w-full mx-auto my-12 z-10 relative">
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div className="mb-14 relative flex items-center justify-center select-none">
-          <svg className="w-32 h-32 transition-transform duration-700 ease-out" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="34"
-              fill="none"
-              stroke="#fbf9f5"
-              strokeWidth="7"
-              strokeLinecap="round"
-              className={getLotusAnimClass()}
-            />
-          </svg>
+        <div className="mb-14 relative flex items-center justify-center select-none w-32 h-32">
+          <div 
+            className={`w-16 h-16 rounded-full border-4 border-[#fbf9f5] transition-all duration-700 ease-out ${getLotusAnimClass()}`} 
+          />
         </div>
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className="w-full space-y-8 max-h-[380px] overflow-y-auto pr-1 no-scrollbar py-4 border-b border-white/10">
-          {messages.map((msg) => {
-            const isLotus = msg.sender === 'lotus';
-            return (
-              <div 
-                key={msg.id} 
-                className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
-              >
-                <div className="max-w-[85%] space-y-1">
-                  {/* Sender label */}
-                  <span className={`block text-[9px] tracking-widest lowercase select-none ${
-                    isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
-                  }`}>
-                    {isLotus ? 'lótus' : 'fê'}
-                  </span>
-                  
-                  {/* Text body */}
-                  <div className={`text-sm leading-relaxed font-light text-[#fbf9f5] ${!isLotus ? 'text-right' : 'text-left'}`}>
-                    {renderMarkdown(msg.text)}
-                  </div>
+        <div className="w-full h-[400px] relative mt-2 mb-6 bg-white/3 backdrop-blur-sm rounded-3xl border border-white/5 shadow-none overflow-hidden">
+          <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
+            {messages.map((msg) => {
+              const isLotus = msg.sender === 'lotus';
+              return (
+                <div 
+                  key={msg.id} 
+                  className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
+                >
+                  <div className="max-w-[85%] space-y-1">
+                    {/* Sender label */}
+                    <span className={`block text-[9px] tracking-widest lowercase select-none ${
+                      isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
+                    }`}>
+                      {isLotus ? 'lótus' : 'fê'}
+                    </span>
+                    
+                    {/* Text body */}
+                    <div className={`text-sm leading-relaxed font-light text-[#fbf9f5] ${!isLotus ? 'text-right' : 'text-left'}`}>
+                      {renderMarkdown(msg.text)}
+                    </div>
 
-                  {/* Operational result / Governance UI (v1.7 & v1.8) */}
-                  {isLotus && msg.openclawResult && (
-                    <div className="mt-3 pt-3 border-t border-white/10 space-y-3 text-left">
-                      
-                      {/* Status row */}
-                      <div className="flex items-center gap-2 text-[9px] text-[#fbf9f5]/60 font-light lowercase">
-                        {msg.handoffStatus === 'waiting_user_approval' ? (
-                          <><Clock size={10} className="stroke-[1.5]" /><span>aguarda aprovação humana</span></>
-                        ) : msg.handoffStatus === 'executed' ? (
-                          <><Check size={10} className="text-white/90 stroke-[2]" /><span>executada com sucesso</span></>
-                        ) : msg.openclawResult.errors && msg.openclawResult.errors.length > 0 ? (
-                          <><AlertTriangle size={10} className="stroke-[1.5] text-white" /><span>falha no processamento</span></>
-                        ) : (
-                          <><Zap size={10} className="stroke-[1.5]" /><span>resposta obtida</span></>
-                        )}
+                    {/* Operational result / Governance UI (v1.7 & v1.8) */}
+                    {isLotus && msg.openclawResult && (
+                      <div className="mt-3 pt-3 border-t border-white/10 space-y-3 text-left">
+                        
+                        {/* Status row */}
+                        <div className="flex items-center gap-2 text-[9px] text-[#fbf9f5]/60 font-light lowercase">
+                          {msg.handoffStatus === 'waiting_user_approval' ? (
+                            <><Clock size={10} strokeWidth={1.5} /><span>aguarda aprovação humana</span></>
+                          ) : msg.handoffStatus === 'executed' ? (
+                            <><Check size={10} strokeWidth={1.5} className="text-white/90" /><span>executada com sucesso</span></>
+                          ) : msg.openclawResult.errors && msg.openclawResult.errors.length > 0 ? (
+                            <><AlertTriangle size={10} strokeWidth={1.5} className="text-white" /><span>falha no processamento</span></>
+                          ) : (
+                            <><Zap size={10} strokeWidth={1.5} /><span>resposta obtida</span></>
+                          )}
                         
                         {/* Copy package */}
                         <button
@@ -1100,7 +1092,8 @@ export default function LivePage() {
 
           <div ref={chatEndRef} />
         </div>
-      </main>
+      </div>
+    </main>
 
       {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
       <footer className="w-full max-w-xl mx-auto flex flex-col items-center gap-4 z-10 select-none">
@@ -1145,7 +1138,7 @@ export default function LivePage() {
               }`}
               title={voiceState === 'listening' ? 'ouvindo... clique para parar' : 'capturar áudio'}
             >
-              {voiceState === 'listening' ? <Mic size={14} className="animate-pulse" /> : <Mic size={14} />}
+              {voiceState === 'listening' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
             </button>
           )}
 
@@ -1154,14 +1147,14 @@ export default function LivePage() {
             disabled={!inputMessage.trim()}
             className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
           >
-            <Send size={14} />
+            <Send size={14} strokeWidth={1.5} />
           </button>
         </div>
       </footer>
 
       {/* 4. CAMADA LATERAL ULTRALEVE — NEGATIVO (Fundo Off-White, Texto Terracota) */}
       <div 
-        className={`fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#fbf9f5]/98 backdrop-blur-lg border-l border-[#e59f8c]/25 shadow-2xl transition-all duration-500 ease-out transform ${
+        className={`fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#fbf9f5]/96 backdrop-blur-xl border-l border-[#e59f8c]/20 shadow-xl transition-all duration-500 ease-out transform ${
           isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
         } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#3d2f2f]`}
       >
@@ -1169,36 +1162,36 @@ export default function LivePage() {
           {/* Drawer Header */}
           <div className="flex items-center justify-between border-b border-[#3c2f2f]/10 pb-4">
             <div className="flex items-center gap-2">
-              <Activity size={14} className="text-[#cf735c] stroke-[2]" />
+              <Activity size={14} className="text-[#cf735c]" strokeWidth={1.5} />
               <span className="text-xs font-bold tracking-widest text-[#3d2f2f]/85 lowercase">sinais operacionais</span>
             </div>
             <button 
               onClick={() => setIsSidebarOpen(false)}
               className="text-[#3c2f2f]/45 hover:text-[#cf735c] transition-colors bg-transparent border-none cursor-pointer outline-none"
             >
-              <X size={16} />
+              <X size={16} strokeWidth={1.5} />
             </button>
           </div>
 
           {/* Sinais de Atenção */}
           <div className="space-y-4">
             <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">briefing do agora</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
-                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">minhas tarefas</span>
-                <span className="text-xl font-bold mt-1 text-[#3d2f2f]">{feTasks.length}</span>
+            <div className="divide-y divide-[#3c2f2f]/10 text-sm">
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="font-light text-[#3d2f2f]/70 lowercase">minhas tarefas</span>
+                <span className="font-bold text-base text-[#3d2f2f]">{feTasks.length}</span>
               </div>
-              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
-                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">riscos & travas</span>
-                <span className="text-xl font-bold mt-1 text-[#c9554d]">{totalRisksCount}</span>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="font-light text-[#3d2f2f]/70 lowercase">riscos & travas</span>
+                <span className={`font-bold text-base ${totalRisksCount > 0 ? 'text-[#c9554d]' : 'text-[#3d2f2f]'}`}>{totalRisksCount}</span>
               </div>
-              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
-                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">projetos ativos</span>
-                <span className="text-xl font-bold mt-1 text-[#3d2f2f]">{activeProjects.length}</span>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="font-light text-[#3d2f2f]/70 lowercase">projetos ativos</span>
+                <span className="font-bold text-base text-[#3d2f2f]">{activeProjects.length}</span>
               </div>
-              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
-                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">metabolismo</span>
-                <span className={`text-[10px] font-bold mt-2 uppercase tracking-wide ${brokenRoutines.length > 0 ? 'text-[#c9554d]' : 'text-[#52856d]'}`}>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="font-light text-[#3d2f2f]/70 lowercase">metabolismo</span>
+                <span className={`font-bold text-xs uppercase tracking-wider ${brokenRoutines.length > 0 ? 'text-[#c9554d]' : 'text-[#52856d]'}`}>
                   {brokenRoutines.length > 0 ? 'instável' : 'saudável'}
                 </span>
               </div>
@@ -1208,16 +1201,16 @@ export default function LivePage() {
           {/* Próximas Melhores Ações */}
           <div className="space-y-3">
             <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">ações recomendadas</h4>
-            <div className="space-y-2.5">
+            <div className="divide-y divide-[#3c2f2f]/10">
               {nextBestActions.map((action, i) => (
-                <div key={i} className="p-3 bg-[#faf6f0] border border-[#e59f8c]/15 rounded-xl flex flex-col justify-between gap-2">
-                  <p className="text-[11px] font-light text-[#3d2f2f] leading-normal">{action.text}</p>
+                <div key={i} className="py-3 flex flex-col gap-1.5">
+                  <p className="text-xs font-light text-[#3d2f2f]/80 leading-relaxed lowercase">{action.text}</p>
                   <button 
                     onClick={() => { action.onClick(); setIsSidebarOpen(false); }}
-                    className="text-[9px] font-bold text-[#cf735c] hover:text-[#b3563f] flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
+                    className="text-[10px] font-bold text-[#cf735c] hover:text-[#b3563f] flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
                   >
                     <span>{action.actionText}</span>
-                    <ArrowRight size={8} />
+                    <ArrowRight size={10} strokeWidth={1.5} />
                   </button>
                 </div>
               ))}
@@ -1235,11 +1228,11 @@ export default function LivePage() {
                 ver ecossistema
               </button>
             </div>
-            <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1 no-scrollbar">
+            <div className="divide-y divide-[#3c2f2f]/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
               {activeProjects.slice(0, 4).map((p: any) => (
-                <div key={p.id} className="p-2.5 bg-[#faf6f0] border border-[#e59f8c]/15 rounded-lg flex items-center justify-between text-xs">
-                  <span className="font-medium text-[#3d2f2f] truncate max-w-[150px]">{p.name}</span>
-                  <span className="text-[9px] font-light text-[#3d2f2f]/60 truncate max-w-[120px]">
+                <div key={p.id} className="py-2.5 flex items-center justify-between text-xs">
+                  <span className="font-medium text-[#3d2f2f]/90 truncate max-w-[150px] lowercase">{p.name}</span>
+                  <span className="text-[10px] font-light text-[#3d2f2f]/50 truncate max-w-[120px] lowercase">
                     {p.nextStep ? p.nextStep : 'sem passo'}
                   </span>
                 </div>
@@ -1250,11 +1243,11 @@ export default function LivePage() {
           {/* Fontes monitoradas */}
           <div className="space-y-3">
             <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">fontes observadas</h4>
-            <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1 no-scrollbar">
+            <div className="divide-y divide-[#3c2f2f]/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
               {allSources.slice(0, 5).map((src: any, i) => (
-                <div key={i} className="flex justify-between items-center text-xs py-1 px-2 hover:bg-[#faf6f0] rounded-lg">
-                  <span className="text-[#3d2f2f] font-light">{src.name}</span>
-                  <span className="text-[8px] font-bold text-[#52856d] uppercase tracking-wider">sintonizado</span>
+                <div key={i} className="flex justify-between items-center text-xs py-2.5">
+                  <span className="text-[#3d2f2f]/80 font-light lowercase">{src.name}</span>
+                  <span className="text-[9px] font-bold text-[#52856d] uppercase tracking-wider">sintonizado</span>
                 </div>
               ))}
             </div>
