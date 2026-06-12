@@ -242,14 +242,13 @@ export default function LivePage() {
     }).catch(() => {/* clipboard unavailable */});
   };
 
-  /** v1.5: Registers OpenClaw's response back into pulso_requests */
   const handleRegisterOpenClawResponse = async (msg: Message) => {
     if (!openclawDraft.trim() || !msg.requestId) return;
     setSubmittingResponse(true);
     try {
       const needsApproval = msg.interpretation?.handoff?.requiresHumanConfirmation ?? false;
-      const newStatus = needsApproval ? 'waiting_user_approval' : 'proposal_ready';
-      const result = {
+      let newStatus = needsApproval ? 'waiting_user_approval' : 'proposal_ready';
+      let result = {
         processedBy: 'openclaw',
         processedAt: new Date(),
         responseText: openclawDraft.trim(),
@@ -257,9 +256,28 @@ export default function LivePage() {
         statusTransition: newStatus,
         auditLog: {
           confidence: 'medium' as const,
-          notes: 'Registrado manualmente via Lótus Live — retorno assistido v1.7'
+          notes: 'Registrado manualmente via Lótus Live — retorno assistido v1.8'
         }
-      };
+      } as any;
+
+      if (openclawDraft.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(openclawDraft.trim());
+          const requiresApproval = parsed.requiresHumanApproval !== undefined ? Boolean(parsed.requiresHumanApproval) : needsApproval;
+          newStatus = requiresApproval ? 'waiting_user_approval' : 'proposal_ready';
+          
+          result = {
+            ...result,
+            ...parsed,
+            processedAt: new Date(),
+            requiresHumanApproval: requiresApproval,
+            statusTransition: newStatus
+          };
+        } catch (jsonErr) {
+          console.error("Failed to parse openclawDraft JSON:", jsonErr);
+        }
+      }
+
       await requestsService.updateRequest(msg.requestId, {
         openclawResult: result as any,
         status: newStatus as any,
