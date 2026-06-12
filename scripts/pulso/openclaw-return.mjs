@@ -33,6 +33,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { getAuth, signInAnonymously } from "firebase/auth";
 import fs from "fs";
 import path from "path";
 
@@ -134,6 +135,15 @@ async function main() {
   console.error(`🔍 Projeto Firebase: ${firebaseConfig.projectId}`);
   console.error(`📂 Workspace: ${WORKSPACE_ID}`);
   console.error(`🎯 Request ID: ${requestId}\n`);
+
+  try {
+    // Authenticate anonymously first
+    const auth = getAuth(app);
+    await signInAnonymously(auth);
+  } catch (authErr) {
+    console.error("❌ Erro de Autenticação:", authErr.message);
+    process.exit(1);
+  }
 
   // ─ Step 1: Verify document exists ────────────────────────────────────────
   const docRef = doc(db, DOC_PATH);

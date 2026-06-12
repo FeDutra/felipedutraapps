@@ -22,6 +22,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
+import { getAuth, signInAnonymously } from "firebase/auth";
 import fs from "fs";
 import path from "path";
 
@@ -76,7 +77,14 @@ function isEligible(doc) {
   if (d.archived === true) return false;
   if (!ELIGIBLE_STATUSES.has(d.status)) return false;
   if (d.requestType !== "conversation_command") return false;
-  if (d.origin !== "lotus_live") return false;
+  if (d.origin !== "lotus_live" && d.origin !== "lotus_live") return false;
+  
+  const interpretation = d.interpretation || {};
+  const handoff = d.handoff || interpretation?.handoff || null;
+  if (!handoff) return false;
+  if (handoff.target !== "openclaw") return false;
+  if (handoff.mode !== "proposal_only" && handoff.canExecuteNow !== false) return false;
+
   return true;
 }
 
@@ -89,35 +97,9 @@ function buildPackage(doc) {
   const handoff = d.handoff || interpretation?.handoff || null;
 
   return {
-    meta: {
-      version: "v1.6",
-      generatedAt: new Date().toISOString(),
-      generator: "openclaw-next.mjs",
-      mode: "proposal_only",
-      securityConstraints: {
-        canExecuteNow: false,
-        noDirectMutations: true,
-        noExternalMessages: true,
-        noTaskCreation: true,
-        noProjectCreation: true,
-        noPersonCreation: true,
-        responseTarget: `workspaces/${WORKSPACE_ID}/pulso_requests/${requestId}`,
-        responseField: "openclawResult",
-        onlyAllowedActions: ["read", "create_proposal", "update_proposal"],
-      },
-    },
-    request: {
-      id: requestId,
-      command: d.summary || d.title || "(sem comando)",
-      title: d.title,
-      summary: d.summary,
-      status: d.status,
-      origin: d.origin,
-      source: d.source,
-      requestedBy: d.requestedBy,
-      requestedAt: d.requestedAt?.toDate?.()?.toISOString() || d.requestedAt || null,
-      updatedAt: d.updatedAt?.toDate?.()?.toISOString() || d.updatedAt || null,
-    },
+    requestId: requestId,
+    title: d.title || "",
+    summary: d.summary || "",
     interpretation: interpretation,
     handoff: handoff
       ? {
@@ -134,6 +116,28 @@ function buildPackage(doc) {
           executionPrompt: handoff.executionPrompt,
         }
       : null,
+    executionPrompt: handoff?.executionPrompt || "",
+    sourcesNeeded: interpretation?.sourcesNeeded || [],
+    entitiesMentioned: handoff?.entitiesMentioned || [],
+    riskLevel: handoff?.riskLevel || interpretation?.riskLevel || "low",
+    requiresHumanApproval: handoff?.requiresHumanConfirmation ?? interpretation?.requiresConfirmation ?? true,
+    meta: {
+      version: "v1.9",
+      generatedAt: new Date().toISOString(),
+      generator: "openclaw-next.mjs",
+      mode: "proposal_only",
+      securityConstraints: {
+        canExecuteNow: false,
+        noDirectMutations: true,
+        noExternalMessages: true,
+        noTaskCreation: true,
+        noProjectCreation: true,
+        noPersonCreation: true,
+        responseTarget: `workspaces/${WORKSPACE_ID}/pulso_requests/${requestId}`,
+        responseField: "openclawResult",
+        onlyAllowedActions: ["read", "create_proposal", "update_proposal"],
+      },
+    },
     responseSchema: {
       processedBy: "openclaw",
       processedAt: "<ISO string>",
@@ -172,6 +176,10 @@ async function main() {
   console.error(`📋 Coletando fila OpenClaw (status: requested | queued_for_openclaw)...\n`);
 
   try {
+    // Authenticate anonymously first
+    const auth = getAuth(app);
+    await signInAnonymously(auth);
+    
     const colRef = collection(db, REQUESTS_COL);
     // Fetch a window — local filtering handles the rest (avoids composite index)
     const q = query(colRef, orderBy("requestedAt", "desc"), limit(100));
