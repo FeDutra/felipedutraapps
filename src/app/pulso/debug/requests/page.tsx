@@ -108,7 +108,7 @@ export default function RequestsDebugPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {req.origin?.channel && (
+                        {typeof req.origin === 'object' && req.origin?.channel && (
                           <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight bg-white/5 text-white/30 border border-white/5">
                             {req.origin.channel}
                           </span>

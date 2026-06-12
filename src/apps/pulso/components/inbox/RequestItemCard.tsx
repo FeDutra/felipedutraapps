@@ -85,7 +85,7 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
               {requestTypeFallback.replace('_', ' ')}
             </span>
             
-            {request.origin?.channel && (
+            {typeof request.origin === 'object' && request.origin?.channel && (
               <span className="flex items-center gap-1 px-2 py-1 bg-white/5 border border-white/5 rounded-lg text-[8px] font-bold text-white/40 uppercase tracking-tight">
                 {getOriginIcon(request.origin.channel)}
                 {request.origin.channel}
