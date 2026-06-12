@@ -14,23 +14,22 @@ import {
 } from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
 import { 
-  Sparkles, 
   Send, 
   Mic, 
-  CheckSquare, 
-  Layers, 
-  Zap, 
+  MicOff, 
+  Check, 
+  Lock, 
   AlertTriangle, 
-  Activity, 
-  Layers2, 
-  ArrowRight,
-  Database,
-  Volume2,
-  Lock,
-  RefreshCw,
-  Clock,
-  Copy,
-  Check
+  Clock, 
+  Zap, 
+  ArrowRight, 
+  RefreshCw, 
+  Copy, 
+  X, 
+  Menu,
+  Activity,
+  Layers,
+  Database
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -38,7 +37,7 @@ import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
 
-// Safe date conversion helper
+// Safe date conversion helpers
 const safeGetTime = (dateInput: any): number => {
   if (!dateInput) return 0;
   if (dateInput instanceof Date) return dateInput.getTime();
@@ -76,7 +75,7 @@ const renderMarkdown = (text: string): React.ReactNode[] => {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="font-bold text-white/95">{part.slice(2, -2)}</strong>;
+      return <strong key={i} className="font-bold text-white">{part.slice(2, -2)}</strong>;
     }
     return <React.Fragment key={i}>{part}</React.Fragment>;
   });
@@ -109,7 +108,6 @@ interface Message {
       executionPrompt: string;
     };
   };
-  /** v1.4: populated when OpenClaw has processed and responded to this handoff */
   openclawResult?: {
     processedBy: string;
     responseText: string;
@@ -124,13 +122,9 @@ interface Message {
     errors?: string[];
     auditLog?: { model?: string; skillUsed?: string; confidence?: string; notes?: string };
   };
-  /** v1.4: the request status for showing handoff state in the bubble */
   handoffStatus?: string;
-  /** v1.5: pulso_requests document ID — needed for response registration */
   requestId?: string;
-  /** v1.5: the raw command text the user typed — used for copy package */
   originalCommand?: string;
-  /** v1.7: human approval decision — set locally after approve/reject */
   userApproval?: {
     approved: boolean;
     approvedAt?: string;
@@ -138,7 +132,6 @@ interface Message {
     note?: string;
     reason?: string;
   };
-  /** v1.8: Execution metadata */
   executedAt?: string;
   executedBy?: string;
   createdEntityRef?: string;
@@ -155,39 +148,123 @@ export default function LivePage() {
     {
       id: 'welcome',
       sender: 'lotus',
-      text: 'Olá Fê! Sou a Lótus. Sintonizei a central viva do PULSO. Como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+      text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
       timestamp: new Date()
     }
   ]);
   const [isTyping, setIsTyping] = React.useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  
   const [copiedPromptId, setCopiedPromptId] = React.useState<string | null>(null);
-  /** v1.5: state for full package copy feedback */
   const [copiedPackageId, setCopiedPackageId] = React.useState<string | null>(null);
-  /** v1.6: state for openclaw result copy feedback */
   const [copiedResultId, setCopiedResultId] = React.useState<string | null>(null);
-  /** v1.5: which message has the register-response panel open */
   const [registeringForId, setRegisteringForId] = React.useState<string | null>(null);
-  /** v1.5: draft text for the manual OpenClaw response */
   const [openclawDraft, setOpenclawDraft] = React.useState('');
-  /** v1.5: submission in-progress flag */
   const [submittingResponse, setSubmittingResponse] = React.useState(false);
-  /** v1.7: approval note/reason draft per message id */
   const [approvalNotes, setApprovalNotes] = React.useState<Record<string, string>>({});
-  /** v1.7: which messageId is currently submitting an approval/rejection */
   const [submittingApprovalId, setSubmittingApprovalId] = React.useState<string | null>(null);
-  /** v1.8: execution tracking states */
   const [submittingExecutionId, setSubmittingExecutionId] = React.useState<string | null>(null);
   const [executionErrors, setExecutionErrors] = React.useState<Record<string, string>>({});
+  
   const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  // ── Voice Input State ────────────────────────────────────────────────
+  type VoiceState = 'idle' | 'listening' | 'transcribing' | 'ready' | 'error_permission' | 'unsupported';
+  const [voiceState, setVoiceState] = React.useState<VoiceState>('idle');
+  const [voiceError, setVoiceError] = React.useState<string | null>(null);
+  const recognitionRef = React.useRef<any>(null);
+
+  const startVoiceInput = React.useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setVoiceState('unsupported');
+      return;
+    }
+
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
+      recognitionRef.current = null;
+    }
+
+    if (voiceState === 'listening') {
+      setVoiceState('idle');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => {
+      setVoiceState('listening');
+      setVoiceError(null);
+    };
+
+    recognition.onspeechend = () => {
+      setVoiceState('transcribing');
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() || '';
+      if (transcript) {
+        setInputMessage(transcript);
+        setVoiceState('ready');
+      } else {
+        setVoiceState('idle');
+      }
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = (event: any) => {
+      recognitionRef.current = null;
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setVoiceState('error_permission');
+        setVoiceError('Permissão de microfone negada.');
+      } else if (event.error === 'no-speech') {
+        setVoiceState('idle');
+      } else {
+        setVoiceState('idle');
+        setVoiceError(`Erro de voz: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setVoiceState(prev => prev === 'listening' || prev === 'transcribing' ? 'idle' : prev);
+      recognitionRef.current = null;
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      setVoiceState('idle');
+    }
+  }, [voiceState, setInputMessage]);
+
+  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputMessage(e.target.value);
+    if (voiceState === 'ready') setVoiceState('idle');
+  }, [voiceState]);
+
+  React.useEffect(() => {
+    if (voiceError) {
+      const t = setTimeout(() => setVoiceError(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [voiceError]);
 
   const handleCopyPrompt = (msgId: string, prompt: string) => {
     navigator.clipboard.writeText(prompt).then(() => {
       setCopiedPromptId(msgId);
       setTimeout(() => setCopiedPromptId(null), 2000);
-    }).catch(() => {/* clipboard unavailable */});
+    }).catch(() => {});
   };
 
-  /** v1.5: Builds full handoff package JSON for OpenClaw consumption */
   const buildHandoffPackage = (msg: Message): string => {
     return JSON.stringify({
       meta: {
@@ -239,7 +316,7 @@ export default function LivePage() {
     navigator.clipboard.writeText(pkg).then(() => {
       setCopiedPackageId(msgId);
       setTimeout(() => setCopiedPackageId(null), 2500);
-    }).catch(() => {/* clipboard unavailable */});
+    }).catch(() => {});
   };
 
   const handleRegisterOpenClawResponse = async (msg: Message) => {
@@ -283,7 +360,7 @@ export default function LivePage() {
         status: newStatus as any,
         updatedAt: new Date()
       });
-      // Update message in local state — show response immediately
+
       setMessages(prev => prev.map(m =>
         m.id === msg.id
           ? { ...m, openclawResult: result, handoffStatus: newStatus, text: result.responseText }
@@ -298,8 +375,6 @@ export default function LivePage() {
     }
   };
 
-
-  /** v1.7: Approve an OpenClaw proposal — recording only, no execution */
   const handleApproveProposal = async (msg: Message) => {
     if (!msg.requestId || submittingApprovalId) return;
     setSubmittingApprovalId(msg.id);
@@ -320,7 +395,6 @@ export default function LivePage() {
     }
   };
 
-  /** v1.7: Reject an OpenClaw proposal — recording only, no execution */
   const handleRejectProposal = async (msg: Message) => {
     if (!msg.requestId || submittingApprovalId) return;
     setSubmittingApprovalId(msg.id);
@@ -341,11 +415,9 @@ export default function LivePage() {
     }
   };
 
-  /** v1.8: Execute an approved proposal - creates task in pulso_tasks */
   const handleExecuteProposal = async (msg: Message, forceAsTriage = false) => {
     if (!msg.requestId || submittingExecutionId) return;
     setSubmittingExecutionId(msg.id);
-    // Clear previous execution error for this message
     setExecutionErrors(prev => {
       const n = { ...prev };
       delete n[msg.id];
@@ -372,7 +444,6 @@ export default function LivePage() {
       const errMsg = err.message || 'Erro desconhecido durante a execução.';
       setExecutionErrors(prev => ({ ...prev, [msg.id]: errMsg }));
       
-      // Update message handoffStatus to 'execution_blocked' if blocked
       setMessages(prev => prev.map(m =>
         m.id === msg.id
           ? {
@@ -387,11 +458,11 @@ export default function LivePage() {
     }
   };
 
-  // Auto-scroll chat to bottom
   React.useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Load database state once
   React.useEffect(() => {
     async function load() {
       try {
@@ -431,7 +502,6 @@ export default function LivePage() {
             timestamp: reqTime
           });
           
-          // v1.4: if OpenClaw already responded, use its responseText; otherwise fall back to local reply
           const hasOpenClawResponse = !!req.openclawResult?.responseText;
           const replyText = hasOpenClawResponse
             ? req.openclawResult.responseText
@@ -459,7 +529,7 @@ export default function LivePage() {
           {
             id: 'welcome',
             sender: 'lotus',
-            text: 'Olá Fê! Sou a Lótus. Sintonizei a central viva do PULSO. Como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
             timestamp: new Date()
           },
           ...chatHistory
@@ -474,247 +544,97 @@ export default function LivePage() {
     load();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-[85vh] flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4" />
-        <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">Iniciando Lótus Live...</p>
-      </div>
-    );
-  }
+  // Real-time Firestore requests listener (Golden Path to OpenClaw usage)
+  React.useEffect(() => {
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (!isFirestore) return;
 
-  if (error) {
-    return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-3xl flex items-center justify-center mb-6">
-          <AlertTriangle size={32} className="text-red-400" />
-        </div>
-        <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">Falha de Conexão</h2>
-        <p className="text-sm text-white/40 max-w-sm mb-8 leading-relaxed">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
-        >
-          Tentar Reestabelecer
-        </button>
-      </div>
-    );
-  }
+    let unsubscribe: any = null;
+    try {
+      const { onSnapshot, collection, query, where } = require("firebase/firestore");
+      const { db } = require("@/shared/lib/firebase/client");
+      const { firestorePaths } = require("../services/firestorePaths");
 
-  // Bind real data
-  const activeAlerts = safeArray(state?.activeAlerts).filter((a: any) => a && a.archived !== true && a.status === 'open');
-  const activeProjects = safeArray(state?.activeProjects).filter((p: any) => p && p.archived !== true && p.status === 'active');
-  const openTasks = safeArray(state?.openTasks).filter((t: any) => t && t.archived !== true && t.status !== 'completed');
-  const pendingInbox = safeArray(state?.pendingInbox).filter((i: any) => i && i.archived !== true && i.status === 'new');
-  const allAreas = safeArray(state?.allAreas).filter((a: any) => a && a.archived !== true && a.status === 'active');
-  const allRoutines = safeArray(state?.allRoutines).filter((r: any) => r && r.archived !== true);
-  const allAgents = safeArray(state?.allAgents).filter((ag: any) => ag && ag.archived !== true);
-  const allLogs = safeArray(state?.allLogs);
-  const allRequests = safeArray(state?.allRequests).filter((r: any) => r && r.archived !== true);
-  const allSources = safeArray(state?.allSources).filter((s: any) => s && s.archived !== true);
+      if (db) {
+        const q = query(
+          collection(db, firestorePaths.requests()),
+          where("archived", "==", false),
+          where("requestType", "==", "conversation_command")
+        );
 
-  // Filter tasks assigned to Felipe
-  const feTasks = openTasks.filter((t: any) => {
-    const refs = t.ownerRefs;
-    if (!refs || !Array.isArray(refs) || refs.length === 0) return true; // fallback to user
-    return refs.some((ref: string) => ref.toLowerCase() === 'felipe' || ref.toLowerCase() === 'fe');
-  });
+        unsubscribe = onSnapshot(q, (snapshot: any) => {
+          const fetchedRequests: any[] = [];
+          snapshot.forEach((docSnap: any) => {
+            const data = docSnap.data();
+            Object.keys(data).forEach(key => {
+              if (data[key] && typeof data[key].toDate === 'function') {
+                data[key] = data[key].toDate();
+              }
+            });
+            fetchedRequests.push({ ...data, id: docSnap.id });
+          });
 
-  // Overdue tasks
-  const nowTime = Date.now();
-  const overdueTasks = openTasks.filter((t: any) => {
-    const due = t.dueDate || t.dueAt;
-    if (!due) return false;
-    const dueTime = safeGetTime(due);
-    return dueTime > 0 && dueTime < nowTime;
-  });
+          const sortedRequests = fetchedRequests.sort((a, b) => safeGetTime(a.requestedAt) - safeGetTime(b.requestedAt));
 
-  // Broken routines
-  const brokenRoutines = allRoutines.filter((r: any) => r && (r.status === 'broken' || r.status === 'failed'));
+          const chatHistory: Message[] = [];
+          sortedRequests.forEach((req: any) => {
+            const reqTime = safeConvertToDate(req.requestedAt) || new Date();
+            chatHistory.push({
+              id: `user-${req.id}`,
+              sender: 'user',
+              text: req.summary || req.title || '',
+              timestamp: reqTime
+            });
 
-  // Projects missing next steps
-  const steplessProjects = activeProjects.filter((p: any) => !p.nextStep || p.nextStep.trim() === '');
+            const hasOpenClawResponse = !!req.openclawResult?.responseText;
+            const replyText = hasOpenClawResponse
+              ? req.openclawResult.responseText
+              : (req.interpretation?.suggestedReply || 
+                 `Registrei o comando "${req.summary || req.title}" para processamento operacional.`);
 
-  // Total attention signals count
-  const totalRisksCount = activeAlerts.length + brokenRoutines.length + overdueTasks.length + steplessProjects.length;
+            chatHistory.push({
+              id: `lotus-${req.id}`,
+              sender: 'lotus',
+              text: replyText,
+              timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+              interpretation: req.interpretation,
+              openclawResult: req.openclawResult || undefined,
+              handoffStatus: req.status,
+              requestId: req.id || undefined,
+              originalCommand: req.summary || req.title || undefined,
+              executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
+              executedBy: req.executedBy || undefined,
+              createdEntityRef: req.createdEntityRef || undefined,
+              executionError: req.executionError || undefined
+            });
+          });
 
-  // 1. Build unified attention signals
-  const attentionSignals: Array<{ id: string; type: string; title: string; subtitle: string; severity: 'critical' | 'warning' }> = [];
-  activeAlerts.forEach((a: any) => {
-    attentionSignals.push({
-      id: a.id || `alert-${Math.random()}`,
-      type: 'alert',
-      title: a.name || 'Alerta Técnico',
-      subtitle: a.description || 'Instabilidade no sistema.',
-      severity: a.severity === 'critical' ? 'critical' : 'warning'
-    });
-  });
-  overdueTasks.forEach((t: any) => {
-    attentionSignals.push({
-      id: t.id || `overdue-${Math.random()}`,
-      type: 'overdue_task',
-      title: `Tarefa Atrasada: ${t.title || t.name}`,
-      subtitle: `Prazo limite excedido em ${t.dueDate || t.dueAt ? formatDate(t.dueDate || t.dueAt) : 'data indefinida'}.`,
-      severity: 'critical'
-    });
-  });
-  steplessProjects.forEach((p: any) => {
-    attentionSignals.push({
-      id: p.id || `stepless-${Math.random()}`,
-      type: 'stepless_project',
-      title: `Projeto sem Próximo Passo: ${p.name}`,
-      subtitle: 'Este projeto precisa de uma próxima ação definida para não travar.',
-      severity: 'warning'
-    });
-  });
-
-  // 2. What Lótus Did Feed (humanized)
-  const feedItems: Array<{ id: string; event: string; system: string; time: Date | null }> = [];
-  
-  // Requests triaged or completed
-  allRequests.slice(0, 10).forEach((req: any) => {
-    let desc = '';
-    const type = req.requestType || '';
-    const title = req.title || req.summary || '';
-    
-    if (type === 'conversation_command') {
-      desc = `Comando conversacional recebido: "${title}"`;
-    } else {
-      switch (req.status) {
-        case 'requested':
-          desc = `Registrou solicitação para: ${title || type}`;
-          break;
-        case 'needs_approval':
-          desc = `Solicitou sua aprovação para: ${title || type}`;
-          break;
-        case 'completed':
-          desc = `Concluiu e materializou: ${title || type}`;
-          break;
-        case 'failed':
-          desc = `Falhou ao processar: ${title || type}`;
-          break;
-        default:
-          desc = `Registrou movimentação em solicitação: ${title || type}`;
+          setMessages([
+            {
+              id: 'welcome',
+              sender: 'lotus',
+              text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+              timestamp: new Date()
+            },
+            ...chatHistory
+          ]);
+        });
       }
+    } catch (err) {
+      console.error("Firestore onSnapshot subscription failed:", err);
     }
-    feedItems.push({
-      id: req.id || `feed-req-${Math.random()}`,
-      event: desc,
-      system: 'LÓTUS / BRIDGE',
-      time: safeConvertToDate(req.requestedAt || req.updatedAt)
-    });
-  });
 
-  // Inbox captures
-  pendingInbox.slice(0, 5).forEach((item: any) => {
-    feedItems.push({
-      id: item.id || `feed-inbox-${Math.random()}`,
-      event: `Capturou e estacionou no Inbox: "${item.name || truncateText(item.body || '', 30)}"`,
-      system: 'LÓTUS / INBOX',
-      time: safeConvertToDate(item.createdAt || item.updatedAt)
-    });
-  });
-
-  // Filter logs for human readability
-  allLogs
-    .filter((log: any) => {
-      if (!log || !log.event) return false;
-      const text = log.event.toLowerCase();
-      return !text.includes('user login') && !text.includes('seed applied') && !text.includes('auth gate');
-    })
-    .slice(0, 5)
-    .forEach((log: any) => {
-      feedItems.push({
-        id: log.id || `feed-log-${Math.random()}`,
-        event: log.event,
-        system: log.system || 'PULSO',
-        time: safeConvertToDate(log.createdAt)
-      });
-    });
-
-  const sortedFeed = feedItems
-    .filter(item => item.time !== null)
-    .sort((a, b) => (b.time?.getTime() || 0) - (a.time?.getTime() || 0))
-    .slice(0, 6);
-
-  // 3. Monitored Sources Status Check
-  const sourcesToCheck = [
-    { key: 'whatsapp', name: 'WhatsApp', type: 'chat' },
-    { key: 'notion', name: 'Notion', type: 'database' },
-    { key: 'obsidian', name: 'Obsidian', type: 'files' },
-    { key: 'calendar', name: 'Google Calendar', type: 'calendar' },
-    { key: 'gmail', name: 'Gmail', type: 'email' },
-    { key: 'sheets', name: 'Google Sheets', type: 'spreadsheet' },
-    { key: 'pulso', name: 'PULSO Interno', type: 'system' }
-  ];
-
-  const monitoredSources = sourcesToCheck.map(src => {
-    // Check if there is an active source matching the name or slug
-    const isConnected = allSources.some((s: any) => 
-      s.status === 'active' && 
-      (s.name.toLowerCase().includes(src.key) || 
-       s.slug?.toLowerCase().includes(src.key) || 
-       s.type?.toLowerCase().includes(src.key))
-    );
-    return {
-      ...src,
-      connected: isConnected || src.key === 'pulso' // PULSO is always connected
+    return () => {
+      if (unsubscribe) unsubscribe();
     };
-  });
+  }, [loading]);
 
-  // 4. Next Best Action calculation
-  const nextBestActions: Array<{ text: string; actionText: string; onClick: () => void; priority: 'high' | 'medium' }> = [];
-  
-  // Add approvals first
-  const pendingApprovals = allRequests.filter((r: any) => r.status === 'needs_approval');
-  pendingApprovals.forEach((req: any) => {
-    nextBestActions.push({
-      text: `Revisar aprovação pendente: ${req.title || req.requestType}`,
-      actionText: 'Ir para Inbox',
-      onClick: () => router.push('/pulso/inbox'),
-      priority: 'high'
-    });
-  });
-
-  // Overdue tasks
-  overdueTasks.slice(0, 2).forEach((t: any) => {
-    nextBestActions.push({
-      text: `Resolver tarefa atrasada: ${t.title || t.name}`,
-      actionText: 'Ver Tarefas',
-      onClick: () => router.push('/pulso/tarefas'),
-      priority: 'high'
-    });
-  });
-
-  // Projects missing step
-  steplessProjects.slice(0, 2).forEach((p: any) => {
-    nextBestActions.push({
-      text: `Definir próximo passo para: ${p.name}`,
-      actionText: 'Ver Ecossistema',
-      onClick: () => router.push('/pulso/ecossistema'),
-      priority: 'medium'
-    });
-  });
-
-  // default fallbacks
-  if (nextBestActions.length === 0) {
-    nextBestActions.push({
-      text: 'Todos os fluxos críticos resolvidos. Sugestão: revisar o Registro da Lótus para novas capturas.',
-      actionText: 'Revisar Inbox',
-      onClick: () => router.push('/pulso/inbox'),
-      priority: 'medium'
-    });
-  }
-
-  // Handle conversational input submission
   const handleSendMessage = async (textToSend?: string) => {
     const rawMsg = textToSend || inputMessage;
     if (!rawMsg.trim()) return;
 
-    // Clear input
     setInputMessage('');
 
-    // Append Fê's message
     const userMsg: Message = {
       id: `user-msg-${Date.now()}`,
       sender: 'user',
@@ -728,7 +648,6 @@ export default function LivePage() {
       const currentUser = authService.getCurrentUser();
       const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
 
-      // Build context from current real state safely
       const context = {
         tasks: state?.allTasks || [],
         projects: state?.allProjects || state?.activeProjects || [],
@@ -740,10 +659,8 @@ export default function LivePage() {
         sources: state?.allSources || []
       };
 
-      // Interpret the command using deterministic matching and real data context
       const interpretation = interpretLiveIntent(rawMsg, context);
 
-      // Build the Request object matching Step 3 with interpretation block
       const reqPayload = {
         requestType: 'conversation_command' as any,
         title: rawMsg.length > 80 ? rawMsg.substring(0, 80) + '...' : rawMsg,
@@ -757,25 +674,19 @@ export default function LivePage() {
         source: 'pulso_live' as any,
         archived: false,
         interpretation,
-        // v1.3: OpenClaw handoff contract — proposal_only, no execution triggered
         handoff: interpretation.handoff
       };
 
       const newRequest = await requestsService.createRequest(reqPayload);
 
-      // Instantly inject the new request to the active state so the feed shows it immediately
       if (state) {
         setState((prev: any) => {
           if (!prev) return prev;
           const updatedRequests = [newRequest, ...(prev.allRequests || [])];
-          return {
-            ...prev,
-            allRequests: updatedRequests
-          };
+          return { ...prev, allRequests: updatedRequests };
         });
       }
 
-      // Simulate Lótus response with interpreted suggested reply
       setTimeout(() => {
         const lotusMsg: Message = {
           id: `lotus-msg-${Date.now()}`,
@@ -795,7 +706,7 @@ export default function LivePage() {
       const lotusErrorMsg: Message = {
         id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
-        text: `Falha ao registrar o comando no barramento: ${err?.message || 'Erro de persistência'}.`,
+        text: `falha ao registrar o comando no barramento: ${err?.message || 'erro de persistência'}.`,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
@@ -803,881 +714,566 @@ export default function LivePage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen theme-her flex flex-col items-center justify-center">
+        <div className="w-8 h-8 rounded-full border border-[#fbf9f5]/20 border-t-[#fbf9f5] animate-spin mb-4" />
+        <p className="text-[9px] font-light tracking-widest text-[#fbf9f5]/40 uppercase">sintonizando lótus live...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen theme-her flex flex-col items-center justify-center p-6 text-center text-[#fbf9f5]">
+        <div className="w-12 h-12 bg-white/10 border border-white/20 rounded-full flex items-center justify-center mb-6">
+          <AlertTriangle size={20} className="text-[#fbf9f5]" />
+        </div>
+        <h2 className="text-sm font-bold text-[#fbf9f5] mb-2 lowercase tracking-tight">falha de conexão</h2>
+        <p className="text-xs text-[#fbf9f5]/65 max-w-sm mb-6 leading-relaxed">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-6 py-2.5 bg-white/10 hover:bg-white/20 border border-white/25 rounded-full text-[10px] font-bold text-[#fbf9f5] transition-all lowercase"
+        >
+          tentar reestabelecer
+        </button>
+      </div>
+    );
+  }
+
+  // Real data parsing for sidebar
+  const activeAlerts = safeArray(state?.activeAlerts).filter((a: any) => a && a.archived !== true && a.status === 'open');
+  const activeProjects = safeArray(state?.activeProjects).filter((p: any) => p && p.archived !== true && p.status === 'active');
+  const openTasks = safeArray(state?.openTasks).filter((t: any) => t && t.archived !== true && t.status !== 'completed');
+  const pendingInbox = safeArray(state?.pendingInbox).filter((i: any) => i && i.archived !== true && i.status === 'new');
+  const allAreas = safeArray(state?.allAreas).filter((a: any) => a && a.archived !== true && a.status === 'active');
+  const allRoutines = safeArray(state?.allRoutines).filter((r: any) => r && r.archived !== true);
+  const allAgents = safeArray(state?.allAgents).filter((ag: any) => ag && ag.archived !== true);
+  const allLogs = safeArray(state?.allLogs);
+  const allRequests = safeArray(state?.allRequests).filter((r: any) => r && r.archived !== true);
+  const allSources = safeArray(state?.allSources).filter((s: any) => s && s.archived !== true);
+
+  const feTasks = openTasks.filter((t: any) => {
+    const refs = t.ownerRefs;
+    if (!refs || !Array.isArray(refs) || refs.length === 0) return true;
+    return refs.some((ref: string) => ref.toLowerCase() === 'felipe' || ref.toLowerCase() === 'fe');
+  });
+
+  const nowTime = Date.now();
+  const overdueTasks = openTasks.filter((t: any) => {
+    const due = t.dueDate || t.dueAt;
+    if (!due) return false;
+    const dueTime = safeGetTime(due);
+    return dueTime > 0 && dueTime < nowTime;
+  });
+
+  const brokenRoutines = allRoutines.filter((r: any) => r && (r.status === 'broken' || r.status === 'failed'));
+  const steplessProjects = activeProjects.filter((p: any) => !p.nextStep || p.nextStep.trim() === '');
+  const totalRisksCount = activeAlerts.length + brokenRoutines.length + overdueTasks.length + steplessProjects.length;
+
+  const attentionSignals: any[] = [];
+  activeAlerts.forEach((a: any) => {
+    attentionSignals.push({
+      id: a.id || `alert-${Math.random()}`,
+      title: a.name || 'Alerta Técnico',
+      subtitle: a.description || 'Instabilidade no sistema.',
+      severity: a.severity === 'critical' ? 'critical' : 'warning'
+    });
+  });
+  overdueTasks.forEach((t: any) => {
+    attentionSignals.push({
+      id: t.id || `overdue-${Math.random()}`,
+      title: `${t.title || t.name}`,
+      subtitle: `Prazo limite excedido em ${t.dueDate || t.dueAt ? formatDate(t.dueDate || t.dueAt) : 'data indefinida'}.`,
+      severity: 'critical'
+    });
+  });
+  steplessProjects.forEach((p: any) => {
+    attentionSignals.push({
+      id: p.id || `stepless-${Math.random()}`,
+      title: `${p.name}`,
+      subtitle: 'Sem próxima ação definida no ecossistema.',
+      severity: 'warning'
+    });
+  });
+
+  const feedItems: any[] = [];
+  allRequests.slice(0, 10).forEach((req: any) => {
+    let desc = '';
+    const type = req.requestType || '';
+    const title = req.title || req.summary || '';
+    
+    if (type === 'conversation_command') {
+      desc = `Comando conversacional recebido: "${title}"`;
+    } else {
+      switch (req.status) {
+        case 'requested': desc = `Registrou solicitação para: ${title || type}`; break;
+        case 'needs_approval': desc = `Solicitou sua aprovação para: ${title || type}`; break;
+        case 'completed': desc = `Concluiu e materializou: ${title || type}`; break;
+        case 'failed': desc = `Falhou ao processar: ${title || type}`; break;
+        default: desc = `Registrou movimentação em solicitação: ${title || type}`;
+      }
+    }
+    feedItems.push({
+      id: req.id || `feed-req-${Math.random()}`,
+      event: desc,
+      system: 'LÓTUS / BRIDGE',
+      time: safeConvertToDate(req.requestedAt || req.updatedAt)
+    });
+  });
+
+  pendingInbox.slice(0, 5).forEach((item: any) => {
+    feedItems.push({
+      id: item.id || `feed-inbox-${Math.random()}`,
+      event: `Capturou e estacionou no Inbox: "${item.name || truncateText(item.body || '', 30)}"`,
+      system: 'LÓTUS / INBOX',
+      time: safeConvertToDate(item.createdAt || item.updatedAt)
+    });
+  });
+
+  const sortedFeed = feedItems
+    .filter(item => item.time !== null)
+    .sort((a, b) => (b.time?.getTime() || 0) - (a.time?.getTime() || 0))
+    .slice(0, 5);
+
+  const nextBestActions: any[] = [];
+  const pendingApprovals = allRequests.filter((r: any) => r.status === 'needs_approval');
+  pendingApprovals.forEach((req: any) => {
+    nextBestActions.push({
+      text: `Revisar aprovação pendente: ${req.title || req.requestType}`,
+      actionText: 'revisar inbox',
+      onClick: () => router.push('/pulso/inbox'),
+      priority: 'high'
+    });
+  });
+
+  overdueTasks.slice(0, 2).forEach((t: any) => {
+    nextBestActions.push({
+      text: `Resolver tarefa atrasada: ${t.title || t.name}`,
+      actionText: 'ver tarefas',
+      onClick: () => router.push('/pulso/tarefas'),
+      priority: 'high'
+    });
+  });
+
+  if (nextBestActions.length === 0) {
+    nextBestActions.push({
+      text: 'Todos os fluxos críticos resolvidos. Sugestão: revisar o Registro da Lótus para novas capturas.',
+      actionText: 'ir para inbox',
+      onClick: () => router.push('/pulso/inbox'),
+      priority: 'medium'
+    });
+  }
+
+  // Animation resolver
+  const getLotusAnimClass = () => {
+    if (voiceState === 'listening') return 'lotus-listening-anim';
+    if (voiceState === 'transcribing' || voiceState === 'ready') return 'lotus-responding-anim';
+    
+    // Check if any message is currently queued or processing by OpenClaw
+    const isAnyRequestPending = messages.some(
+      m => m.sender === 'lotus' && 
+      (m.handoffStatus === 'requested' || m.handoffStatus === 'queued_for_openclaw' || m.handoffStatus === 'processing_by_openclaw')
+    );
+    if (isTyping || isAnyRequestPending) return 'lotus-thinking-anim';
+    
+    return 'lotus-idle-anim';
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12 w-full max-w-full min-w-0">
+    <div className="theme-her min-h-screen w-full flex flex-col justify-between py-8 px-4 md:px-8 relative overflow-hidden transition-colors duration-500 font-sans text-[#fbf9f5]">
       
-      {/* Premium Header */}
-      <header className="mb-8 border-b border-white/5 pb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-[8px] font-black uppercase tracking-widest text-purple-400 shrink-0">
-                Experimental
-              </span>
-              <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white flex items-center gap-2.5">
-                Lótus Live
-                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.7)]" />
-              </h1>
-            </div>
-            <p className="text-xs md:text-sm text-white/40 font-medium tracking-tight mt-1">
-              Superfície conversacional de comando e estado vivo • Fê ↔ Lótus
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4 bg-white/2 border border-white/5 rounded-2xl px-4 py-2.5 backdrop-blur-md shrink-0 self-start md:self-auto">
-            <div className="text-right">
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/25">Interface Principal</p>
-              <p className="text-xs font-bold text-purple-400">Conversação Ativa</p>
-            </div>
-            <div className="w-8 h-8 rounded-full border border-purple-500/20 flex items-center justify-center bg-purple-500/5">
-              <Sparkles size={14} className="text-purple-400 animate-spin-slow" />
-            </div>
-          </div>
+      {/* 1. HEADER MINIMALISTA */}
+      <header className="flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#fbf9f5] opacity-75" />
+          <span className="text-[9px] font-light tracking-[0.1em] text-[#fbf9f5]/40 lowercase">
+            {voiceState === 'listening' ? 'ouvindo...' : isTyping ? 'processando...' : 'conectada'}
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
+          >
+            <Menu size={12} className="stroke-[1.5]" />
+            <span>[ sinais ]</span>
+          </button>
         </div>
       </header>
 
-      {/* Main Grid: Chat vs Operations */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-full min-w-0 items-start">
+      {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
+      <main className="flex-1 flex flex-col items-center justify-center max-w-2xl w-full mx-auto my-12 z-10 relative">
         
-        {/* LEFT COLUMN: A. Conversational Interface (Col-span 7) */}
-        <section className="lg:col-span-7 flex flex-col bg-white/2 border border-white/5 rounded-3xl overflow-hidden min-h-[580px] lg:h-[620px] backdrop-blur-md shadow-2xl">
-          {/* Chat Header */}
-          <div className="px-6 py-4 bg-white/2 border-b border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
-                <Sparkles size={14} className="text-purple-400" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-widest text-white/80 leading-none">Console Conversacional</h3>
-                <p className="text-[9px] text-white/30 font-medium mt-1">Conectado diretamente ao barramento de dados</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-              <div className="w-1 h-1 bg-emerald-400 rounded-full animate-ping" />
-              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Pronto</span>
-            </div>
-          </div>
+        {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
+        <div className="mb-14 relative flex items-center justify-center select-none">
+          <svg className="w-32 h-32 transition-transform duration-700 ease-out" viewBox="0 0 100 100">
+            <circle
+              cx="50"
+              cy="50"
+              r="34"
+              fill="none"
+              stroke="#fbf9f5"
+              strokeWidth="7"
+              strokeLinecap="round"
+              className={getLotusAnimClass()}
+            />
+          </svg>
+        </div>
 
-          {/* Messages Container */}
-          <div className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar max-h-[350px] lg:max-h-[420px]">
-            {messages.map((msg) => {
-              const isLotus = msg.sender === 'lotus';
-              return (
-                <div key={msg.id} className={`flex ${isLotus ? 'justify-start' : 'justify-end'} w-full`}>
-                  <div className={`flex items-start gap-3 max-w-[85%] ${isLotus ? '' : 'flex-row-reverse'}`}>
-                    {/* Avatar */}
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border text-[10px] font-black uppercase tracking-wider ${
-                      isLotus 
-                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.1)]' 
-                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                    }`}>
-                      {isLotus ? 'L' : 'F'}
-                    </div>
-                    {/* Bubble */}
-                    <div className={`p-4 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap border ${
-                      isLotus 
-                        ? 'bg-white/2 border-white/5 text-white/80' 
-                        : 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/15 text-white/95 shadow-md shadow-blue-950/20'
-                    }`}>
-                      <div className="leading-relaxed">{renderMarkdown(msg.text)}</div>
+        {/* Linha Editorial da Conversa (Textos em Off-White) */}
+        <div className="w-full space-y-8 max-h-[380px] overflow-y-auto pr-1 no-scrollbar py-4 border-b border-white/10">
+          {messages.map((msg) => {
+            const isLotus = msg.sender === 'lotus';
+            return (
+              <div 
+                key={msg.id} 
+                className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
+              >
+                <div className="max-w-[85%] space-y-1">
+                  {/* Sender label */}
+                  <span className={`block text-[9px] tracking-widest lowercase select-none ${
+                    isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
+                  }`}>
+                    {isLotus ? 'lótus' : 'fê'}
+                  </span>
+                  
+                  {/* Text body */}
+                  <div className={`text-sm leading-relaxed font-light text-[#fbf9f5] ${!isLotus ? 'text-right' : 'text-left'}`}>
+                    {renderMarkdown(msg.text)}
+                  </div>
+
+                  {/* Operational result / Governance UI (v1.7 & v1.8) */}
+                  {isLotus && msg.openclawResult && (
+                    <div className="mt-3 pt-3 border-t border-white/10 space-y-3 text-left">
                       
-                      {/* v1.6: OpenClaw response block — 5-state lifecycle display */}
-                      {isLotus && msg.openclawResult && (
-                        <div className="mt-3 pt-2.5 border-t border-purple-500/10 space-y-2">
-                          {/* Header row */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              {msg.openclawResult.errors && msg.openclawResult.errors.length > 0 ? (
-                                <AlertTriangle size={9} className="text-red-400" />
-                              ) : msg.handoffStatus === 'waiting_user_approval' ? (
-                                <Clock size={9} className="text-orange-400" />
-                              ) : (
-                                <Zap size={9} className="text-purple-400" />
-                              )}
-                              <span className={`text-[8px] font-black uppercase tracking-widest ${
-                                msg.openclawResult.errors && msg.openclawResult.errors.length > 0
-                                  ? 'text-red-400'
-                                  : msg.handoffStatus === 'waiting_user_approval'
-                                  ? 'text-orange-400'
-                                  : 'text-purple-400'
-                              }`}>
-                                {msg.openclawResult.errors && msg.openclawResult.errors.length > 0
-                                  ? 'Falha no retorno'
-                                  : msg.handoffStatus === 'waiting_user_approval'
-                                  ? 'Aguarda aprovação humana'
-                                  : 'OpenClaw respondeu'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              {/* Confidence badge */}
-                              {(msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence) && (
-                                <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${
-                                  (msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence) === 'high'
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                    : (msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence) === 'medium'
-                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                    : 'bg-white/5 border-white/10 text-white/40'
-                                }`}>
-                                  {msg.openclawResult.confidence || msg.openclawResult.auditLog?.confidence}
-                                </span>
-                              )}
-                              {/* Risk badge */}
-                              {msg.openclawResult.riskLevel && (
-                                <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${
-                                  msg.openclawResult.riskLevel === 'high'
-                                    ? 'bg-red-500/10 border-red-500/20 text-red-400'
-                                    : msg.openclawResult.riskLevel === 'medium'
-                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                    : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400/60'
-                                }`}>
-                                  risco {msg.openclawResult.riskLevel}
-                                </span>
-                              )}
-                              {/* Copy result button */}
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(JSON.stringify(msg.openclawResult, null, 2))
-                                    .then(() => { setCopiedResultId(msg.id); setTimeout(() => setCopiedResultId(null), 2000); })
-                                    .catch(() => {});
-                                }}
-                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/3 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/20 text-[7px] font-bold text-white/20 hover:text-purple-400 transition-all"
-                                title="Copiar retorno da OpenClaw"
-                              >
-                                {copiedResultId === msg.id ? (
-                                  <><Check size={8} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
-                                ) : (
-                                  <><Copy size={8} /><span>Retorno</span></>
-                                )}
-                              </button>
-                            </div>
-                          </div>
+                      {/* Status row */}
+                      <div className="flex items-center gap-2 text-[9px] text-[#fbf9f5]/60 font-light lowercase">
+                        {msg.handoffStatus === 'waiting_user_approval' ? (
+                          <><Clock size={10} className="stroke-[1.5]" /><span>aguarda aprovação humana</span></>
+                        ) : msg.handoffStatus === 'executed' ? (
+                          <><Check size={10} className="text-white/90 stroke-[2]" /><span>executada com sucesso</span></>
+                        ) : msg.openclawResult.errors && msg.openclawResult.errors.length > 0 ? (
+                          <><AlertTriangle size={10} className="stroke-[1.5] text-white" /><span>falha no processamento</span></>
+                        ) : (
+                          <><Zap size={10} className="stroke-[1.5]" /><span>resposta obtida</span></>
+                        )}
+                        
+                        {/* Copy package */}
+                        <button
+                          onClick={() => handleCopyPackage(msg.id, msg)}
+                          className="ml-auto text-[8px] text-[#fbf9f5]/40 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                          title="Copiar pacote JSON para OpenClaw"
+                        >
+                          {copiedPackageId === msg.id ? '[ copiado ]' : '[ copiar pacote ]'}
+                        </button>
+                      </div>
 
-                          {/* Summary (if present) */}
-                          {msg.openclawResult.summary && (
-                            <p className="text-[9px] text-white/50 italic border-l-2 border-purple-500/20 pl-2">
-                              {msg.openclawResult.summary}
-                            </p>
-                          )}
+                      {/* Execution feedback */}
+                      {msg.handoffStatus === 'executed' && msg.createdEntityRef && (
+                        <p className="text-[10px] font-mono text-white bg-white/10 p-2 rounded-lg select-all border border-white/10">
+                          tarefa criada: {msg.createdEntityRef}
+                        </p>
+                      )}
 
-                          {/* Errors block */}
-                          {msg.openclawResult.errors && msg.openclawResult.errors.length > 0 && (
-                            <div className="p-2 bg-red-500/5 border border-red-500/15 rounded-lg">
-                              <p className="text-[8px] font-black uppercase tracking-widest text-red-400 mb-1">Erros</p>
-                              {msg.openclawResult.errors.map((err, i) => (
-                                <p key={i} className="text-[8px] text-red-300/70 font-mono">{err}</p>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Fontes consultadas */}
-                          {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
-                            <p className="text-[8px] text-white/30">
-                              <span className="font-semibold text-white/25">Fontes: </span>
-                              {msg.openclawResult.sourcesConsulted.join(', ')}
-                            </p>
-                          )}
-
-                          {/* Proposed actions (v1.6) */}
-                          {msg.openclawResult.proposedActions && msg.openclawResult.proposedActions.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-[8px] font-black uppercase tracking-widest text-amber-400/70">Ações propostas</p>
-                              {msg.openclawResult.proposedActions.map((action, i) => (
-                                <div key={i} className="flex items-start gap-1.5 text-[8px] text-white/60">
-                                  <span className="text-amber-400/50 mt-0.5">›</span>
-                                  <span>{action.label}</span>
-                                  {action.riskLevel && action.riskLevel !== 'low' && (
-                                    <span className={`ml-auto text-[7px] font-black uppercase ${
-                                      action.riskLevel === 'high' ? 'text-red-400' : 'text-amber-400'
-                                    }`}>{action.riskLevel}</span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Proposed mutation (legacy) */}
-                          {msg.openclawResult.proposedMutation && (
-                            <div className="p-2.5 bg-amber-500/5 border border-amber-500/15 rounded-xl">
-                              <p className="text-[8px] font-black uppercase tracking-widest text-amber-400 mb-1">Proposta de Ação</p>
-                              <p className="text-[9px] text-white/70">{msg.openclawResult.proposedMutation.previewLabel}</p>
-                            </div>
-                          )}
-
-                          {/* v1.7 & v1.8: Human Approval & Assisted Execution UI */}
-                          {msg.openclawResult.requiresHumanApproval && (() => {
-                            const isExecuted = msg.handoffStatus === 'executed' || !!msg.executedAt;
-                            const isFailedExecution = msg.handoffStatus === 'execution_failed';
-                            const isBlockedExecution = msg.handoffStatus === 'execution_blocked' || !!msg.executionError || !!executionErrors[msg.id];
-                            
-                            const isApproved = msg.userApproval?.approved === true || msg.handoffStatus === 'approved_by_user' || isExecuted || isBlockedExecution || isFailedExecution;
-                            const isRejected = msg.userApproval?.approved === false || msg.handoffStatus === 'rejected_by_user';
-                            
-                            const isSubmittingApproval = submittingApprovalId === msg.id;
-                            const isSubmittingExecution = submittingExecutionId === msg.id;
-
-                            // 1. Successful execution UI
-                            if (isExecuted) {
-                              return (
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
-                                    <Check size={9} className="text-emerald-400 shrink-0" />
-                                    <div className="flex-1">
-                                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">✓ Ação Executada com Sucesso</p>
-                                      <p className="text-[7px] text-white/70 mt-0.5">
-                                        Tarefa criada: <span className="font-mono text-emerald-300 select-all">{msg.createdEntityRef}</span>
-                                      </p>
-                                      {msg.executedAt && (
-                                        <p className="text-[6px] text-white/40 mt-0.5">
-                                          Executado por {msg.executedBy || 'felipe@dutra'} em {new Date(msg.executedAt).toLocaleString()}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {msg.userApproval?.note && (
-                                    <p className="text-[7px] text-white/25 italic pl-2">Nota de Aprovação: {msg.userApproval.note}</p>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // 2. Blocked execution UI (governance warning / force option)
-                            if (isBlockedExecution) {
-                              const blockMessage = msg.executionError || executionErrors[msg.id] || "Bloqueado por regras de governança.";
-                              const isMissingOwner = blockMessage.includes("ownerRefs") || blockMessage.includes("responsável");
-                              
-                              return (
-                                <div className="space-y-2">
-                                  <div className="flex items-start gap-1.5 px-2.5 py-2 bg-red-500/10 border border-red-500/25 rounded-lg">
-                                    <AlertTriangle size={9} className="text-red-400 shrink-0 mt-0.5" />
-                                    <div className="flex-1">
-                                      <p className="text-[8px] font-black uppercase tracking-widest text-red-400">⚠ Execução Bloqueada</p>
-                                      <p className="text-[7px] text-white/80 mt-0.5 font-medium">{blockMessage}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  {isMissingOwner && (
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleExecuteProposal(msg, true)}
-                                        disabled={isSubmittingExecution}
-                                        className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 hover:border-orange-500/35 text-[7.5px] font-black uppercase tracking-widest text-orange-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                      >
-                                        {isSubmittingExecution ? (
-                                          <><RefreshCw size={8} className="animate-spin" /><span>Executando...</span></>
-                                        ) : (
-                                          <><CheckSquare size={8} /><span>Confirmar como Triagem & Executar</span></>
-                                        )}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // 3. General Approved UI with Execution button
-                            if (isApproved) {
-                              const payload = msg.openclawResult?.proposedMutation?.payload || {};
-                              const mutationType = msg.openclawResult?.proposedMutation?.type;
-                              const handoffActionType = msg.interpretation?.handoff?.actionType;
-                              const actionType = mutationType || handoffActionType;
-                              const isExecutable = actionType === 'create_task';
-
-                              return (
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
-                                    <Check size={9} className="text-emerald-400 shrink-0" />
-                                    <div className="flex-1">
-                                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Proposta aprovada por você</p>
-                                      <p className="text-[7px] text-emerald-400/60 mt-0.5">Nenhuma ação foi executada automaticamente. Pronto para início assistido.</p>
-                                    </div>
-                                  </div>
-                                  {msg.userApproval?.note && (
-                                    <p className="text-[7px] text-white/25 italic pl-2">Nota: {msg.userApproval.note}</p>
-                                  )}
-                                  
-                                  {isExecutable ? (
-                                    <div className="pt-1">
-                                      <button
-                                        onClick={() => handleExecuteProposal(msg, false)}
-                                        disabled={isSubmittingExecution}
-                                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 hover:border-emerald-700 text-[8px] font-black uppercase tracking-widest text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all"
-                                      >
-                                        {isSubmittingExecution ? (
-                                          <><RefreshCw size={9} className="animate-spin" /><span>Executando ação...</span></>
-                                        ) : (
-                                          <><Zap size={9} /><span>Executar ação aprovada</span></>
-                                        )}
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <p className="text-[6.5px] text-white/20 italic pl-1">
-                                      Apenas a criação de tarefas internas ('create_task') é executável nesta versão.
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // 4. Rejected UI
-                            if (isRejected) {
-                              return (
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-red-500/8 border border-red-500/20 rounded-lg">
-                                    <AlertTriangle size={9} className="text-red-400 shrink-0" />
-                                    <div>
-                                      <p className="text-[8px] font-black uppercase tracking-widest text-red-400">Proposta rejeitada</p>
-                                      <p className="text-[7px] text-red-400/50 mt-0.5">Nenhuma ação foi executada</p>
-                                    </div>
-                                  </div>
-                                  {msg.userApproval?.reason && (
-                                    <p className="text-[7px] text-white/25 italic pl-2">Motivo: {msg.userApproval.reason}</p>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // 5. Pending decision UI (v1.7)
-                            return (
-                              <div className="space-y-2 pt-1">
-                                <div className="flex items-center gap-1.5">
-                                  <Lock size={8} className="text-orange-400 shrink-0" />
-                                  <span className="text-[8px] text-orange-400/80 font-black uppercase tracking-widest">Aguardando sua decisão</span>
-                                </div>
-
-                                <input
-                                  type="text"
-                                  value={approvalNotes[msg.id] || ''}
-                                  onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
-                                  placeholder="Nota opcional (aprovação) ou motivo (rejeição)..."
-                                  className="w-full text-[8px] text-white/60 bg-black/20 border border-white/8 focus:border-orange-500/30 rounded-lg px-2.5 py-1.5 outline-none placeholder-white/20 transition-colors"
-                                  disabled={isSubmittingApproval}
-                                />
-
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleApproveProposal(msg)}
-                                    disabled={isSubmittingApproval || !msg.requestId}
-                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/35 text-[8px] font-black uppercase tracking-widest text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                  >
-                                    {isSubmittingApproval ? (
-                                      <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
-                                    ) : (
-                                      <><Check size={9} /><span>Aprovar proposta</span></>
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={() => handleRejectProposal(msg)}
-                                    disabled={isSubmittingApproval || !msg.requestId}
-                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 hover:bg-red-500/15 border border-red-500/15 hover:border-red-500/30 text-[8px] font-black uppercase tracking-widest text-red-400/70 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                  >
-                                    <AlertTriangle size={9} />
-                                    <span>Rejeitar</span>
-                                  </button>
-                                </div>
-                                <p className="text-[7px] text-white/15 text-center">
-                                  Aprovar não executa nenhuma ação — apenas registra sua decisão
-                                </p>
-                              </div>
-                            );
-                          })()}
-
-
-                          {/* Skill used */}
-                          {msg.openclawResult.auditLog?.skillUsed && (
-                            <p className="text-[7px] text-white/15 font-mono">skill: {msg.openclawResult.auditLog.skillUsed}</p>
+                      {/* Blocked governance warning — NEGATIVO (fundo off-white, texto terracota) */}
+                      {msg.handoffStatus === 'execution_blocked' && (
+                        <div className="p-3 bg-[#fbf9f5] border border-[#e59f8c]/20 rounded-xl space-y-1.5 text-[#3d2f2f]">
+                          <p className="text-[9px] text-[#cf735c] font-bold lowercase">execução bloqueada</p>
+                          <p className="text-[10px] text-[#3d2f2f]/80 font-light leading-relaxed">{msg.executionError || 'responsável não designado.'}</p>
+                          
+                          {/* Force triage button */}
+                          {(msg.executionError || '').includes("ownerRefs") && (
+                            <button
+                              onClick={() => handleExecuteProposal(msg, true)}
+                              disabled={submittingExecutionId === msg.id}
+                              className="text-[9px] font-bold text-[#cf735c] hover:text-[#b3563f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
+                            >
+                              {submittingExecutionId === msg.id ? '[ executando... ]' : '[ confirmar como triagem & executar ]'}
+                            </button>
                           )}
                         </div>
                       )}
 
-                      {/* v1.6: Handoff status badge — 5-state lifecycle */}
-                      {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (() => {
-                        const s = msg.handoffStatus || 'requested';
-                        const isQueued = s === 'requested' || s === 'queued_for_openclaw';
-                        const isProcessing = s === 'processing_by_openclaw';
-                        const isFailed = s === 'openclaw_failed';
-                        const isApproval = s === 'waiting_user_approval';
-
-                        const statusConfig = {
-                          label: isProcessing ? 'Processando...' : isFailed ? 'Falha no retorno' : isApproval ? 'Aguardando aprovação' : 'Aguardando OpenClaw',
-                          color: isFailed ? 'text-red-400/70' : isApproval ? 'text-orange-400/70' : isProcessing ? 'text-blue-400/70' : 'text-amber-400/70',
-                          dot: isFailed ? 'bg-red-500' : isApproval ? 'bg-orange-400 animate-pulse' : isProcessing ? 'bg-blue-400 animate-pulse' : 'bg-amber-400 animate-pulse',
-                        };
-
-                        return (
-                          <div className="mt-2 space-y-2">
-                            {/* Status + Copy Package row */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <div className={`w-1 h-1 rounded-full ${statusConfig.dot}`} />
-                                <span className={`text-[8px] font-semibold uppercase tracking-widest ${statusConfig.color}`}>
-                                  {statusConfig.label}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => handleCopyPackage(msg.id, msg)}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/20 text-[8px] font-bold text-white/30 hover:text-indigo-400 transition-all"
-                                title="Copiar pacote completo para OpenClaw"
-                              >
-                                {copiedPackageId === msg.id ? (
-                                  <><Check size={9} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
-                                ) : (
-                                  <><Copy size={9} /><span>Copiar Pacote</span></>
-                                )}
-                              </button>
-                            </div>
-
-                            {/* Register panel — only shown when queued or failed */}
-                            {(isQueued || isFailed) && (
-                              registeringForId === msg.id ? (
-                                <div className="mt-1.5 space-y-1.5">
-                                  <textarea
-                                    value={openclawDraft}
-                                    onChange={e => setOpenclawDraft(e.target.value)}
-                                    placeholder="Cole aqui a resposta da OpenClaw (responseText)..."
-                                    className="w-full text-[9px] text-white/70 bg-black/20 border border-white/10 focus:border-purple-500/30 rounded-lg px-3 py-2 resize-none outline-none placeholder-white/20 font-mono leading-relaxed transition-colors"
-                                    rows={4}
-                                    disabled={submittingResponse}
-                                  />
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[7px] text-white/20 font-mono">→ {msg.requestId}</span>
-                                    <div className="flex gap-1.5">
-                                      <button
-                                        onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
-                                        className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[8px] text-white/30 hover:text-white/60 transition-all"
-                                        disabled={submittingResponse}
-                                      >
-                                        Cancelar
-                                      </button>
-                                      <button
-                                        onClick={() => handleRegisterOpenClawResponse(msg)}
-                                        disabled={!openclawDraft.trim() || submittingResponse}
-                                        className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-[8px] font-bold text-purple-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                                      >
-                                        {submittingResponse ? (
-                                          <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
-                                        ) : (
-                                          <><Zap size={9} /><span>Registrar Resposta</span></>
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setRegisteringForId(msg.id)}
-                                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/20 text-[8px] font-bold text-purple-400/60 hover:text-purple-400 transition-all w-full justify-center"
-                                >
-                                  <Zap size={9} />
-                                  <span>Registrar Retorno da OpenClaw</span>
-                                </button>
-                              )
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {isLotus && msg.interpretation && (
-                        <div className="mt-3 pt-2.5 border-t border-white/5 space-y-2">
-
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-white/30">Análise:</span>
-                            <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[8px] font-black tracking-widest uppercase">
-                              {msg.interpretation.intent}
-                            </span>
-                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase border ${
-                              msg.interpretation.riskLevel === 'high' 
-                                ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                                : msg.interpretation.riskLevel === 'medium'
-                                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                            }`}>
-                              Risco {msg.interpretation.riskLevel}
-                            </span>
-                            {msg.interpretation.requiresConfirmation && (
-                              <span className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[8px] font-black tracking-widest uppercase animate-pulse">
-                                Requer Confirmação
-                              </span>
-                            )}
-                          </div>
+                      {/* Approval panels — NEGATIVO (fundo off-white, texto terracota) */}
+                      {msg.openclawResult.requiresHumanApproval && msg.handoffStatus === 'waiting_user_approval' && (
+                        <div className="p-3 bg-[#fbf9f5] border border-[#e59f8c]/25 rounded-xl space-y-3 text-[#3d2f2f]">
+                          <span className="block text-[9px] font-bold text-[#cf735c] tracking-widest lowercase">decisão pendente</span>
                           
-                          <div className="grid grid-cols-2 gap-2 text-[9px] text-white/40">
-                             <div>
-                               <span className="font-semibold text-white/30">Domínio:</span> <span className="text-white/60">{msg.interpretation.domain}</span>
-                             </div>
-                             <div>
-                               <span className="font-semibold text-white/30">Confirmação:</span> <span className="text-white/60">{msg.interpretation.requiresConfirmation ? 'Sim' : 'Não'}</span>
-                             </div>
-                             {msg.interpretation.handoff && (
-                               <div>
-                                 <span className="font-semibold text-white/30">Tipo de Ação:</span> <span className="text-white/60">{msg.interpretation.handoff.actionType}</span>
-                               </div>
-                             )}
-                             <div className="col-span-2">
-                               <span className="font-semibold text-white/30">Ação Executada:</span> <span className="text-white/60">Nenhuma — modo proposta</span>
-                             </div>
-                             {msg.interpretation.handoff?.entitiesMentioned && msg.interpretation.handoff.entitiesMentioned.length > 0 && (
-                               <div className="col-span-2">
-                                 <span className="font-semibold text-white/30">Entidades:</span> <span className="text-white/60">{msg.interpretation.handoff.entitiesMentioned.join(', ')}</span>
-                               </div>
-                             )}
-                             {msg.interpretation.sourcesNeeded && msg.interpretation.sourcesNeeded.length > 0 && (
-                               <div className="col-span-2">
-                                 <span className="font-semibold text-white/30">Fontes Consultadas:</span> <span className="text-white/60">{msg.interpretation.sourcesNeeded.join(', ')}</span>
-                               </div>
-                             )}
-                           </div>
-                           
-                           {/* v1.3: executionPrompt — handoff contract for OpenClaw */}
-                           {msg.interpretation.handoff?.executionPrompt && (
-                             <div className="mt-2 pt-2 border-t border-white/5">
-                               <div className="flex items-center justify-between mb-1.5">
-                                 <span className="text-[8px] font-black uppercase tracking-widest text-purple-400/70">
-                                   Handoff → OpenClaw
-                                 </span>
-                                 <button
-                                   onClick={() => handleCopyPrompt(msg.id, msg.interpretation!.handoff!.executionPrompt)}
-                                   className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-purple-500/10 border border-white/5 hover:border-purple-500/20 text-[8px] font-bold text-white/30 hover:text-purple-400 transition-all"
-                                   title="Copiar executionPrompt"
-                                 >
-                                   {copiedPromptId === msg.id ? (
-                                     <><Check size={9} className="text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
-                                   ) : (
-                                     <><Copy size={9} /><span>Copiar Prompt</span></>
-                                   )}
-                                 </button>
-                               </div>
-                               <p className="text-[9px] text-white/40 leading-relaxed font-mono bg-black/20 rounded-lg px-3 py-2 border border-white/5">
-                                 {msg.interpretation.handoff.executionPrompt}
-                               </p>
-                               {msg.interpretation.handoff.suggestedNextStep && (
-                                 <p className="mt-1.5 text-[8px] text-white/30 leading-relaxed">
-                                   <span className="font-semibold text-white/25">Próx. passo: </span>
-                                   {msg.interpretation.handoff.suggestedNextStep}
-                                 </p>
-                               )}
-                             </div>
-                           )}
+                          <input
+                            type="text"
+                            value={approvalNotes[msg.id] || ''}
+                            onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                            placeholder="nota (opcional)..."
+                            className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#cf735c] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
+                            disabled={submittingApprovalId === msg.id}
+                          />
 
-                          <span className="block text-[8px] text-white/20 text-right mt-2 font-medium">
-                            {msg.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <div className="flex gap-4">
+                            <button
+                              onClick={() => handleApproveProposal(msg)}
+                              disabled={submittingApprovalId === msg.id}
+                              className="text-[10px] font-bold text-[#cf735c] hover:text-[#b3563f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                            >
+                              {submittingApprovalId === msg.id ? '[ registrando... ]' : '[ aprovar proposta ]'}
+                            </button>
+                            <button
+                              onClick={() => handleRejectProposal(msg)}
+                              disabled={submittingApprovalId === msg.id}
+                              className="text-[10px] font-light text-[#3d2f2f]/60 hover:text-[#3d2f2f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                            >
+                              [ rejeitar ]
+                            </button>
+                          </div>
                         </div>
+                      )}
+
+                      {/* Approved & Executable (v1.8 create_task allowlist) */}
+                      {msg.handoffStatus === 'approved_by_user' && msg.openclawResult.proposedMutation?.type === 'create_task' && (
+                        <button
+                          onClick={() => handleExecuteProposal(msg, false)}
+                          disabled={submittingExecutionId === msg.id}
+                          className="w-full text-center py-2 bg-white/10 hover:bg-white/20 text-[10px] font-bold text-[#fbf9f5] border border-white/25 rounded-full transition-all lowercase cursor-pointer outline-none"
+                        >
+                          {submittingExecutionId === msg.id ? '[ executando... ]' : '[ executar criação de tarefa ]'}
+                        </button>
+                      )}
+                      
+                    </div>
+                  )}
+
+                  {/* Pending local queue responses manual input panel — TRANSLÚCIDO */}
+                  {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (msg.handoffStatus === 'requested' || msg.handoffStatus === 'queued_for_openclaw') && (
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-left">
+                      {registeringForId === msg.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={openclawDraft}
+                            onChange={e => setOpenclawDraft(e.target.value)}
+                            placeholder="cole a resposta do openclaw (responseText)..."
+                            className="w-full text-xs text-[#fbf9f5] bg-white/10 border border-white/20 focus:border-white rounded-xl px-3 py-2 outline-none resize-none font-mono placeholder-white/30 lowercase"
+                            rows={3}
+                            disabled={submittingResponse}
+                          />
+                          <div className="flex justify-end gap-3">
+                            <button
+                              onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
+                              className="text-[9px] text-[#fbf9f5]/50 hover:text-white lowercase bg-transparent border-none cursor-pointer outline-none"
+                            >
+                              cancelar
+                            </button>
+                            <button
+                              onClick={() => handleRegisterOpenClawResponse(msg)}
+                              disabled={!openclawDraft.trim() || submittingResponse}
+                              className="text-[9px] font-bold text-white disabled:opacity-35 lowercase bg-transparent border-none cursor-pointer outline-none"
+                            >
+                              [ registrar ]
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setRegisteringForId(msg.id)}
+                          className="text-[9px] font-light text-[#fbf9f5]/60 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                        >
+                          [ registrar retorno da lótus manualmente ]
+                        </button>
                       )}
                     </div>
-                  </div>
-                </div>
-              );
-            })}
-            
-            {/* Lótus Typing Indicator */}
-            {isTyping && (
-              <div className="flex justify-start w-full">
-                <div className="flex items-start gap-3 max-w-[85%]">
-                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 text-[10px] font-black text-purple-400">
-                    L
-                  </div>
-                  <div className="px-4 py-3 bg-white/2 border border-white/5 rounded-2xl flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
+                  )}
                 </div>
               </div>
-            )}
-            
-            <div ref={chatEndRef} />
-          </div>
+            );
+          })}
 
-          {/* Quick Suggestions Pills */}
-          <div className="px-6 py-2 bg-white/1 border-t border-white/5 flex items-center gap-2 overflow-x-auto flex-nowrap shrink-0 custom-scrollbar-horizontal select-none">
-            <span className="text-[8px] font-black uppercase tracking-widest text-white/20 whitespace-nowrap mr-1 shrink-0">Perguntas Rápidas:</span>
-            {[
-              { label: 'Como está meu dia?', text: 'Como está meu dia?' },
-              { label: 'O que depende de mim?', text: 'O que depende de mim?' },
-              { label: 'O que está travado?', text: 'O que está travado?' },
-              { label: 'O que a Lótus fez?', text: 'O que a Lótus fez?' },
-              { label: 'Projetos vivos', text: 'Quais projetos estão vivos?' },
-              { label: 'Agentes & crons', text: 'Quais agentes estão trabalhando?' },
-              { label: 'Fontes sintonizadas', text: 'Quais fontes foram consultadas?' }
-            ].map((sugg, i) => (
-              <button
-                key={i}
-                onClick={() => handleSendMessage(sugg.text)}
-                className="px-3 py-1.5 bg-white/5 border border-white/5 rounded-full text-[10px] font-bold text-white/50 hover:text-white hover:bg-white/10 hover:border-purple-500/25 transition-all shrink-0 whitespace-nowrap"
-              >
-                {sugg.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Chat Input Bar */}
-          <div className="p-4 bg-white/3 border-t border-white/5 flex items-center gap-2.5 shrink-0">
-            <div className="flex-1 bg-black/20 border border-white/5 rounded-2xl flex items-center px-4 py-2 focus-within:border-purple-500/35 focus-within:ring-2 focus-within:ring-purple-500/5 transition-all">
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Fê, pergunte ou peça algo para a Lótus…"
-                className="flex-1 bg-transparent border-none text-xs text-white placeholder:text-white/20 outline-none py-1.5"
-              />
-              <button 
-                className="p-1.5 rounded-lg text-white/25 hover:text-purple-400 hover:bg-white/5 transition-all"
-                title="Comando de voz (futuro)"
-              >
-                <Mic size={14} />
-              </button>
+          {/* Typing state mock */}
+          {isTyping && (
+            <div className="flex justify-start w-full animate-pulse select-none text-left">
+              <div className="space-y-1">
+                <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
+                <span className="text-xs font-light text-[#fbf9f5]/40">pensando...</span>
+              </div>
             </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+      </main>
+
+      {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
+      <footer className="w-full max-w-xl mx-auto flex flex-col items-center gap-4 z-10 select-none">
+        
+        {/* Quick Suggestion links */}
+        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full text-[10px] text-[#fbf9f5]/60 font-light tracking-wide pb-1 whitespace-nowrap">
+          {[
+            { label: 'resumo do dia', text: 'Resumo do meu dia' },
+            { label: 'o que depende de mim', text: 'O que depende de mim?' },
+            { label: 'tarefas atrasadas', text: 'Quais tarefas estão atrasadas?' },
+            { label: 'projetos estagnados', text: 'Quais projetos estão travados?' }
+          ].map((sugg, i) => (
             <button
-              onClick={() => handleSendMessage()}
-              disabled={!inputMessage.trim()}
-              className="p-3 bg-purple-600 hover:bg-purple-500 disabled:bg-white/5 disabled:text-white/20 text-white rounded-2xl transition-all shrink-0 flex items-center justify-center shadow-lg shadow-purple-950/30"
+              key={i}
+              onClick={() => handleSendMessage(sugg.text)}
+              className="hover:text-white text-[#fbf9f5]/70 transition-colors border-b border-white/15 pb-0.5 bg-transparent border-none cursor-pointer outline-none"
             >
-              <Send size={14} />
+              {sugg.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Core Input Container */}
+        <div className="w-full flex items-center gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1">
+          <input
+            type="text"
+            value={inputMessage}
+            onChange={handleInputChange}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            placeholder="falar ou digitar comando..."
+            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase"
+          />
+
+          {/* Voice recorder button */}
+          {voiceState !== 'unsupported' && (
+            <button
+              onClick={startVoiceInput}
+              className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent ${
+                voiceState === 'listening' 
+                  ? 'text-[#cf735c] bg-white scale-105 shadow-md' 
+                  : 'text-[#fbf9f5]/60 hover:text-white'
+              }`}
+              title={voiceState === 'listening' ? 'ouvindo... clique para parar' : 'capturar áudio'}
+            >
+              {voiceState === 'listening' ? <Mic size={14} className="animate-pulse" /> : <Mic size={14} />}
+            </button>
+          )}
+
+          <button
+            onClick={() => handleSendMessage()}
+            disabled={!inputMessage.trim()}
+            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
+          >
+            <Send size={14} />
+          </button>
+        </div>
+      </footer>
+
+      {/* 4. CAMADA LATERAL ULTRALEVE — NEGATIVO (Fundo Off-White, Texto Terracota) */}
+      <div 
+        className={`fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#fbf9f5]/98 backdrop-blur-lg border-l border-[#e59f8c]/25 shadow-2xl transition-all duration-500 ease-out transform ${
+          isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
+        } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#3d2f2f]`}
+      >
+        <div className="space-y-8">
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between border-b border-[#3c2f2f]/10 pb-4">
+            <div className="flex items-center gap-2">
+              <Activity size={14} className="text-[#cf735c] stroke-[2]" />
+              <span className="text-xs font-bold tracking-widest text-[#3d2f2f]/85 lowercase">sinais operacionais</span>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="text-[#3c2f2f]/45 hover:text-[#cf735c] transition-colors bg-transparent border-none cursor-pointer outline-none"
+            >
+              <X size={16} />
             </button>
           </div>
-        </section>
 
-        {/* RIGHT COLUMN: B & G (Col-span 5) */}
-        <div className="lg:col-span-5 space-y-6 min-w-0">
-          
-          {/* B. BRIEFING DO AGORA */}
-          <section className="bg-white/2 border border-white/5 rounded-3xl p-6 backdrop-blur-md shadow-lg">
-            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 mb-5 flex items-center gap-2">
-              <Activity size={14} className="text-purple-400" />
-              Briefing do Agora
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/2 border border-white/5 p-4 rounded-2xl flex flex-col justify-between hover:bg-white/4 transition-colors">
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/25">Depende de Você</span>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-2xl font-black text-amber-400">{feTasks.length}</span>
-                  <span className="text-[10px] font-bold text-white/30">tarefas</span>
-                </div>
-                <p className="text-[9px] text-white/45 mt-1 leading-tight">Atribuídas sob sua responsabilidade direta.</p>
+          {/* Sinais de Atenção */}
+          <div className="space-y-4">
+            <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">briefing do agora</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
+                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">minhas tarefas</span>
+                <span className="text-xl font-bold mt-1 text-[#3d2f2f]">{feTasks.length}</span>
               </div>
-
-              <div className="bg-white/2 border border-white/5 p-4 rounded-2xl flex flex-col justify-between hover:bg-white/4 transition-colors">
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/25">Riscos & Travas</span>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-2xl font-black text-red-400">{totalRisksCount}</span>
-                  <span className="text-[10px] font-bold text-white/30">alertas</span>
-                </div>
-                <p className="text-[9px] text-white/45 mt-1 leading-tight">Atrasos, projetos estagnados ou crons em falha.</p>
+              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
+                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">riscos & travas</span>
+                <span className="text-xl font-bold mt-1 text-[#c9554d]">{totalRisksCount}</span>
               </div>
-
-              <div className="bg-white/2 border border-white/5 p-4 rounded-2xl flex flex-col justify-between hover:bg-white/4 transition-colors">
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/25">Projetos Vivos</span>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-2xl font-black text-blue-400">{activeProjects.length}</span>
-                  <span className="text-[10px] font-bold text-white/30">frentes</span>
-                </div>
-                <p className="text-[9px] text-white/45 mt-1 leading-tight">Projetos ativamente em andamento.</p>
+              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
+                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">projetos ativos</span>
+                <span className="text-xl font-bold mt-1 text-[#3d2f2f]">{activeProjects.length}</span>
               </div>
-
-              <div className="bg-white/2 border border-white/5 p-4 rounded-2xl flex flex-col justify-between hover:bg-white/4 transition-colors">
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/25">Metabolismo</span>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className={`text-sm font-black uppercase tracking-widest ${brokenRoutines.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {brokenRoutines.length > 0 ? 'Instável' : 'Saudável'}
-                  </span>
-                </div>
-                <p className="text-[9px] text-white/45 mt-1 leading-tight">Agentes e rotinas recorrentes de processamento.</p>
+              <div className="bg-[#faf6f0] border border-[#e59f8c]/20 p-3.5 rounded-2xl flex flex-col justify-between">
+                <span className="text-[8px] font-light text-[#3d2f2f]/60 lowercase">metabolismo</span>
+                <span className={`text-[10px] font-bold mt-2 uppercase tracking-wide ${brokenRoutines.length > 0 ? 'text-[#c9554d]' : 'text-[#52856d]'}`}>
+                  {brokenRoutines.length > 0 ? 'instável' : 'saudável'}
+                </span>
               </div>
             </div>
-          </section>
+          </div>
 
-          {/* G. PRÓXIMA MELHOR AÇÃO */}
-          <section className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/15 rounded-3xl p-6 backdrop-blur-md shadow-xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
-            
-            <h3 className="text-xs font-black uppercase tracking-widest text-purple-400 mb-4 flex items-center gap-2">
-              <Sparkles size={14} className="text-purple-400" />
-              Próxima Melhor Ação Recomendada
-            </h3>
-            
-            <div className="space-y-4">
+          {/* Próximas Melhores Ações */}
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">ações recomendadas</h4>
+            <div className="space-y-2.5">
               {nextBestActions.map((action, i) => (
-                <div key={i} className="flex items-start justify-between gap-3 p-3.5 bg-black/20 border border-white/5 rounded-2xl">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white/95 leading-relaxed">{action.text}</p>
-                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 mt-2 ${
-                      action.priority === 'high' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    }`}>
-                      Prioridade {action.priority === 'high' ? 'Crítica' : 'Média'}
-                    </span>
-                  </div>
+                <div key={i} className="p-3 bg-[#faf6f0] border border-[#e59f8c]/15 rounded-xl flex flex-col justify-between gap-2">
+                  <p className="text-[11px] font-light text-[#3d2f2f] leading-normal">{action.text}</p>
                   <button 
-                    onClick={action.onClick}
-                    className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-white whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0"
+                    onClick={() => { action.onClick(); setIsSidebarOpen(false); }}
+                    className="text-[9px] font-bold text-[#cf735c] hover:text-[#b3563f] flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
                   >
-                    {action.actionText}
-                    <ArrowRight size={10} />
+                    <span>{action.actionText}</span>
+                    <ArrowRight size={8} />
                   </button>
                 </div>
               ))}
             </div>
-          </section>
-        </div>
-      </div>
-
-      {/* Grid: Lower Panels (C, D, E, F) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-full min-w-0 mt-8">
-        
-        {/* C. O QUE A LÓTUS FEZ (Activity Feed) */}
-        <section className="bg-white/2 border border-white/5 rounded-3xl p-6 backdrop-blur-md flex flex-col justify-between min-h-[300px]">
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 mb-5 flex items-center gap-2">
-              <Clock size={14} className="text-purple-400" />
-              O Que a Lótus Fez (Feed)
-            </h3>
-            <div className="space-y-3.5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-              {sortedFeed.map((f) => {
-                const timeText = f.time ? formatDate(f.time) : '';
-                return (
-                  <div key={f.id} className="flex flex-col gap-0.5 pb-2.5 border-b border-white/2 last:border-b-0">
-                    <p className="text-[11px] text-white/85 leading-snug">{f.event}</p>
-                    <div className="flex items-center justify-between text-[8px] text-white/25 mt-0.5">
-                      <span className="font-black tracking-widest uppercase">{f.system}</span>
-                      <span>{timeText}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {sortedFeed.length === 0 && (
-                <p className="text-[11px] text-white/30 italic text-center py-6">Nenhum evento registrado nos logs.</p>
-              )}
-            </div>
-          </div>
-          
-          <button 
-            onClick={() => router.push('/pulso/eventos')}
-            className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all flex items-center justify-center gap-2 mt-4"
-          >
-            Ver Logs Técnicos
-            <ArrowRight size={10} />
-          </button>
-        </section>
-
-        {/* D. PROJETOS VIVOS */}
-        <section className="bg-white/2 border border-white/5 rounded-3xl p-6 backdrop-blur-md flex flex-col justify-between min-h-[300px]">
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 mb-5 flex items-center gap-2">
-              <Layers2 size={14} className="text-purple-400" />
-              Projetos Vivos ({activeProjects.length})
-            </h3>
-            <div className="space-y-3 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-              {activeProjects.slice(0, 5).map((p: any) => {
-                const isOverdue = p.deadline && safeGetTime(p.deadline) < nowTime;
-                return (
-                  <div key={p.id} className="flex flex-col gap-1 p-3 bg-white/2 border border-white/5 rounded-2xl hover:bg-white/4 transition-colors">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-xs font-bold text-white truncate">{p.name}</h4>
-                      {isOverdue && (
-                        <span className="px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded text-[7px] font-black tracking-widest uppercase shrink-0">
-                          Atrasado
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-white/50 leading-relaxed truncate">
-                      <span className="font-bold text-purple-400/80">Próximo Passo: </span>
-                      {p.nextStep ? p.nextStep : <span className="text-red-400/80 italic font-semibold">Definir passo ⚠️</span>}
-                    </p>
-                  </div>
-                );
-              })}
-              {activeProjects.length === 0 && (
-                <p className="text-[11px] text-white/30 italic text-center py-6">Nenhum projeto ativo.</p>
-              )}
-            </div>
           </div>
 
-          <button 
-            onClick={() => router.push('/pulso/ecossistema')}
-            className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all flex items-center justify-center gap-2 mt-4"
-          >
-            Ver Mapa Estratégico
-            <ArrowRight size={10} />
-          </button>
-        </section>
-
-        {/* E. AGENTES EM OPERAÇÃO */}
-        <section className="bg-white/2 border border-white/5 rounded-3xl p-6 backdrop-blur-md flex flex-col justify-between min-h-[300px]">
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 mb-5 flex items-center gap-2">
-              <Zap size={14} className="text-purple-400" />
-              Agentes Operantes
-            </h3>
-            <div className="space-y-3.5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-              {allAgents.slice(0, 4).map((ag: any) => {
-                const isActive = ag.status === 'active';
-                return (
-                  <div key={ag.id} className="flex items-center justify-between p-2.5 bg-white/2 border border-white/5 rounded-2xl hover:bg-white/4 transition-colors">
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-bold text-white truncate">{ag.name}</h4>
-                      <p className="text-[8px] text-white/30 uppercase tracking-widest font-black mt-0.5 truncate">{ag.role || 'Agente'}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border shrink-0 ${
-                      isActive 
-                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                        : 'bg-white/5 border-white/10 text-white/30'
-                    }`}>
-                      {isActive ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </div>
-                );
-              })}
-              {allAgents.length === 0 && (
-                <p className="text-[11px] text-white/30 italic text-center py-6">Nenhum agente registrado.</p>
-              )}
+          {/* Projetos Vivos */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">projetos ativos</h4>
+              <button 
+                onClick={() => { router.push('/pulso/ecossistema'); setIsSidebarOpen(false); }}
+                className="text-[9px] text-[#cf735c] hover:underline lowercase bg-transparent border-none cursor-pointer outline-none"
+              >
+                ver ecossistema
+              </button>
             </div>
-          </div>
-
-          <button 
-            onClick={() => router.push('/pulso/metabolismo')}
-            className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all flex items-center justify-center gap-2 mt-4"
-          >
-            Gerenciar Agentes
-            <ArrowRight size={10} />
-          </button>
-        </section>
-
-        {/* F. FONTES OBSERVADAS */}
-        <section className="bg-white/2 border border-white/5 rounded-3xl p-6 backdrop-blur-md flex flex-col justify-between min-h-[300px]">
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-white/30 mb-5 flex items-center gap-2">
-              <Database size={14} className="text-purple-400" />
-              Fontes Observadas
-            </h3>
-            
-            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-              {monitoredSources.map((src, i) => (
-                <div key={i} className="flex items-center justify-between p-2.5 bg-white/2 border border-white/5 rounded-2xl hover:bg-white/4 transition-colors">
-                  <span className="text-xs font-bold text-white/80">{src.name}</span>
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-1 h-1 rounded-full ${src.connected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-white/20'}`} />
-                    <span className={`text-[8px] font-black uppercase tracking-widest ${
-                      src.connected ? 'text-emerald-400' : 'text-white/25'
-                    }`}>
-                      {src.connected ? 'Conectado' : 'Aguardando'}
-                    </span>
-                  </div>
+            <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1 no-scrollbar">
+              {activeProjects.slice(0, 4).map((p: any) => (
+                <div key={p.id} className="p-2.5 bg-[#faf6f0] border border-[#e59f8c]/15 rounded-lg flex items-center justify-between text-xs">
+                  <span className="font-medium text-[#3d2f2f] truncate max-w-[150px]">{p.name}</span>
+                  <span className="text-[9px] font-light text-[#3d2f2f]/60 truncate max-w-[120px]">
+                    {p.nextStep ? p.nextStep : 'sem passo'}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Fontes monitoradas */}
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">fontes observadas</h4>
+            <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1 no-scrollbar">
+              {allSources.slice(0, 5).map((src: any, i) => (
+                <div key={i} className="flex justify-between items-center text-xs py-1 px-2 hover:bg-[#faf6f0] rounded-lg">
+                  <span className="text-[#3d2f2f] font-light">{src.name}</span>
+                  <span className="text-[8px] font-bold text-[#52856d] uppercase tracking-wider">sintonizado</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Drawer Footer / Backstage trigger */}
+        <div className="border-t border-[#3c2f2f]/10 pt-4 mt-8 flex flex-col gap-2">
           <button 
-            onClick={() => router.push('/pulso/ecossistema')}
-            className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all flex items-center justify-center gap-2 mt-4"
+            onClick={() => { router.push('/pulso/eventos'); setIsSidebarOpen(false); }}
+            className="w-full text-center py-2 border border-[#3c2f2f]/20 rounded-full text-[9px] font-bold text-[#3c2f2f]/60 hover:text-[#cf735c] hover:border-[#cf735c]/40 transition-colors lowercase bg-transparent cursor-pointer outline-none"
           >
-            Visualizar Fontes
-            <ArrowRight size={10} />
+            abrir bastidor técnico (logs)
           </button>
-        </section>
+        </div>
 
       </div>
+
     </div>
   );
 }

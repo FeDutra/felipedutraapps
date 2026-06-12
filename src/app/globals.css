@@ -194,3 +194,112 @@ body {
   color: #ffffff;
   font-weight: 600;
 }
+
+/* Lótus Live 'Her' palette theme container */
+.theme-her {
+  --background-her: #cf735c;
+  --foreground-her: #fbf9f5;
+  --foreground-her-muted: rgba(251, 249, 245, 0.6);
+  --coral-her: #fbf9f5;
+  --coral-light-her: rgba(251, 249, 245, 0.15);
+  --coral-muted-her: rgba(251, 249, 245, 0.75);
+  --coral-deep-her: #ffffff;
+  background-color: var(--background-her);
+  color: var(--foreground-her);
+}
+
+/* Organic Breathing / Floating animations for Lótus Circle SVG */
+@keyframes lotus-breathe {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    stroke: var(--coral-her);
+    stroke-width: 7;
+    filter: drop-shadow(0 0 10px rgba(251, 249, 245, 0.25));
+  }
+  50% {
+    transform: scale(1.04) rotate(3deg);
+    stroke: var(--coral-muted-her);
+    stroke-width: 9;
+    filter: drop-shadow(0 0 18px rgba(251, 249, 245, 0.45));
+  }
+}
+
+@keyframes lotus-listen {
+  0%, 100% {
+    transform: scale(1.03) rotate(0deg);
+    stroke: var(--coral-her);
+    stroke-width: 9;
+    stroke-dasharray: 290 10;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(90deg);
+    stroke: var(--coral-deep-her);
+    stroke-width: 12;
+    stroke-dasharray: 240 60;
+    stroke-dashoffset: 40;
+    filter: drop-shadow(0 0 25px rgba(251, 249, 245, 0.6));
+  }
+}
+
+@keyframes lotus-think {
+  0% {
+    transform: scale(1.05) rotate(0deg);
+    stroke: var(--coral-muted-her);
+    stroke-width: 8;
+    stroke-dasharray: 120 180;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    transform: scale(0.97) rotate(180deg);
+    stroke: var(--coral-her);
+    stroke-width: 11;
+    stroke-dasharray: 200 100;
+    stroke-dashoffset: -90;
+    filter: drop-shadow(0 0 20px rgba(251, 249, 245, 0.5));
+  }
+  100% {
+    transform: scale(1.05) rotate(360deg);
+    stroke: var(--coral-muted-her);
+    stroke-width: 8;
+    stroke-dasharray: 120 180;
+    stroke-dashoffset: -300;
+  }
+}
+
+@keyframes lotus-speak {
+  0%, 100% {
+    transform: scale(1.04) translateY(0);
+    stroke: var(--coral-her);
+    stroke-width: 8;
+    filter: drop-shadow(0 0 15px rgba(251, 249, 245, 0.35));
+  }
+  50% {
+    transform: scale(1.11) translateY(-2px);
+    stroke: var(--coral-deep-her);
+    stroke-width: 13;
+    filter: drop-shadow(0 0 28px rgba(251, 249, 245, 0.65));
+  }
+}
+
+.lotus-idle-anim {
+  animation: lotus-breathe 6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.lotus-listening-anim {
+  animation: lotus-listen 2.5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.lotus-thinking-anim {
+  animation: lotus-think 3.5s linear infinite;
+  transform-origin: center;
+}
+
+.lotus-responding-anim {
+  animation: lotus-speak 1.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+
