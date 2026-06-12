@@ -176,7 +176,10 @@ export default function InboxPage() {
 
       // 8. Origin matching logic
       if (filters.origin && filters.origin !== 'all') {
-        const originVal = r.origin?.channel || (r as any).originChannel || (r as any).channel;
+        // v1.6: origin may be string (lotus_live) or object {channel, ...}
+        const originVal = typeof r.origin === 'object' && r.origin !== null
+          ? (r.origin as any).channel
+          : (r.origin as any) || (r as any).originChannel || (r as any).channel;
         if (originVal !== filters.origin) return false;
       }
 

@@ -65,6 +65,10 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
   const requestTypeFallback = request.requestType || 'unknown';
 
   const isTest = (request as any).isTest || request.dedupeKey?.includes('test') || titleFallback.toLowerCase().includes('test');
+  // v1.6: origin may be a string (lotus_live) or an object {channel, source, ...}
+  const originChannel: string | undefined = typeof request.origin === 'object' && request.origin !== null
+    ? (request.origin as any).channel
+    : undefined;
 
   return (
     <motion.div
@@ -85,10 +89,10 @@ export const RequestItemCard = ({ request, onClick }: RequestItemCardProps) => {
               {requestTypeFallback.replace('_', ' ')}
             </span>
             
-            {typeof request.origin === 'object' && request.origin?.channel && (
+            {originChannel && (
               <span className="flex items-center gap-1 px-2 py-1 bg-white/5 border border-white/5 rounded-lg text-[8px] font-bold text-white/40 uppercase tracking-tight">
-                {getOriginIcon(request.origin.channel)}
-                {request.origin.channel}
+                {getOriginIcon(originChannel)}
+                {originChannel}
               </span>
             )}
 
