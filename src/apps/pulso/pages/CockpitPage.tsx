@@ -136,7 +136,7 @@ export default function CockpitPage() {
   if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <div className="w-12 h-12 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
         <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">Sintonizando Campo Vivo</p>
       </div>
     );

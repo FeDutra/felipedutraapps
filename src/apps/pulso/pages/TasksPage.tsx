@@ -279,9 +279,9 @@ export default function TasksPage() {
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center gap-3 text-xs text-blue-300 font-bold"
+          className="mb-6 p-4 bg-white/10 border border-white/20 rounded-2xl flex items-center gap-3 text-xs text-white font-bold"
         >
-          <div className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+          <div className="w-2 h-2 rounded-full bg-white animate-ping" />
           <span>{feedbackMsg}</span>
         </motion.div>
       )}
@@ -296,7 +296,7 @@ export default function TasksPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10 w-full max-w-full min-w-0">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center text-white">
               <CheckSquare size={16} />
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Central de Tarefas</h1>
@@ -310,11 +310,11 @@ export default function TasksPage() {
       {/* Stunning Interactive Dashboard Indicator Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         {[
-          { id: 'all', count: openCount, label: 'Abertas', desc: 'Tarefas ativas', color: 'text-amber-400 border-amber-500/20 bg-amber-500/5', activeColor: 'ring-1 ring-amber-500/40' },
-          { id: 'depende_fe', count: dependsFeCount, label: 'Depende do Fê', desc: 'Atribuídas a Felipe', color: 'text-blue-400 border-blue-500/20 bg-blue-500/5', activeColor: 'ring-1 ring-blue-500/40' },
-          { id: 'vencidas', count: overdueCount, label: 'Vencidas', desc: 'Passaram do prazo', color: 'text-red-400 border-red-500/20 bg-red-500/5', activeColor: 'ring-1 ring-red-500/40' },
-          { id: 'sem_responsavel', count: noOwnerCount, label: 'Sem Responsável', desc: 'Nenhum ownerRef', color: 'text-purple-400 border-purple-500/20 bg-purple-500/5', activeColor: 'ring-1 ring-purple-500/40' },
-          { id: 'sem_projeto', count: noProjectCount, label: 'Sem Projeto', desc: 'Órfãs de projeto', color: 'text-orange-400 border-orange-500/20 bg-orange-500/5', activeColor: 'ring-1 ring-orange-500/40' }
+          { id: 'all', count: openCount, label: 'Abertas', desc: 'Tarefas ativas', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
+          { id: 'depende_fe', count: dependsFeCount, label: 'Depende do Fê', desc: 'Atribuídas a Felipe', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
+          { id: 'vencidas', count: overdueCount, label: 'Vencidas', desc: 'Passaram do prazo', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
+          { id: 'sem_responsavel', count: noOwnerCount, label: 'Sem Responsável', desc: 'Nenhum ownerRef', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
+          { id: 'sem_projeto', count: noProjectCount, label: 'Sem Projeto', desc: 'Órfãs de projeto', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' }
         ].map(card => {
           const isActive = (card.id === 'all' && customFilter === 'all') || (card.id !== 'all' && customFilter === card.id);
           return (
@@ -395,7 +395,7 @@ export default function TasksPage() {
                 placeholder="Buscar por título, descrição, área ou projeto..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-blue-500/50 transition-all truncate"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/40 transition-all truncate"
               />
             </div>
           </div>
@@ -411,9 +411,9 @@ export default function TasksPage() {
                 onChange={(e) => setAreaFilter(e.target.value)}
                 className="bg-transparent text-xs text-white/80 focus:outline-none w-full cursor-pointer font-semibold"
               >
-                <option value="all" className="bg-slate-900 text-white">Todas as Áreas</option>
+                <option value="all" className="bg-[#b8544a] text-white">Todas as Áreas</option>
                 {areas.map(a => (
-                  <option key={a.id} value={a.id} className="bg-slate-900 text-white">{a.name}</option>
+                  <option key={a.id} value={a.id} className="bg-[#b8544a] text-white">{a.name}</option>
                 ))}
               </select>
             </div>
@@ -426,9 +426,9 @@ export default function TasksPage() {
                 onChange={(e) => setProjectFilter(e.target.value)}
                 className="bg-transparent text-xs text-white/80 focus:outline-none w-full cursor-pointer font-semibold"
               >
-                <option value="all" className="bg-slate-900 text-white">Todos os Projetos</option>
+                <option value="all" className="bg-[#b8544a] text-white">Todos os Projetos</option>
                 {projects.map(p => (
-                  <option key={p.id} value={p.id} className="bg-slate-900 text-white">{p.name}</option>
+                  <option key={p.id} value={p.id} className="bg-[#b8544a] text-white">{p.name}</option>
                 ))}
               </select>
             </div>
@@ -449,7 +449,7 @@ export default function TasksPage() {
               setCustomFilter('all');
               setSearchTerm('');
             }}
-            className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+            className="flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
           >
             <RotateCcw size={10} /> Limpar Filtros
           </button>
@@ -492,12 +492,11 @@ export default function TasksPage() {
             const hasNoOwner = !task.ownerRefs || task.ownerRefs.length === 0;
             const hasNoProj = !task.projectRef;
             
-            // Priority pill colors
             const pColor = task.priority === 'high' || task.priority === 'critical' 
-              ? 'text-red-400 bg-red-500/10 border-red-500/20' 
+              ? 'text-white border-white/30 bg-white/10' 
               : task.priority === 'low' 
               ? 'text-white/30 bg-white/5 border-white/5' 
-              : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+              : 'text-white/70 bg-white/5 border-white/10';
 
             const resolvedProj = projects.find(p => p.id === task.projectRef);
             const resolvedArea = areas.find(a => a.id === task.areaRef);
@@ -510,11 +509,11 @@ export default function TasksPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 className={`group relative bg-white/2 border ${
                   isCompleted 
-                    ? 'border-emerald-500/20 bg-emerald-500/5' 
+                    ? 'border-white/20 bg-white/5 opacity-70' 
                     : isArchived 
                     ? 'border-white/5 opacity-60' 
                     : overdue
-                    ? 'border-red-500/20 bg-red-500/2'
+                    ? 'border-white/20 bg-white/5'
                     : 'border-white/5 hover:border-white/10'
                 } rounded-3xl p-6 flex flex-col justify-between transition-all w-full min-w-0`}
               >
@@ -525,18 +524,16 @@ export default function TasksPage() {
                       {task.priority || 'medium'}
                     </span>
                     
-                    {/* Status visual indication pill */}
                     <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 ${
-                      isCompleted ? 'text-emerald-400' : isArchived ? 'text-white/30' : overdue ? 'text-red-400' : 'text-amber-400'
+                      isCompleted ? 'text-white/60' : isArchived ? 'text-white/30' : overdue ? 'text-white underline decoration-white/40' : 'text-white/80'
                     }`}>
                       {isCompleted ? 'Concluída' : isArchived ? 'Arquivada' : overdue ? 'Vencida' : 'Aberta'}
                     </span>
                   </div>
 
-                  {/* Title */}
                   <h3 
                     onClick={() => setSelectedTask(task)}
-                    className={`text-sm font-black text-white group-hover:text-blue-400 transition-colors cursor-pointer line-clamp-2 break-words leading-snug mb-2 ${isCompleted ? 'line-through text-white/60' : ''}`}
+                    className={`text-sm font-black text-white group-hover:underline transition-all cursor-pointer line-clamp-2 break-words leading-snug mb-2 ${isCompleted ? 'line-through text-white/60' : ''}`}
                   >
                     {task.title || task.name || 'Sem Título'}
                   </h3>
@@ -552,25 +549,24 @@ export default function TasksPage() {
                 {/* Card footer layer */}
                 <div className="pt-4 border-t border-white/5 space-y-3 mt-auto">
                   
-                  {/* Custom badges to map gaps */}
                   <div className="flex flex-wrap gap-1">
                     {overdue && (
-                      <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-md text-[8px] font-black uppercase tracking-widest">
+                      <span className="px-2 py-0.5 bg-white/10 text-white border border-white/20 rounded-md text-[8px] font-black uppercase tracking-widest">
                         ⚠️ Vencida
                       </span>
                     )}
                     {dependsFe && (
-                      <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md text-[8px] font-black uppercase tracking-widest animate-pulse">
+                      <span className="px-2 py-0.5 bg-white/10 text-white border border-white/20 rounded-md text-[8px] font-black uppercase tracking-widest">
                         👤 Depende do Fê
                       </span>
                     )}
                     {hasNoOwner && (
-                      <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-md text-[8px] font-black uppercase tracking-widest">
+                      <span className="px-2 py-0.5 bg-white/5 text-white/60 border border-white/10 rounded-md text-[8px] font-black uppercase tracking-widest">
                         🔍 Sem Responsável
                       </span>
                     )}
                     {hasNoProj && (
-                      <span className="px-2 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-md text-[8px] font-black uppercase tracking-widest">
+                      <span className="px-2 py-0.5 bg-white/5 text-white/60 border border-white/10 rounded-md text-[8px] font-black uppercase tracking-widest">
                         📦 Sem Projeto
                       </span>
                     )}
@@ -580,12 +576,12 @@ export default function TasksPage() {
                   {(task.areaRef || task.projectRef) && (
                     <div className="flex flex-wrap items-center gap-1.5 text-[9px]">
                       {task.areaRef && (
-                        <span className="px-2 py-0.5 bg-blue-500/5 text-blue-400 border border-blue-500/10 rounded font-bold truncate max-w-[130px]">
+                        <span className="px-2 py-0.5 bg-white/5 text-white/80 border border-white/10 rounded font-bold truncate max-w-[130px]">
                           Área: {resolvedArea?.name || task.areaRef}
                         </span>
                       )}
                       {task.projectRef && (
-                        <span className="px-2 py-0.5 bg-emerald-500/5 text-emerald-400 border border-emerald-500/10 rounded font-bold truncate max-w-[130px]">
+                        <span className="px-2 py-0.5 bg-white/5 text-white/80 border border-white/10 rounded font-bold truncate max-w-[130px]">
                           Proj: {resolvedProj?.name || task.projectRef}
                         </span>
                       )}
@@ -601,7 +597,7 @@ export default function TasksPage() {
 
                     <div className="flex items-center gap-2">
                       {(task.dueDate || task.dueAt) && (
-                        <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${overdue ? 'text-red-400 bg-red-500/10' : 'text-white/30'}`}>
+                        <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${overdue ? 'text-white bg-white/10 border border-white/20' : 'text-white/30'}`}>
                           {safeDate(task.dueDate || task.dueAt)?.toLocaleDateString() || 'N/A'}
                         </span>
                       )}
@@ -611,7 +607,7 @@ export default function TasksPage() {
                         {!isCompleted && !isArchived && (
                           <button 
                             onClick={() => handleComplete(task.id)}
-                            className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 transition-all"
+                            className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 transition-all"
                             title="Concluir Tarefa"
                           >
                             <CheckCircle2 size={12} />
@@ -621,7 +617,7 @@ export default function TasksPage() {
                         {(isCompleted || isArchived) && (
                           <button 
                             onClick={() => handleReopen(task.id)}
-                            className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/20 transition-all"
+                            className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 transition-all"
                             title="Reabrir Tarefa"
                           >
                             <RotateCcw size={12} />

@@ -173,90 +173,10 @@ export default function LivePage() {
   const [voiceState, setVoiceState] = React.useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = React.useState<string | null>(null);
   const recognitionRef = React.useRef<any>(null);
+  const silenceTimeoutRef = React.useRef<any>(null);
+  const finalTranscriptRef = React.useRef<string>('');
 
-  const startVoiceInput = React.useCallback(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      setVoiceState('unsupported');
-      return;
-    }
-
-    if (recognitionRef.current) {
-      recognitionRef.current.abort();
-      recognitionRef.current = null;
-    }
-
-    if (voiceState === 'listening') {
-      setVoiceState('idle');
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'pt-BR';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
-
-    recognition.onstart = () => {
-      setVoiceState('listening');
-      setVoiceError(null);
-    };
-
-    recognition.onspeechend = () => {
-      setVoiceState('transcribing');
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0]?.[0]?.transcript?.trim() || '';
-      if (transcript) {
-        setInputMessage(transcript);
-        setVoiceState('ready');
-      } else {
-        setVoiceState('idle');
-      }
-      recognitionRef.current = null;
-    };
-
-    recognition.onerror = (event: any) => {
-      recognitionRef.current = null;
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        setVoiceState('error_permission');
-        setVoiceError('Permissão de microfone negada.');
-      } else if (event.error === 'no-speech') {
-        setVoiceState('idle');
-      } else {
-        setVoiceState('idle');
-        setVoiceError(`Erro de voz: ${event.error}`);
-      }
-    };
-
-    recognition.onend = () => {
-      setVoiceState(prev => prev === 'listening' || prev === 'transcribing' ? 'idle' : prev);
-      recognitionRef.current = null;
-    };
-
-    try {
-      recognition.start();
-    } catch {
-      setVoiceState('idle');
-    }
-  }, [voiceState, setInputMessage]);
-
-  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputMessage(e.target.value);
-    if (voiceState === 'ready') setVoiceState('idle');
-  }, [voiceState]);
-
-  React.useEffect(() => {
-    if (voiceError) {
-      const t = setTimeout(() => setVoiceError(null), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [voiceError]);
 
   const handleCopyPrompt = (msgId: string, prompt: string) => {
     navigator.clipboard.writeText(prompt).then(() => {
@@ -714,6 +634,132 @@ export default function LivePage() {
     }
   };
 
+  const stopVoiceRecognition = React.useCallback(() => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn('Recognition stop error:', e);
+      }
+      recognitionRef.current = null;
+    }
+  }, []);
+
+  const startVoiceInput = React.useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setVoiceState('unsupported');
+      return;
+    }
+
+    if (voiceState === 'listening') {
+      stopVoiceRecognition();
+      setVoiceState('idle');
+      return;
+    }
+
+    finalTranscriptRef.current = '';
+    
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => {
+      setVoiceState('listening');
+      setVoiceError(null);
+    };
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const chunk = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscriptRef.current += ' ' + chunk;
+        } else {
+          interimTranscript += ' ' + chunk;
+        }
+      }
+
+      const currentText = (finalTranscriptRef.current + ' ' + interimTranscript)
+        .trim()
+        .replace(/\s+/g, ' ');
+
+      setInputMessage(currentText);
+
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+
+      silenceTimeoutRef.current = setTimeout(() => {
+        const textToSend = finalTranscriptRef.current.trim().replace(/\s+/g, ' ');
+        if (textToSend) {
+          handleSendMessage(textToSend);
+          stopVoiceRecognition();
+          setVoiceState('idle');
+        }
+      }, 2200);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.warn('SpeechRecognition error:', event.error);
+      stopVoiceRecognition();
+      
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setVoiceState('error_permission');
+        setVoiceError('Permissão de microfone negada ou indisponível.');
+      } else if (event.error === 'no-speech') {
+        setVoiceState('idle');
+      } else {
+        setVoiceState('idle');
+        setVoiceError(`Erro de voz: ${event.error}. Usando digitação.`);
+      }
+    };
+
+    recognition.onend = () => {
+      setVoiceState((prev) => (prev === 'listening' || prev === 'transcribing' ? 'idle' : prev));
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition start failed:', err);
+      setVoiceState('idle');
+    }
+  }, [voiceState, handleSendMessage, stopVoiceRecognition]);
+
+  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputMessage(e.target.value);
+    if (voiceState === 'ready') setVoiceState('idle');
+  }, [voiceState]);
+
+  React.useEffect(() => {
+    if (voiceError) {
+      const t = setTimeout(() => setVoiceError(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [voiceError]);
+
+  React.useEffect(() => {
+    return () => {
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen theme-her flex flex-col items-center justify-center">
@@ -905,17 +951,17 @@ export default function LivePage() {
       </header>
 
       {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
-      <main className="flex-1 flex flex-col items-center justify-center max-w-2xl w-full mx-auto my-12 z-10 relative">
+      <main className="flex-1 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative">
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div className="mb-14 relative flex items-center justify-center select-none w-32 h-32">
+        <div className="mb-10 relative flex items-center justify-center select-none w-64 h-64">
           <div 
-            className={`w-16 h-16 rounded-full border-4 border-[#fbf9f5] transition-all duration-700 ease-out ${getLotusAnimClass()}`} 
+            className={`w-44 h-44 rounded-full border-8 border-[#fbf9f5] transition-all duration-700 ease-out ${getLotusAnimClass()}`} 
           />
         </div>
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className="w-full h-[400px] relative mt-2 mb-6 bg-white/3 backdrop-blur-sm rounded-3xl border border-white/5 shadow-none overflow-hidden">
+        <div className="w-[80%] md:w-[75%] h-[380px] relative mt-2 mb-4 bg-transparent border-none shadow-none overflow-hidden">
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
               const isLotus = msg.sender === 'lotus';
@@ -972,8 +1018,8 @@ export default function LivePage() {
 
                       {/* Blocked governance warning — NEGATIVO (fundo off-white, texto terracota) */}
                       {msg.handoffStatus === 'execution_blocked' && (
-                        <div className="p-3 bg-[#fbf9f5] border border-[#e59f8c]/20 rounded-xl space-y-1.5 text-[#3d2f2f]">
-                          <p className="text-[9px] text-[#cf735c] font-bold lowercase">execução bloqueada</p>
+                        <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/20 rounded-xl space-y-1.5 text-[#3d2f2f]">
+                          <p className="text-[9px] text-[#b8544a] font-bold lowercase">execução bloqueada</p>
                           <p className="text-[10px] text-[#3d2f2f]/80 font-light leading-relaxed">{msg.executionError || 'responsável não designado.'}</p>
                           
                           {/* Force triage button */}
@@ -981,7 +1027,7 @@ export default function LivePage() {
                             <button
                               onClick={() => handleExecuteProposal(msg, true)}
                               disabled={submittingExecutionId === msg.id}
-                              className="text-[9px] font-bold text-[#cf735c] hover:text-[#b3563f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
+                              className="text-[9px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
                             >
                               {submittingExecutionId === msg.id ? '[ executando... ]' : '[ confirmar como triagem & executar ]'}
                             </button>
@@ -991,15 +1037,15 @@ export default function LivePage() {
 
                       {/* Approval panels — NEGATIVO (fundo off-white, texto terracota) */}
                       {msg.openclawResult.requiresHumanApproval && msg.handoffStatus === 'waiting_user_approval' && (
-                        <div className="p-3 bg-[#fbf9f5] border border-[#e59f8c]/25 rounded-xl space-y-3 text-[#3d2f2f]">
-                          <span className="block text-[9px] font-bold text-[#cf735c] tracking-widest lowercase">decisão pendente</span>
+                        <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/25 rounded-xl space-y-3 text-[#3d2f2f]">
+                          <span className="block text-[9px] font-bold text-[#b8544a] tracking-widest lowercase">decisão pendente</span>
                           
                           <input
                             type="text"
                             value={approvalNotes[msg.id] || ''}
                             onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
                             placeholder="nota (opcional)..."
-                            className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#cf735c] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
+                            className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#b8544a] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
                             disabled={submittingApprovalId === msg.id}
                           />
 
@@ -1007,7 +1053,7 @@ export default function LivePage() {
                             <button
                               onClick={() => handleApproveProposal(msg)}
                               disabled={submittingApprovalId === msg.id}
-                              className="text-[10px] font-bold text-[#cf735c] hover:text-[#b3563f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                              className="text-[10px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
                             >
                               {submittingApprovalId === msg.id ? '[ registrando... ]' : '[ aprovar proposta ]'}
                             </button>
@@ -1099,19 +1145,20 @@ export default function LivePage() {
       <footer className="w-full max-w-xl mx-auto flex flex-col items-center gap-4 z-10 select-none">
         
         {/* Quick Suggestion links */}
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full text-[10px] text-[#fbf9f5]/60 font-light tracking-wide pb-1 whitespace-nowrap">
+        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full pb-1 whitespace-nowrap">
           {[
-            { label: 'resumo do dia', text: 'Resumo do meu dia' },
-            { label: 'o que depende de mim', text: 'O que depende de mim?' },
-            { label: 'tarefas atrasadas', text: 'Quais tarefas estão atrasadas?' },
-            { label: 'projetos estagnados', text: 'Quais projetos estão travados?' }
+            { label: 'resumo do dia', text: 'Resumo do meu dia', icon: Activity },
+            { label: 'o que depende de mim', text: 'O que depende de mim?', icon: Zap },
+            { label: 'tarefas atrasadas', text: 'Quais tarefas estão atrasadas?', icon: Clock },
+            { label: 'projetos estagnados', text: 'Quais projetos estão travados?', icon: AlertTriangle }
           ].map((sugg, i) => (
             <button
               key={i}
               onClick={() => handleSendMessage(sugg.text)}
-              className="hover:text-white text-[#fbf9f5]/70 transition-colors border-b border-white/15 pb-0.5 bg-transparent border-none cursor-pointer outline-none"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all text-[#fbf9f5]/85 hover:text-white cursor-pointer select-none text-[9px] font-medium tracking-wide outline-none"
             >
-              {sugg.label}
+              <sugg.icon size={10} strokeWidth={1.5} />
+              <span>{sugg.label}</span>
             </button>
           ))}
         </div>
@@ -1133,7 +1180,7 @@ export default function LivePage() {
               onClick={startVoiceInput}
               className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent ${
                 voiceState === 'listening' 
-                  ? 'text-[#cf735c] bg-white scale-105 shadow-md' 
+                  ? 'text-[#b8544a] bg-white scale-105 shadow-md' 
                   : 'text-[#fbf9f5]/60 hover:text-white'
               }`}
               title={voiceState === 'listening' ? 'ouvindo... clique para parar' : 'capturar áudio'}
@@ -1152,22 +1199,30 @@ export default function LivePage() {
         </div>
       </footer>
 
-      {/* 4. CAMADA LATERAL ULTRALEVE — NEGATIVO (Fundo Off-White, Texto Terracota) */}
+      {/* Backdrop para fechar ao clicar fora */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] transition-opacity cursor-pointer"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* 4. CAMADA LATERAL ULTRALEVE — TRANSLÚCIDA (Fundo Coral/Rosa, Texto Off-White) */}
       <div 
-        className={`fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#fbf9f5]/96 backdrop-blur-xl border-l border-[#e59f8c]/20 shadow-xl transition-all duration-500 ease-out transform ${
+        className={`fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#b8544a]/85 backdrop-blur-xl border-l border-white/10 shadow-xl transition-all duration-500 ease-out transform ${
           isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
-        } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#3d2f2f]`}
+        } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5]`}
       >
         <div className="space-y-8">
           {/* Drawer Header */}
-          <div className="flex items-center justify-between border-b border-[#3c2f2f]/10 pb-4">
+          <div className="flex items-center justify-between border-b border-white/15 pb-4">
             <div className="flex items-center gap-2">
-              <Activity size={14} className="text-[#cf735c]" strokeWidth={1.5} />
-              <span className="text-xs font-bold tracking-widest text-[#3d2f2f]/85 lowercase">sinais operacionais</span>
+              <Activity size={14} className="text-white" strokeWidth={1.5} />
+              <span className="text-xs font-bold tracking-widest text-white/90 lowercase">sinais operacionais</span>
             </div>
             <button 
               onClick={() => setIsSidebarOpen(false)}
-              className="text-[#3c2f2f]/45 hover:text-[#cf735c] transition-colors bg-transparent border-none cursor-pointer outline-none"
+              className="text-[#fbf9f5]/45 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
             >
               <X size={16} strokeWidth={1.5} />
             </button>
@@ -1175,23 +1230,25 @@ export default function LivePage() {
 
           {/* Sinais de Atenção */}
           <div className="space-y-4">
-            <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">briefing do agora</h4>
-            <div className="divide-y divide-[#3c2f2f]/10 text-sm">
+            <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">briefing do agora</h4>
+            <div className="divide-y divide-white/10 text-sm">
               <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#3d2f2f]/70 lowercase">minhas tarefas</span>
-                <span className="font-bold text-base text-[#3d2f2f]">{feTasks.length}</span>
+                <span className="font-light text-[#fbf9f5]/70 lowercase">minhas tarefas</span>
+                <span className="font-bold text-base text-white">{feTasks.length}</span>
               </div>
               <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#3d2f2f]/70 lowercase">riscos & travas</span>
-                <span className={`font-bold text-base ${totalRisksCount > 0 ? 'text-[#c9554d]' : 'text-[#3d2f2f]'}`}>{totalRisksCount}</span>
+                <span className="font-light text-[#fbf9f5]/70 lowercase">riscos & travas</span>
+                <span className={`font-bold text-base ${totalRisksCount > 0 ? 'text-white underline decoration-white/40' : 'text-white/60'}`}>{totalRisksCount}</span>
               </div>
               <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#3d2f2f]/70 lowercase">projetos ativos</span>
-                <span className="font-bold text-base text-[#3d2f2f]">{activeProjects.length}</span>
+                <span className="font-light text-[#fbf9f5]/70 lowercase">projetos ativos</span>
+                <span className="font-bold text-base text-white">{activeProjects.length}</span>
               </div>
               <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#3d2f2f]/70 lowercase">metabolismo</span>
-                <span className={`font-bold text-xs uppercase tracking-wider ${brokenRoutines.length > 0 ? 'text-[#c9554d]' : 'text-[#52856d]'}`}>
+                <span className="font-light text-[#fbf9f5]/70 lowercase">metabolismo</span>
+                <span className={`font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded border ${
+                  brokenRoutines.length > 0 ? 'text-white border-white/30 bg-white/10' : 'text-white/60 border-white/10 bg-white/5'
+                }`}>
                   {brokenRoutines.length > 0 ? 'instável' : 'saudável'}
                 </span>
               </div>
@@ -1200,14 +1257,14 @@ export default function LivePage() {
 
           {/* Próximas Melhores Ações */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">ações recomendadas</h4>
-            <div className="divide-y divide-[#3c2f2f]/10">
+            <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">ações recomendadas</h4>
+            <div className="divide-y divide-white/10">
               {nextBestActions.map((action, i) => (
                 <div key={i} className="py-3 flex flex-col gap-1.5">
-                  <p className="text-xs font-light text-[#3d2f2f]/80 leading-relaxed lowercase">{action.text}</p>
+                  <p className="text-xs font-light text-[#fbf9f5]/80 leading-relaxed lowercase">{action.text}</p>
                   <button 
                     onClick={() => { action.onClick(); setIsSidebarOpen(false); }}
-                    className="text-[10px] font-bold text-[#cf735c] hover:text-[#b3563f] flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
+                    className="text-[10px] font-bold text-white hover:text-white/80 flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
                   >
                     <span>{action.actionText}</span>
                     <ArrowRight size={10} strokeWidth={1.5} />
@@ -1220,19 +1277,19 @@ export default function LivePage() {
           {/* Projetos Vivos */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">projetos ativos</h4>
+              <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">projetos ativos</h4>
               <button 
                 onClick={() => { router.push('/pulso/ecossistema'); setIsSidebarOpen(false); }}
-                className="text-[9px] text-[#cf735c] hover:underline lowercase bg-transparent border-none cursor-pointer outline-none"
+                className="text-[9px] text-[#fbf9f5]/75 hover:text-white hover:underline lowercase bg-transparent border-none cursor-pointer outline-none"
               >
                 ver ecossistema
               </button>
             </div>
-            <div className="divide-y divide-[#3c2f2f]/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+            <div className="divide-y divide-white/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
               {activeProjects.slice(0, 4).map((p: any) => (
-                <div key={p.id} className="py-2.5 flex items-center justify-between text-xs">
-                  <span className="font-medium text-[#3d2f2f]/90 truncate max-w-[150px] lowercase">{p.name}</span>
-                  <span className="text-[10px] font-light text-[#3d2f2f]/50 truncate max-w-[120px] lowercase">
+                <div key={p.id} className="py-2.5 flex items-center justify-between text-xs text-[#fbf9f5]/90">
+                  <span className="font-medium truncate max-w-[150px] lowercase">{p.name}</span>
+                  <span className="text-[10px] font-light text-[#fbf9f5]/55 truncate max-w-[120px] lowercase">
                     {p.nextStep ? p.nextStep : 'sem passo'}
                   </span>
                 </div>
@@ -1242,12 +1299,12 @@ export default function LivePage() {
 
           {/* Fontes monitoradas */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold tracking-widest text-[#3c2f2f]/45 uppercase">fontes observadas</h4>
-            <div className="divide-y divide-[#3c2f2f]/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+            <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">fontes observadas</h4>
+            <div className="divide-y divide-white/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
               {allSources.slice(0, 5).map((src: any, i) => (
-                <div key={i} className="flex justify-between items-center text-xs py-2.5">
-                  <span className="text-[#3d2f2f]/80 font-light lowercase">{src.name}</span>
-                  <span className="text-[9px] font-bold text-[#52856d] uppercase tracking-wider">sintonizado</span>
+                <div key={i} className="flex justify-between items-center text-xs py-2.5 text-[#fbf9f5]/90">
+                  <span className="font-light lowercase">{src.name}</span>
+                  <span className="text-[9px] font-bold text-[#fbf9f5]/65 uppercase tracking-wider">sintonizado</span>
                 </div>
               ))}
             </div>
@@ -1256,10 +1313,10 @@ export default function LivePage() {
         </div>
 
         {/* Drawer Footer / Backstage trigger */}
-        <div className="border-t border-[#3c2f2f]/10 pt-4 mt-8 flex flex-col gap-2">
+        <div className="border-t border-white/15 pt-4 mt-8 flex flex-col gap-2">
           <button 
             onClick={() => { router.push('/pulso/eventos'); setIsSidebarOpen(false); }}
-            className="w-full text-center py-2 border border-[#3c2f2f]/20 rounded-full text-[9px] font-bold text-[#3c2f2f]/60 hover:text-[#cf735c] hover:border-[#cf735c]/40 transition-colors lowercase bg-transparent cursor-pointer outline-none"
+            className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 transition-colors lowercase bg-transparent cursor-pointer outline-none"
           >
             abrir bastidor técnico (logs)
           </button>

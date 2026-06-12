@@ -172,7 +172,7 @@ export default function EventsPage() {
   if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
-        <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+        <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
         <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">
           Sincronizando Barramento
         </p>
@@ -223,11 +223,11 @@ export default function EventsPage() {
               onChange={(e) => setDateRange(e.target.value)}
               className="bg-transparent border-none text-[10px] font-bold text-[#fbf9f5] focus:ring-0 p-0 cursor-pointer hover:text-white transition-colors outline-none lowercase"
             >
-              <option value="all" className="bg-[#cf735c]">sempre</option>
-              <option value="today" className="bg-[#cf735c]">hoje</option>
-              <option value="7d" className="bg-[#cf735c]">últimos 7 dias</option>
-              <option value="30d" className="bg-[#cf735c]">últimos 30 dias</option>
-              <option value="month" className="bg-[#cf735c]">este mês</option>
+              <option value="all" className="bg-[#b8544a]">sempre</option>
+              <option value="today" className="bg-[#b8544a]">hoje</option>
+              <option value="7d" className="bg-[#b8544a]">últimos 7 dias</option>
+              <option value="30d" className="bg-[#b8544a]">últimos 30 dias</option>
+              <option value="month" className="bg-[#b8544a]">este mês</option>
             </select>
           </div>
         </div>
@@ -446,7 +446,7 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
             {/* Header */}
             <div className="flex items-start justify-between mb-6 pb-2 border-b border-[#3c2f2f]/10">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-[#3c2f2f]/20 bg-[#3c2f2f]/5 text-[#cf735c] shrink-0">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-[#3c2f2f]/20 bg-[#3c2f2f]/5 text-[#b8544a] shrink-0">
                   <Activity size={16} strokeWidth={1.5} />
                 </div>
                 <div className="min-w-0">
@@ -476,7 +476,7 @@ function EventDetailDrawer({ event, onClose, onUpdateStatus }: {
               </div>
               <div className="bg-[#3c2f2f]/5 border border-[#3c2f2f]/10 p-3 rounded-xl min-w-0">
                 <p className="text-[8px] font-black text-[#3d2f2f]/45 uppercase mb-1 truncate">Origem</p>
-                <span className="text-[9px] font-bold text-[#cf735c] uppercase truncate block">{event.origin || 'system'}</span>
+                <span className="text-[9px] font-bold text-[#b8544a] uppercase truncate block">{event.origin || 'system'}</span>
               </div>
             </div>
 

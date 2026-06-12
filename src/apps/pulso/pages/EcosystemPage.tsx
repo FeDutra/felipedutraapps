@@ -247,7 +247,7 @@ export default function EcosystemPage() {
           <input 
             type="text"
             placeholder={`Buscar em ${activeTab}...`}
-            className="w-full bg-white/2 border border-white/5 rounded-2xl py-3.5 pl-12 pr-4 text-xs text-white focus:ring-1 focus:ring-blue-500/50 outline-none transition-all placeholder:text-white/10 truncate"
+            className="w-full bg-white/2 border border-white/5 rounded-2xl py-3.5 pl-12 pr-4 text-xs text-white focus:ring-1 focus:ring-white/40 outline-none transition-all placeholder:text-white/10 truncate"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -256,7 +256,7 @@ export default function EcosystemPage() {
           onClick={() => setShowFilters(!showFilters)}
           className={`p-3.5 rounded-2xl border transition-all shrink-0 ${
             showFilters || Object.values(filters).some(v => v !== 'all')
-              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
+              ? 'bg-white/10 border-white/20 text-white' 
               : 'bg-white/2 border-white/5 text-white/40 hover:bg-white/5'
           }`}
           title="Filtros Avançados"
@@ -278,7 +278,7 @@ export default function EcosystemPage() {
       {/* Grid View */}
       {loading ? (
         <div className="py-40 flex flex-col items-center justify-center">
-          <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+          <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
           <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Sintonizando Estruturas</p>
         </div>
       ) : error ? (

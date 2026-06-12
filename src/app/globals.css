@@ -197,7 +197,7 @@ body {
 
 /* Lótus Live 'Her' palette theme container */
 .theme-her {
-  --background-her: #cf735c;
+  --background-her: #b8544a;
   --foreground-her: #fbf9f5;
   --foreground-her-muted: rgba(251, 249, 245, 0.6);
   --coral-her: #fbf9f5;
@@ -301,8 +301,23 @@ body {
 
 /* Chat fade dissolving mask */
 .chat-fade-mask {
-  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 5%, black 25%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 5%, black 25%, black 92%, transparent 100%);
+}
+
+@keyframes watermark-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.02;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.035;
+  }
+}
+
+.watermark-layout-anim {
+  animation: watermark-breathe 15s ease-in-out infinite;
 }
 
 
