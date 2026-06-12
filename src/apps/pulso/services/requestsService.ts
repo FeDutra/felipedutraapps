@@ -198,6 +198,142 @@ export const requestsService = {
       userApproval: approval as any,
       updatedAt: new Date(),
     });
+  },
+
+  /**
+   * v1.8: Execução Assistida Segura — Execute an approved proposal.
+   * Creates a local task in pulso_tasks if the proposal meets all security, risk,
+   * and schema allowlist criteria.
+   *
+   * @param requestId     The pulso_requests document ID
+   * @param forceAsTriage If true, bypasses the missing ownerRefs check by forcing triage mode
+   * @param executedBy    User identifier executing the action
+   */
+  executeApprovedProposal: async (
+    requestId: string,
+    forceAsTriage = false,
+    executedBy = 'felipe@dutra'
+  ) => {
+    // 1. Fetch the request
+    const request = await pulsoRepository.getRequest(requestId);
+    if (!request) {
+      throw new Error("Solicitação não encontrada.");
+    }
+
+    // 2. Validate the Golden Rule conditions
+    const isApprovedState = request.status === 'approved_by_user' || request.status === 'execution_blocked';
+    const isUserApproved = request.userApproval?.approved === true;
+    const hasOpenclawResult = !!request.openclawResult;
+    const requiresHumanApproval = request.openclawResult?.requiresHumanApproval === true;
+    const hasProposedMutation = !!request.openclawResult?.proposedMutation;
+    const hasProposedActions = !!request.openclawResult?.proposedActions;
+    
+    const mutationType = request.openclawResult?.proposedMutation?.type;
+    const handoffActionType = request.handoff?.actionType;
+    const actionType = mutationType || handoffActionType;
+    
+    const openclawRisk = request.openclawResult?.riskLevel;
+    const handoffRisk = request.handoff?.riskLevel;
+    const mutationRisk = request.openclawResult?.proposedMutation?.payload?.riskLevel;
+    const riskLevel = openclawRisk || handoffRisk || mutationRisk || 'low';
+
+    if (!isApprovedState) {
+      throw new Error(`A solicitação não está no estado adequado para execução (status atual: ${request.status}).`);
+    }
+    if (!isUserApproved) {
+      throw new Error("A solicitação não foi aprovada pelo usuário.");
+    }
+    if (!hasOpenclawResult) {
+      throw new Error("Resultado do OpenClaw não encontrado.");
+    }
+    if (!requiresHumanApproval) {
+      throw new Error("Esta solicitação não requer aprovação humana ou já está liberada.");
+    }
+    if (!hasProposedMutation && !hasProposedActions) {
+      throw new Error("Nenhuma proposta ou mutação sugerida no resultado do OpenClaw.");
+    }
+    if (actionType !== 'create_task') {
+      throw new Error(`Apenas a criação de tarefas ('create_task') é suportada na v1.8 (tentativa de executar: ${actionType}).`);
+    }
+    if (riskLevel !== 'low' && riskLevel !== 'medium') {
+      throw new Error(`Apenas ações de risco 'low' ou 'medium' podem ser executadas (risco atual: ${riskLevel}).`);
+    }
+    if (request.executedAt || request.createdEntityRef) {
+      throw new Error("Esta proposta já foi executada anteriormente.");
+    }
+
+    // 3. Extract mutation payload
+    const payload = request.openclawResult?.proposedMutation?.payload || {};
+
+    // 4. Validate Fields
+    // - Title validation
+    const title = payload.title || payload.name;
+    if (!title || !title.trim()) {
+      await pulsoRepository.updateRequest(requestId, {
+        status: 'execution_blocked' as RequestStatus,
+        executionError: "Erro de Validação: Título da tarefa é obrigatório."
+      });
+      throw new Error("Título da tarefa não especificado na proposta.");
+    }
+
+    // - OwnerRefs validation
+    const ownerRefs = payload.ownerRefs || [];
+    const isExplicitTriage = 
+      forceAsTriage || 
+      payload.isTriage === true || 
+      (payload.tags && (payload.tags.includes('triage') || payload.tags.includes('triagem'))) ||
+      (request.title && (request.title.toLowerCase().includes('triagem') || request.title.toLowerCase().includes('triage'))) ||
+      (request.summary && (request.summary.toLowerCase().includes('triagem') || request.summary.toLowerCase().includes('triage')));
+
+    if ((!ownerRefs || ownerRefs.length === 0) && !isExplicitTriage) {
+      await pulsoRepository.updateRequest(requestId, {
+        status: 'execution_blocked' as RequestStatus,
+        executionError: "Erro de Governança: Falta responsável (ownerRefs). Defina responsável ou execute como triagem."
+      });
+      throw new Error("Bloqueado: Falta responsável pela tarefa.");
+    }
+
+    // - ProjectRef validation
+    const projectRef = payload.projectRef || null;
+    const tags = payload.tags || [];
+    if (!projectRef && !tags.includes('sem-projeto')) {
+      tags.push('sem-projeto');
+    }
+
+    // - Priority validation
+    const priority = payload.priority || 'medium';
+
+    // 5. Execute Action (Create Task)
+    const taskData = {
+      title: title.trim(),
+      name: title.trim(),
+      description: payload.description || request.summary || '',
+      status: 'open' as any,
+      priority: priority,
+      ownerRefs: ownerRefs,
+      projectRef: projectRef,
+      areaRef: payload.areaRef || request.areaRef || null,
+      sourceRefs: [requestId],
+      tags: tags,
+      origin: 'lotus_live',
+      createdBy: executedBy,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const createdTask = await pulsoRepository.saveTask(taskData);
+
+    // 6. Update operational request
+    const now = new Date();
+    await pulsoRepository.updateRequest(requestId, {
+      status: 'executed' as RequestStatus,
+      executedAt: now,
+      executedBy,
+      createdEntityRef: `pulso_tasks/${createdTask.id}`,
+      executionError: "" // Clear any past execution blocks/errors
+    });
+
+    return createdTask;
   }
 };
 

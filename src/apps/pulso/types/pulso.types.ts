@@ -134,7 +134,11 @@ export type RequestStatus =
   | 'openclaw_failed'
   // v1.7: human approval decisions
   | 'approved_by_user'
-  | 'rejected_by_user';
+  | 'rejected_by_user'
+  // v1.8: execution tracking
+  | 'executed'
+  | 'execution_failed'
+  | 'execution_blocked';
 
 
 /**
@@ -290,6 +294,11 @@ export interface PulsoRequest {
    * NEVER triggers automatic execution of the proposal.
    */
   userApproval?: UserApproval;
+  /** v1.8: Execution tracking */
+  executedAt?: string | Date;
+  executedBy?: string;
+  createdEntityRef?: string;
+  executionError?: string;
 }
 
 export type ActorType = 'user' | 'agent' | 'system';

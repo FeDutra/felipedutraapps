@@ -138,6 +138,11 @@ interface Message {
     note?: string;
     reason?: string;
   };
+  /** v1.8: Execution metadata */
+  executedAt?: string;
+  executedBy?: string;
+  createdEntityRef?: string;
+  executionError?: string;
 }
 
 export default function LivePage() {
@@ -170,6 +175,9 @@ export default function LivePage() {
   const [approvalNotes, setApprovalNotes] = React.useState<Record<string, string>>({});
   /** v1.7: which messageId is currently submitting an approval/rejection */
   const [submittingApprovalId, setSubmittingApprovalId] = React.useState<string | null>(null);
+  /** v1.8: execution tracking states */
+  const [submittingExecutionId, setSubmittingExecutionId] = React.useState<string | null>(null);
+  const [executionErrors, setExecutionErrors] = React.useState<Record<string, string>>({});
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   const handleCopyPrompt = (msgId: string, prompt: string) => {
@@ -315,6 +323,52 @@ export default function LivePage() {
     }
   };
 
+  /** v1.8: Execute an approved proposal - creates task in pulso_tasks */
+  const handleExecuteProposal = async (msg: Message, forceAsTriage = false) => {
+    if (!msg.requestId || submittingExecutionId) return;
+    setSubmittingExecutionId(msg.id);
+    // Clear previous execution error for this message
+    setExecutionErrors(prev => {
+      const n = { ...prev };
+      delete n[msg.id];
+      return n;
+    });
+
+    try {
+      const createdTask = await requestsService.executeApprovedProposal(msg.requestId, forceAsTriage);
+      const now = new Date();
+      setMessages(prev => prev.map(m =>
+        m.id === msg.id
+          ? {
+              ...m,
+              handoffStatus: 'executed',
+              executedAt: now.toISOString(),
+              executedBy: 'felipe@dutra',
+              createdEntityRef: `pulso_tasks/${createdTask.id}`,
+              executionError: undefined
+            }
+          : m
+      ));
+    } catch (err: any) {
+      console.error('[v1.8] Error executing proposal:', err);
+      const errMsg = err.message || 'Erro desconhecido durante a execução.';
+      setExecutionErrors(prev => ({ ...prev, [msg.id]: errMsg }));
+      
+      // Update message handoffStatus to 'execution_blocked' if blocked
+      setMessages(prev => prev.map(m =>
+        m.id === msg.id
+          ? {
+              ...m,
+              handoffStatus: 'execution_blocked',
+              executionError: errMsg
+            }
+          : m
+      ));
+    } finally {
+      setSubmittingExecutionId(null);
+    }
+  };
+
   // Auto-scroll chat to bottom
   React.useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -375,7 +429,11 @@ export default function LivePage() {
             openclawResult: req.openclawResult || undefined,
             handoffStatus: req.status,
             requestId: req.id || undefined,
-            originalCommand: req.summary || req.title || undefined
+            originalCommand: req.summary || req.title || undefined,
+            executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
+            executedBy: req.executedBy || undefined,
+            createdEntityRef: req.createdEntityRef || undefined,
+            executionError: req.executionError || undefined
           });
         });
 
@@ -927,30 +985,122 @@ export default function LivePage() {
                             </div>
                           )}
 
-                          {/* v1.7: Human Approval — interactive approval/rejection UI */}
+                          {/* v1.7 & v1.8: Human Approval & Assisted Execution UI */}
                           {msg.openclawResult.requiresHumanApproval && (() => {
-                            const isApproved = msg.userApproval?.approved === true || msg.handoffStatus === 'approved_by_user';
+                            const isExecuted = msg.handoffStatus === 'executed' || !!msg.executedAt;
+                            const isFailedExecution = msg.handoffStatus === 'execution_failed';
+                            const isBlockedExecution = msg.handoffStatus === 'execution_blocked' || !!msg.executionError || !!executionErrors[msg.id];
+                            
+                            const isApproved = msg.userApproval?.approved === true || msg.handoffStatus === 'approved_by_user' || isExecuted || isBlockedExecution || isFailedExecution;
                             const isRejected = msg.userApproval?.approved === false || msg.handoffStatus === 'rejected_by_user';
-                            const hasDecision = isApproved || isRejected;
-                            const isSubmitting = submittingApprovalId === msg.id;
+                            
+                            const isSubmittingApproval = submittingApprovalId === msg.id;
+                            const isSubmittingExecution = submittingExecutionId === msg.id;
 
-                            if (isApproved) {
+                            // 1. Successful execution UI
+                            if (isExecuted) {
                               return (
                                 <div className="space-y-1.5">
-                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
+                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
                                     <Check size={9} className="text-emerald-400 shrink-0" />
-                                    <div>
-                                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Proposta aprovada por você</p>
-                                      <p className="text-[7px] text-emerald-400/50 mt-0.5">Aguardando etapa futura de execução assistida — nenhuma ação real executada</p>
+                                    <div className="flex-1">
+                                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">✓ Ação Executada com Sucesso</p>
+                                      <p className="text-[7px] text-white/70 mt-0.5">
+                                        Tarefa criada: <span className="font-mono text-emerald-300 select-all">{msg.createdEntityRef}</span>
+                                      </p>
+                                      {msg.executedAt && (
+                                        <p className="text-[6px] text-white/40 mt-0.5">
+                                          Executado por {msg.executedBy || 'felipe@dutra'} em {new Date(msg.executedAt).toLocaleString()}
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                   {msg.userApproval?.note && (
-                                    <p className="text-[7px] text-white/25 italic pl-2">Nota: {msg.userApproval.note}</p>
+                                    <p className="text-[7px] text-white/25 italic pl-2">Nota de Aprovação: {msg.userApproval.note}</p>
                                   )}
                                 </div>
                               );
                             }
 
+                            // 2. Blocked execution UI (governance warning / force option)
+                            if (isBlockedExecution) {
+                              const blockMessage = msg.executionError || executionErrors[msg.id] || "Bloqueado por regras de governança.";
+                              const isMissingOwner = blockMessage.includes("ownerRefs") || blockMessage.includes("responsável");
+                              
+                              return (
+                                <div className="space-y-2">
+                                  <div className="flex items-start gap-1.5 px-2.5 py-2 bg-red-500/10 border border-red-500/25 rounded-lg">
+                                    <AlertTriangle size={9} className="text-red-400 shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                      <p className="text-[8px] font-black uppercase tracking-widest text-red-400">⚠ Execução Bloqueada</p>
+                                      <p className="text-[7px] text-white/80 mt-0.5 font-medium">{blockMessage}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  {isMissingOwner && (
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleExecuteProposal(msg, true)}
+                                        disabled={isSubmittingExecution}
+                                        className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 hover:border-orange-500/35 text-[7.5px] font-black uppercase tracking-widest text-orange-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                      >
+                                        {isSubmittingExecution ? (
+                                          <><RefreshCw size={8} className="animate-spin" /><span>Executando...</span></>
+                                        ) : (
+                                          <><CheckSquare size={8} /><span>Confirmar como Triagem & Executar</span></>
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // 3. General Approved UI with Execution button
+                            if (isApproved) {
+                              const payload = msg.openclawResult?.proposedMutation?.payload || {};
+                              const mutationType = msg.openclawResult?.proposedMutation?.type;
+                              const handoffActionType = msg.interpretation?.handoff?.actionType;
+                              const actionType = mutationType || handoffActionType;
+                              const isExecutable = actionType === 'create_task';
+
+                              return (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
+                                    <Check size={9} className="text-emerald-400 shrink-0" />
+                                    <div className="flex-1">
+                                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">Proposta aprovada por você</p>
+                                      <p className="text-[7px] text-emerald-400/60 mt-0.5">Nenhuma ação foi executada automaticamente. Pronto para início assistido.</p>
+                                    </div>
+                                  </div>
+                                  {msg.userApproval?.note && (
+                                    <p className="text-[7px] text-white/25 italic pl-2">Nota: {msg.userApproval.note}</p>
+                                  )}
+                                  
+                                  {isExecutable ? (
+                                    <div className="pt-1">
+                                      <button
+                                        onClick={() => handleExecuteProposal(msg, false)}
+                                        disabled={isSubmittingExecution}
+                                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 hover:border-emerald-700 text-[8px] font-black uppercase tracking-widest text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all"
+                                      >
+                                        {isSubmittingExecution ? (
+                                          <><RefreshCw size={9} className="animate-spin" /><span>Executando ação...</span></>
+                                        ) : (
+                                          <><Zap size={9} /><span>Executar ação aprovada</span></>
+                                        )}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <p className="text-[6.5px] text-white/20 italic pl-1">
+                                      Apenas a criação de tarefas internas ('create_task') é executável nesta versão.
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // 4. Rejected UI
                             if (isRejected) {
                               return (
                                 <div className="space-y-1.5">
@@ -968,7 +1118,7 @@ export default function LivePage() {
                               );
                             }
 
-                            // Pending decision UI
+                            // 5. Pending decision UI (v1.7)
                             return (
                               <div className="space-y-2 pt-1">
                                 <div className="flex items-center gap-1.5">
@@ -976,23 +1126,22 @@ export default function LivePage() {
                                   <span className="text-[8px] text-orange-400/80 font-black uppercase tracking-widest">Aguardando sua decisão</span>
                                 </div>
 
-                                {/* Optional note/reason field */}
                                 <input
                                   type="text"
                                   value={approvalNotes[msg.id] || ''}
                                   onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
                                   placeholder="Nota opcional (aprovação) ou motivo (rejeição)..."
                                   className="w-full text-[8px] text-white/60 bg-black/20 border border-white/8 focus:border-orange-500/30 rounded-lg px-2.5 py-1.5 outline-none placeholder-white/20 transition-colors"
-                                  disabled={isSubmitting}
+                                  disabled={isSubmittingApproval}
                                 />
 
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleApproveProposal(msg)}
-                                    disabled={isSubmitting || !msg.requestId}
+                                    disabled={isSubmittingApproval || !msg.requestId}
                                     className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/35 text-[8px] font-black uppercase tracking-widest text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                   >
-                                    {isSubmitting ? (
+                                    {isSubmittingApproval ? (
                                       <><RefreshCw size={9} className="animate-spin" /><span>Registrando...</span></>
                                     ) : (
                                       <><Check size={9} /><span>Aprovar proposta</span></>
@@ -1000,7 +1149,7 @@ export default function LivePage() {
                                   </button>
                                   <button
                                     onClick={() => handleRejectProposal(msg)}
-                                    disabled={isSubmitting || !msg.requestId}
+                                    disabled={isSubmittingApproval || !msg.requestId}
                                     className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/8 hover:bg-red-500/15 border border-red-500/15 hover:border-red-500/30 text-[8px] font-black uppercase tracking-widest text-red-400/70 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                   >
                                     <AlertTriangle size={9} />
@@ -1013,6 +1162,7 @@ export default function LivePage() {
                               </div>
                             );
                           })()}
+
 
                           {/* Skill used */}
                           {msg.openclawResult.auditLog?.skillUsed && (

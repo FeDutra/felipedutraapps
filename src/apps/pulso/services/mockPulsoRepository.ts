@@ -300,4 +300,9 @@ export class MockPulsoRepository implements IPulsoRepository {
     }
     return data as any;
   }
+
+  async getRequest(id: string): Promise<PulsoRequest | undefined> {
+    const all = await this.getRequests();
+    return all.find(r => r.id === id);
+  }
 }

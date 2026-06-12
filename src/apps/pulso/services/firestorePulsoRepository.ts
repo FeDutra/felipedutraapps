@@ -580,4 +580,11 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     const snap = await getDoc(ref);
     return this.toData<PulsoRequest>(snap);
   }
+
+  async getRequest(id: string): Promise<PulsoRequest | undefined> {
+    const ref = doc(db!, firestorePaths.request(id));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return undefined;
+    return this.toData<PulsoRequest>(snap);
+  }
 }
