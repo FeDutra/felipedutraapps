@@ -50,9 +50,9 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center">
-        <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-        <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">Validando Acesso</p>
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center">
+        <div className="w-8 h-8 border border-white/20 border-t-white rounded-full animate-spin mb-4" />
+        <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">Validando Acesso</p>
       </div>
     );
   }
@@ -86,9 +86,9 @@ const LoginScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+    <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-6">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-white/5 rounded-full blur-[120px]" />
       </div>
 
       <motion.div 
@@ -97,8 +97,8 @@ const LoginScreen = () => {
         className="w-full max-w-sm relative"
       >
         <div className="text-center mb-10">
-          <div className="inline-flex p-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 mb-6">
-            <Activity size={32} className="text-blue-400" />
+          <div className="inline-flex p-4 bg-white/10 rounded-2xl border border-white/20 mb-6">
+            <Activity size={32} className="text-white" />
           </div>
           <h1 className="text-3xl font-black tracking-tight mb-2">PULSO</h1>
           <p className="text-sm text-white/40">Central Viva do Ecossistema ÉDEN</p>
@@ -138,7 +138,7 @@ const LoginScreen = () => {
 
 const ConfigErrorScreen = () => {
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex items-center justify-center p-6">
+    <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-6">
       <div className="w-full max-w-sm text-center">
         <div className="inline-flex p-4 bg-red-500/10 rounded-2xl border border-red-500/20 mb-6">
           <AlertTriangle size={32} className="text-red-400" />
