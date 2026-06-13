@@ -598,7 +598,7 @@ export default function LivePage() {
         timestamp: new Date().toISOString(),
         conversationId: `conv_${Date.now()}`,
         messageId: `msg_${Date.now()}`,
-        approvalMode: "proposal_only" as const,
+        approvalMode: "allow_read_only" as const,
         context: {
           currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
           timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo',
