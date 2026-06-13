@@ -949,7 +949,7 @@ export default function LivePage() {
   return (
     <div 
       onClick={() => presenceMode && setPresenceMode(false)}
-      className={`theme-her h-[100dvh] w-full flex flex-col justify-between py-6 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
+      className={`theme-her h-[100svh] w-full flex flex-col justify-between py-6 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
         presenceMode ? 'cursor-pointer' : ''
       }`}
     >
@@ -1011,7 +1011,7 @@ export default function LivePage() {
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
         <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-1000 ease-in-out ${
-          presenceMode ? 'max-h-[380px] h-[380px] opacity-0 pointer-events-none mt-2 mb-4 blur-md scale-95' : 'max-h-[380px] h-[380px] opacity-100 mt-2 mb-4 blur-none scale-100'
+          presenceMode ? 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[380px] opacity-0 pointer-events-none mt-2 mb-4 blur-md scale-95' : 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[380px] opacity-100 mt-2 mb-4 blur-none scale-100'
         }`}>
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
@@ -1280,25 +1280,7 @@ export default function LivePage() {
         {/* Core Input Container */}
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
           
-          {/* Anexos */}
-          <button
-            onClick={() => {
-              setShowAttachmentToast(true);
-              setTimeout(() => setShowAttachmentToast(false), 3000);
-            }}
-            disabled={isLatestRequestPending}
-            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
-            title="Anexar arquivo"
-          >
-            <Paperclip size={14} strokeWidth={1.5} />
-          </button>
-
-          {/* Toast de Anexos Embutido */}
-          {showAttachmentToast && (
-            <div className="absolute -top-10 left-0 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-1.5 text-[9px] text-white animate-fade-in pointer-events-none lowercase">
-              anexos em preparação
-            </div>
-          )}
+          
 
           <textarea
             ref={textareaRef}
