@@ -175,7 +175,7 @@ export const MetabolismPreview = ({ agents, routines }: { agents: Agent[], routi
   return (
     <div className="bg-white/2 border border-white/5 rounded-3xl p-6">
       <div className="flex items-center gap-2 mb-6">
-        <Layers size={18} className="text-emerald-500" />
+        <Layers size={18} className="text-[#a5b5a2]" />
         <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Metabolismo</h3>
       </div>
       
@@ -188,8 +188,8 @@ export const MetabolismPreview = ({ agents, routines }: { agents: Agent[], routi
               const id = a.id || `agent-${idx}`;
               const name = a.name || 'Agente';
               return (
-                <div key={id} className="w-6 h-6 rounded-full bg-blue-500/20 border border-white/10 flex items-center justify-center overflow-hidden shrink-0" title={name}>
-                  <User size={10} className="text-blue-400" />
+                <div key={id} className="w-6 h-6 rounded-full bg-[#8ea0b0]/20 border border-white/10 flex items-center justify-center overflow-hidden shrink-0" title={name}>
+                  <User size={10} className="text-[#b8c6d4]" />
                 </div>
               );
             })}
@@ -198,7 +198,7 @@ export const MetabolismPreview = ({ agents, routines }: { agents: Agent[], routi
         <div className="p-4 bg-white/3 rounded-2xl border border-white/5">
           <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">Rotinas</p>
           <p className="text-lg font-black text-white">{safeRoutines.length}</p>
-          <p className="text-[9px] text-emerald-400/60 font-bold mt-2 uppercase">Batimento Estável</p>
+          <p className="text-[9px] text-[#a5b5a2] font-bold mt-2 uppercase">Batimento Estável</p>
         </div>
       </div>
     </div>

@@ -404,28 +404,28 @@ export default function CockpitPage() {
                 value={pendingInbox.length} 
                 subtitle="Aguardando sua decisão" 
                 icon={Inbox} 
-                colorClass="text-amber-400"
+                colorClass="text-[#dfcfbc]"
               />
               <StateCard 
                 title="Projetos Vivos" 
                 value={activeProjects.length} 
                 subtitle="Frentes em movimento" 
                 icon={Layers} 
-                colorClass="text-blue-400"
+                colorClass="text-[#b8c6d4]"
               />
               <StateCard 
                 title="Depende do Fe" 
                 value={feTasks.length} 
                 subtitle="Tarefas ativas para você" 
                 icon={CheckSquare} 
-                colorClass="text-emerald-400"
+                colorClass="text-[#a5b5a2]"
               />
               <StateCard 
                 title="Riscos & Travas" 
                 value={totalRisksCount} 
                 subtitle="Alertas, falhas e atrasos" 
                 icon={AlertCircle} 
-                colorClass="text-red-500"
+                colorClass="text-[#e89083]"
               />
             </div>
           </SafeBlock>
@@ -444,16 +444,16 @@ export default function CockpitPage() {
         {/* Center Column: Attention, Felipe Tasks & Areas Map */}
         <div className="lg:col-span-5 space-y-8 min-w-0">
           <SafeBlock name="Sinais de Atenção">
-            <div className="bg-red-500/5 border border-red-500/10 rounded-3xl p-6">
+            <div className="bg-[#b8544a]/5 border border-[#b8544a]/15 rounded-3xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <AlertCircle size={18} className="text-red-500" />
-                <h3 className="text-sm font-black uppercase tracking-widest text-red-500/80">Sinais de Atenção</h3>
+                <AlertCircle size={18} className="text-[#e89083]" />
+                <h3 className="text-sm font-black uppercase tracking-widest text-[#e89083]/80">Sinais de Atenção</h3>
               </div>
               
               <div className="space-y-4">
                 {topAttentionSignals.map((sig) => {
-                  const bgClass = sig.severity === 'critical' ? 'bg-red-500/5 border-red-500/10' : 'bg-amber-500/5 border-amber-500/10';
-                  const dotClass = sig.severity === 'critical' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-amber-500';
+                  const bgClass = sig.severity === 'critical' ? 'bg-[#b8544a]/5 border-[#b8544a]/15' : 'bg-[#cbb291]/5 border-[#cbb291]/15';
+                  const dotClass = sig.severity === 'critical' ? 'bg-[#b8544a] shadow-[0_0_8px_rgba(184,84,74,0.4)]' : 'bg-[#cbb291]';
                   
                   return (
                     <div key={sig.id} className={`flex items-start gap-4 p-3 rounded-xl border ${bgClass}`}>
@@ -478,7 +478,7 @@ export default function CockpitPage() {
               <div className="bg-white/2 border border-white/5 rounded-3xl p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
-                    <User size={16} className="text-amber-400" />
+                    <User size={16} className="text-[#dfcfbc]" />
                     <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Depende do Fê</h3>
                   </div>
                   <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">
@@ -491,7 +491,7 @@ export default function CockpitPage() {
                     const title = t?.title || t?.name || 'Tarefa sem nome';
                     return (
                       <div key={safeId} className="flex items-start gap-3 p-3 bg-white/2 hover:bg-white/5 border border-white/5 rounded-2xl transition-all">
-                        <CheckSquare size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                        <CheckSquare size={14} className="text-[#dfcfbc] mt-0.5 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-white leading-tight truncate">{title}</p>
                           <span className="text-[8px] font-black uppercase tracking-widest text-white/20">
@@ -538,7 +538,7 @@ export default function CockpitPage() {
           <SafeBlock name="Movimento Recente">
             <div className="bg-white/2 border border-white/5 rounded-3xl p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Activity size={18} className="text-blue-500" />
+                <Activity size={18} className="text-white/40" />
                 <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Movimento Recente</h3>
               </div>
               
@@ -570,7 +570,7 @@ export default function CockpitPage() {
           </SafeBlock>
 
           <SafeBlock name="Registro da Lótus Link">
-            <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
+            <div className="bg-white/2 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/10">
                  <Activity size={20} className="text-white/40" />
               </div>
@@ -580,9 +580,9 @@ export default function CockpitPage() {
               </p>
               <button 
                 onClick={() => router.push('/pulso/inbox')}
-                className="w-full py-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-500/20 transition-all backdrop-blur-sm flex items-center justify-center gap-2 group animate-pulse"
+                className="w-full py-3 bg-white/10 border border-white/20 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-white/20 transition-all backdrop-blur-sm flex items-center justify-center gap-2 group cursor-pointer outline-none"
               >
-                Abrir Registro
+                <span>Abrir Registro</span>
                 <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
               </button>
             </div>

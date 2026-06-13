@@ -54,7 +54,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
             <div className="flex items-center justify-between gap-4 w-full">
               {/* Logo & v0.1 */}
               <div className="flex items-center gap-2 shrink-0 min-w-0">
-                <Link href="/" className="p-1.5 hover:bg-white/5 rounded-xl transition-colors shrink-0">
+                <Link href="/" prefetch={false} className="p-1.5 hover:bg-white/5 rounded-xl transition-colors shrink-0">
                   <ArrowLeft size={16} className="text-[#fbf9f5]/55 hover:text-white" />
                 </Link>
                 <div className="flex items-center gap-2 min-w-0">
@@ -99,6 +99,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                   <Link 
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
                       isActive 
                         ? 'bg-white/15 text-white border border-white/20' 
@@ -120,7 +121,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
               {/* Logo & Back button */}
               <div className="flex items-center justify-between gap-2 px-1">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <Link href="/" className="p-1.5 hover:bg-white/5 rounded-xl transition-colors shrink-0 -ml-1.5" title="Voltar para Home">
+                  <Link href="/" prefetch={false} className="p-1.5 hover:bg-white/5 rounded-xl transition-colors shrink-0 -ml-1.5" title="Voltar para Home">
                     <ArrowLeft size={16} className="text-[#fbf9f5]/55 hover:text-white" />
                   </Link>
                   <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center border border-white/20 shrink-0">
@@ -145,6 +146,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                     <Link 
                       key={item.href}
                       href={item.href}
+                      prefetch={false}
                       className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold tracking-wide transition-all ${
                         isActive 
                           ? 'bg-white/15 text-white border border-white/20' 

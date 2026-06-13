@@ -7,39 +7,39 @@ import { Status, Priority, Severity } from "../types/pulso.types";
 
 export const semanticColors = {
   red: {
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
-    text: 'text-red-400',
-    glow: 'shadow-[0_0_15px_rgba(239,68,68,0.2)]',
-    dot: 'bg-red-500'
+    bg: 'bg-[#b8544a]/10',
+    border: 'border-[#b8544a]/25',
+    text: 'text-[#e89083]',
+    glow: 'shadow-[0_0_15px_rgba(184,84,74,0.15)]',
+    dot: 'bg-[#b8544a]'
   },
   amber: {
-    bg: 'bg-amber-500/10',
-    border: 'border-amber-500/20',
-    text: 'text-amber-400',
-    glow: 'shadow-[0_0_15px_rgba(245,158,11,0.2)]',
-    dot: 'bg-amber-500'
+    bg: 'bg-[#cbb291]/15',
+    border: 'border-[#cbb291]/25',
+    text: 'text-[#dfcfbc]',
+    glow: 'shadow-none',
+    dot: 'bg-[#cbb291]'
   },
   emerald: {
-    bg: 'bg-emerald-500/10',
-    border: 'border-emerald-500/20',
-    text: 'text-emerald-400',
-    glow: 'shadow-[0_0_15px_rgba(16,185,129,0.2)]',
-    dot: 'bg-emerald-500'
+    bg: 'bg-[#7a8c77]/15',
+    border: 'border-[#7a8c77]/25',
+    text: 'text-[#a5b5a2]',
+    glow: 'shadow-none',
+    dot: 'bg-[#7a8c77]'
   },
   blue: {
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
-    text: 'text-blue-400',
-    glow: 'shadow-[0_0_15px_rgba(59,130,246,0.2)]',
-    dot: 'bg-blue-500'
+    bg: 'bg-[#8ea0b0]/15',
+    border: 'border-[#8ea0b0]/25',
+    text: 'text-[#b8c6d4]',
+    glow: 'shadow-none',
+    dot: 'bg-[#8ea0b0]'
   },
   slate: {
-    bg: 'bg-slate-500/10',
-    border: 'border-slate-500/20',
-    text: 'text-slate-400',
+    bg: 'bg-white/5',
+    border: 'border-white/10',
+    text: 'text-[#fbf9f5]/65',
     glow: 'shadow-none',
-    dot: 'bg-slate-500'
+    dot: 'bg-white/20'
   }
 };
 
