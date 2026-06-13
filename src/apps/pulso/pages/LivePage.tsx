@@ -34,6 +34,9 @@ import {
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
+import { onSnapshot, collection, query, where } from "firebase/firestore";
+import { db } from '../../../shared/lib/firebase/client';
+import { firestorePaths } from '../services/firestorePaths';
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -493,10 +496,6 @@ export default function LivePage() {
 
     let unsubscribe: any = null;
     try {
-      const { onSnapshot, collection, query, where } = require("firebase/firestore");
-      const { db } = require("@/shared/lib/firebase/client");
-      const { firestorePaths } = require("../services/firestorePaths");
-
       if (db) {
         const q = query(
           collection(db, firestorePaths.requests()),
