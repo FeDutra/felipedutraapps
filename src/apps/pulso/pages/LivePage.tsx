@@ -916,12 +916,10 @@ export default function LivePage() {
     if (voiceState === 'listening') return 'lotus-listening-anim';
     if (voiceState === 'transcribing' || voiceState === 'ready') return 'lotus-responding-anim';
     
-    // Check if any message is currently queued or processing by OpenClaw
-    const isAnyRequestPending = messages.some(
-      m => m.sender === 'lotus' && 
-      (m.handoffStatus === 'requested' || m.handoffStatus === 'queued_for_openclaw' || m.handoffStatus === 'processing_by_openclaw')
-    );
-    if (isTyping || isAnyRequestPending) return 'lotus-thinking-anim';
+    // Check if the most recent message is queued or processing
+    const lastLotusMsg = [...messages].reverse().find(m => m.sender === 'lotus' && m.id !== 'welcome');
+    const isLatestRequestPending = lastLotusMsg && (lastLotusMsg.handoffStatus === 'requested' || lastLotusMsg.handoffStatus === 'queued_for_openclaw' || lastLotusMsg.handoffStatus === 'processing_by_openclaw');
+    if (isTyping || isLatestRequestPending) return 'lotus-thinking-anim';
     
     return 'lotus-idle-anim';
   };
