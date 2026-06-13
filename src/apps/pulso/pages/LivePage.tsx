@@ -948,14 +948,10 @@ export default function LivePage() {
 
   return (
     <div 
-      className={`theme-her w-full flex flex-col justify-between px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
+      onClick={() => presenceMode && setPresenceMode(false)}
+      className={`theme-her h-[100dvh] w-full flex flex-col justify-between py-6 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
         presenceMode ? 'cursor-pointer' : ''
       }`}
-      style={{
-        height: '100dvh',
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-        paddingBottom: 'max(16px, env(safe-area-inset-bottom))'
-      }}
     >
       {/* Botão sutil de saída do Modo Foco */}
       {presenceMode && (
@@ -970,7 +966,7 @@ export default function LivePage() {
       )}
       
       {/* 1. HEADER MINIMALISTA */}
-      <header className={`flex-shrink-0 flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none transition-all duration-1000 ease-in-out ${
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none transition-all duration-1000 ease-in-out ${
         presenceMode ? 'opacity-0 pointer-events-none transform -translate-y-4 blur-md' : 'opacity-100 blur-none'
       }`}>
         <div className="flex items-center gap-3">
@@ -1000,24 +996,22 @@ export default function LivePage() {
       </header>
 
       {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
-      <main className="flex-1 flex flex-col w-full max-w-4xl mx-auto z-10 relative overflow-hidden pt-2 pb-2">
+      <main className={`flex-1 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-1000 ease-in-out`}>
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div className={`flex-shrink-0 relative flex items-center justify-center select-none transition-all duration-1000 ease-in-out w-full ${
+        <div className={`relative flex items-center justify-center select-none transition-all duration-1000 ease-in-out ${
           presenceMode 
-            ? 'flex-1 scale-[1.6] md:scale-[2.4] z-20' 
-            : 'h-[25vh] min-h-[140px] max-h-[220px] mb-2 z-10'
+            ? 'w-64 h-64 scale-[1.8] md:scale-[2.4] mb-10 z-20 translate-y-0' 
+            : 'w-64 h-64 scale-100 mb-10 z-10 translate-y-0'
         }`}>
           <div 
-            className={`w-32 h-32 md:w-44 md:h-44 rounded-full border-[6px] md:border-8 border-[#fbf9f5] transition-all duration-1000 ease-in-out ${getLotusAnimClass()}`} 
+            className={`w-44 h-44 rounded-full border-8 border-[#fbf9f5] transition-all duration-1000 ease-in-out ${getLotusAnimClass()}`} 
           />
         </div>
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className={`w-full md:w-[75%] mx-auto relative bg-transparent border-none shadow-none transition-all duration-1000 ease-in-out ${
-          presenceMode 
-            ? 'flex-none h-0 opacity-0 pointer-events-none blur-md scale-95' 
-            : 'flex-1 min-h-0 opacity-100 blur-none scale-100'
+        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-1000 ease-in-out ${
+          presenceMode ? 'max-h-[380px] h-[380px] opacity-0 pointer-events-none mt-2 mb-4 blur-md scale-95' : 'max-h-[380px] h-[380px] opacity-100 mt-2 mb-4 blur-none scale-100'
         }`}>
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
@@ -1259,8 +1253,8 @@ export default function LivePage() {
     </main>
 
       {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
-      <footer className={`flex-shrink-0 w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none transition-all duration-1000 ease-in-out ${
-        presenceMode ? 'h-0 opacity-0 pointer-events-none gap-4 blur-md scale-95' : 'opacity-100 gap-4 mt-2 blur-none scale-100'
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none transition-all duration-1000 ease-in-out ${
+        presenceMode ? 'max-h-40 opacity-0 pointer-events-none mt-2 gap-4 blur-md scale-95' : 'max-h-40 opacity-100 gap-4 mt-2 blur-none scale-100'
       }`}>
         
         {/* Quick Suggestion links */}
@@ -1286,7 +1280,25 @@ export default function LivePage() {
         {/* Core Input Container */}
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
           
-          
+          {/* Anexos */}
+          <button
+            onClick={() => {
+              setShowAttachmentToast(true);
+              setTimeout(() => setShowAttachmentToast(false), 3000);
+            }}
+            disabled={isLatestRequestPending}
+            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
+            title="Anexar arquivo"
+          >
+            <Paperclip size={14} strokeWidth={1.5} />
+          </button>
+
+          {/* Toast de Anexos Embutido */}
+          {showAttachmentToast && (
+            <div className="absolute -top-10 left-0 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-1.5 text-[9px] text-white animate-fade-in pointer-events-none lowercase">
+              anexos em preparação
+            </div>
+          )}
 
           <textarea
             ref={textareaRef}
