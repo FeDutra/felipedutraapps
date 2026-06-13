@@ -30,7 +30,8 @@ import {
   Menu,
   Activity,
   Layers,
-  Database
+  Database,
+  Paperclip
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -163,7 +164,10 @@ export default function LivePage() {
   const [isTyping, setIsTyping] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
+  const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
   
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
   const [copiedPromptId, setCopiedPromptId] = React.useState<string | null>(null);
   const [copiedPackageId, setCopiedPackageId] = React.useState<string | null>(null);
 
@@ -581,6 +585,9 @@ export default function LivePage() {
     if (!rawMsg.trim()) return;
 
     setInputMessage('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     const userMsg: Message = {
       id: `user-msg-${Date.now()}`,
@@ -712,7 +719,6 @@ export default function LivePage() {
       silenceTimeoutRef.current = setTimeout(() => {
         const textToSend = finalTranscriptRef.current.trim().replace(/\s+/g, ' ');
         if (textToSend) {
-          handleSendMessage(textToSend);
           stopVoiceRecognition();
           setVoiceState('idle');
         }
@@ -746,9 +752,15 @@ export default function LivePage() {
     }
   }, [voiceState, handleSendMessage, stopVoiceRecognition]);
 
-  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
     if (voiceState === 'ready') setVoiceState('idle');
+    
+    // Auto-resize
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
   }, [voiceState]);
 
   React.useEffect(() => {
@@ -937,7 +949,7 @@ export default function LivePage() {
   return (
     <div 
       onClick={() => presenceMode && setPresenceMode(false)}
-      className={`theme-her min-h-screen w-full flex flex-col justify-between py-8 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
+      className={`theme-her h-[100dvh] w-full flex flex-col justify-between py-6 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
         presenceMode ? 'cursor-pointer' : ''
       }`}
     >
@@ -1037,10 +1049,10 @@ export default function LivePage() {
                                 href={link.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full text-[10px] text-[#fbf9f5] hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1"
+                                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
                               >
                                 {link.label}
-                                <ArrowRight size={10} />
+                                <ArrowRight size={10} strokeWidth={1.5} />
                               </a>
                             ))}
                           </div>
@@ -1066,7 +1078,7 @@ export default function LivePage() {
                                       alert(`Ação acionada: ${action.label}`);
                                     }
                                   }}
-                                  className="px-3 py-1 bg-[#fbf9f5] hover:bg-[#fbf9f5]/90 border border-[#b8544a]/20 rounded-full text-[10px] text-[#3d2f2f] transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1"
+                                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
                                 >
                                   {action.label}
                                 </button>
@@ -1268,15 +1280,46 @@ export default function LivePage() {
         </div>
 
         {/* Core Input Container */}
-        <div className="w-full flex items-center gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1">
-          <input
-            type="text"
+        <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+          
+          {/* Anexos */}
+          <button
+            onClick={() => {
+              setShowAttachmentToast(true);
+              setTimeout(() => setShowAttachmentToast(false), 3000);
+            }}
+            disabled={isLatestRequestPending}
+            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
+            title="Anexar arquivo"
+          >
+            <Paperclip size={14} strokeWidth={1.5} />
+          </button>
+
+          {/* Toast de Anexos Embutido */}
+          {showAttachmentToast && (
+            <div className="absolute -top-10 left-0 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-1.5 text-[9px] text-white animate-fade-in pointer-events-none lowercase">
+              anexos em preparação
+            </div>
+          )}
+
+          <textarea
+            ref={textareaRef}
             value={inputMessage}
             onChange={handleInputChange}
-            onKeyDown={(e) => e.key === 'Enter' && !isLatestRequestPending && handleSendMessage()}
-            placeholder={isLatestRequestPending ? 'aguarde a resposta...' : 'falar ou digitar comando...'}
-            disabled={isLatestRequestPending}
-            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase disabled:opacity-50"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                if (!isLatestRequestPending) handleSendMessage();
+              }
+            }}
+            placeholder={
+              voiceState === 'transcribing' ? 'transcrevendo...' : 
+              isLatestRequestPending ? 'aguarde a resposta...' : 
+              'digitar comando (cmd + enter envia)'
+            }
+            disabled={isLatestRequestPending || voiceState === 'transcribing'}
+            rows={1}
+            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase disabled:opacity-50 resize-none max-h-[120px] py-1.5 no-scrollbar"
           />
 
           {/* Voice recorder button */}
@@ -1284,7 +1327,7 @@ export default function LivePage() {
             <button
               onClick={startVoiceInput}
               disabled={isLatestRequestPending}
-              className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent ${
+              className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
                 voiceState === 'listening' 
                   ? 'text-[#b8544a] bg-white scale-105 shadow-md' 
                   : 'text-[#fbf9f5]/60 hover:text-white'
@@ -1298,7 +1341,7 @@ export default function LivePage() {
           <button
             onClick={() => handleSendMessage()}
             disabled={!inputMessage.trim() || isLatestRequestPending}
-            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
+            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
           >
             <Send size={14} strokeWidth={1.5} />
           </button>
@@ -1313,10 +1356,10 @@ export default function LivePage() {
         />
       )}
 
-      {/* 4. CAMADA LATERAL ULTRALEVE — TRANSLÚCIDA (Fundo Coral/Rosa, Texto Off-White) */}
+      {/* 4. CAMADA LATERAL ETÉREA — FLUTUANTE (Vidro/Blur) */}
       <div 
-        className={`fixed inset-y-0 right-0 z-50 w-80 md:w-96 bg-[#b8544a]/85 backdrop-blur-xl border-l border-white/10 shadow-xl transition-all duration-500 ease-out transform ${
-          isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
+        className={`fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl transition-all duration-500 ease-out transform ${
+          isSidebarOpen ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-8 opacity-0 scale-95 pointer-events-none'
         } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5]`}
       >
         <div className="space-y-8">
