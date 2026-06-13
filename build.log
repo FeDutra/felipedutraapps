@@ -1,0 +1,10 @@
+▲ Next.js 16.2.4 (Turbopack)
+- Environments: .env.local, .env.production
+- Experiments (use with caution):
+  · cpus: 1
+
+  Creating an optimized production build ...
+  Using external babel configuration from /Users/fe/.gemini/antigravity/scratch/felipedutraapps/.babelrc
+⚠ It looks like there is a custom Babel configuration that can be removed.
+✓ Compiled successfully in 19.2s
+  Running TypeScript ...

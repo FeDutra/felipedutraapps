@@ -425,16 +425,20 @@ export default function LivePage() {
         });
 
         const chatHistory: Message[] = [];
-        const commandRequests = safeArray(allRequests)
+          const commandRequests = safeArray(allRequests)
           .filter((req: any) => req && req.requestType === 'conversation_command' && !req.archived)
-          .sort((a, b) => safeGetTime(a.requestedAt) - safeGetTime(b.requestedAt));
+          .sort((a, b) => {
+            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || 0;
+            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || 0;
+            return timeA - timeB;
+          });
 
         commandRequests.forEach((req: any) => {
           const reqTime = safeConvertToDate(req.requestedAt) || new Date();
           chatHistory.push({
             id: `user-${req.id || Math.random()}`,
             sender: 'user',
-            text: req.summary || req.title || '',
+            text: req.input || req.rawInput || req.summary || req.title || '',
             timestamp: reqTime
           });
           
@@ -512,7 +516,11 @@ export default function LivePage() {
             fetchedRequests.push({ ...data, id: docSnap.id });
           });
 
-          const sortedRequests = fetchedRequests.sort((a, b) => safeGetTime(a.requestedAt) - safeGetTime(b.requestedAt));
+          const sortedRequests = fetchedRequests.sort((a, b) => {
+            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || 0;
+            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || 0;
+            return timeA - timeB;
+          });
 
           const chatHistory: Message[] = [];
           sortedRequests.forEach((req: any) => {
@@ -520,7 +528,7 @@ export default function LivePage() {
             chatHistory.push({
               id: `user-${req.id}`,
               sender: 'user',
-              text: req.summary || req.title || '',
+              text: req.input || req.rawInput || req.summary || req.title || '',
               timestamp: reqTime
             });
 
@@ -595,7 +603,9 @@ export default function LivePage() {
         source: "pulso_live" as const,
         mode: (voiceState === 'listening' ? 'voice' : 'text') as "voice" | "text",
         input: rawMsg,
+        rawInput: rawMsg,
         timestamp: new Date().toISOString(),
+        clientCreatedAtMs: Date.now(),
         conversationId: `conv_${Date.now()}`,
         messageId: `msg_${Date.now()}`,
         approvalMode: "allow_read_only" as const,

@@ -15,7 +15,9 @@ export interface LotusSendPayload {
   source: "pulso_live";
   mode: "text" | "voice";
   input: string;
+  rawInput?: string;
   timestamp: string;
+  clientCreatedAtMs?: number;
   conversationId: string;
   messageId: string;
   approvalMode: "proposal_only" | "allow_read_only";
@@ -39,8 +41,10 @@ export const lotusOpenClawClient = {
       origin: "lotus_live",
       mode: payload.mode,
       input: payload.input,
+      rawInput: payload.rawInput || payload.input,
       requestedBy: payload.userId,
       requestedAt: new Date(payload.timestamp),
+      clientCreatedAtMs: payload.clientCreatedAtMs || Date.now(),
       updatedAt: new Date(),
       conversationId: payload.conversationId,
       messageId: payload.messageId,
