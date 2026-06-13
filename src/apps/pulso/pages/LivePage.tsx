@@ -1228,7 +1228,7 @@ export default function LivePage() {
           })}
 
           {/* Typing state mock */}
-          {isTyping && (
+          {(isTyping || isLatestRequestPending) && (
             <div className="flex justify-start w-full animate-pulse select-none text-left">
               <div className="space-y-1">
                 <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
@@ -1258,7 +1258,8 @@ export default function LivePage() {
             <button
               key={i}
               onClick={() => handleSendMessage(sugg.text)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all text-[#fbf9f5]/85 hover:text-white cursor-pointer select-none text-[9px] font-medium tracking-wide outline-none"
+              disabled={isLatestRequestPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all text-[#fbf9f5]/85 hover:text-white cursor-pointer select-none text-[9px] font-medium tracking-wide outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <sugg.icon size={10} strokeWidth={1.5} />
               <span>{sugg.label}</span>
@@ -1272,20 +1273,22 @@ export default function LivePage() {
             type="text"
             value={inputMessage}
             onChange={handleInputChange}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="falar ou digitar comando..."
-            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase"
+            onKeyDown={(e) => e.key === 'Enter' && !isLatestRequestPending && handleSendMessage()}
+            placeholder={isLatestRequestPending ? 'aguarde a resposta...' : 'falar ou digitar comando...'}
+            disabled={isLatestRequestPending}
+            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase disabled:opacity-50"
           />
 
           {/* Voice recorder button */}
           {voiceState !== 'unsupported' && (
             <button
               onClick={startVoiceInput}
+              disabled={isLatestRequestPending}
               className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent ${
                 voiceState === 'listening' 
                   ? 'text-[#b8544a] bg-white scale-105 shadow-md' 
                   : 'text-[#fbf9f5]/60 hover:text-white'
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={voiceState === 'listening' ? 'ouvindo... clique para parar' : 'capturar áudio'}
             >
               {voiceState === 'listening' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
@@ -1294,7 +1297,7 @@ export default function LivePage() {
 
           <button
             onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim()}
+            disabled={!inputMessage.trim() || isLatestRequestPending}
             className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
           >
             <Send size={14} strokeWidth={1.5} />
