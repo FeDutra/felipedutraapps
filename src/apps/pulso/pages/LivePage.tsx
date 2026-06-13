@@ -980,7 +980,7 @@ export default function LivePage() {
         <div className="flex items-center gap-6">
           <button 
             onClick={(e) => { e.stopPropagation(); setPresenceMode(true); }}
-            className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
+            className="hidden md:flex text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
           >
             <span>[ presença ]</span>
           </button>
@@ -999,7 +999,14 @@ export default function LivePage() {
       <main className={`flex-1 min-h-0 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-1000 ease-in-out`}>
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div className={`relative flex items-center justify-center select-none transition-all duration-1000 ease-in-out ${
+        <div 
+          onClick={(e) => { 
+            if (!presenceMode) {
+              e.stopPropagation(); 
+              setPresenceMode(true); 
+            }
+          }}
+          className={`relative flex items-center justify-center select-none transition-all duration-1000 ease-in-out ${!presenceMode ? 'cursor-pointer' : ''} ${
           presenceMode 
             ? 'w-64 h-64 scale-[1.8] md:scale-[2.4] mb-10 z-20 translate-y-[12vh] md:translate-y-0' 
             : 'w-64 h-64 scale-100 mb-10 z-10 translate-y-0'
