@@ -966,8 +966,8 @@ export default function LivePage() {
       )}
       
       {/* 1. HEADER MINIMALISTA */}
-      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none transition-all duration-700 ease-in-out ${
-        presenceMode ? 'opacity-0 pointer-events-none transform -translate-y-4' : 'opacity-100'
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+        presenceMode ? 'opacity-0 pointer-events-none transform -translate-y-4 blur-sm scale-95' : 'opacity-100 blur-none scale-100 translate-y-0'
       }`}>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
@@ -996,24 +996,24 @@ export default function LivePage() {
       </header>
 
       {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
-      <main className={`flex-1 flex flex-col items-center max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-700 ease-in-out ${
-        presenceMode ? 'justify-center' : 'justify-end'
-      }`}>
+      <main className={`flex-1 flex flex-col items-center justify-center max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)]`}>
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div className={`relative flex items-center justify-center select-none transition-all duration-700 ease-in-out ${
+        <div className={`relative flex items-center justify-center select-none transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] ${
           presenceMode 
-            ? 'w-96 h-96 scale-[2.2] md:scale-[2.4] mb-0 z-20 translate-y-[8vh]' 
-            : 'w-64 h-64 mb-10 z-10 translate-y-0'
+            ? 'w-[28rem] h-[28rem] scale-[1.3] md:scale-[1.8] mb-0 z-20 translate-y-0 blur-[1px]' 
+            : 'w-64 h-64 mb-10 z-10 translate-y-0 blur-none'
         }`}>
           <div 
-            className={`w-44 h-44 rounded-full border-8 border-[#fbf9f5] transition-all duration-700 ease-out ${getLotusAnimClass()}`} 
+            className={`w-44 h-44 rounded-full border-8 border-[#fbf9f5] transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] ${getLotusAnimClass()} ${
+              presenceMode ? 'opacity-70 drop-shadow-2xl' : 'opacity-100'
+            }`} 
           />
         </div>
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-700 ease-in-out ${
-          presenceMode ? 'max-h-0 opacity-0 pointer-events-none mt-0 mb-0' : 'max-h-[380px] h-[380px] mt-2 mb-4'
+        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+          presenceMode ? 'max-h-0 opacity-0 pointer-events-none mt-0 mb-0 blur-sm scale-95' : 'max-h-[380px] h-[380px] mt-2 mb-4 blur-none scale-100'
         }`}>
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
@@ -1255,8 +1255,8 @@ export default function LivePage() {
     </main>
 
       {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
-      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none transition-all duration-700 ease-in-out ${
-        presenceMode ? 'max-h-0 opacity-0 pointer-events-none mt-0 mb-0 pt-0 pb-0 gap-0 overflow-hidden' : 'max-h-40 gap-4 mt-2'
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+        presenceMode ? 'max-h-0 opacity-0 pointer-events-none mt-0 mb-0 pt-0 pb-0 gap-0 overflow-hidden blur-sm scale-95 translate-y-4' : 'max-h-40 gap-4 mt-2 blur-none scale-100 translate-y-0'
       }`}>
         
         {/* Quick Suggestion links */}
