@@ -996,12 +996,12 @@ export default function LivePage() {
       </header>
 
       {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
-      <main className={`flex-1 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-1000 ease-in-out`}>
+      <main className={`flex-1 min-h-0 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-1000 ease-in-out`}>
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
         <div className={`relative flex items-center justify-center select-none transition-all duration-1000 ease-in-out ${
           presenceMode 
-            ? 'w-64 h-64 scale-[1.8] md:scale-[2.4] mb-10 z-20 translate-y-0' 
+            ? 'w-64 h-64 scale-[1.8] md:scale-[2.4] mb-10 z-20 translate-y-[12vh] md:translate-y-0' 
             : 'w-64 h-64 scale-100 mb-10 z-10 translate-y-0'
         }`}>
           <div 
@@ -1011,7 +1011,7 @@ export default function LivePage() {
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
         <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-1000 ease-in-out ${
-          presenceMode ? 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[380px] opacity-0 pointer-events-none mt-2 mb-4 blur-md scale-95' : 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[380px] opacity-100 mt-2 mb-4 blur-none scale-100'
+          presenceMode ? 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[min(380px,40vh)] opacity-0 pointer-events-none mt-2 mb-4 blur-md scale-95' : 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[min(380px,40vh)] opacity-100 mt-2 mb-4 blur-none scale-100'
         }`}>
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
