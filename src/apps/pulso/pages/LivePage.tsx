@@ -13,6 +13,7 @@ import {
   sourcesService
 } from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
+import { lotusOpenClawClient } from '../services/lotusOpenClawClient';
 import { 
   Send, 
   Mic, 
@@ -119,6 +120,10 @@ interface Message {
     sourcesConsulted?: string[];
     proposedActions?: Array<{ label: string; description?: string; riskLevel?: string }>;
     proposedMutation?: { type: string; previewLabel: string; payload: any };
+    processedAt?: string;
+    createdAt?: string;
+    links?: Array<{ label: string; url: string }>;
+    actions?: Array<{ label: string; type: string; payload?: any; requiresConfirmation?: boolean }>;
     errors?: string[];
     auditLog?: { model?: string; skillUsed?: string; confidence?: string; notes?: string };
   };
@@ -154,9 +159,20 @@ export default function LivePage() {
   ]);
   const [isTyping, setIsTyping] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [presenceMode, setPresenceMode] = React.useState(false);
   
   const [copiedPromptId, setCopiedPromptId] = React.useState<string | null>(null);
   const [copiedPackageId, setCopiedPackageId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPresenceMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const [copiedResultId, setCopiedResultId] = React.useState<string | null>(null);
   const [registeringForId, setRegisteringForId] = React.useState<string | null>(null);
   const [openclawDraft, setOpenclawDraft] = React.useState('');
@@ -568,24 +584,73 @@ export default function LivePage() {
       const currentUser = authService.getCurrentUser();
       const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
 
-      const context = {
-        tasks: state?.allTasks || [],
-        projects: state?.allProjects || state?.activeProjects || [],
-        areas: state?.allAreas || [],
-        agents: state?.allAgents || [],
-        routines: state?.allRoutines || [],
-        requests: state?.allRequests || [],
-        logs: state?.allLogs || [],
-        sources: state?.allSources || []
+      const reqId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const lotusPayload = {
+        requestId: reqId,
+        userId: userRef,
+        source: "pulso_live" as "pulso_live",
+        mode: (voiceState === 'listening' ? 'voice' : 'text') as "voice" | "text",
+        input: rawMsg,
+        timestamp: new Date().toISOString(),
+        context: {
+          currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
+          timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo',
+          locale: "pt-BR" as "pt-BR",
+          userName: "Fê",
+          interface: "pulso" as "pulso"
+        }
       };
 
-      const interpretation = interpretLiveIntent(rawMsg, context);
+      const lotusResponse = await lotusOpenClawClient.sendToLotus(lotusPayload);
+
+      let finalStatus: any = 'requested';
+      let openclawResult = null;
+
+      if (lotusResponse.status === 'success') {
+        finalStatus = 'completed';
+        openclawResult = {
+          processedBy: 'openclaw',
+          processedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          responseText: lotusResponse.responseText,
+          summary: lotusResponse.summary,
+          confidence: 'high' as const,
+          riskLevel: 'low' as const,
+          requiresHumanApproval: false,
+          sourcesConsulted: lotusResponse.sourcesConsulted || [],
+          proposedActions: lotusResponse.actions || [],
+          proposedMutation: lotusResponse.proposedMutation || null,
+          links: lotusResponse.links || [],
+          actions: lotusResponse.actions || []
+        };
+      } else if (lotusResponse.status === 'needs_approval') {
+        finalStatus = 'waiting_user_approval';
+        openclawResult = {
+          processedBy: 'openclaw',
+          processedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          responseText: lotusResponse.responseText,
+          summary: lotusResponse.summary,
+          confidence: 'high' as const,
+          riskLevel: 'medium' as const,
+          requiresHumanApproval: true,
+          sourcesConsulted: lotusResponse.sourcesConsulted || [],
+          proposedActions: lotusResponse.actions || [],
+          proposedMutation: lotusResponse.proposedMutation || null,
+          links: lotusResponse.links || [],
+          actions: lotusResponse.actions || []
+        };
+      } else {
+        // unconnected fallback
+        finalStatus = 'requested';
+      }
 
       const reqPayload = {
+        id: reqId,
         requestType: 'conversation_command' as any,
         title: rawMsg.length > 80 ? rawMsg.substring(0, 80) + '...' : rawMsg,
         summary: rawMsg,
-        status: 'requested' as any,
+        status: finalStatus as any,
         priority: 'medium' as any,
         requestedBy: userRef,
         requestedAt: new Date(),
@@ -593,8 +658,20 @@ export default function LivePage() {
         origin: 'lotus_live' as any,
         source: 'pulso_live' as any,
         archived: false,
-        interpretation,
-        handoff: interpretation.handoff
+        handoff: {
+          target: 'openclaw',
+          mode: 'proposal_only',
+          canExecuteNow: false,
+          requiresHumanConfirmation: true,
+          intent: 'unknown',
+          domain: 'general',
+          riskLevel: 'low' as 'low' | 'medium' | 'high',
+          actionType: 'query',
+          entitiesMentioned: [],
+          suggestedNextStep: 'OpenClaw manual processing',
+          executionPrompt: rawMsg
+        },
+        ...(openclawResult && { openclawResult })
       };
 
       const newRequest = await requestsService.createRequest(reqPayload);
@@ -607,19 +684,19 @@ export default function LivePage() {
         });
       }
 
-      setTimeout(() => {
-        const lotusMsg: Message = {
-          id: `lotus-msg-${Date.now()}`,
-          sender: 'lotus',
-          text: interpretation.suggestedReply,
-          timestamp: new Date(),
-          interpretation,
-          requestId: newRequest?.id || undefined,
-          originalCommand: rawMsg
-        };
-        setMessages(prev => [...prev, lotusMsg]);
-        setIsTyping(false);
-      }, 800);
+      // Append reply directly in the messages stream
+      const lotusMsg: Message = {
+        id: `lotus-msg-${Date.now()}`,
+        sender: 'lotus',
+        text: lotusResponse.responseText,
+        timestamp: new Date(),
+        requestId: reqId,
+        originalCommand: rawMsg,
+        handoffStatus: finalStatus,
+        ...(openclawResult && { openclawResult })
+      };
+      setMessages(prev => [...prev, lotusMsg]);
+      setIsTyping(false);
 
     } catch (err: any) {
       console.error('Error saving conversation request:', err);
@@ -927,10 +1004,28 @@ export default function LivePage() {
   };
 
   return (
-    <div className="theme-her min-h-screen w-full flex flex-col justify-between py-8 px-4 md:px-8 relative overflow-hidden transition-colors duration-500 font-sans text-[#fbf9f5]">
+    <div 
+      onClick={() => presenceMode && setPresenceMode(false)}
+      className={`theme-her min-h-screen w-full flex flex-col justify-between py-8 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
+        presenceMode ? 'cursor-pointer' : ''
+      }`}
+    >
+      {/* Botão sutil de saída do Modo Foco */}
+      {presenceMode && (
+        <div className="fixed top-8 right-8 z-30 animate-fade-in pointer-events-auto">
+          <button
+            onClick={(e) => { e.stopPropagation(); setPresenceMode(false); }}
+            className="text-[10px] font-light tracking-widest text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80 transition-colors lowercase bg-transparent border-none outline-none cursor-pointer"
+          >
+            [ sair do foco ]
+          </button>
+        </div>
+      )}
       
       {/* 1. HEADER MINIMALISTA */}
-      <header className="flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none">
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none transition-all duration-700 ease-in-out ${
+        presenceMode ? 'opacity-0 pointer-events-none transform -translate-y-4' : 'opacity-100'
+      }`}>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#fbf9f5] opacity-75" />
@@ -941,7 +1036,14 @@ export default function LivePage() {
         
         <div className="flex items-center gap-6">
           <button 
-            onClick={() => setIsSidebarOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setPresenceMode(true); }}
+            className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
+          >
+            <span>[ presença ]</span>
+          </button>
+          
+          <button 
+            onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(true); }}
             className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
           >
             <Menu size={12} strokeWidth={1.5} />
@@ -951,17 +1053,25 @@ export default function LivePage() {
       </header>
 
       {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
-      <main className="flex-1 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative">
+      <main className={`flex-1 flex flex-col items-center max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-700 ease-in-out ${
+        presenceMode ? 'justify-center' : 'justify-end'
+      }`}>
         
         {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div className="mb-10 relative flex items-center justify-center select-none w-64 h-64">
+        <div className={`relative flex items-center justify-center select-none transition-all duration-700 ease-in-out ${
+          presenceMode 
+            ? 'w-96 h-96 scale-[2.2] md:scale-[2.4] mb-0 z-20 translate-y-[8vh]' 
+            : 'w-64 h-64 mb-10 z-10 translate-y-0'
+        }`}>
           <div 
             className={`w-44 h-44 rounded-full border-8 border-[#fbf9f5] transition-all duration-700 ease-out ${getLotusAnimClass()}`} 
           />
         </div>
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className="w-[80%] md:w-[75%] h-[380px] relative mt-2 mb-4 bg-transparent border-none shadow-none overflow-hidden">
+        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-700 ease-in-out ${
+          presenceMode ? 'max-h-0 opacity-0 pointer-events-none mt-0 mb-0' : 'max-h-[380px] h-[380px] mt-2 mb-4'
+        }`}>
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
               const isLotus = msg.sender === 'lotus';
@@ -982,6 +1092,65 @@ export default function LivePage() {
                     <div className={`text-sm leading-relaxed font-light text-[#fbf9f5] ${!isLotus ? 'text-right' : 'text-left'}`}>
                       {renderMarkdown(msg.text)}
                     </div>
+
+                    {/* Render dynamic links and actions */}
+                    {isLotus && msg.openclawResult && (
+                      <div className="flex flex-col gap-2 mt-2">
+                        {/* Render Links */}
+                        {msg.openclawResult.links && msg.openclawResult.links.length > 0 && (
+                          <div className="flex flex-wrap gap-2 justify-start">
+                            {msg.openclawResult.links.map((link: any, idx: number) => (
+                              <a
+                                key={idx}
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full text-[10px] text-[#fbf9f5] hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1"
+                              >
+                                {link.label}
+                                <ArrowRight size={10} />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Render Actions */}
+                        {msg.openclawResult.actions && msg.openclawResult.actions.length > 0 && (
+                          <div className="flex flex-wrap gap-2 justify-start">
+                            {msg.openclawResult.actions.map((action: any, idx: number) => {
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    if (action.type === 'trigger_mutation' && action.payload) {
+                                      handleExecuteProposal({
+                                        ...msg,
+                                        openclawResult: {
+                                          ...msg.openclawResult,
+                                          proposedMutation: action.payload
+                                        }
+                                      } as any);
+                                    } else {
+                                      alert(`Ação acionada: ${action.label}`);
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-[#fbf9f5] hover:bg-[#fbf9f5]/90 border border-[#b8544a]/20 rounded-full text-[10px] text-[#3d2f2f] transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  {action.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Render sourcesConsulted */}
+                        {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
+                          <div className="text-[9px] text-[#fbf9f5]/40 font-light mt-1 lowercase select-none">
+                            fontes consultadas: {msg.openclawResult.sourcesConsulted.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Operational result / Governance UI (v1.7 & v1.8) */}
                     {isLotus && msg.openclawResult && (
@@ -1142,7 +1311,9 @@ export default function LivePage() {
     </main>
 
       {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
-      <footer className="w-full max-w-xl mx-auto flex flex-col items-center gap-4 z-10 select-none">
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none transition-all duration-700 ease-in-out ${
+        presenceMode ? 'max-h-0 opacity-0 pointer-events-none mt-0 mb-0 pt-0 pb-0 gap-0 overflow-hidden' : 'max-h-40 gap-4 mt-2'
+      }`}>
         
         {/* Quick Suggestion links */}
         <div className="flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full pb-1 whitespace-nowrap">
