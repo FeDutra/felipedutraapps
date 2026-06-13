@@ -441,8 +441,10 @@ export default function LivePage() {
           const hasOpenClawResponse = !!req.openclawResult?.responseText;
           const replyText = hasOpenClawResponse
             ? req.openclawResult.responseText
-            : (req.interpretation?.suggestedReply || 
-               `Registrei o comando "${req.summary || req.title}" para processamento operacional.`);
+            : (req.status === 'queued_for_openclaw' || req.status === 'processing_by_openclaw'
+               ? ''
+               : (req.interpretation?.suggestedReply || 
+                  `Registrei o comando "${req.summary || req.title}" para processamento operacional.`));
           
           chatHistory.push({
             id: `lotus-${req.id || Math.random()}`,
@@ -525,8 +527,10 @@ export default function LivePage() {
             const hasOpenClawResponse = !!req.openclawResult?.responseText;
             const replyText = hasOpenClawResponse
               ? req.openclawResult.responseText
-              : (req.interpretation?.suggestedReply || 
-                 `Registrei o comando "${req.summary || req.title}" para processamento operacional.`);
+              : (req.status === 'queued_for_openclaw' || req.status === 'processing_by_openclaw'
+                 ? ''
+                 : (req.interpretation?.suggestedReply || 
+                    `Registrei o comando "${req.summary || req.title}" para processamento operacional.`));
 
             chatHistory.push({
               id: `lotus-${req.id}`,
@@ -588,93 +592,24 @@ export default function LivePage() {
       const lotusPayload = {
         requestId: reqId,
         userId: userRef,
-        source: "pulso_live" as "pulso_live",
+        source: "pulso_live" as const,
         mode: (voiceState === 'listening' ? 'voice' : 'text') as "voice" | "text",
         input: rawMsg,
         timestamp: new Date().toISOString(),
+        conversationId: `conv_${Date.now()}`,
+        messageId: `msg_${Date.now()}`,
+        approvalMode: "proposal_only" as const,
         context: {
           currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
           timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo',
-          locale: "pt-BR" as "pt-BR",
+          locale: "pt-BR" as const,
           userName: "Fê",
-          interface: "pulso" as "pulso"
-        }
-      };
-
-      const lotusResponse = await lotusOpenClawClient.sendToLotus(lotusPayload);
-
-      let finalStatus: any = 'requested';
-      let openclawResult = null;
-
-      if (lotusResponse.status === 'success') {
-        finalStatus = 'completed';
-        openclawResult = {
-          processedBy: 'openclaw',
-          processedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          responseText: lotusResponse.responseText,
-          summary: lotusResponse.summary,
-          confidence: 'high' as const,
-          riskLevel: 'low' as const,
-          requiresHumanApproval: false,
-          sourcesConsulted: lotusResponse.sourcesConsulted || [],
-          proposedActions: lotusResponse.actions || [],
-          proposedMutation: lotusResponse.proposedMutation || null,
-          links: lotusResponse.links || [],
-          actions: lotusResponse.actions || []
-        };
-      } else if (lotusResponse.status === 'needs_approval') {
-        finalStatus = 'waiting_user_approval';
-        openclawResult = {
-          processedBy: 'openclaw',
-          processedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          responseText: lotusResponse.responseText,
-          summary: lotusResponse.summary,
-          confidence: 'high' as const,
-          riskLevel: 'medium' as const,
-          requiresHumanApproval: true,
-          sourcesConsulted: lotusResponse.sourcesConsulted || [],
-          proposedActions: lotusResponse.actions || [],
-          proposedMutation: lotusResponse.proposedMutation || null,
-          links: lotusResponse.links || [],
-          actions: lotusResponse.actions || []
-        };
-      } else {
-        // unconnected fallback
-        finalStatus = 'requested';
-      }
-
-      const reqPayload = {
-        id: reqId,
-        requestType: 'conversation_command' as any,
-        title: rawMsg.length > 80 ? rawMsg.substring(0, 80) + '...' : rawMsg,
-        summary: rawMsg,
-        status: finalStatus as any,
-        priority: 'medium' as any,
-        requestedBy: userRef,
-        requestedAt: new Date(),
-        updatedAt: new Date(),
-        origin: 'lotus_live' as any,
-        source: 'pulso_live' as any,
-        archived: false,
-        handoff: {
-          target: 'openclaw',
-          mode: 'proposal_only',
-          canExecuteNow: false,
-          requiresHumanConfirmation: true,
-          intent: 'unknown',
-          domain: 'general',
-          riskLevel: 'low' as 'low' | 'medium' | 'high',
-          actionType: 'query',
-          entitiesMentioned: [],
-          suggestedNextStep: 'OpenClaw manual processing',
-          executionPrompt: rawMsg
+          interface: "pulso" as const
         },
-        ...(openclawResult && { openclawResult })
+        contextWindow: []
       };
 
-      const newRequest = await requestsService.createRequest(reqPayload);
+      const newRequest = await lotusOpenClawClient.queueRequest(lotusPayload);
 
       if (state) {
         setState((prev: any) => {
@@ -684,18 +619,6 @@ export default function LivePage() {
         });
       }
 
-      // Append reply directly in the messages stream
-      const lotusMsg: Message = {
-        id: `lotus-msg-${Date.now()}`,
-        sender: 'lotus',
-        text: lotusResponse.responseText,
-        timestamp: new Date(),
-        requestId: reqId,
-        originalCommand: rawMsg,
-        handoffStatus: finalStatus,
-        ...(openclawResult && { openclawResult })
-      };
-      setMessages(prev => [...prev, lotusMsg]);
       setIsTyping(false);
 
     } catch (err: any) {
@@ -1075,6 +998,7 @@ export default function LivePage() {
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
               const isLotus = msg.sender === 'lotus';
+              if (isLotus && !msg.text) return null;
               return (
                 <div 
                   key={msg.id} 
