@@ -1349,17 +1349,17 @@ export default function LivePage() {
       </footer>
 
       {/* Backdrop para fechar ao clicar fora */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] transition-opacity cursor-pointer"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      <div 
+        className={`fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] cursor-pointer pulso-transition ${
+          isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
 
       {/* 4. CAMADA LATERAL ETÉREA — FLUTUANTE (Vidro/Blur) */}
       <div 
-        className={`fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl transition-all duration-500 ease-out transform ${
-          isSidebarOpen ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-8 opacity-0 scale-95 pointer-events-none'
+        className={`fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl pulso-transition ${
+          isSidebarOpen ? 'pulso-visible' : 'pulso-hidden-right'
         } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5]`}
       >
         <div className="space-y-8">
