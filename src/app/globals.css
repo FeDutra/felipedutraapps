@@ -321,3 +321,8 @@ body {
 }
 
 
+
+/* Theme Void Overrides */
+body.pulso-theme-black .theme-her {
+  --background-her: #0f0f0f;
+}
