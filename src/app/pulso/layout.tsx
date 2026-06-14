@@ -31,15 +31,21 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
       setPulsoTheme(e.detail);
       document.body.classList.toggle('pulso-theme-black', e.detail === 'black');
       let metaTheme = document.querySelector('meta[name="theme-color"]');
-      if (metaTheme) {
-        metaTheme.setAttribute('content', e.detail === 'black' ? '#0f0f0f' : '#b8544a');
+      if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.setAttribute('name', 'theme-color');
+        document.head.appendChild(metaTheme);
       }
+      metaTheme.setAttribute('content', e.detail === 'black' ? '#0f0f0f' : '#b8544a');
     };
     document.body.classList.toggle('pulso-theme-black', saved === 'black');
     let metaTheme = document.querySelector('meta[name="theme-color"]');
-    if (metaTheme) {
-      metaTheme.setAttribute('content', saved === 'black' ? '#0f0f0f' : '#b8544a');
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaTheme);
     }
+    metaTheme.setAttribute('content', saved === 'black' ? '#0f0f0f' : '#b8544a');
     window.addEventListener('pulso-theme-change', handleThemeChange);
 
     document.documentElement.setAttribute('data-theme', 'dark');
