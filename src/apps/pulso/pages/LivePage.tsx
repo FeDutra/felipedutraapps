@@ -1275,7 +1275,7 @@ export default function LivePage() {
             <button
               key={i}
               onClick={() => handleSendMessage(sugg.text)}
-              disabled={isLatestRequestPending}
+              disabled={false}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all text-[#fbf9f5]/85 hover:text-white cursor-pointer select-none text-[9px] font-medium tracking-wide outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <sugg.icon size={10} strokeWidth={1.5} />
@@ -1296,15 +1296,15 @@ export default function LivePage() {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                if (!isLatestRequestPending) handleSendMessage();
+                handleSendMessage();
               }
             }}
             placeholder={
               voiceState === 'transcribing' ? 'transcrevendo...' : 
-              isLatestRequestPending ? 'aguarde a resposta...' : 
+               
               'digitar comando (cmd + enter envia)'
             }
-            disabled={isLatestRequestPending || voiceState === 'transcribing'}
+            disabled={voiceState === 'transcribing'}
             rows={1}
             className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase disabled:opacity-50 resize-none max-h-[120px] py-1.5 no-scrollbar"
           />
@@ -1313,7 +1313,7 @@ export default function LivePage() {
           {voiceState !== 'unsupported' && (
             <button
               onClick={startVoiceInput}
-              disabled={isLatestRequestPending}
+              disabled={false}
               className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
                 voiceState === 'listening' 
                   ? 'text-[#b8544a] bg-white scale-105 shadow-md' 
@@ -1327,7 +1327,7 @@ export default function LivePage() {
 
           <button
             onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim() || isLatestRequestPending}
+            disabled={!inputMessage.trim()}
             className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
           >
             <Send size={14} strokeWidth={1.5} />
