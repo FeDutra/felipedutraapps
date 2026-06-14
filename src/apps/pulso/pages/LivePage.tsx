@@ -31,7 +31,10 @@ import {
   Activity,
   Layers,
   Database,
-  Paperclip
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
+  Camera
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -165,6 +168,18 @@ export default function LivePage() {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
+  const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = React.useState(false);
+  const attachmentMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
+        setIsAttachmentMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -1270,7 +1285,16 @@ export default function LivePage() {
           <div ref={chatEndRef} />
         </div>
       </div>
+
+      {/* Toast de Anexo */}
+      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8544a] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
+        showAttachmentToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4 pointer-events-none'
+      }`}>
+        <Activity size={16} className="animate-pulse" />
+        <span className="text-xs font-semibold tracking-widest uppercase">função em desenvolvimento</span>
+      </div>
     </main>
+
 
       {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
       <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-40 gap-4 mt-2 ${
@@ -1299,6 +1323,47 @@ export default function LivePage() {
 
         {/* Core Input Container */}
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+
+          {/* Menu de Anexos */}
+          <div className="relative" ref={attachmentMenuRef}>
+            <button
+              onClick={() => setIsAttachmentMenuOpen(!isAttachmentMenuOpen)}
+              className="p-1.5 text-[#fbf9f5]/60 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
+              title="Anexar arquivos"
+            >
+              <Paperclip size={14} strokeWidth={1.5} />
+            </button>
+            
+            {/* Popover do Menu */}
+            <div className={`absolute bottom-full left-0 mb-2 w-36 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden pulso-transition ${
+              isAttachmentMenuOpen ? 'opacity-100 transform translate-y-0 pointer-events-auto scale-100' : 'opacity-0 transform translate-y-2 pointer-events-none scale-95'
+            }`}>
+              <div className="flex flex-col text-xs font-light tracking-wide text-[#fbf9f5]">
+                <button 
+                  onClick={() => { setShowAttachmentToast(true); setIsAttachmentMenuOpen(false); setTimeout(() => setShowAttachmentToast(false), 3000); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent"
+                >
+                  <FileText size={12} />
+                  <span>arquivos</span>
+                </button>
+                <button 
+                  onClick={() => { setShowAttachmentToast(true); setIsAttachmentMenuOpen(false); setTimeout(() => setShowAttachmentToast(false), 3000); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent"
+                >
+                  <ImageIcon size={12} />
+                  <span>fotos</span>
+                </button>
+                <button 
+                  onClick={() => { setShowAttachmentToast(true); setIsAttachmentMenuOpen(false); setTimeout(() => setShowAttachmentToast(false), 3000); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left bg-transparent"
+                >
+                  <Camera size={12} />
+                  <span>câmera</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           
           
 
