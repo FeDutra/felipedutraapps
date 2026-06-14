@@ -954,11 +954,7 @@ export default function LivePage() {
       }`}
     >
       {/* Botão sutil de saída do Modo Foco */}
-      <div className={`fixed top-8 right-8 z-30 transition-all duration-1000 ease-in-out ${
-        presenceMode 
-          ? 'opacity-100 blur-none transform translate-y-0 pointer-events-auto' 
-          : 'opacity-0 blur-md transform -translate-y-4 pointer-events-none'
-      }`}>
+      <div className={`fixed top-8 right-8 z-30 pulso-transition ${presenceMode ? 'pulso-visible' : 'pulso-hidden-up'}`}>
         <button
           onClick={(e) => { e.stopPropagation(); setPresenceMode(false); }}
           className="text-[10px] font-light tracking-widest text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80 transition-colors lowercase bg-transparent border-none outline-none cursor-pointer"
@@ -968,9 +964,7 @@ export default function LivePage() {
       </div>
       
       {/* 1. HEADER MINIMALISTA */}
-      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none transition-all duration-1000 ease-in-out ${
-        presenceMode ? 'opacity-0 pointer-events-none transform -translate-y-4 blur-md' : 'opacity-100 blur-none'
-      }`}>
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none pulso-transition ${presenceMode ? 'pulso-hidden-up' : 'pulso-visible'}`}>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#fbf9f5] opacity-75" />
@@ -1036,8 +1030,8 @@ export default function LivePage() {
         </div>
 
         {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden transition-all duration-1000 ease-in-out ${
-          presenceMode ? 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[min(380px,40vh)] opacity-0 pointer-events-none mt-2 mb-4 blur-md scale-95' : 'max-h-[250px] md:max-h-[380px] h-[250px] md:h-[min(380px,40vh)] opacity-100 mt-2 mb-4 blur-none scale-100'
+        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[250px] md:max-h-[380px] h-[250px] md:h-[min(380px,40vh)] mt-2 mb-4 ${
+          presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
         }`}>
           <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
             {messages.map((msg) => {
@@ -1279,8 +1273,8 @@ export default function LivePage() {
     </main>
 
       {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
-      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none transition-all duration-1000 ease-in-out ${
-        presenceMode ? 'max-h-40 opacity-0 pointer-events-none mt-2 gap-4 blur-md scale-95' : 'max-h-40 opacity-100 gap-4 mt-2 blur-none scale-100'
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-40 gap-4 mt-2 ${
+        presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
         {/* Quick Suggestion links */}
