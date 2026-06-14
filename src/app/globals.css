@@ -213,17 +213,17 @@ body {
   0%, 100% {
     border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1) rotate(0deg);
-    filter: drop-shadow(0 0 8px rgba(251, 249, 245, 0.2));
+    filter: drop-shadow(0 0 19px rgba(251, 249, 245, 0.2));
   }
   33% {
     border-radius: 54% 46% 52% 48% / 48% 53% 47% 52%;
     transform: scale(1.02) rotate(1.5deg);
-    filter: drop-shadow(0 0 14px rgba(251, 249, 245, 0.3));
+    filter: drop-shadow(0 0 34px rgba(251, 249, 245, 0.3));
   }
   66% {
     border-radius: 47% 53% 48% 52% / 53% 47% 53% 47%;
     transform: scale(0.98) rotate(-1.5deg);
-    filter: drop-shadow(0 0 10px rgba(251, 249, 245, 0.25));
+    filter: drop-shadow(0 0 24px rgba(251, 249, 245, 0.25));
   }
 }
 
@@ -231,12 +231,12 @@ body {
   0%, 100% {
     border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.03) rotate(0deg);
-    filter: drop-shadow(0 0 15px rgba(251, 249, 245, 0.35));
+    filter: drop-shadow(0 0 36px rgba(251, 249, 245, 0.35));
   }
   25% {
     border-radius: 58% 42% 62% 38% / 45% 55% 45% 55%;
     transform: scale(1.09) rotate(3deg);
-    filter: drop-shadow(0 0 25px rgba(251, 249, 245, 0.5));
+    filter: drop-shadow(0 0 60px rgba(251, 249, 245, 0.5));
   }
   50% {
     border-radius: 42% 58% 38% 62% / 55% 45% 55% 45%;
@@ -252,17 +252,17 @@ body {
   0% {
     border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.02) rotate(0deg);
-    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.3));
+    filter: drop-shadow(0 0 29px rgba(251, 249, 245, 0.3));
   }
   50% {
     border-radius: 45% 55% 48% 52% / 52% 45% 55% 48%;
     transform: scale(0.96) rotate(180deg);
-    filter: drop-shadow(0 0 20px rgba(251, 249, 245, 0.45));
+    filter: drop-shadow(0 0 48px rgba(251, 249, 245, 0.45));
   }
   100% {
     border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.02) rotate(360deg);
-    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.3));
+    filter: drop-shadow(0 0 29px rgba(251, 249, 245, 0.3));
   }
 }
 
@@ -270,12 +270,12 @@ body {
   0%, 100% {
     border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.02) translateY(0);
-    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.3));
+    filter: drop-shadow(0 0 29px rgba(251, 249, 245, 0.3));
   }
   50% {
     border-radius: 55% 45% 53% 47% / 49% 56% 44% 51%;
     transform: scale(1.1) translateY(-3px);
-    filter: drop-shadow(0 0 26px rgba(251, 249, 245, 0.55));
+    filter: drop-shadow(0 0 62px rgba(251, 249, 245, 0.55));
   }
 }
 
