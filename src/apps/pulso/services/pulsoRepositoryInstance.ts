@@ -13,10 +13,15 @@ let repository: IPulsoRepository;
 export const getRepository = (): IPulsoRepository => {
   if (repository) return repository;
   
-  if (DATA_MODE === 'firestore' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-    console.log('PULSO: Modo Firestore Ativo. API KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-    const { FirestorePulsoRepository } = require("./firestorePulsoRepository");
-    repository = new FirestorePulsoRepository();
+  if (DATA_MODE === 'firestore') {
+    if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      console.log('PULSO: Modo Firestore Ativo. API KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+      const { FirestorePulsoRepository } = require("./firestorePulsoRepository");
+      repository = new FirestorePulsoRepository();
+    } else {
+      console.error('CRITICAL WARNING: Firestore mode is configured but NEXT_PUBLIC_FIREBASE_API_KEY is missing! Falling back to Mock mode.');
+      repository = new MockPulsoRepository();
+    }
   } else {
     console.log('PULSO: Modo Mock Ativo. DATA_MODE:', DATA_MODE, 'API_KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
     repository = new MockPulsoRepository();

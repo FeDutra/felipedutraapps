@@ -1,5 +1,62 @@
 'use client';
 
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableAreaItem({ area, isActive, onClick, icon }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+    zIndex: isDragging ? 50 : 'auto',
+    position: 'relative' as any,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      className={`flex items-center gap-2.5 cursor-pointer group/item py-1 touch-none`}
+    >
+      <span
+        className={`text-lg text-center transition-all duration-300 font-mono ${
+          isActive
+            ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
+            : 'text-[#fbf9f5]/35 group-hover/item:text-[#fbf9f5]/80 group-hover/item:scale-110'
+        }`}
+        style={{ width: '24px' }}
+      >
+        {icon}
+      </span>
+      <span
+        className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-300 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
+          isActive ? 'text-white font-medium' : 'text-[#fbf9f5]'
+        }`}
+      >
+        {area.name}
+      </span>
+    </div>
+  );
+}
+
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { 
@@ -14,6 +71,17 @@ import {
 } from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
 import { lotusOpenClawClient } from '../services/lotusOpenClawClient';
+import { useSearchParams } from 'next/navigation';
+import { ContextSurfaceVariants } from '../components/system/ContextSurfaceVariants';
+import { 
+  MessageRenderer, 
+  MessageActions, 
+  formatMessageTimestamp 
+} from '../components/chat/MessageRenderer';
+import { routeInputToArea } from '../../../lib/pulso/AreaRouter';
+import { normalizeTranscript } from '../../../lib/pulso/normalizeTranscript';
+import { candidateAreas } from '../scripts/seedAreas';
+import { TTSAdapter, TTSPreferences } from '../../../lib/pulso/TTSAdapter';
 import { 
   Send, 
   Mic, 
@@ -34,7 +102,9 @@ import {
   Paperclip,
   FileText,
   Image as ImageIcon,
-  Camera
+  Camera,
+  Volume2,
+  Square
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -150,6 +220,18 @@ interface Message {
   executionError?: string;
 }
 
+export type VoiceMode = 'off' | 'recording_once' | 'presence';
+export type PresenceState = 
+  | 'presence_idle' 
+  | 'presence_requesting_permission' 
+  | 'presence_listening' 
+  | 'presence_transcribing' 
+  | 'presence_sending' 
+  | 'presence_waiting_response' 
+  | 'presence_speaking' 
+  | 'presence_error';
+
+
 export default function LivePage() {
   const router = useRouter();
   const [state, setState] = React.useState<any>(null);
@@ -168,6 +250,54 @@ export default function LivePage() {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
+  const [activeAreaId, setActiveAreaId] = React.useState<string | null>(null);
+  const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
+  const headerMenuRef = React.useRef<HTMLDivElement>(null);
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const searchParams = useSearchParams();
+  const contextSurfaceVariant = searchParams?.get('contextSurface') as 'a' | 'b' | 'c' | null;
+  const [isContextSurfaceOpen, setIsContextSurfaceOpen] = React.useState(!!contextSurfaceVariant);
+  const activeVariant = contextSurfaceVariant || 'a';
+
+  React.useEffect(() => {
+    if (contextSurfaceVariant) {
+      setIsContextSurfaceOpen(true);
+    }
+  }, [contextSurfaceVariant]);
+
+  const getAreaIcon = (area: any) => {
+    if (!area) return '○';
+    const identifier = (area.slug || area.id || area.name || '').toLowerCase();
+    
+    if (identifier.includes('casa') || identifier.includes('obra') || identifier.includes('construção')) return '⌂';
+    if (identifier.includes('fam')) return '◎';
+    if (identifier.includes('vida') || identifier.includes('rotina')) return '〰';
+    if (identifier.includes('saud') || identifier.includes('saúd')) return '✚';
+    if (identifier.includes('finan')) return '◌';
+    if (identifier.includes('modu') || identifier.includes('modú')) return '▦';
+    if (identifier.includes('despertar')) return '✹';
+    if (identifier.includes('projeto') || identifier.includes('autoral') || identifier.includes('produção')) return '✦';
+    if (identifier.includes('pulso') || identifier.includes('ia') || identifier.includes('tecnologia') || identifier.includes('openclaw') || identifier.includes('agente')) return '⌘';
+    if (identifier.includes('relacoes') || identifier.includes('relações') || identifier.includes('pessoa')) return '⟡';
+    if (identifier.includes('pesquisa') || identifier.includes('arca')) return '◍';
+    if (identifier.includes('guayi') || identifier.includes('escola')) return '◈';
+    if (identifier.includes('horta') || identifier.includes('terra')) return '⑆';
+    if (identifier.includes('infra')) return '▤';
+    
+    return '⚬';
+  };
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = React.useState(false);
   const attachmentMenuRef = React.useRef<HTMLDivElement>(null);
 
@@ -175,6 +305,9 @@ export default function LivePage() {
     const handleClickOutside = (event: MouseEvent) => {
       if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
         setIsAttachmentMenuOpen(false);
+      }
+      if (headerMenuRef.current && !headerMenuRef.current.contains(event.target as Node)) {
+        setIsHeaderMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -187,6 +320,52 @@ export default function LivePage() {
   const [copiedPackageId, setCopiedPackageId] = React.useState<string | null>(null);
   const voiceReplyRequestsRef = React.useRef<Set<string>>(new Set());
   const currentTextRef = React.useRef<string>('');
+
+  // TTS instantiation
+  const [ttsAdapter] = React.useState(() => new TTSAdapter());
+  const [ttsPrefs, setTtsPrefs] = React.useState<TTSPreferences>(() => ttsAdapter.getPreferences());
+  const [availableVoices, setAvailableVoices] = React.useState<SpeechSynthesisVoice[]>([]);
+  const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
+  const [kokoroEndpoint, setKokoroEndpoint] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
+    }
+    return 'http://127.0.0.1:8880/v1/audio/speech';
+  });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const loadVoices = () => {
+      const voices = ttsAdapter.getPortugueseVoices();
+      setAvailableVoices(voices);
+      
+      // Auto-update prefs if standard voice selected is empty but we have voices loaded
+      const currentPrefs = ttsAdapter.getPreferences();
+      if (!currentPrefs.voiceURI && voices.length > 0) {
+        const defVoice = ttsAdapter.getDefaultPortugueseVoice();
+        if (defVoice) {
+          const updated = {
+            ...currentPrefs,
+            voiceURI: defVoice.voiceURI,
+            voiceName: defVoice.name,
+            voiceLang: defVoice.lang
+          };
+          setTtsPrefs(updated);
+          ttsAdapter.updatePreferences(updated);
+        }
+      }
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, [ttsAdapter]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -205,8 +384,128 @@ export default function LivePage() {
   const [submittingApprovalId, setSubmittingApprovalId] = React.useState<string | null>(null);
   const [submittingExecutionId, setSubmittingExecutionId] = React.useState<string | null>(null);
   const [executionErrors, setExecutionErrors] = React.useState<Record<string, string>>({});
+  const [playingMsgId, setPlayingMsgId] = React.useState<string | null>(null);
+  const [playingState, setPlayingState] = React.useState<'stopped' | 'preparing' | 'playing' | 'error/fallback'>('stopped');
+
+  // Voice State Machine additions
+  const [voiceMode, setVoiceMode] = React.useState<VoiceMode>('off');
+  const [presenceState, setPresenceState] = React.useState<PresenceState>('presence_idle');
+
+  const voiceModeRef = React.useRef<VoiceMode>('off');
+  const presenceStateRef = React.useRef<PresenceState>('presence_idle');
+  const maxRecordingTimeoutRef = React.useRef<any>(null);
+  const spokenRequestsRef = React.useRef<Set<string>>(new Set());
   
-  const chatEndRef = React.useRef<HTMLDivElement>(null);
+  // Latency and session session state tracking
+  const presenceSessionStartTimeRef = React.useRef<number>(0);
+  const latencyStopRecRef = React.useRef<number | null>(null);
+  const latencyTranscriptionRef = React.useRef<number | null>(null);
+  const latencyRequestCreatedRef = React.useRef<number | null>(null);
+  const latencyResponseReceivedRef = React.useRef<number | null>(null);
+  const latencyAutoTtsStartRef = React.useRef<number | null>(null);
+
+  const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(false);
+  const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+
+  const playPresenceSoundCue = React.useCallback((type: 'start_listening' | 'sent' | 'response_arrived' | 'speak_start' | 'error') => {
+    if (!presenceSoundCuesEnabled) {
+      console.log('[PULSO_PRESENCE_SOUND_CUE_SKIPPED_DISABLED]', { type });
+      return;
+    }
+    console.log('[PULSO_PRESENCE_SOUND_CUE_PLAY]', { type });
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      const now = ctx.currentTime;
+      
+      if (type === 'start_listening') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(220, now + 0.25);
+        gain.gain.setValueAtTime(0.015, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'sent') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+        gain.gain.setValueAtTime(0.008, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'response_arrived') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(330, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.2);
+        gain.gain.setValueAtTime(0.015, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+        
+        setTimeout(() => {
+          try {
+            const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc2 = ctx2.createOscillator();
+            const gain2 = ctx2.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx2.destination);
+            const now2 = ctx2.currentTime;
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(440, now2);
+            osc2.frequency.exponentialRampToValueAtTime(550, now2 + 0.15);
+            gain2.gain.setValueAtTime(0.01, now2);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.15);
+            osc2.start(now2);
+            osc2.stop(now2 + 0.15);
+          } catch {}
+        }, 80);
+      } else if (type === 'speak_start') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
+        gain.gain.setValueAtTime(0.006, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+        
+        setTimeout(() => {
+          try {
+            const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc2 = ctx2.createOscillator();
+            const gain2 = ctx2.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx2.destination);
+            const now2 = ctx2.currentTime;
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(1100, now2);
+            osc2.frequency.exponentialRampToValueAtTime(1500, now2 + 0.35);
+            gain2.gain.setValueAtTime(0.004, now2);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.35);
+            osc2.start(now2);
+            osc2.stop(now2 + 0.35);
+          } catch {}
+        }, 60);
+      } else if (type === 'error') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.linearRampToValueAtTime(110, now + 0.4);
+        gain.gain.setValueAtTime(0.015, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+      }
+    } catch (e) {
+      console.warn('Failed to play presence sound cue:', e);
+    }
+  }, [presenceSoundCuesEnabled]);
 
   // ── Voice Input State ────────────────────────────────────────────────
   type VoiceState = 'idle' | 'listening' | 'transcribing' | 'ready' | 'error_permission' | 'unsupported';
@@ -215,6 +514,35 @@ export default function LivePage() {
   const recognitionRef = React.useRef<any>(null);
   const silenceTimeoutRef = React.useRef<any>(null);
   const finalTranscriptRef = React.useRef<string>('');
+
+  React.useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    console.log('[PULSO_VOICE_MODE_CHANGED]', { mode: voiceMode });
+    
+    // Sync voiceState to maintain compatibility with existing UI checks
+    if (voiceMode === 'off') {
+      setVoiceState('idle');
+    } else if (voiceMode === 'recording_once') {
+      setVoiceState('listening');
+    } else if (voiceMode === 'presence') {
+      if (presenceState === 'presence_listening') setVoiceState('listening');
+      else if (presenceState === 'presence_transcribing' || presenceState === 'presence_sending' || presenceState === 'presence_waiting_response') setVoiceState('transcribing');
+      else setVoiceState('idle');
+    }
+  }, [voiceMode, presenceState]);
+
+  React.useEffect(() => {
+    presenceStateRef.current = presenceState;
+    
+    // Sync voiceState
+    if (voiceMode === 'presence') {
+      if (presenceState === 'presence_listening') setVoiceState('listening');
+      else if (presenceState === 'presence_transcribing' || presenceState === 'presence_sending' || presenceState === 'presence_waiting_response') setVoiceState('transcribing');
+      else setVoiceState('idle');
+    }
+  }, [presenceState, voiceMode]);
+
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
 
 
 
@@ -271,13 +599,60 @@ export default function LivePage() {
     }, null, 2);
   };
 
-  const handleCopyPackage = (msgId: string, msg: Message) => {
+  const handleHearClick = React.useCallback((msg: Message) => {
+    if (playingMsgId === msg.id) {
+      ttsAdapter.cancel();
+      setPlayingMsgId(null);
+      setPlayingState('stopped');
+    } else {
+      setPlayingMsgId(msg.id);
+      setPlayingState('preparing');
+      ttsAdapter.speak(
+        msg.text,
+        () => {
+          setPlayingMsgId(prev => {
+            if (prev === msg.id) {
+              setPlayingState('playing');
+            }
+            return prev;
+          });
+        },
+        () => {
+          setPlayingMsgId(prev => {
+            if (prev === msg.id) {
+              setPlayingState('stopped');
+              return null;
+            }
+            return prev;
+          });
+        },
+        () => {
+          setPlayingMsgId(prev => {
+            if (prev === msg.id) {
+              setPlayingState('preparing');
+            }
+            return prev;
+          });
+        }
+      );
+    }
+  }, [playingMsgId, ttsAdapter]);
+
+  const handleCopyText = React.useCallback((msg: Message) => {
+    const visibleText = ttsAdapter.normalizeTextForSpeech(msg.text);
+    navigator.clipboard.writeText(visibleText || msg.text).then(() => {
+      setToastMessage('texto copiado!');
+      setTimeout(() => setToastMessage(null), 2000);
+    }).catch(() => {});
+  }, [ttsAdapter]);
+
+  const handleCopyPackage = React.useCallback((msg: Message) => {
     const pkg = buildHandoffPackage(msg);
     navigator.clipboard.writeText(pkg).then(() => {
-      setCopiedPackageId(msgId);
-      setTimeout(() => setCopiedPackageId(null), 2500);
+      setToastMessage('pacote técnico copiado!');
+      setTimeout(() => setToastMessage(null), 2000);
     }).catch(() => {});
-  };
+  }, []);
 
   const handleRegisterOpenClawResponse = async (msg: Message) => {
     if (!openclawDraft.trim() || !msg.requestId) return;
@@ -433,7 +808,7 @@ export default function LivePage() {
         const allAgents = await agentsService.getAll().catch(e => { console.error(e); return []; });
         const allLogs = await healthService.getLogs(15).catch(e => { console.error(e); return []; });
         const allAreas = await areasService.getAll().catch(e => { console.error(e); return []; });
-        const allRequests = await requestsService.getRequests(15).catch(e => { console.error(e); return []; });
+        const allRequests = await requestsService.getRequests(25, true).catch(e => { console.error(e); return []; });
         const allSources = await sourcesService.getAll().catch(e => { console.error(e); return []; });
         const allTasks = await tasksService.getAll().catch(e => { console.error(e); return []; });
         
@@ -450,45 +825,85 @@ export default function LivePage() {
 
         const chatHistory: Message[] = [];
           const commandRequests = safeArray(allRequests)
-          .filter((req: any) => req && req.requestType === 'conversation_command' && !req.archived)
+          .filter((req: any) => req && (req.requestType === 'conversation_command' || req.requestType === 'active_message') && req.archived !== true)
           .sort((a, b) => {
-            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || 0;
-            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || 0;
+            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
+            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
             return timeA - timeB;
           });
 
         commandRequests.forEach((req: any) => {
           const reqTime = safeConvertToDate(req.requestedAt) || new Date();
-          chatHistory.push({
-            id: `user-${req.id || Math.random()}`,
-            sender: 'user',
-            text: req.input || req.rawInput || req.summary || req.title || '',
-            timestamp: reqTime
-          });
           
-          const hasOpenClawResponse = !!req.openclawResult?.responseText;
-          const replyText = hasOpenClawResponse
-            ? req.openclawResult.responseText
-            : (req.status === 'queued_for_openclaw' || req.status === 'processing_by_openclaw'
-               ? ''
-               : (req.interpretation?.suggestedReply || 
-                  `Registrei o comando "${req.summary || req.title}" para processamento operacional.`));
+          if (req.requestType !== "active_message") {
+            chatHistory.push({
+              id: `user-${req.id || Math.random()}`,
+              sender: 'user',
+              text: req.input || req.rawInput || req.summary || req.title || '',
+              timestamp: reqTime
+            });
+          }
           
-          chatHistory.push({
-            id: `lotus-${req.id || Math.random()}`,
-            sender: 'lotus',
-            text: replyText,
-            timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-            interpretation: req.interpretation,
-            openclawResult: req.openclawResult || undefined,
-            handoffStatus: req.status,
-            requestId: req.id || undefined,
-            originalCommand: req.summary || req.title || undefined,
-            executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
-            executedBy: req.executedBy || undefined,
-            createdEntityRef: req.createdEntityRef || undefined,
-            executionError: req.executionError || undefined
-          });
+          const isConvCommand = req.requestType === 'conversation_command';
+          const isActiveMessage = req.requestType === "active_message";
+          
+          if (isConvCommand) {
+            const status = req.status;
+            const responseText = req.openclawResult?.responseText ?? null;
+            const hasRealResponse = responseText && responseText.trim() !== '';
+            
+            if (status === 'success' && hasRealResponse) {
+              console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+              console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+              console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
+              chatHistory.push({
+                id: `lotus-${req.id || Math.random()}`,
+                sender: 'lotus',
+                text: responseText || '',
+                timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                interpretation: req.interpretation,
+                openclawResult: req.openclawResult || undefined,
+                handoffStatus: req.status,
+                requestId: req.id || undefined,
+                originalCommand: req.summary || req.title || undefined,
+                executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
+                executedBy: req.executedBy || undefined,
+                createdEntityRef: req.createdEntityRef || undefined,
+                executionError: req.executionError || undefined
+              });
+            } else if (status === 'error' || status === 'timeout') {
+              console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
+              chatHistory.push({
+                id: `lotus-${req.id || Math.random()}`,
+                sender: 'lotus',
+                text: 'falha operacional no processamento deste comando.',
+                timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                interpretation: req.interpretation,
+                openclawResult: req.openclawResult || undefined,
+                handoffStatus: req.status,
+                requestId: req.id || undefined,
+                originalCommand: req.summary || req.title || undefined
+              });
+            } else {
+              console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
+              console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
+            }
+          } else if (isActiveMessage) {
+            console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
+            const replyText = req.message || req.text || '';
+            console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+            chatHistory.push({
+              id: `lotus-${req.id || Math.random()}`,
+              sender: 'lotus',
+              text: replyText,
+              timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+              interpretation: req.interpretation,
+              openclawResult: req.openclawResult || undefined,
+              handoffStatus: req.status,
+              requestId: req.id || undefined,
+              originalCommand: req.summary || req.title || undefined
+            });
+          }
         });
 
         setMessages([
@@ -520,14 +935,15 @@ export default function LivePage() {
       if (db) {
         const q = query(
           collection(db, firestorePaths.requests()),
-          where("archived", "==", false),
-          where("requestType", "==", "conversation_command")
+          where("requestType", "in", ["conversation_command", "active_message"])
         );
 
         unsubscribe = onSnapshot(q, (snapshot: any) => {
           const fetchedRequests: any[] = [];
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data();
+            if (data.archived === true) return; // filter archived in memory
+
             Object.keys(data).forEach(key => {
               if (data[key] && typeof data[key].toDate === 'function') {
                 data[key] = data[key].toDate();
@@ -537,53 +953,192 @@ export default function LivePage() {
           });
 
           const sortedRequests = fetchedRequests.sort((a, b) => {
-            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || 0;
-            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || 0;
+            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
+            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
             return timeA - timeB;
           });
 
           const chatHistory: Message[] = [];
           sortedRequests.forEach((req: any) => {
             const reqTime = safeConvertToDate(req.requestedAt) || new Date();
-            chatHistory.push({
-              id: `user-${req.id}`,
-              sender: 'user',
-              text: req.input || req.rawInput || req.summary || req.title || '',
-              timestamp: reqTime
-            });
-
-            const hasOpenClawResponse = !!req.openclawResult?.responseText;
-            const replyText = hasOpenClawResponse
-              ? req.openclawResult.responseText
-              : (req.status === 'queued_for_openclaw' || req.status === 'processing_by_openclaw'
-                 ? ''
-                 : (req.interpretation?.suggestedReply || 
-                    `Registrei o comando "${req.summary || req.title}" para processamento operacional.`));
             
-            if (hasOpenClawResponse && voiceReplyRequestsRef.current.has(req.id)) {
-              voiceReplyRequestsRef.current.delete(req.id);
-              if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(req.openclawResult.responseText);
-                utterance.lang = 'pt-BR';
-                window.speechSynthesis.speak(utterance);
-              }
+            if (req.requestType !== "active_message") {
+              chatHistory.push({
+                id: `user-${req.id}`,
+                sender: 'user',
+                text: req.input || req.rawInput || req.summary || req.title || '',
+                timestamp: reqTime
+              });
             }
 
-            chatHistory.push({
-              id: `lotus-${req.id}`,
-              sender: 'lotus',
-              text: replyText,
-              timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-              interpretation: req.interpretation,
-              openclawResult: req.openclawResult || undefined,
-              handoffStatus: req.status,
-              requestId: req.id || undefined,
-              originalCommand: req.summary || req.title || undefined,
-              executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
-              executedBy: req.executedBy || undefined,
-              createdEntityRef: req.createdEntityRef || undefined,
-              executionError: req.executionError || undefined
-            });
+            const isConvCommand = req.requestType === 'conversation_command';
+            const isActiveMessage = req.requestType === "active_message";
+
+            if (isConvCommand) {
+              const status = req.status;
+              const responseText = req.openclawResult?.responseText ?? null;
+              const hasRealResponse = responseText && responseText.trim() !== '';
+
+              // Check if auto TTS needs to be triggered in presence mode
+              const requestOriginMode = req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
+              const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
+              
+              if (status === 'success' && hasRealResponse && requestOriginMode === 'presence') {
+                const isPresenceActive = voiceModeRef.current === 'presence';
+                const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
+                
+                if (!isPresenceActive || !isRecent) {
+                  if (!spokenRequestsRef.current.has(req.id)) {
+                    spokenRequestsRef.current.add(req.id);
+                    console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_NOT_ACTIVE]', { 
+                      requestId: req.id, 
+                      isPresenceActive, 
+                      isRecent,
+                      reqTimeMs,
+                      sessionStart: presenceSessionStartTimeRef.current
+                    });
+                  }
+                } else if (spokenRequestsRef.current.has(req.id)) {
+                  console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: req.id });
+                } else if (presenceStateRef.current === 'presence_speaking') {
+                  console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
+                } else {
+                  spokenRequestsRef.current.add(req.id);
+                  const msgId = `lotus-${req.id}`;
+                  
+                  // Latency point 4: Response Received
+                  latencyResponseReceivedRef.current = Date.now();
+                  const diffReqToResp = latencyResponseReceivedRef.current - (latencyRequestCreatedRef.current || latencyResponseReceivedRef.current);
+                  console.log(`[PULSO_LATENCY_REQUEST_CREATED_TO_RESPONSE_RECEIVED_MS] ${diffReqToResp} ms`);
+                  
+                  console.log('[PULSO_PRESENCE_RESPONSE_RECEIVED]', { requestId: req.id });
+                  console.log('[PULSO_PRESENCE_AUTO_TTS_START]', { requestId: req.id });
+                  
+                  // Play response arrived sound cue
+                  playPresenceSoundCue('response_arrived');
+                  
+                  // Block new recording & mute
+                  stopVoiceRecognition();
+                  console.log('[PULSO_PRESENCE_MIC_PAUSED_DURING_TTS]');
+                  
+                  presenceStateRef.current = 'presence_speaking';
+                  setPresenceState('presence_speaking');
+                  setPlayingMsgId(msgId);
+                  setPlayingState('preparing');
+                  
+                  playPresenceSoundCue('speak_start');
+                  
+                  // Latency point 5: TTS Started
+                  latencyAutoTtsStartRef.current = Date.now();
+                  const diffRespToTts = latencyAutoTtsStartRef.current - (latencyResponseReceivedRef.current || latencyAutoTtsStartRef.current);
+                  console.log(`[PULSO_LATENCY_RESPONSE_RECEIVED_TO_AUTO_TTS_START_MS] ${diffRespToTts} ms`);
+                  
+                  ttsAdapter.speak(
+                    responseText,
+                    () => {
+                      // Latency point 6: First Audio Playing
+                      const firstAudioTime = Date.now();
+                      const diffTtsToFirst = firstAudioTime - (latencyAutoTtsStartRef.current || firstAudioTime);
+                      console.log(`[PULSO_LATENCY_AUTO_TTS_START_TO_FIRST_AUDIO_MS] ${diffTtsToFirst} ms`);
+                      
+                      const totalTime = firstAudioTime - (latencyStopRecRef.current || firstAudioTime);
+                      console.log(`[PULSO_LATENCY_PRESENCE_TOTAL_MS] ${totalTime} ms`);
+                      
+                      setPlayingMsgId(prev => {
+                        if (prev === msgId) {
+                          setPlayingState('playing');
+                        }
+                        return prev;
+                      });
+                    },
+                    () => {
+                      setPlayingMsgId(prev => {
+                        if (prev === msgId) {
+                          setPlayingState('stopped');
+                          console.log('[PULSO_PRESENCE_AUTO_TTS_DONE]', { requestId: req.id });
+                          
+                          // Return to listening if we are still in presence mode
+                          if (voiceModeRef.current === 'presence') {
+                            console.log('[PULSO_PRESENCE_MIC_RESUMED_AFTER_TTS]');
+                            presenceStateRef.current = 'presence_listening';
+                            setPresenceState('presence_listening');
+                            startSpeechRecognition('presence');
+                          }
+                          return null;
+                        }
+                        return prev;
+                      });
+                    },
+                    () => {
+                      setPlayingMsgId(prev => {
+                        if (prev === msgId) {
+                          setPlayingState('preparing');
+                        }
+                        return prev;
+                      });
+                    }
+                  );
+                }
+              }
+
+              if (status === 'success' && hasRealResponse) {
+                console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+                console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
+                console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+                console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
+                chatHistory.push({
+                  id: `lotus-${req.id}`,
+                  sender: 'lotus',
+                  text: responseText || '',
+                  timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                  interpretation: req.interpretation,
+                  openclawResult: req.openclawResult || undefined,
+                  handoffStatus: req.status,
+                  requestId: req.id || undefined,
+                  originalCommand: req.summary || req.title || undefined,
+                  executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
+                  executedBy: req.executedBy || undefined,
+                  createdEntityRef: req.createdEntityRef || undefined,
+                  executionError: req.executionError || undefined
+                });
+              } else if (status === 'error' || status === 'timeout') {
+                console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
+                chatHistory.push({
+                  id: `lotus-${req.id}`,
+                  sender: 'lotus',
+                  text: 'falha operacional no processamento deste comando.',
+                  timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                  interpretation: req.interpretation,
+                  openclawResult: req.openclawResult || undefined,
+                  handoffStatus: req.status,
+                  requestId: req.id || undefined,
+                  originalCommand: req.summary || req.title || undefined
+                });
+              } else {
+                console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
+                console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
+              }
+            } else if (isActiveMessage) {
+              console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
+              const replyText = req.message || req.text || '';
+              console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+              chatHistory.push({
+                id: `lotus-${req.id}`,
+                sender: 'lotus',
+                text: replyText,
+                timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                interpretation: req.interpretation,
+                openclawResult: req.openclawResult || undefined,
+                handoffStatus: req.status,
+                requestId: req.id || undefined,
+                originalCommand: req.summary || req.title || undefined
+              });
+            }
+          });
+
+          setState((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, allRequests: sortedRequests };
           });
 
           setMessages([
@@ -606,57 +1161,154 @@ export default function LivePage() {
     };
   }, [loading]);
 
-  const handleSendMessage = async (textToSend?: string, options?: { requestVoiceReply?: boolean }) => {
+  const createPulsoConversationRequest = React.useCallback(async (
+    input: string,
+    options?: {
+      mode?: "text" | "voice" | "presence";
+      conversationId?: string;
+      context?: object;
+    }
+  ) => {
+    const mode = options?.mode || 'text';
+    const cleanMsg = input;
+    const rawMsg = input;
+
+    console.log('[PULSO_SUBMIT_START]');
+    console.log('[PULSO_SUBMIT_INPUT]', { input: cleanMsg, rawInput: rawMsg, mode });
+
+    const currentUser = authService.getCurrentUser();
+    const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
+    const reqId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // Routing
+    const routeResult = routeInputToArea(rawMsg, state?.allAreas || [], {
+      currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
+      activeAreaId: activeAreaId || undefined
+    });
+    if (routeResult.areaRef && routeResult.areaRef !== activeAreaId) {
+      setActiveAreaId(routeResult.areaRef);
+    }
+
+    const isTauri = typeof window !== 'undefined' && (
+      window.location.protocol === 'tauri:' ||
+      window.location.protocol === 'file:' ||
+      !!(window as any).__TAURI__ ||
+      !!(window as any).__TAURI_INTERNALS__
+    );
+
+    const lotusPayload: any = {
+      requestId: reqId,
+      userId: userRef,
+      source: "pulso_live" as const,
+      mode: (mode === 'presence' || mode === 'voice' ? 'voice' : 'text') as "voice" | "text",
+      originMode: mode,
+      input: cleanMsg,
+      rawInput: rawMsg,
+      cleanInput: (mode === 'presence' || mode === 'voice') ? cleanMsg : undefined,
+      rawTranscript: (mode === 'presence' || mode === 'voice') ? rawMsg : undefined,
+      cleanTranscript: (mode === 'presence' || mode === 'voice') ? cleanMsg : undefined,
+      timestamp: new Date().toISOString(),
+      clientCreatedAtMs: Date.now(),
+      conversationId: options?.conversationId || `conv_${Date.now()}`,
+      messageId: `msg_${Date.now()}`,
+      approvalMode: "allow_read_only" as const,
+      context: {
+        currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
+        timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo',
+        locale: "pt-BR" as const,
+        userName: "Fê",
+        interface: "pulso" as const,
+        ...options?.context
+      },
+      contextWindow: []
+    };
+
+    if (routeResult.areaRef) lotusPayload.areaRef = routeResult.areaRef;
+    if (routeResult.routing) lotusPayload.routing = routeResult.routing;
+    if (routeResult.routing.secondaryTopics) lotusPayload.secondaryAreaRefs = routeResult.routing.secondaryTopics;
+
+    console.log('[PULSO_FIRESTORE_PATH]', { path: `workspaces/felipe_dutra/pulso_requests` });
+    console.log('[PULSO_FIRESTORE_PAYLOAD]', lotusPayload);
+
+    try {
+      const newRequest = await lotusOpenClawClient.queueRequest(lotusPayload);
+
+      console.log('[PULSO_FIRESTORE_CREATED]', {
+        path: `workspaces/felipe_dutra/pulso_requests`,
+        documentId: newRequest.id,
+        requestType: newRequest.requestType,
+        status: newRequest.status,
+        input: newRequest.input,
+        rawInput: newRequest.rawInput,
+        source: newRequest.source,
+        conversationId: newRequest.conversationId,
+        messageId: newRequest.messageId,
+        runtime: isTauri ? 'tauri' : 'web'
+      });
+
+      if (typeof window !== 'undefined') {
+        (window as any).lastPulsoSubmit = {
+          lastSubmitInput: cleanMsg,
+          runtime: isTauri ? 'tauri' : 'web',
+          firestorePath: `workspaces/felipe_dutra/pulso_requests`,
+          documentId: newRequest.id,
+          payload: lotusPayload,
+          status: newRequest.status
+        };
+      }
+
+      console.log('[PULSO_DEBUG_LAST_SUBMIT]', JSON.stringify((window as any).lastPulsoSubmit, null, 2));
+
+      return newRequest;
+    } catch (err: any) {
+      console.log('[PULSO_FIRESTORE_CREATE_FAILED]', { error: err?.message || String(err) });
+      
+      if (typeof window !== 'undefined') {
+        (window as any).lastPulsoSubmit = {
+          lastSubmitInput: cleanMsg,
+          runtime: isTauri ? 'tauri' : 'web',
+          firestorePath: `workspaces/felipe_dutra/pulso_requests`,
+          error: err?.message || String(err)
+        };
+      }
+
+      console.log('[PULSO_DEBUG_LAST_SUBMIT]', JSON.stringify((window as any).lastPulsoSubmit, null, 2));
+      throw err;
+    }
+  }, [state, activeAreaId]);
+
+  const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' }) => {
+    if (isTyping) {
+      console.warn('Blocked duplicate send: message already processing.');
+      return;
+    }
+
     const rawMsg = textToSend || inputMessage;
     if (!rawMsg.trim()) return;
 
-    setInputMessage('');
-    currentTextRef.current = '';
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    const originMode = options?.originMode || 'text';
+    const cleanMsg = originMode === 'text' ? rawMsg : normalizeTranscript(rawMsg);
 
-    const userMsg: Message = {
-      id: `user-msg-${Date.now()}`,
-      sender: 'user',
-      text: rawMsg,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMsg]);
     setIsTyping(true);
 
     try {
-      const currentUser = authService.getCurrentUser();
-      const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
+      const sendMode = originMode === 'presence' ? 'presence' : (originMode === 'recording_once' ? 'voice' : 'text');
+      const newRequest = await createPulsoConversationRequest(cleanMsg, { mode: sendMode });
 
-      const reqId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      const lotusPayload = {
-        requestId: reqId,
-        userId: userRef,
-        source: "pulso_live" as const,
-        mode: (voiceState === 'listening' ? 'voice' : 'text') as "voice" | "text",
-        input: rawMsg,
-        rawInput: rawMsg,
-        timestamp: new Date().toISOString(),
-        clientCreatedAtMs: Date.now(),
-        conversationId: `conv_${Date.now()}`,
-        messageId: `msg_${Date.now()}`,
-        approvalMode: "allow_read_only" as const,
-        context: {
-          currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
-          timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Sao_Paulo',
-          locale: "pt-BR" as const,
-          userName: "Fê",
-          interface: "pulso" as const
-        },
-        contextWindow: []
-      };
-
-      const newRequest = await lotusOpenClawClient.queueRequest(lotusPayload);
-      
-      if (options?.requestVoiceReply) {
-        voiceReplyRequestsRef.current.add(reqId);
+      // ONLY on success, clear the input
+      setInputMessage('');
+      currentTextRef.current = '';
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
       }
+
+      const userMsg: Message = {
+        id: `user-msg-${newRequest.id || Date.now()}`,
+        sender: 'user',
+        text: cleanMsg,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMsg]);
 
       if (state) {
         setState((prev: any) => {
@@ -666,26 +1318,75 @@ export default function LivePage() {
         });
       }
 
-      setIsTyping(false);
+      console.log('[PULSO_WAITING_OPENCLAW]', { requestId: newRequest.id });
+
+      // Latency point 3: Request Created in Firestore
+      if (originMode === 'presence') {
+        latencyRequestCreatedRef.current = Date.now();
+        const diffTransToReq = latencyRequestCreatedRef.current - (latencyTranscriptionRef.current || latencyRequestCreatedRef.current);
+        console.log(`[PULSO_LATENCY_TRANSCRIPTION_TO_REQUEST_CREATED_MS] ${diffTransToReq} ms`);
+      }
 
     } catch (err: any) {
-      console.error('Error saving conversation request:', err);
       const lotusErrorMsg: Message = {
         id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
-        text: `falha ao registrar o comando no barramento: ${err?.message || 'erro de persistência'}.`,
+        text: `falha ao enviar para a Lótus: ${err?.message || 'erro de persistência'}.`,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
+    } finally {
       setIsTyping(false);
     }
   };
+
+  const requestMicrophonePermission = React.useCallback(async (): Promise<boolean> => {
+    console.log('[PULSO_MIC_PERMISSION_REQUEST]');
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.log('[PULSO_MIC_PERMISSION_DENIED]', { reason: 'mediaDevices API not supported' });
+        return false;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      console.log('[PULSO_MIC_PERMISSION_GRANTED]');
+      return true;
+    } catch (err) {
+      console.log('[PULSO_MIC_PERMISSION_DENIED]', err);
+      return false;
+    }
+  }, []);
+
+  const isSpeechRecognitionSupported = React.useCallback((): boolean => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      console.log('[PULSO_STT_API_AVAILABLE]');
+      return true;
+    } else {
+      console.log('[PULSO_STT_API_UNAVAILABLE]');
+      return false;
+    }
+  }, []);
 
   const stopVoiceRecognition = React.useCallback(() => {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
     }
+    if (maxRecordingTimeoutRef.current) {
+      clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = null;
+    }
+    
+    if (voiceModeRef.current === 'presence') {
+      console.log('[PULSO_PRESENCE_STOP]');
+    } else if (voiceModeRef.current === 'recording_once') {
+      console.log('[PULSO_RECORDING_ONCE_STOP]');
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -696,7 +1397,22 @@ export default function LivePage() {
     }
   }, []);
 
-  const startVoiceInput = React.useCallback(() => {
+  const exitPresenceMode = React.useCallback(() => {
+    console.log('[PULSO_PRESENCE_EXIT_CLEAN]');
+    setPresenceMode(false);
+    setVoiceMode('off');
+    voiceModeRef.current = 'off';
+    setPresenceState('presence_idle');
+    presenceStateRef.current = 'presence_idle';
+    stopVoiceRecognition();
+    ttsAdapter.cancel();
+    setPlayingMsgId(null);
+    setPlayingState('stopped');
+    currentTextRef.current = '';
+    setInputMessage('');
+  }, [stopVoiceRecognition, ttsAdapter]);
+
+  const startSpeechRecognition = React.useCallback((mode: VoiceMode) => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -706,19 +1422,40 @@ export default function LivePage() {
       return;
     }
 
-    if (voiceState === 'listening') {
-      const textToSend = currentTextRef.current.trim();
-      stopVoiceRecognition();
-      setVoiceState('idle');
-      if (textToSend) {
-        handleSendMessage(textToSend, { requestVoiceReply: false });
-      }
-      return;
+    // Cancel any active speech from Lótus before listening
+    ttsAdapter.cancel();
+
+    // Clear any existing recognition or timeouts
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (maxRecordingTimeoutRef.current) {
+      clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = null;
+    }
+
+    setVoiceMode(mode);
+    voiceModeRef.current = mode;
+    if (mode === 'presence') {
+      presenceStateRef.current = 'presence_listening';
+      setPresenceState('presence_listening');
+      playPresenceSoundCue('start_listening');
+      console.log('[PULSO_PRESENCE_START]');
+      console.log('[PULSO_PRESENCE_LISTENING]');
+    } else if (mode === 'recording_once') {
+      console.log('[PULSO_RECORDING_ONCE_START]');
     }
 
     finalTranscriptRef.current = '';
     currentTextRef.current = '';
-    
+
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
     recognition.continuous = true;
@@ -727,8 +1464,12 @@ export default function LivePage() {
     recognitionRef.current = recognition;
 
     recognition.onstart = () => {
-      setVoiceState('listening');
       setVoiceError(null);
+      if (mode === 'presence') {
+        console.log('[PULSO_PRESENCE_LISTENING]');
+      } else if (mode === 'recording_once') {
+        console.log('[PULSO_RECORDING_AUDIO_CAPTURE_STARTED]');
+      }
     };
 
     recognition.onresult = (event: any) => {
@@ -749,46 +1490,206 @@ export default function LivePage() {
       currentTextRef.current = currentText;
       setInputMessage(currentText);
 
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-      }
-
-      silenceTimeoutRef.current = setTimeout(() => {
-        const textToSend = currentTextRef.current.trim();
-        if (textToSend) {
-          stopVoiceRecognition();
-          setVoiceState('idle');
-          handleSendMessage(textToSend, { requestVoiceReply: true });
+      // Presence mode auto-send on silence
+      if (mode === 'presence') {
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
         }
-      }, 2500);
+
+        silenceTimeoutRef.current = setTimeout(() => {
+          const textToSend = currentTextRef.current.trim();
+          if (textToSend) {
+            latencyStopRecRef.current = Date.now();
+            stopVoiceRecognition();
+            
+            presenceStateRef.current = 'presence_transcribing';
+            setPresenceState('presence_transcribing');
+            console.log('[PULSO_PRESENCE_TRANSCRIPTION_READY]', { text: textToSend });
+            
+            latencyTranscriptionRef.current = Date.now();
+            const diffStopToTrans = latencyTranscriptionRef.current - (latencyStopRecRef.current || latencyTranscriptionRef.current);
+            console.log(`[PULSO_LATENCY_RECORDING_STOP_TO_TRANSCRIPTION_MS] ${diffStopToTrans} ms`);
+            
+            presenceStateRef.current = 'presence_sending';
+            setPresenceState('presence_sending');
+            playPresenceSoundCue('sent');
+            console.log('[PULSO_PRESENCE_REQUEST_SENT]');
+            
+            handleSendMessage(textToSend, { originMode: 'presence' });
+            
+            presenceStateRef.current = 'presence_waiting_response';
+            setPresenceState('presence_waiting_response');
+          }
+        }, 2500);
+      }
     };
 
     recognition.onerror = (event: any) => {
       console.warn('SpeechRecognition error:', event.error);
+      
+      // Ignore errors that fire after mic is paused for TTS
+      if (presenceStateRef.current === 'presence_speaking') {
+        console.log('[PULSO_PRESENCE_ERROR_IGNORED_DURING_TTS]', { error: event.error });
+        return;
+      }
+      
       stopVoiceRecognition();
       
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        setVoiceState('error_permission');
-        setVoiceError('Permissão de microfone negada ou indisponível.');
-      } else if (event.error === 'no-speech') {
-        setVoiceState('idle');
+      if (mode === 'presence') {
+        console.log('[PULSO_PRESENCE_ERROR]', { error: event.error });
+        if (event.error === 'no-speech') {
+          if (voiceModeRef.current === 'presence' && presenceStateRef.current !== 'presence_speaking') {
+            presenceStateRef.current = 'presence_listening';
+            setPresenceState('presence_listening');
+            startSpeechRecognition('presence');
+          }
+          return;
+        }
+        
+        playPresenceSoundCue('error');
+        presenceStateRef.current = 'presence_error';
+        setPresenceState('presence_error');
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          setVoiceError('Permissão de microfone negada ou indisponível.');
+        } else {
+          setVoiceError(`Erro de voz: ${event.error}.`);
+        }
+        
+        setTimeout(() => {
+          if (voiceModeRef.current === 'presence' && presenceStateRef.current !== 'presence_speaking') {
+            presenceStateRef.current = 'presence_idle';
+            setPresenceState('presence_idle');
+          }
+        }, 3000);
       } else {
-        setVoiceState('idle');
-        setVoiceError(`Erro de voz: ${event.error}. Usando digitação.`);
+        console.log('[PULSO_RECORDING_TRANSCRIPTION_FAILED]', { error: event.error });
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          setVoiceError('Permissão de microfone negada ou indisponível.');
+        } else {
+          setVoiceError(`Erro de voz: ${event.error}.`);
+        }
       }
     };
 
     recognition.onend = () => {
-      setVoiceState((prev) => (prev === 'listening' || prev === 'transcribing' ? 'idle' : prev));
+      if (presenceStateRef.current === 'presence_speaking') {
+        // Prevent auto-restarts while Lótus is speaking
+        return;
+      }
+      if (voiceModeRef.current === 'presence' && presenceStateRef.current === 'presence_listening') {
+        try {
+          recognitionRef.current?.start();
+        } catch (err) {
+          console.warn('Speech recognition restart failed:', err);
+        }
+      } else if (voiceModeRef.current === 'recording_once') {
+        setVoiceMode('off');
+        const finalVal = currentTextRef.current.trim();
+        if (finalVal) {
+          console.log('[PULSO_RECORDING_TRANSCRIPTION_READY]', { text: finalVal });
+        } else {
+          console.log('[PULSO_RECORDING_TRANSCRIPTION_FAILED]', { reason: 'No speech detected' });
+        }
+      }
     };
+
+    // Max recording timeout of 20 seconds
+    maxRecordingTimeoutRef.current = setTimeout(() => {
+      console.log('Max recording timeout reached.');
+      if (voiceModeRef.current === 'presence') {
+        const textToSend = currentTextRef.current.trim();
+        latencyStopRecRef.current = Date.now();
+        stopVoiceRecognition();
+        
+        if (textToSend) {
+          presenceStateRef.current = 'presence_transcribing';
+          setPresenceState('presence_transcribing');
+          console.log('[PULSO_PRESENCE_TRANSCRIPTION_READY]', { text: textToSend });
+          
+          latencyTranscriptionRef.current = Date.now();
+          const diffStopToTrans = latencyTranscriptionRef.current - (latencyStopRecRef.current || latencyTranscriptionRef.current);
+          console.log(`[PULSO_LATENCY_RECORDING_STOP_TO_TRANSCRIPTION_MS] ${diffStopToTrans} ms`);
+          
+          presenceStateRef.current = 'presence_sending';
+          setPresenceState('presence_sending');
+          playPresenceSoundCue('sent');
+          console.log('[PULSO_PRESENCE_REQUEST_SENT]');
+          handleSendMessage(textToSend, { originMode: 'presence' });
+          presenceStateRef.current = 'presence_waiting_response';
+          setPresenceState('presence_waiting_response');
+        } else {
+          exitPresenceMode();
+        }
+      } else if (voiceModeRef.current === 'recording_once') {
+        stopVoiceRecognition();
+      }
+    }, 20000);
 
     try {
       recognition.start();
     } catch (err) {
       console.error('Speech recognition start failed:', err);
-      setVoiceState('idle');
+      setVoiceMode('off');
+      setPresenceState('presence_idle');
     }
-  }, [voiceState, handleSendMessage, stopVoiceRecognition]);
+  }, [handleSendMessage, stopVoiceRecognition, ttsAdapter, exitPresenceMode]);
+
+  const toggleRecordingOnce = React.useCallback(async () => {
+    if (voiceModeRef.current === 'recording_once') {
+      stopVoiceRecognition();
+      setVoiceMode('off');
+    } else {
+      if (!isSpeechRecognitionSupported()) {
+        setVoiceState('unsupported');
+        setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
+        return;
+      }
+      
+      setVoiceState('listening');
+      const granted = await requestMicrophonePermission();
+      if (!granted) {
+        setVoiceState('idle');
+        setVoiceError('Permissão de microfone negada ou indisponível.');
+        return;
+      }
+
+      startSpeechRecognition('recording_once');
+    }
+  }, [startSpeechRecognition, stopVoiceRecognition, requestMicrophonePermission, isSpeechRecognitionSupported]);
+
+  const togglePresenceMode = React.useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
+    if (presenceMode) {
+      exitPresenceMode();
+    } else {
+      console.log('[PULSO_PRESENCE_ENTER]');
+      presenceSessionStartTimeRef.current = Date.now();
+      
+      if (!isSpeechRecognitionSupported()) {
+        setPresenceMode(true);
+        setPresenceState('presence_error');
+        setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
+        return;
+      }
+      
+      setPresenceMode(true);
+      setPresenceState('presence_requesting_permission');
+      
+      const granted = await requestMicrophonePermission();
+      if (!granted) {
+        setPresenceState('presence_error');
+        setVoiceError('Permissão de microfone negada ou indisponível.');
+        return;
+      }
+      
+      console.log('[PULSO_PRESENCE_MIC_READY]');
+      console.log('[PULSO_PRESENCE_STT_READY]');
+      startSpeechRecognition('presence');
+    }
+  }, [presenceMode, startSpeechRecognition, exitPresenceMode, requestMicrophonePermission, isSpeechRecognitionSupported]);
 
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
@@ -797,7 +1698,7 @@ export default function LivePage() {
     // Auto-resize
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
     }
   }, [voiceState]);
 
@@ -821,7 +1722,7 @@ export default function LivePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen theme-her flex flex-col items-center justify-center">
+      <div className="theme-her flex flex-col items-center justify-center h-[100dvh] pb-[env(safe-area-inset-bottom)] text-[#fbf9f5]">
         <div className="w-8 h-8 rounded-full border border-[#fbf9f5]/20 border-t-[#fbf9f5] animate-spin mb-4" />
         <p className="text-[9px] font-light tracking-widest text-[#fbf9f5]/40 uppercase">sintonizando lótus live...</p>
       </div>
@@ -830,7 +1731,7 @@ export default function LivePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen theme-her flex flex-col items-center justify-center p-6 text-center text-[#fbf9f5]">
+      <div className="theme-her flex flex-col items-center justify-center h-[100dvh] pb-[env(safe-area-inset-bottom)] p-6 text-center text-[#fbf9f5]">
         <div className="w-12 h-12 bg-white/10 border border-white/20 rounded-full flex items-center justify-center mb-6">
           <AlertTriangle size={20} className="text-[#fbf9f5]" />
         </div>
@@ -851,7 +1752,38 @@ export default function LivePage() {
   const activeProjects = safeArray(state?.activeProjects).filter((p: any) => p && p.archived !== true && p.status === 'active');
   const openTasks = safeArray(state?.openTasks).filter((t: any) => t && t.archived !== true && t.status !== 'completed');
   const pendingInbox = safeArray(state?.pendingInbox).filter((i: any) => i && i.archived !== true && i.status === 'new');
-  const allAreas = safeArray(state?.allAreas).filter((a: any) => a && a.archived !== true && a.status === 'active');
+  let allAreas = safeArray(state?.allAreas).filter((a: any) => a && a.archived !== true && a.status === 'active');
+  allAreas.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  if (allAreas.length === 0) {
+    allAreas = candidateAreas as any[];
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = allAreas.findIndex(a => a.id === active.id);
+      const newIndex = allAreas.findIndex(a => a.id === over.id);
+      const newOrder = arrayMove(allAreas, oldIndex, newIndex);
+      
+      setState((prev: any) => {
+        if (!prev) return prev;
+        const updatedAreas = prev.allAreas.map((a: any) => {
+          const orderIdx = newOrder.findIndex((no) => no.id === a.id);
+          return orderIdx !== -1 ? { ...a, order: orderIdx } : a;
+        });
+        return { ...prev, allAreas: updatedAreas };
+      });
+
+      try {
+        const promises = newOrder.map((areaToSave, index) => {
+          return areasService.saveArea({ id: areaToSave.id, order: index } as any);
+        });
+        await Promise.all(promises);
+      } catch (err) {
+        console.error("Erro ao salvar ordem das áreas:", err);
+      }
+    }
+  };
   const allRoutines = safeArray(state?.allRoutines).filter((r: any) => r && r.archived !== true);
   const allAgents = safeArray(state?.allAgents).filter((ag: any) => ag && ag.archived !== true);
   const allLogs = safeArray(state?.allLogs);
@@ -970,39 +1902,67 @@ export default function LivePage() {
     });
   }
 
-  // Check if the most recent message is queued or processing
-  const lastLotusMsg = [...messages].reverse().find(m => m.sender === 'lotus' && m.id !== 'welcome');
-  const isLatestRequestPending = lastLotusMsg && (lastLotusMsg.handoffStatus === 'requested' || lastLotusMsg.handoffStatus === 'queued_for_openclaw' || lastLotusMsg.handoffStatus === 'processing_by_openclaw');
+  // Check if the most recent request is queued or processing (pending)
+  const conversationRequests = allRequests.filter((req: any) => req && req.requestType === 'conversation_command');
+  const mostRecentRequest = conversationRequests.length > 0
+    ? [...conversationRequests].sort((a, b) => {
+        const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
+        const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
+        return timeB - timeA;
+      })[0]
+    : null;
+
+  const isLatestRequestPending = mostRecentRequest &&
+    mostRecentRequest.status !== 'success' &&
+    mostRecentRequest.status !== 'error' &&
+    mostRecentRequest.status !== 'timeout';
 
   // Animation resolver
   const getLotusAnimClass = () => {
-    if (voiceState === 'listening') return 'lotus-listening-anim';
-    if (voiceState === 'transcribing' || voiceState === 'ready') return 'lotus-responding-anim';
+    if (voiceModeRef.current === 'presence') {
+      if (presenceStateRef.current === 'presence_listening') return 'lotus-listening-anim';
+      if (presenceStateRef.current === 'presence_transcribing' || presenceStateRef.current === 'presence_sending') return 'lotus-thinking-anim';
+      if (presenceStateRef.current === 'presence_waiting_response') return 'lotus-waiting-anim';
+      if (presenceStateRef.current === 'presence_speaking') return 'lotus-responding-anim';
+      if (presenceStateRef.current === 'presence_error') return 'lotus-error-anim';
+      return 'lotus-idle-anim';
+    }
     
-    if (isTyping || isLatestRequestPending) return 'lotus-thinking-anim';
+    if (voiceModeRef.current === 'recording_once') {
+      return 'lotus-listening-anim';
+    }
+    
+    if (isLatestRequestPending) return 'lotus-thinking-anim';
     
     return 'lotus-idle-anim';
   };
 
   return (
     <div 
-      onClick={() => presenceMode && setPresenceMode(false)}
-      className={`theme-her h-[100svh] w-full flex flex-col justify-between py-6 px-4 md:px-8 relative overflow-hidden transition-all duration-500 font-sans text-[#fbf9f5] ${
+      onClick={() => presenceMode && exitPresenceMode()}
+      className={`theme-her fixed inset-0 pb-[env(safe-area-inset-bottom)] w-full flex flex-col justify-between py-6 px-4 md:px-8 overflow-hidden font-sans text-[#fbf9f5] transition-all duration-500 ${
         presenceMode ? 'cursor-pointer' : ''
       }`}
     >
+      {/* Camada Contextual */}
+      <ContextSurfaceVariants 
+        variant={activeVariant} 
+        isOpen={isContextSurfaceOpen} 
+        onClose={() => setIsContextSurfaceOpen(false)}
+        activeContext={allAreas.find((a: any) => a.id === activeAreaId)?.name}
+      />
+
       {/* Botão sutil de saída do Modo Foco */}
       <div className={`fixed top-8 right-8 z-30 pulso-transition ${presenceMode ? 'pulso-visible' : 'pulso-hidden-up'}`}>
         <button
-          onClick={(e) => { e.stopPropagation(); setPresenceMode(false); }}
+          onClick={(e) => { e.stopPropagation(); exitPresenceMode(); }}
           className="text-[10px] font-light tracking-widest text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80 transition-colors lowercase bg-transparent border-none outline-none cursor-pointer"
         >
           [ sair do foco ]
         </button>
       </div>
       
-      {/* 1. HEADER MINIMALISTA */}
-      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto z-10 select-none pulso-transition ${presenceMode ? 'pulso-hidden-up' : 'pulso-visible'}`}>
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto relative z-20 select-none pulso-transition ${presenceMode ? 'pulso-hidden-up' : 'pulso-visible'}`}>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#fbf9f5] opacity-75" />
@@ -1012,7 +1972,7 @@ export default function LivePage() {
         </div>
         
         <div className="flex items-center gap-6">
-                    <button 
+          <button 
             onClick={(e) => {
               e.stopPropagation();
               const current = localStorage.getItem('pulso-theme') || 'orange';
@@ -1032,302 +1992,322 @@ export default function LivePage() {
             <span>[ presença ]</span>
           </button>
           
-          <button 
-            onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(true); }}
-            className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
-          >
-            <Menu size={12} strokeWidth={1.5} />
-            <span>[ sinais ]</span>
-          </button>
+          <div className="relative" ref={headerMenuRef}>
+            <button 
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                if (contextSurfaceVariant) {
+                  setIsContextSurfaceOpen(!isContextSurfaceOpen);
+                } else {
+                  setIsHeaderMenuOpen(!isHeaderMenuOpen); 
+                }
+              }}
+              className="text-xs font-light tracking-widest text-[#fbf9f5]/50 hover:text-white transition-colors flex items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
+              title="Superfície de Contexto"
+            >
+              <span>[ {isContextSurfaceOpen ? '✕' : '⋯'} ]</span>
+            </button>
+            
+            {isHeaderMenuOpen && !contextSurfaceVariant && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden z-50 text-left shadow-2xl transition-all duration-300">
+                <div className="flex flex-col text-[10px] font-light tracking-widest text-[#fbf9f5] lowercase">
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
+                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <Activity size={12} strokeWidth={1.5} />
+                    <span>sinais operacionais</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsTtsSettingsOpen(true); }}
+                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <Mic size={12} strokeWidth={1.5} />
+                    <span>voz da lótus (tts)</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/ecossistema'); }}
+                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <Layers size={12} strokeWidth={1.5} />
+                    <span>visão do contexto</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/eventos'); }}
+                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <Database size={12} strokeWidth={1.5} />
+                    <span>logs técnicos</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* 2. CENTRO ABSOLUTO (Círculo Lótus + Conversa) */}
-      <main className={`flex-1 min-h-0 flex flex-col items-center justify-end max-w-4xl w-full mx-auto mt-6 mb-10 z-10 relative transition-all duration-1000 ease-in-out`}>
-        
-        {/* Símbolo vivo da Lótus (Branco Gelo / Off-White) */}
-        <div 
-          onClick={(e) => { 
-            if (!presenceMode) {
-              e.stopPropagation(); 
-              setPresenceMode(true); 
-            }
-            if (voiceState !== 'listening') {
-              startVoiceInput();
-            }
-          }}
-          className={`relative flex items-center justify-center select-none transition-all duration-1000 ease-in-out ${!presenceMode ? 'cursor-pointer' : ''} ${
-          presenceMode 
-            ? 'w-64 h-64 mb-10 z-20 translate-y-[12vh] md:translate-y-0' 
-            : 'w-64 h-64 mb-10 z-10 translate-y-0'
-        }`}>
-          <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-            presenceMode ? 'scale-[0.75] md:scale-100' : 'scale-[0.417]'
+      <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 md:gap-5 group/sidebar select-none transition-opacity duration-300 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={allAreas.map(a => a.id)} strategy={verticalListSortingStrategy}>
+            {allAreas.map((area: any) => (
+              <SortableAreaItem
+                key={area.id}
+                area={area}
+                isActive={activeAreaId === area.id}
+                icon={getAreaIcon(area)}
+                onClick={() => setActiveAreaId(activeAreaId === area.id ? null : area.id)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+      </div>
+
+        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end max-w-5xl w-full mx-auto mt-6 mb-4 z-10 relative transition-all duration-1000 ease-in-out`}>
+          
+          <div 
+            onClick={togglePresenceMode}
+            className={`relative w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-1000 ease-in-out ${!presenceMode ? 'cursor-pointer' : ''} ${
+            presenceMode 
+              ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
+              : 'mt-auto mb-4 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-[-2vh] md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
           }`}>
-            <div 
-              className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out ${getLotusAnimClass()}`} 
-            />
+            <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
+              presenceMode ? 'scale-[0.75] md:scale-100' : 'scale-[0.417] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
+            }`}>
+              <div 
+                className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
+                aria-label={`Modo Presença: ${presenceState}`}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Linha Editorial da Conversa (Textos em Off-White) */}
-        <div className={`w-[80%] md:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[250px] md:max-h-[380px] h-[250px] md:h-[min(380px,40vh)] mt-2 mb-4 ${
-          presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
-        }`}>
-          <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
-            {messages.map((msg) => {
-              const isLotus = msg.sender === 'lotus';
-              if (isLotus && !msg.text) return null;
-              return (
-                <div 
-                  key={msg.id} 
-                  className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
-                >
-                  <div className="max-w-[85%] space-y-1">
-                    {/* Sender label */}
-                    <span className={`block text-[9px] tracking-widest lowercase select-none ${
-                      isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
-                    }`}>
-                      {isLotus ? 'lótus' : 'fê'}
-                    </span>
-                    
-                    {/* Text body */}
-                    <div className={`text-sm leading-relaxed font-light text-[#fbf9f5] ${!isLotus ? 'text-right' : 'text-left'}`}>
-                      {renderMarkdown(msg.text)}
-                    </div>
+          <div className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[400px] md:max-h-[60vh] h-[350px] md:h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
+            presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
+          }`}>
+            <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
+              {messages.map((msg) => {
+                const isLotus = msg.sender === 'lotus';
+                if (isLotus && !msg.text) return null;
+                return (
+                  <div 
+                    key={msg.id} 
+                    className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
+                  >
+                    <div className="max-w-[85%] space-y-1">
+                      <span className={`block text-[9px] tracking-widest lowercase select-none ${
+                        isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
+                      }`}>
+                        {isLotus ? 'lótus' : 'fê'}
+                      </span>
+                      
+                      {/* Text body & blocks renderer */}
+                      <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
+                        <MessageRenderer text={msg.text} sender={msg.sender} />
+                      </div>
 
-                    {/* Render dynamic links and actions */}
-                    {isLotus && msg.openclawResult && (
-                      <div className="flex flex-col gap-2 mt-2">
-                        {/* Render Links */}
-                        {msg.openclawResult.links && msg.openclawResult.links.length > 0 && (
-                          <div className="flex flex-wrap gap-2 justify-start">
-                            {msg.openclawResult.links.map((link: any, idx: number) => (
-                              <a
-                                key={idx}
-                                href={link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
-                              >
-                                {link.label}
-                                <ArrowRight size={10} strokeWidth={1.5} />
-                              </a>
-                            ))}
-                          </div>
-                        )}
+                      {/* User Message Timestamp */}
+                      {!isLotus && msg.sender !== 'system' && (
+                        <div className="text-right text-[9px] text-[#fbf9f5]/40 select-none lowercase">
+                          {formatMessageTimestamp(msg.timestamp)}
+                        </div>
+                      )}
 
-                        {/* Render Actions */}
-                        {msg.openclawResult.actions && msg.openclawResult.actions.length > 0 && (
-                          <div className="flex flex-wrap gap-2 justify-start">
-                            {msg.openclawResult.actions.map((action: any, idx: number) => {
-                              return (
+                      {/* Lótus Handoff Proposals Forms / Actions if applicable */}
+                      {isLotus && msg.openclawResult && (
+                        <div className="flex flex-col gap-2 mt-2">
+                          {msg.openclawResult.actions && msg.openclawResult.actions.length > 0 && (
+                            <div className="flex flex-wrap gap-2 justify-start">
+                              {msg.openclawResult.actions.map((action: any, idx: number) => {
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      if (action.type === 'trigger_mutation' && action.payload) {
+                                        handleExecuteProposal({
+                                          ...msg,
+                                          openclawResult: {
+                                            ...msg.openclawResult,
+                                            proposedMutation: action.payload
+                                          }
+                                        } as any);
+                                      } else {
+                                        alert(`Ação acionada: ${action.label}`);
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
+                                  >
+                                    {action.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
+                            <div className="text-[9px] text-[#fbf9f5]/40 font-light mt-1 lowercase select-none">
+                              fontes consultadas: {msg.openclawResult.sourcesConsulted.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Lótus Message Action Bar */}
+                      {isLotus && (
+                        <MessageActions
+                          msg={msg}
+                          playingMsgId={playingMsgId}
+                          playingState={playingState}
+                          onHearClick={handleHearClick}
+                          onCopyText={handleCopyText}
+                          onCopyPackage={handleCopyPackage}
+                        />
+                      )}
+
+                      {isLotus && msg.openclawResult && (
+                        <>
+                          {msg.handoffStatus === 'executed' && msg.createdEntityRef && (
+                            <p className="text-[10px] font-mono text-white bg-white/10 p-2 rounded-lg select-all border border-white/10 mt-2">
+                              tarefa criada: {msg.createdEntityRef}
+                            </p>
+                          )}
+
+                          {msg.handoffStatus === 'execution_blocked' && (
+                            <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/20 rounded-xl space-y-1.5 text-[#3d2f2f] mt-2">
+                              <p className="text-[9px] text-[#b8544a] font-bold lowercase">execução bloqueada</p>
+                              <p className="text-[10px] text-[#3d2f2f]/80 font-light leading-relaxed">{msg.executionError || 'responsável não designado.'}</p>
+                              
+                              {(msg.executionError || '').includes("ownerRefs") && (
                                 <button
-                                  key={idx}
-                                  onClick={() => {
-                                    if (action.type === 'trigger_mutation' && action.payload) {
-                                      handleExecuteProposal({
-                                        ...msg,
-                                        openclawResult: {
-                                          ...msg.openclawResult,
-                                          proposedMutation: action.payload
-                                        }
-                                      } as any);
-                                    } else {
-                                      alert(`Ação acionada: ${action.label}`);
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
+                                  onClick={() => handleExecuteProposal(msg, true)}
+                                  disabled={submittingExecutionId === msg.id}
+                                  className="text-[9px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
                                 >
-                                  {action.label}
+                                  {submittingExecutionId === msg.id ? '[ executando... ]' : '[ confirmar como triagem & executar ]'}
                                 </button>
-                              );
-                            })}
-                          </div>
-                        )}
+                              )}
+                            </div>
+                          )}
 
-                        {/* Render sourcesConsulted */}
-                        {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
-                          <div className="text-[9px] text-[#fbf9f5]/40 font-light mt-1 lowercase select-none">
-                            fontes consultadas: {msg.openclawResult.sourcesConsulted.join(', ')}
+                          {msg.openclawResult.requiresHumanApproval && msg.handoffStatus === 'waiting_user_approval' && (
+                            <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/25 rounded-xl space-y-3 text-[#3d2f2f] mt-2">
+                              <span className="block text-[9px] font-bold text-[#b8544a] tracking-widest lowercase">decisão pendente</span>
+                              
+                              <input
+                                type="text"
+                                value={approvalNotes[msg.id] || ''}
+                                onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                                placeholder="nota (opcional)..."
+                                className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#b8544a] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
+                                disabled={submittingApprovalId === msg.id}
+                              />
+
+                              <div className="flex gap-4">
+                                <button
+                                  onClick={() => handleApproveProposal(msg)}
+                                  disabled={submittingApprovalId === msg.id}
+                                  className="text-[10px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                                >
+                                  {submittingApprovalId === msg.id ? '[ registrando... ]' : '[ aprovar proposta ]'}
+                                </button>
+                                <button
+                                  onClick={() => handleRejectProposal(msg)}
+                                  disabled={submittingApprovalId === msg.id}
+                                  className="text-[10px] font-light text-[#3d2f2f]/60 hover:text-[#3d2f2f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                                >
+                                  [ rejeitar ]
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {msg.handoffStatus === 'approved_by_user' && msg.openclawResult.proposedMutation?.type === 'create_task' && (
+                            <button
+                              onClick={() => handleExecuteProposal(msg, false)}
+                              disabled={submittingExecutionId === msg.id}
+                              className="w-full text-center py-2 bg-white/10 hover:bg-white/20 text-[10px] font-bold text-[#fbf9f5] border border-white/25 rounded-full transition-all lowercase cursor-pointer outline-none mt-2"
+                            >
+                              {submittingExecutionId === msg.id ? '[ executando... ]' : '[ executar criação de tarefa ]'}
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                    {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (msg.handoffStatus === 'requested' || msg.handoffStatus === 'queued_for_openclaw') && (
+                      <div className="mt-2.5 pt-2 border-t border-white/10 text-left">
+                        {registeringForId === msg.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={openclawDraft}
+                              onChange={e => setOpenclawDraft(e.target.value)}
+                              placeholder="cole a resposta do openclaw (responseText)..."
+                              className="w-full text-xs text-[#fbf9f5] bg-white/10 border border-white/20 focus:border-white rounded-xl px-3 py-2 outline-none resize-none font-mono placeholder-white/30 lowercase"
+                              rows={3}
+                              disabled={submittingResponse}
+                            />
+                            <div className="flex justify-end gap-3">
+                              <button
+                                onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
+                                className="text-[9px] text-[#fbf9f5]/50 hover:text-white lowercase bg-transparent border-none cursor-pointer outline-none"
+                              >
+                                cancelar
+                              </button>
+                              <button
+                                onClick={() => handleRegisterOpenClawResponse(msg)}
+                                disabled={!openclawDraft.trim() || submittingResponse}
+                                className="text-[9px] font-bold text-white disabled:opacity-35 lowercase bg-transparent border-none cursor-pointer outline-none"
+                              >
+                                [ registrar ]
+                              </button>
+                            </div>
                           </div>
+                        ) : (
+                          <button
+                            onClick={() => setRegisteringForId(msg.id)}
+                            className="text-[9px] font-light text-[#fbf9f5]/60 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                          >
+                            [ registrar retorno da lótus manualmente ]
+                          </button>
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+              );
+            })}
 
-                    {/* Operational result / Governance UI (v1.7 & v1.8) */}
-                    {isLotus && msg.openclawResult && (
-                      <div className="mt-3 pt-3 border-t border-white/10 space-y-3 text-left">
-                        
-                        {/* Status row */}
-                        <div className="flex items-center gap-2 text-[9px] text-[#fbf9f5]/60 font-light lowercase">
-                          {msg.handoffStatus === 'waiting_user_approval' ? (
-                            <><Clock size={10} strokeWidth={1.5} /><span>aguarda aprovação humana</span></>
-                          ) : msg.handoffStatus === 'executed' ? (
-                            <><Check size={10} strokeWidth={1.5} className="text-white/90" /><span>executada com sucesso</span></>
-                          ) : msg.openclawResult.errors && msg.openclawResult.errors.length > 0 ? (
-                            <><AlertTriangle size={10} strokeWidth={1.5} className="text-white" /><span>falha no processamento</span></>
-                          ) : (
-                            <><Zap size={10} strokeWidth={1.5} /><span>resposta obtida</span></>
-                          )}
-                        
-                        {/* Copy package */}
-                        <button
-                          onClick={() => handleCopyPackage(msg.id, msg)}
-                          className="ml-auto text-[8px] text-[#fbf9f5]/40 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
-                          title="Copiar pacote JSON para OpenClaw"
-                        >
-                          {copiedPackageId === msg.id ? '[ copiado ]' : '[ copiar pacote ]'}
-                        </button>
-                      </div>
-
-                      {/* Execution feedback */}
-                      {msg.handoffStatus === 'executed' && msg.createdEntityRef && (
-                        <p className="text-[10px] font-mono text-white bg-white/10 p-2 rounded-lg select-all border border-white/10">
-                          tarefa criada: {msg.createdEntityRef}
-                        </p>
-                      )}
-
-                      {/* Blocked governance warning — NEGATIVO (fundo off-white, texto terracota) */}
-                      {msg.handoffStatus === 'execution_blocked' && (
-                        <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/20 rounded-xl space-y-1.5 text-[#3d2f2f]">
-                          <p className="text-[9px] text-[#b8544a] font-bold lowercase">execução bloqueada</p>
-                          <p className="text-[10px] text-[#3d2f2f]/80 font-light leading-relaxed">{msg.executionError || 'responsável não designado.'}</p>
-                          
-                          {/* Force triage button */}
-                          {(msg.executionError || '').includes("ownerRefs") && (
-                            <button
-                              onClick={() => handleExecuteProposal(msg, true)}
-                              disabled={submittingExecutionId === msg.id}
-                              className="text-[9px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
-                            >
-                              {submittingExecutionId === msg.id ? '[ executando... ]' : '[ confirmar como triagem & executar ]'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Approval panels — NEGATIVO (fundo off-white, texto terracota) */}
-                      {msg.openclawResult.requiresHumanApproval && msg.handoffStatus === 'waiting_user_approval' && (
-                        <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/25 rounded-xl space-y-3 text-[#3d2f2f]">
-                          <span className="block text-[9px] font-bold text-[#b8544a] tracking-widest lowercase">decisão pendente</span>
-                          
-                          <input
-                            type="text"
-                            value={approvalNotes[msg.id] || ''}
-                            onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
-                            placeholder="nota (opcional)..."
-                            className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#b8544a] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
-                            disabled={submittingApprovalId === msg.id}
-                          />
-
-                          <div className="flex gap-4">
-                            <button
-                              onClick={() => handleApproveProposal(msg)}
-                              disabled={submittingApprovalId === msg.id}
-                              className="text-[10px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
-                            >
-                              {submittingApprovalId === msg.id ? '[ registrando... ]' : '[ aprovar proposta ]'}
-                            </button>
-                            <button
-                              onClick={() => handleRejectProposal(msg)}
-                              disabled={submittingApprovalId === msg.id}
-                              className="text-[10px] font-light text-[#3d2f2f]/60 hover:text-[#3d2f2f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
-                            >
-                              [ rejeitar ]
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Approved & Executable (v1.8 create_task allowlist) */}
-                      {msg.handoffStatus === 'approved_by_user' && msg.openclawResult.proposedMutation?.type === 'create_task' && (
-                        <button
-                          onClick={() => handleExecuteProposal(msg, false)}
-                          disabled={submittingExecutionId === msg.id}
-                          className="w-full text-center py-2 bg-white/10 hover:bg-white/20 text-[10px] font-bold text-[#fbf9f5] border border-white/25 rounded-full transition-all lowercase cursor-pointer outline-none"
-                        >
-                          {submittingExecutionId === msg.id ? '[ executando... ]' : '[ executar criação de tarefa ]'}
-                        </button>
-                      )}
-                      
-                    </div>
-                  )}
-
-                  {/* Pending local queue responses manual input panel — TRANSLÚCIDO */}
-                  {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (msg.handoffStatus === 'requested' || msg.handoffStatus === 'queued_for_openclaw') && (
-                    <div className="mt-2.5 pt-2 border-t border-white/10 text-left">
-                      {registeringForId === msg.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={openclawDraft}
-                            onChange={e => setOpenclawDraft(e.target.value)}
-                            placeholder="cole a resposta do openclaw (responseText)..."
-                            className="w-full text-xs text-[#fbf9f5] bg-white/10 border border-white/20 focus:border-white rounded-xl px-3 py-2 outline-none resize-none font-mono placeholder-white/30 lowercase"
-                            rows={3}
-                            disabled={submittingResponse}
-                          />
-                          <div className="flex justify-end gap-3">
-                            <button
-                              onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
-                              className="text-[9px] text-[#fbf9f5]/50 hover:text-white lowercase bg-transparent border-none cursor-pointer outline-none"
-                            >
-                              cancelar
-                            </button>
-                            <button
-                              onClick={() => handleRegisterOpenClawResponse(msg)}
-                              disabled={!openclawDraft.trim() || submittingResponse}
-                              className="text-[9px] font-bold text-white disabled:opacity-35 lowercase bg-transparent border-none cursor-pointer outline-none"
-                            >
-                              [ registrar ]
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setRegisteringForId(msg.id)}
-                          className="text-[9px] font-light text-[#fbf9f5]/60 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
-                        >
-                          [ registrar retorno da lótus manualmente ]
-                        </button>
-                      )}
-                    </div>
-                  )}
+            {isLatestRequestPending && (
+              <div className="flex justify-start w-full animate-pulse select-none text-left">
+                <div className="space-y-1">
+                  <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
+                  <span className="text-xs font-light text-[#fbf9f5]/40">pensando...</span>
                 </div>
               </div>
-            );
-          })}
+            )}
 
-          {/* Typing state mock */}
-          {(isTyping || isLatestRequestPending) && (
-            <div className="flex justify-start w-full animate-pulse select-none text-left">
-              <div className="space-y-1">
-                <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
-                <span className="text-xs font-light text-[#fbf9f5]/40">pensando...</span>
-              </div>
-            </div>
-          )}
-
-          <div ref={chatEndRef} />
+            <div ref={chatEndRef} />
+          </div>
         </div>
-      </div>
 
-      {/* Toast de Anexo */}
-      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8544a] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
-        showAttachmentToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4 pointer-events-none'
-      }`}>
-        <Activity size={16} className="animate-pulse" />
-        <span className="text-xs font-semibold tracking-widest uppercase">função em desenvolvimento</span>
-      </div>
-    </main>
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8544a] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
+          showAttachmentToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4 pointer-events-none'
+        }`}>
+          <Activity size={16} className="animate-pulse" />
+          <span className="text-xs font-semibold tracking-widest uppercase">função em desenvolvimento</span>
+        </div>
+      </main>
 
-
-      {/* 3. ENTRADA DE COMUNICAÇÃO (Voz + Texto em Off-White) */}
-      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-40 gap-4 mt-2 ${
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-40 gap-3 pb-6 md:pb-8 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
-        {/* Quick Suggestion links */}
+        {activeAreaId && (
+          <div className="w-full flex justify-center mb-0.5 animate-fade-in select-none">
+            <span className="text-[9px] text-[#fbf9f5]/25 tracking-widest uppercase font-mono font-light">
+              [ contexto ativo: {allAreas.find((a: any) => a.id === activeAreaId)?.name} ]
+            </span>
+          </div>
+        )}
+        
         <div className="flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full pb-1 whitespace-nowrap">
           {[
             { label: 'resumo do dia', text: 'Resumo do meu dia', icon: Activity },
@@ -1347,10 +2327,8 @@ export default function LivePage() {
           ))}
         </div>
 
-        {/* Core Input Container */}
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
 
-          {/* Menu de Anexos */}
           <div className="relative" ref={attachmentMenuRef}>
             <button
               onClick={() => setIsAttachmentMenuOpen(!isAttachmentMenuOpen)}
@@ -1360,7 +2338,6 @@ export default function LivePage() {
               <Paperclip size={14} strokeWidth={1.5} />
             </button>
             
-            {/* Popover do Menu */}
             <div className={`absolute bottom-full left-0 mb-2 w-36 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden pulso-transition ${
               isAttachmentMenuOpen ? 'opacity-100 transform translate-y-0 pointer-events-auto scale-100' : 'opacity-0 transform translate-y-2 pointer-events-none scale-95'
             }`}>
@@ -1389,10 +2366,7 @@ export default function LivePage() {
               </div>
             </div>
           </div>
-
           
-          
-
           <textarea
             ref={textareaRef}
             value={inputMessage}
@@ -1410,22 +2384,24 @@ export default function LivePage() {
             }
             disabled={voiceState === 'transcribing'}
             rows={1}
-            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none lowercase disabled:opacity-50 resize-none max-h-[120px] py-1.5 no-scrollbar"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[160px] py-1.5 no-scrollbar"
           />
 
-          {/* Voice recorder button */}
           {voiceState !== 'unsupported' && (
             <button
-              onClick={startVoiceInput}
+              onClick={toggleRecordingOnce}
               disabled={false}
               className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
-                voiceState === 'listening' 
+                voiceMode === 'recording_once' 
                   ? 'text-[#b8544a] bg-white scale-105 shadow-md' 
                   : 'text-[#fbf9f5]/60 hover:text-white'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={voiceState === 'listening' ? 'ouvindo... clique para parar' : 'capturar áudio'}
+              title={voiceMode === 'recording_once' ? 'gravando... clique para parar' : 'capturar áudio'}
             >
-              {voiceState === 'listening' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
+              {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
             </button>
           )}
 
@@ -1439,130 +2415,386 @@ export default function LivePage() {
         </div>
       </footer>
 
-      {/* Backdrop para fechar ao clicar fora */}
-      <div 
-        className={`fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] cursor-pointer pulso-transition ${
-          isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={() => setIsSidebarOpen(false)}
-      />
+      {(isSidebarOpen || isTtsSettingsOpen) && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] cursor-pointer"
+          onClick={() => { setIsSidebarOpen(false); setIsTtsSettingsOpen(false); }}
+        />
+      )}
 
-      {/* 4. CAMADA LATERAL ETÉREA — FLUTUANTE (Vidro/Blur) */}
-      <div 
-        className={`fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl pulso-transition ${
-          isSidebarOpen ? 'pulso-visible' : 'pulso-hidden-right'
-        } p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5]`}
-      >
-        <div className="space-y-8">
-          {/* Drawer Header */}
-          <div className="flex items-center justify-between border-b border-white/15 pb-4">
-            <div className="flex items-center gap-2">
-              <Activity size={14} className="text-white" strokeWidth={1.5} />
-              <span className="text-xs font-bold tracking-widest text-white/90 lowercase">sinais operacionais</span>
-            </div>
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="text-[#fbf9f5]/45 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-            >
-              <X size={16} strokeWidth={1.5} />
-            </button>
-          </div>
-
-          {/* Sinais de Atenção */}
-          <div className="space-y-4">
-            <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">briefing do agora</h4>
-            <div className="divide-y divide-white/10 text-sm">
-              <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#fbf9f5]/70 lowercase">minhas tarefas</span>
-                <span className="font-bold text-base text-white">{feTasks.length}</span>
+      {isSidebarOpen && (
+        <div 
+          className="fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5] animate-fade-in"
+        >
+          <div className="space-y-8">
+            <div className="flex items-center justify-between border-b border-white/15 pb-4">
+              <div className="flex items-center gap-2">
+                <Activity size={14} className="text-white" strokeWidth={1.5} />
+                <span className="text-xs font-bold tracking-widest text-white/90 lowercase">sinais operacionais</span>
               </div>
-              <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#fbf9f5]/70 lowercase">riscos & travas</span>
-                <span className={`font-bold text-base ${totalRisksCount > 0 ? 'text-white underline decoration-white/40' : 'text-white/60'}`}>{totalRisksCount}</span>
-              </div>
-              <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#fbf9f5]/70 lowercase">projetos ativos</span>
-                <span className="font-bold text-base text-white">{activeProjects.length}</span>
-              </div>
-              <div className="py-2.5 flex justify-between items-center">
-                <span className="font-light text-[#fbf9f5]/70 lowercase">metabolismo</span>
-                <span className={`font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded border ${
-                  brokenRoutines.length > 0 ? 'text-white border-white/30 bg-white/10' : 'text-white/60 border-white/10 bg-white/5'
-                }`}>
-                  {brokenRoutines.length > 0 ? 'instável' : 'saudável'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Próximas Melhores Ações */}
-          <div className="space-y-3">
-            <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">ações recomendadas</h4>
-            <div className="divide-y divide-white/10">
-              {nextBestActions.map((action, i) => (
-                <div key={i} className="py-3 flex flex-col gap-1.5">
-                  <p className="text-xs font-light text-[#fbf9f5]/80 leading-relaxed lowercase">{action.text}</p>
-                  <button 
-                    onClick={() => { action.onClick(); setIsSidebarOpen(false); }}
-                    className="text-[10px] font-bold text-white hover:text-white/80 flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
-                  >
-                    <span>{action.actionText}</span>
-                    <ArrowRight size={10} strokeWidth={1.5} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Projetos Vivos */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">projetos ativos</h4>
               <button 
-                onClick={() => { router.push('/pulso/ecossistema'); setIsSidebarOpen(false); }}
-                className="text-[9px] text-[#fbf9f5]/75 hover:text-white hover:underline lowercase bg-transparent border-none cursor-pointer outline-none"
+                onClick={() => setIsSidebarOpen(false)}
+                className="text-[#fbf9f5]/45 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
               >
-                ver ecossistema
+                <X size={16} strokeWidth={1.5} />
               </button>
             </div>
-            <div className="divide-y divide-white/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
-              {activeProjects.slice(0, 4).map((p: any) => (
-                <div key={p.id} className="py-2.5 flex items-center justify-between text-xs text-[#fbf9f5]/90">
-                  <span className="font-medium truncate max-w-[150px] lowercase">{p.name}</span>
-                  <span className="text-[10px] font-light text-[#fbf9f5]/55 truncate max-w-[120px] lowercase">
-                    {p.nextStep ? p.nextStep : 'sem passo'}
+
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">briefing do agora</h4>
+              <div className="divide-y divide-white/10 text-sm">
+                <div className="py-2.5 flex justify-between items-center">
+                  <span className="font-light text-[#fbf9f5]/70 lowercase">minhas tarefas</span>
+                  <span className="font-bold text-base text-white">{feTasks.length}</span>
+                </div>
+                <div className="py-2.5 flex justify-between items-center">
+                  <span className="font-light text-[#fbf9f5]/70 lowercase">riscos & travas</span>
+                  <span className={`font-bold text-base ${totalRisksCount > 0 ? 'text-white underline decoration-white/40' : 'text-white/60'}`}>{totalRisksCount}</span>
+                </div>
+                <div className="py-2.5 flex justify-between items-center">
+                  <span className="font-light text-[#fbf9f5]/70 lowercase">projetos ativos</span>
+                  <span className="font-bold text-base text-white">{activeProjects.length}</span>
+                </div>
+                <div className="py-2.5 flex justify-between items-center">
+                  <span className="font-light text-[#fbf9f5]/70 lowercase">metabolismo</span>
+                  <span className={`font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded border ${
+                    brokenRoutines.length > 0 ? 'text-white border-white/30 bg-white/10' : 'text-white/60 border-white/10 bg-white/5'
+                  }`}>
+                    {brokenRoutines.length > 0 ? 'instável' : 'saudável'}
                   </span>
                 </div>
-              ))}
+              </div>
             </div>
+
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">ações recomendadas</h4>
+              <div className="divide-y divide-white/10">
+                {nextBestActions.map((action, i) => (
+                  <div key={i} className="py-3 flex flex-col gap-1.5">
+                    <p className="text-xs font-light text-[#fbf9f5]/80 leading-relaxed lowercase">{action.text}</p>
+                    <button 
+                      onClick={() => { action.onClick(); setIsSidebarOpen(false); }}
+                      className="text-[10px] font-bold text-white hover:text-white/80 flex items-center gap-1 transition-colors self-start lowercase bg-transparent border-none cursor-pointer outline-none"
+                    >
+                      <span>{action.actionText}</span>
+                      <ArrowRight size={10} strokeWidth={1.5} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">projetos ativos</h4>
+                <button 
+                  onClick={() => { router.push('/pulso/ecossistema'); setIsSidebarOpen(false); }}
+                  className="text-[9px] text-[#fbf9f5]/75 hover:text-white hover:underline lowercase bg-transparent border-none cursor-pointer outline-none"
+                >
+                  ver ecossistema
+                </button>
+              </div>
+              <div className="divide-y divide-white/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+                {activeProjects.slice(0, 4).map((p: any) => (
+                  <div key={p.id} className="py-2.5 flex items-center justify-between text-xs text-[#fbf9f5]/90">
+                    <span className="font-medium truncate max-w-[150px] lowercase">{p.name}</span>
+                    <span className="text-[10px] font-light text-[#fbf9f5]/55 truncate max-w-[120px] lowercase">
+                      {p.nextStep ? p.nextStep : 'sem passo'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">fontes observadas</h4>
+              <div className="divide-y divide-white/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+                {allSources.slice(0, 5).map((src: any, i) => (
+                  <div key={i} className="flex justify-between items-center text-xs py-2.5 text-[#fbf9f5]/90">
+                    <span className="font-light lowercase">{src.name}</span>
+                    <span className="text-[9px] font-bold text-[#fbf9f5]/65 uppercase tracking-wider">sintonizado</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* Fontes monitoradas */}
-          <div className="space-y-3">
-            <h4 className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">fontes observadas</h4>
-            <div className="divide-y divide-white/10 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
-              {allSources.slice(0, 5).map((src: any, i) => (
-                <div key={i} className="flex justify-between items-center text-xs py-2.5 text-[#fbf9f5]/90">
-                  <span className="font-light lowercase">{src.name}</span>
-                  <span className="text-[9px] font-bold text-[#fbf9f5]/65 uppercase tracking-wider">sintonizado</span>
+          {/* Drawer Footer / Backstage trigger */}
+          <div className="border-t border-white/15 pt-4 mt-8 flex flex-col gap-2">
+            <button 
+              onClick={() => { router.push('/pulso/eventos'); setIsSidebarOpen(false); }}
+              className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 transition-colors lowercase bg-transparent cursor-pointer outline-none"
+            >
+              abrir bastidor técnico (logs)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isTtsSettingsOpen && (
+        <div 
+          className="fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5] animate-fade-in"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-white/15 pb-4">
+              <div className="flex items-center gap-2">
+                <Mic size={14} className="text-white" strokeWidth={1.5} />
+                <span className="text-xs font-bold tracking-widest text-white/90 lowercase">voz da lótus (tts)</span>
+              </div>
+              <button 
+                onClick={() => setIsTtsSettingsOpen(false)}
+                className="text-[#fbf9f5]/45 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+              >
+                <X size={16} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">provedor de voz</label>
+                <select
+                  value={ttsPrefs.ttsProvider}
+                  onChange={(e) => {
+                    const provider = e.target.value as any;
+                    const newPrefs = { ...ttsPrefs, ttsProvider: provider };
+                    setTtsPrefs(newPrefs);
+                    ttsAdapter.updatePreferences(newPrefs);
+                  }}
+                  className="pulso-select w-full"
+                >
+                  <option value="browser_native" className="bg-[#121212]">nativo do navegador</option>
+                  <option value="kokoro_http" className="bg-[#121212]">kokoro http (oficial)</option>
+                  <option value="local_kokoro" className="bg-[#121212]">kokoro-fastapi (beta)</option>
+                  <option value="local_piper" disabled className="bg-[#121212]">local piper (indisponível)</option>
+                  <option value="cloud_google" disabled className="bg-[#121212]">google cloud tts (indisponível)</option>
+                </select>
+              </div>
+
+              {ttsPrefs.ttsProvider === 'browser_native' ? (
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">voz selecionada</label>
+                  <select
+                    value={ttsPrefs.voiceURI}
+                    onChange={(e) => {
+                      const selected = availableVoices.find(v => v.voiceURI === e.target.value);
+                      if (selected) {
+                        const newPrefs = { ...ttsPrefs, voiceURI: selected.voiceURI, voiceName: selected.name, voiceLang: selected.lang };
+                        setTtsPrefs(newPrefs);
+                        ttsAdapter.updatePreferences(newPrefs);
+                      }
+                    }}
+                    className="pulso-select w-full"
+                  >
+                    {availableVoices.length === 0 ? (
+                      <option className="bg-[#121212]">nenhuma voz pt-br encontrada</option>
+                    ) : (
+                      availableVoices.map((v, i) => (
+                        <option key={i} value={v.voiceURI} className="bg-[#121212]">
+                          {v.name} ({v.lang})
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
-              ))}
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">voz selecionada (kokoro)</label>
+                    <select
+                      value={ttsPrefs.voiceName === 'pf_dora' ? 'pf_dora' : 'custom'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const newVoiceName = val === 'custom' ? '' : val;
+                        const newPrefs = { ...ttsPrefs, voiceName: newVoiceName };
+                        setTtsPrefs(newPrefs);
+                        ttsAdapter.updatePreferences(newPrefs);
+                      }}
+                      className="pulso-select w-full"
+                    >
+                      <option value="pf_dora" className="bg-[#121212]">pf_dora (fem pt-br - provisória)</option>
+                      <option value="custom" className="bg-[#121212]">outra voz (escrever abaixo)...</option>
+                    </select>
+                    <span className="text-[8px] text-[#fbf9f5]/40 leading-relaxed block mt-1">
+                      nota: apenas pf_dora está instalada como voz feminina PT-BR local.
+                    </span>
+                  </div>
+
+                  {ttsPrefs.voiceName !== 'pf_dora' && (
+                    <div className="flex flex-col gap-0.5 animate-fade-in">
+                      <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">nome da voz customizada</label>
+                      <input
+                        type="text"
+                        value={ttsPrefs.voiceName}
+                        placeholder="Ex: pm_alex, af_sarah"
+                        onChange={(e) => {
+                          const newPrefs = { ...ttsPrefs, voiceName: e.target.value };
+                          setTtsPrefs(newPrefs);
+                          ttsAdapter.updatePreferences(newPrefs);
+                        }}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/20 transition-colors lowercase"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">endpoint kokoro http</label>
+                    <input
+                      type="text"
+                      value={kokoroEndpoint}
+                      placeholder="http://127.0.0.1:8880/v1/audio/speech"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setKokoroEndpoint(val);
+                        localStorage.setItem('pulso_tts_kokoro_endpoint', val);
+                      }}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-0.5">
+                <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">
+                  <span>velocidade (rate)</span>
+                  <span>{ttsPrefs.rate.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={ttsPrefs.rate}
+                  onChange={(e) => {
+                    const rate = parseFloat(e.target.value);
+                    const newPrefs = { ...ttsPrefs, rate };
+                    setTtsPrefs(newPrefs);
+                    ttsAdapter.updatePreferences(newPrefs);
+                  }}
+                  className="pulso-slider"
+                />
+              </div>
+
+              {ttsPrefs.ttsProvider === 'browser_native' && (
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">
+                    <span>tom (pitch)</span>
+                    <span>{ttsPrefs.pitch.toFixed(1)}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    step="0.1"
+                    value={ttsPrefs.pitch}
+                    onChange={(e) => {
+                      const pitch = parseFloat(e.target.value);
+                      const newPrefs = { ...ttsPrefs, pitch };
+                      setTtsPrefs(newPrefs);
+                      ttsAdapter.updatePreferences(newPrefs);
+                    }}
+                    className="pulso-slider"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-0.5">
+                <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">
+                  <span>volume</span>
+                  <span>{Math.round(ttsPrefs.volume * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="1.0"
+                  step="0.05"
+                  value={ttsPrefs.volume}
+                  onChange={(e) => {
+                    const volume = parseFloat(e.target.value);
+                    const newPrefs = { ...ttsPrefs, volume };
+                    setTtsPrefs(newPrefs);
+                    ttsAdapter.updatePreferences(newPrefs);
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
+                <span className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">sinais sonoros (foco)</span>
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={presenceSoundCuesEnabled}
+                    onChange={(e) => setPresenceSoundCuesEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-white/10 rounded-full peer peer-focus:ring-0 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-white/30 relative"></div>
+                </label>
+              </div>
             </div>
           </div>
 
+          <div className="border-t border-white/15 pt-4 mt-8 flex flex-col gap-2">
+            <button 
+              onClick={() => {
+                if (playingMsgId === 'test') {
+                  ttsAdapter.cancel();
+                  setPlayingMsgId(null);
+                  setPlayingState('stopped');
+                } else {
+                  setPlayingMsgId('test');
+                  setPlayingState('preparing');
+                  ttsAdapter.speak(
+                    "oi, fê. esta é uma voz de teste da lótus.",
+                    () => {
+                      setPlayingMsgId(prev => {
+                        if (prev === 'test') {
+                          setPlayingState('playing');
+                        }
+                        return prev;
+                      });
+                    },
+                    () => {
+                      setPlayingMsgId(prev => {
+                        if (prev === 'test') {
+                          setPlayingState('stopped');
+                          return null;
+                        }
+                        return prev;
+                      });
+                    },
+                    () => {
+                      setPlayingMsgId(prev => {
+                        if (prev === 'test') {
+                          setPlayingState('preparing');
+                        }
+                        return prev;
+                      });
+                    }
+                  );
+                }
+              }}
+              className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 transition-colors lowercase bg-transparent cursor-pointer outline-none font-sans"
+            >
+              {playingMsgId === 'test'
+                ? (playingState === 'preparing' ? '[ preparando ]' : '[ parar ]')
+                : '[ testar voz da lótus ]'}
+            </button>
+            <button 
+              onClick={() => setIsTtsSettingsOpen(false)}
+              className="w-full text-center py-2 text-[9px] text-[#fbf9f5]/45 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+            >
+              fechar
+            </button>
+          </div>
         </div>
+      )}
 
-        {/* Drawer Footer / Backstage trigger */}
-        <div className="border-t border-white/15 pt-4 mt-8 flex flex-col gap-2">
-          <button 
-            onClick={() => { router.push('/pulso/eventos'); setIsSidebarOpen(false); }}
-            className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 transition-colors lowercase bg-transparent cursor-pointer outline-none"
-          >
-            abrir bastidor técnico (logs)
-          </button>
+      {toastMessage && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-black/60 backdrop-blur-md border border-white/10 text-[#fbf9f5] px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-2 animate-fade-in text-[10px] tracking-widest lowercase select-none">
+          <Check size={12} className="text-[#fbf9f5]" />
+          <span>{toastMessage}</span>
         </div>
-
-      </div>
+      )}
 
     </div>
   );
