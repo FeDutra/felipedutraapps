@@ -20,8 +20,32 @@ import { firestorePaths } from "./firestorePaths";
 import { 
   Area, Project, InboxItem, Task, Decision, 
   Routine, Agent, Source, Alert, Log, Person, SyncJob,
-  PulsoEvent, IngestionEvent, PulsoRequest
+  PulsoEvent, IngestionEvent, PulsoRequest, Note, Meeting
 } from "../types/pulso.types";
+
+/**
+ * Helper to recursively remove undefined values from objects before sending to Firestore.
+ * Firestore throws errors on undefined fields.
+ */
+function sanitizeForFirestore(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item));
+  }
+  // Only deep sanitize plain objects to avoid breaking Firestore FieldValues/Timestamps
+  if (obj.constructor !== Object) {
+    return obj;
+  }
+
+  const result: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = sanitizeForFirestore(value);
+    }
+  }
+  return result;
+}
 
 /**
  * @class FirestorePulsoRepository
@@ -545,16 +569,14 @@ export class FirestorePulsoRepository implements IPulsoRepository {
 
   async saveRequest(request: Partial<PulsoRequest>) {
     const id = request.id || `req_${Date.now()}`;
-    const cleanData = Object.entries(request).reduce((acc, [key, val]) => {
-      if (val !== undefined) acc[key] = val;
-      return acc;
-    }, {} as any);
+    const cleanData = sanitizeForFirestore(request);
 
     const data = { 
       ...cleanData, 
       id, 
       status: request.status || 'requested',
       archived: false,
+      createdAt: request.createdAt || serverTimestamp(),
       requestedAt: serverTimestamp(),
       updatedAt: serverTimestamp() 
     };
@@ -572,10 +594,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
 
   async updateRequest(id: string, data: Partial<PulsoRequest>) {
     const ref = doc(db!, firestorePaths.request(id));
-    const cleanData = Object.entries(data).reduce((acc, [key, val]) => {
-      if (val !== undefined) acc[key] = val;
-      return acc;
-    }, {} as any);
+    const cleanData = sanitizeForFirestore(data);
     await updateDoc(ref, { ...cleanData, updatedAt: serverTimestamp() });
     const snap = await getDoc(ref);
     return this.toData<PulsoRequest>(snap);

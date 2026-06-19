@@ -111,6 +111,122 @@ import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
 import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
+import { PulsoContextNode } from '../types/pulso.types';
+
+const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
+  {
+    areaId: "sistema",
+    subareaId: "pulso",
+    contextId: "sistema_pulso",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:sistema_pulso",
+    label: "Sistema / PULSO"
+  },
+  {
+    areaId: "casa",
+    subareaId: "construcao",
+    contextId: "casa_construcao",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:casa_construcao",
+    label: "Casa / Construção"
+  },
+  {
+    areaId: "casa",
+    subareaId: "horta",
+    contextId: "casa_horta",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:casa_horta",
+    label: "Casa / Horta"
+  },
+  {
+    areaId: "familia",
+    subareaId: "familia",
+    contextId: "familia",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:familia",
+    label: "Família"
+  },
+  {
+    areaId: "familia",
+    subareaId: "escola_guayi",
+    contextId: "familia_escola_guayi",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:familia_escola_guayi",
+    label: "Família / Escola Guayi"
+  },
+  {
+    areaId: "trabalho",
+    subareaId: "modu",
+    contextId: "trabalho_modu",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:trabalho_modu",
+    label: "Trabalho / MODÚ"
+  },
+  {
+    areaId: "trabalho",
+    subareaId: "despertar",
+    contextId: "trabalho_despertar",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:trabalho_despertar",
+    label: "Trabalho / Despertar"
+  },
+  {
+    areaId: "criacao",
+    subareaId: "producao_autoral",
+    contextId: "criacao_producao_autoral",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:criacao_producao_autoral",
+    label: "Criação / Produção Autoral"
+  },
+  {
+    areaId: "sistema",
+    subareaId: "infraestrutura",
+    contextId: "sistema_infraestrutura",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:sistema_infraestrutura",
+    label: "Sistema / Infraestrutura"
+  },
+  {
+    areaId: "sistema",
+    subareaId: "openclaw_agentes",
+    contextId: "sistema_openclaw_agentes",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:sistema_openclaw_agentes",
+    label: "Sistema / OpenClaw e Agentes"
+  },
+  {
+    areaId: "pessoas",
+    subareaId: "pessoas",
+    contextId: "pessoas",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:pessoas",
+    label: "Pessoas"
+  },
+  {
+    areaId: "dinheiro",
+    subareaId: "dinheiro",
+    contextId: "dinheiro",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:dinheiro",
+    label: "Dinheiro"
+  },
+  {
+    areaId: "saude",
+    subareaId: "saude",
+    contextId: "saude",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:saude",
+    label: "Saúde"
+  },
+  {
+    areaId: "eu",
+    subareaId: "eu",
+    contextId: "eu",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:eu",
+    label: "Eu"
+  }
+];
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -218,6 +334,7 @@ interface Message {
   executedBy?: string;
   createdEntityRef?: string;
   executionError?: string;
+  contextId?: string | null;
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence';
@@ -246,11 +363,13 @@ export default function LivePage() {
       timestamp: new Date()
     }
   ]);
+  const [lastSentRequestId, setLastSentRequestId] = React.useState<string | null>(null);
   const [isTyping, setIsTyping] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
-  const [activeAreaId, setActiveAreaId] = React.useState<string | null>(null);
+  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(INITIAL_CONTEXT_NODES[0]);
+  const activeAreaId = activeContextNode.areaId;
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
   const headerMenuRef = React.useRef<HTMLDivElement>(null);
@@ -840,7 +959,8 @@ export default function LivePage() {
               id: `user-${req.id || Math.random()}`,
               sender: 'user',
               text: req.input || req.rawInput || req.summary || req.title || '',
-              timestamp: reqTime
+              timestamp: reqTime,
+              contextId: req.contextId || null
             });
           }
           
@@ -869,7 +989,8 @@ export default function LivePage() {
                 executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
                 executedBy: req.executedBy || undefined,
                 createdEntityRef: req.createdEntityRef || undefined,
-                executionError: req.executionError || undefined
+                executionError: req.executionError || undefined,
+                contextId: req.contextId || null
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
@@ -882,7 +1003,8 @@ export default function LivePage() {
                 openclawResult: req.openclawResult || undefined,
                 handoffStatus: req.status,
                 requestId: req.id || undefined,
-                originalCommand: req.summary || req.title || undefined
+                originalCommand: req.summary || req.title || undefined,
+                contextId: req.contextId || null
               });
             } else {
               console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
@@ -901,7 +1023,8 @@ export default function LivePage() {
               openclawResult: req.openclawResult || undefined,
               handoffStatus: req.status,
               requestId: req.id || undefined,
-              originalCommand: req.summary || req.title || undefined
+              originalCommand: req.summary || req.title || undefined,
+              contextId: req.contextId || null
             });
           }
         });
@@ -967,7 +1090,8 @@ export default function LivePage() {
                 id: `user-${req.id}`,
                 sender: 'user',
                 text: req.input || req.rawInput || req.summary || req.title || '',
-                timestamp: reqTime
+                timestamp: reqTime,
+                contextId: req.contextId || null
               });
             }
 
@@ -1099,7 +1223,8 @@ export default function LivePage() {
                   executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
                   executedBy: req.executedBy || undefined,
                   createdEntityRef: req.createdEntityRef || undefined,
-                  executionError: req.executionError || undefined
+                  executionError: req.executionError || undefined,
+                  contextId: req.contextId || null
                 });
               } else if (status === 'error' || status === 'timeout') {
                 console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
@@ -1112,7 +1237,8 @@ export default function LivePage() {
                   openclawResult: req.openclawResult || undefined,
                   handoffStatus: req.status,
                   requestId: req.id || undefined,
-                  originalCommand: req.summary || req.title || undefined
+                  originalCommand: req.summary || req.title || undefined,
+                  contextId: req.contextId || null
                 });
               } else {
                 console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
@@ -1131,7 +1257,8 @@ export default function LivePage() {
                 openclawResult: req.openclawResult || undefined,
                 handoffStatus: req.status,
                 requestId: req.id || undefined,
-                originalCommand: req.summary || req.title || undefined
+                originalCommand: req.summary || req.title || undefined,
+                contextId: req.contextId || null
               });
             }
           });
@@ -1167,6 +1294,10 @@ export default function LivePage() {
       mode?: "text" | "voice" | "presence";
       conversationId?: string;
       context?: object;
+      areaId?: string;
+      contextId?: string;
+      chatId?: string;
+      openclawSessionKey?: string;
     }
   ) => {
     const mode = options?.mode || 'text';
@@ -1185,9 +1316,6 @@ export default function LivePage() {
       currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
       activeAreaId: activeAreaId || undefined
     });
-    if (routeResult.areaRef && routeResult.areaRef !== activeAreaId) {
-      setActiveAreaId(routeResult.areaRef);
-    }
 
     const isTauri = typeof window !== 'undefined' && (
       window.location.protocol === 'tauri:' ||
@@ -1220,12 +1348,16 @@ export default function LivePage() {
         interface: "pulso" as const,
         ...options?.context
       },
-      contextWindow: []
+      contextWindow: [],
+      areaId: options?.areaId || activeContextNode.areaId,
+      contextId: options?.contextId || activeContextNode.contextId,
+      chatId: options?.chatId || activeContextNode.chatId,
+      openclawSessionKey: options?.openclawSessionKey || activeContextNode.openclawSessionKey
     };
 
     if (routeResult.areaRef) lotusPayload.areaRef = routeResult.areaRef;
     if (routeResult.routing) lotusPayload.routing = routeResult.routing;
-    if (routeResult.routing.secondaryTopics) lotusPayload.secondaryAreaRefs = routeResult.routing.secondaryTopics;
+    if (routeResult.routing?.secondaryTopics) lotusPayload.secondaryAreaRefs = routeResult.routing.secondaryTopics;
 
     console.log('[PULSO_FIRESTORE_PATH]', { path: `workspaces/felipe_dutra/pulso_requests` });
     console.log('[PULSO_FIRESTORE_PAYLOAD]', lotusPayload);
@@ -1275,7 +1407,7 @@ export default function LivePage() {
       console.log('[PULSO_DEBUG_LAST_SUBMIT]', JSON.stringify((window as any).lastPulsoSubmit, null, 2));
       throw err;
     }
-  }, [state, activeAreaId]);
+  }, [state, activeContextNode]);
 
   const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' }) => {
     if (isTyping) {
@@ -1293,7 +1425,14 @@ export default function LivePage() {
 
     try {
       const sendMode = originMode === 'presence' ? 'presence' : (originMode === 'recording_once' ? 'voice' : 'text');
-      const newRequest = await createPulsoConversationRequest(cleanMsg, { mode: sendMode });
+      const newRequest = await createPulsoConversationRequest(cleanMsg, {
+        mode: sendMode,
+        areaId: activeContextNode.areaId,
+        contextId: activeContextNode.contextId,
+        chatId: activeContextNode.chatId,
+        openclawSessionKey: activeContextNode.openclawSessionKey
+      });
+      setLastSentRequestId(newRequest.id);
 
       // ONLY on success, clear the input
       setInputMessage('');
@@ -1306,7 +1445,8 @@ export default function LivePage() {
         id: `user-msg-${newRequest.id || Date.now()}`,
         sender: 'user',
         text: cleanMsg,
-        timestamp: new Date()
+        timestamp: new Date(),
+        contextId: activeContextNode.contextId
       };
       setMessages(prev => [...prev, userMsg]);
 
@@ -1720,6 +1860,16 @@ export default function LivePage() {
     };
   }, []);
 
+  const allRequests = safeArray(state?.allRequests).filter((r: any) => r && r.archived !== true);
+
+  // Check if the most recent request is queued or processing (pending)
+  const isLatestRequestPending = React.useMemo(() => {
+    if (!lastSentRequestId) return false;
+    const req = allRequests.find((r: any) => r.id === lastSentRequestId);
+    if (!req) return false;
+    return req.status !== 'success' && req.status !== 'error' && req.status !== 'timeout';
+  }, [allRequests, lastSentRequestId]);
+
   if (loading) {
     return (
       <div className="theme-her flex flex-col items-center justify-center h-[100dvh] pb-[env(safe-area-inset-bottom)] text-[#fbf9f5]">
@@ -1787,7 +1937,6 @@ export default function LivePage() {
   const allRoutines = safeArray(state?.allRoutines).filter((r: any) => r && r.archived !== true);
   const allAgents = safeArray(state?.allAgents).filter((ag: any) => ag && ag.archived !== true);
   const allLogs = safeArray(state?.allLogs);
-  const allRequests = safeArray(state?.allRequests).filter((r: any) => r && r.archived !== true);
   const allSources = safeArray(state?.allSources).filter((s: any) => s && s.archived !== true);
 
   const feTasks = openTasks.filter((t: any) => {
@@ -1902,21 +2051,6 @@ export default function LivePage() {
     });
   }
 
-  // Check if the most recent request is queued or processing (pending)
-  const conversationRequests = allRequests.filter((req: any) => req && req.requestType === 'conversation_command');
-  const mostRecentRequest = conversationRequests.length > 0
-    ? [...conversationRequests].sort((a, b) => {
-        const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
-        const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
-        return timeB - timeA;
-      })[0]
-    : null;
-
-  const isLatestRequestPending = mostRecentRequest &&
-    mostRecentRequest.status !== 'success' &&
-    mostRecentRequest.status !== 'error' &&
-    mostRecentRequest.status !== 'timeout';
-
   // Animation resolver
   const getLotusAnimClass = () => {
     if (voiceModeRef.current === 'presence') {
@@ -1937,6 +2071,13 @@ export default function LivePage() {
     return 'lotus-idle-anim';
   };
 
+  const currentMessages = React.useMemo(() => {
+    return messages.filter(msg => {
+      if (msg.id === 'welcome') return true;
+      return !msg.contextId || msg.contextId === activeContextNode.contextId;
+    });
+  }, [messages, activeContextNode.contextId]);
+
   return (
     <div 
       onClick={() => presenceMode && exitPresenceMode()}
@@ -1949,7 +2090,7 @@ export default function LivePage() {
         variant={activeVariant} 
         isOpen={isContextSurfaceOpen} 
         onClose={() => setIsContextSurfaceOpen(false)}
-        activeContext={allAreas.find((a: any) => a.id === activeAreaId)?.name}
+        activeContext={activeContextNode.label}
       />
 
       {/* Botão sutil de saída do Modo Foco */}
@@ -2048,14 +2189,14 @@ export default function LivePage() {
 
       <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 md:gap-5 group/sidebar select-none transition-opacity duration-300 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={allAreas.map(a => a.id)} strategy={verticalListSortingStrategy}>
-            {allAreas.map((area: any) => (
+          <SortableContext items={INITIAL_CONTEXT_NODES.map(c => c.contextId)} strategy={verticalListSortingStrategy}>
+            {INITIAL_CONTEXT_NODES.map((ctx: PulsoContextNode) => (
               <SortableAreaItem
-                key={area.id}
-                area={area}
-                isActive={activeAreaId === area.id}
-                icon={getAreaIcon(area)}
-                onClick={() => setActiveAreaId(activeAreaId === area.id ? null : area.id)}
+                key={ctx.contextId}
+                area={{ id: ctx.contextId, name: ctx.label }}
+                isActive={activeContextNode.contextId === ctx.contextId}
+                icon={getAreaIcon({ id: ctx.areaId, name: ctx.label, slug: ctx.subareaId })}
+                onClick={() => setActiveContextNode(ctx)}
               />
             ))}
           </SortableContext>
@@ -2085,7 +2226,7 @@ export default function LivePage() {
             presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
           }`}>
             <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
-              {messages.map((msg) => {
+              {currentMessages.map((msg) => {
                 const isLotus = msg.sender === 'lotus';
                 if (isLotus && !msg.text) return null;
                 return (
@@ -2300,10 +2441,10 @@ export default function LivePage() {
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
-        {activeAreaId && (
+        {activeContextNode && (
           <div className="w-full flex justify-center mb-0.5 animate-fade-in select-none">
             <span className="text-[9px] text-[#fbf9f5]/25 tracking-widest uppercase font-mono font-light">
-              [ contexto ativo: {allAreas.find((a: any) => a.id === activeAreaId)?.name} ]
+              [ contexto ativo: {activeContextNode.label} ]
             </span>
           </div>
         )}

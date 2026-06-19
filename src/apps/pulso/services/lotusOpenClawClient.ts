@@ -29,7 +29,27 @@ export interface LotusSendPayload {
     currentRoute: string;
   };
   contextWindow: any[];
+  areaRef?: string;
+  secondaryAreaRefs?: string[];
+  routing?: any;
+  originMode?: string;
+  areaId?: string;
+  contextId?: string;
+  chatId?: string;
+  openclawSessionKey?: string;
 }
+
+const cleanUndefined = (obj: any): any => {
+  if (Array.isArray(obj)) return obj.map(cleanUndefined).filter(v => v !== undefined);
+  if (obj && typeof obj === 'object' && !(obj instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, cleanUndefined(v)])
+    );
+  }
+  return obj;
+};
 
 export const lotusOpenClawClient = {
   queueRequest: async (payload: LotusSendPayload) => {
@@ -38,11 +58,16 @@ export const lotusOpenClawClient = {
       requestType: "conversation_command" as any,
       status: "queued_for_openclaw" as any,
       source: payload.source,
+      areaRef: payload.areaRef,
+      secondaryAreaRefs: payload.secondaryAreaRefs,
+      routing: payload.routing,
       origin: "lotus_live",
       mode: payload.mode,
+      originMode: payload.originMode || "text",
       input: payload.input,
       rawInput: payload.rawInput || payload.input,
       requestedBy: payload.userId,
+      createdAt: new Date(),
       requestedAt: new Date(payload.timestamp),
       clientCreatedAtMs: payload.clientCreatedAtMs || Date.now(),
       updatedAt: new Date(),
@@ -52,9 +77,19 @@ export const lotusOpenClawClient = {
       context: payload.context,
       contextWindow: payload.contextWindow,
       archived: false,
-      priority: "medium" as any
+      priority: "medium" as any,
+      areaId: payload.areaId || null,
+      contextId: payload.contextId || null,
+      chatId: payload.chatId || "default",
+      openclawSessionKey: payload.openclawSessionKey || null,
+      handoff: {
+        target: "openclaw",
+        mode: "proposal_only"
+      }
     };
 
-    return requestsService.createRequest(reqPayload);
+    const cleanPayload = cleanUndefined(reqPayload);
+
+    return requestsService.createRequest(cleanPayload);
   }
 };

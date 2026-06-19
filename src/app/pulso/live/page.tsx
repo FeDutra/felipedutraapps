@@ -12,5 +12,9 @@ export const viewport: Viewport = {
 };
 
 export default function Page() {
-  return <LivePage />;
+  return (
+    <React.Suspense fallback={<div className="h-[100dvh] bg-[#111] flex items-center justify-center text-[#fbf9f5]/50 text-xs tracking-widest lowercase">sintonizando lótus live...</div>}>
+      <LivePage />
+    </React.Suspense>
+  );
 }

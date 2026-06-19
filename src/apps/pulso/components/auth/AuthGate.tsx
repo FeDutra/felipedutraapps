@@ -71,15 +71,50 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const checkIsTauri = () => {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.protocol === 'tauri:' ||
+    window.location.protocol === 'file:' ||
+    !!(window as any).__TAURI__ ||
+    !!(window as any).__TAURI_INTERNALS__
+  );
+};
+
 const LoginScreen = () => {
   const [signingIn, setSigningIn] = React.useState(false);
+  const [isTauri, setIsTauri] = React.useState(false);
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [errorMsg, setErrorMsg] = React.useState("");
+
+  React.useEffect(() => {
+    setIsTauri(checkIsTauri());
+  }, []);
 
   const handleLogin = async () => {
     setSigningIn(true);
+    setErrorMsg("");
     try {
       await authService.signInWithGoogle();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
+      setErrorMsg(error.message || "Erro ao fazer login com Google.");
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+    setSigningIn(true);
+    setErrorMsg("");
+    try {
+      await authService.signInWithEmail(email, password);
+    } catch (error: any) {
+      console.error("Email login failed:", error);
+      setErrorMsg("Credenciais inválidas ou erro de autenticação.");
     } finally {
       setSigningIn(false);
     }
@@ -126,6 +161,50 @@ const LoginScreen = () => {
               </>
             )}
           </button>
+
+          {isTauri && (
+            <form onSubmit={handleEmailLogin} className="mt-6 pt-6 border-t border-white/5 flex flex-col gap-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/30 text-center mb-1">
+                Acesso Interno Desktop
+              </p>
+              <div>
+                <input
+                  type="email"
+                  placeholder="E-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={signingIn}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                  required
+                />
+              </div>
+              <div>
+                <input
+                  type="password"
+                  placeholder="Senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={signingIn}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/20 transition-colors"
+                  required
+                />
+              </div>
+              
+              {errorMsg && (
+                <p className="text-[10px] font-medium text-red-400 text-center mt-1">
+                  {errorMsg}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={signingIn}
+                className="w-full bg-white/10 text-white hover:bg-white/15 border border-white/20 py-3 rounded-xl font-bold text-xs transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {signingIn ? "Acessando..." : "Entrar com Credencial"}
+              </button>
+            </form>
+          )}
 
           <p className="mt-8 text-center text-[9px] font-black uppercase tracking-[0.2em] text-white/10">
             Acesso Restrito • Felipe Dutra

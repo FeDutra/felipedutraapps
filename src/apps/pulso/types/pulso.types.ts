@@ -223,6 +223,15 @@ export interface UserApproval {
   reason?: string;
 }
 
+export interface PulsoContextNode {
+  areaId: string;
+  subareaId: string;
+  contextId: string;
+  chatId: string;
+  openclawSessionKey: string;
+  label: string;
+}
+
 export interface PulsoRequest {
   id: string;
   requestType: RequestType | 'conversation_command' | string;
@@ -230,10 +239,27 @@ export interface PulsoRequest {
   summary: string;
   status: RequestStatus;
   priority: Priority;
+  areaId?: string;
+  contextId?: string;
+  chatId?: string;
+  openclawSessionKey?: string;
   areaRef?: string | null;
   projectRef?: string | null;
   sourceRef?: string | null;
   personRef?: string | null;
+  secondaryAreaRefs?: string[];
+  routing?: {
+    rawInput?: string;
+    cleanInput?: string;
+    sessionTarget?: string;
+    secondaryTopics?: string[];
+    intentType?: string;
+    shouldSendToLotus?: boolean;
+    shouldCreateSideNotes?: boolean;
+    contextHints?: string[];
+    routerVersion?: string;
+    confidence?: number;
+  };
   requestedBy: string;
   requestedAt: Date;
   updatedAt: Date;
@@ -348,6 +374,12 @@ export interface Area extends BaseEntity {
   importance: Priority;
   riskSummary?: string;
   nextReviewAt?: Date;
+  aliases?: string[];
+  keywords?: string[];
+  contextHints?: string[];
+  defaultAgentId?: string;
+  notionAreaUrl?: string;
+  visibility?: 'private' | 'shared';
 }
 
 export interface Project extends BaseEntity {

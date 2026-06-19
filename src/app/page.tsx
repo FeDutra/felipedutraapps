@@ -2,14 +2,31 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Leaf, CheckCircle2, Home, ArrowRight, User, Settings, Sparkles, Activity } from 'lucide-react';
 import GlassCard from '@/shared/components/GlassCard';
 
 export default function EdenCentral() {
+  const router = useRouter();
+
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark');
-  }, []);
+
+    const checkIsTauri = () => {
+      if (typeof window === 'undefined') return false;
+      return (
+        window.location.protocol === 'tauri:' ||
+        window.location.protocol === 'file:' ||
+        !!(window as any).__TAURI__ ||
+        !!(window as any).__TAURI_INTERNALS__
+      );
+    };
+
+    if (checkIsTauri()) {
+      router.replace('/pulso/live');
+    }
+  }, [router]);
 
   const apps = [
     {
