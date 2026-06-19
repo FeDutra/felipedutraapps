@@ -86,7 +86,12 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
             let query = db.collection(BASE);
             query = query.where("archived", "==", false);
             if (status) {
-                query = query.where("status", "==", status);
+                if (status === "requested") {
+                    query = query.where("status", "in", ["requested", "queued_for_openclaw"]);
+                }
+                else {
+                    query = query.where("status", "==", status);
+                }
             }
             else {
                 query = query.where("status", "in", ["requested", "queued_for_openclaw"]);

@@ -57,7 +57,11 @@ export const pulsoRequests = onRequest(
         let query: admin.firestore.Query = db.collection(BASE);
         query = query.where("archived", "==", false);
         if (status) {
-          query = query.where("status", "==", status);
+          if (status === "requested") {
+            query = query.where("status", "in", ["requested", "queued_for_openclaw"]);
+          } else {
+            query = query.where("status", "==", status);
+          }
         } else {
           query = query.where("status", "in", ["requested", "queued_for_openclaw"]);
         }

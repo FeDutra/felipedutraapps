@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processOpenClawQueue = void 0;
-// openclawQueueProcessor.ts
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 /**
@@ -44,7 +44,7 @@ const admin = __importStar(require("firebase-admin"));
  *   2. Call mock OpenClaw adapter (replace with real call later)
  *   3. Store openclawResult and set status to proposal_ready
  */
-exports.processOpenClawQueue = (0, v2_1.onSchedule)({
+exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
     schedule: "every 1 minutes", // adjust after approval if needed
     timeoutSeconds: 300,
 }, async () => {
