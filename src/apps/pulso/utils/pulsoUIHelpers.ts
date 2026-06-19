@@ -7,11 +7,11 @@ import { Status, Priority, Severity } from "../types/pulso.types";
 
 export const semanticColors = {
   red: {
-    bg: 'bg-[#b8544a]/10',
-    border: 'border-[#b8544a]/25',
+    bg: 'bg-[#d81842]/10',
+    border: 'border-[#d81842]/25',
     text: 'text-[#e89083]',
-    glow: 'shadow-[0_0_15px_rgba(184,84,74,0.15)]',
-    dot: 'bg-[#b8544a]'
+    glow: 'shadow-[0_0_15px_rgba(216, 24, 66,0.15)]',
+    dot: 'bg-[#d81842]'
   },
   amber: {
     bg: 'bg-[#cbb291]/15',

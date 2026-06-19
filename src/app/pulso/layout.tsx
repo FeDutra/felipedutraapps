@@ -37,7 +37,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
         metaTheme.setAttribute('name', 'theme-color');
         document.head.appendChild(metaTheme);
       }
-      metaTheme.setAttribute('content', e.detail === 'black' ? '#0f0f0f' : '#b8544a');
+      metaTheme.setAttribute('content', e.detail === 'black' ? '#0f0f0f' : '#d81842');
     };
     document.body.classList.toggle('pulso-theme-black', saved === 'black');
     let metaTheme = document.querySelector('meta[name="theme-color"]');
@@ -46,7 +46,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
       metaTheme.setAttribute('name', 'theme-color');
       document.head.appendChild(metaTheme);
     }
-    metaTheme.setAttribute('content', saved === 'black' ? '#0f0f0f' : '#b8544a');
+    metaTheme.setAttribute('content', saved === 'black' ? '#0f0f0f' : '#d81842');
     window.addEventListener('pulso-theme-change', handleThemeChange);
 
     document.documentElement.setAttribute('data-theme', 'dark');
@@ -64,7 +64,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
   const isLivePage = cleanPathname === '/pulso/live';
 
   return (
-    <div className={`min-h-screen ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]' : 'bg-[#b8544a]'} text-[#fbf9f5] w-full selection:bg-white/20 flex flex-col xl:flex-row overflow-x-hidden relative`}>
+    <div className={`min-h-screen ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]' : 'bg-[#d81842]'} text-[#fbf9f5] w-full selection:bg-white/20 flex flex-col xl:flex-row overflow-x-hidden relative`}>
       {/* Watermark centralizado de fundo (Lótus) */}
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 md:w-[600px] md:h-[600px] rounded-full border border-white/5 bg-white/2 pointer-events-none watermark-layout-anim -z-10" />
 
@@ -77,7 +77,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
       ) : (
         <>
           {/* MOBILE / TABLET TOP NAV (Hidden on Desktop xl) */}
-          <nav className={`xl:hidden relative p-3 md:p-4 flex flex-col items-stretch justify-between gap-3 border-b border-white/10 ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]/90' : 'bg-[#b8544a]/90'} backdrop-blur-xl sticky top-0 z-50 w-full max-w-full overflow-x-hidden`}>
+          <nav className={`xl:hidden relative p-3 md:p-4 flex flex-col items-stretch justify-between gap-3 border-b border-white/10 ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]/90' : 'bg-[#d81842]/90'} backdrop-blur-xl sticky top-0 z-50 w-full max-w-full overflow-x-hidden`}>
             {/* Top bar layer: Logo securely on the left, Profile & Logout securely on the right */}
             <div className="flex items-center justify-between gap-4 w-full">
               {/* Logo & v0.1 */}
@@ -143,7 +143,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* DESKTOP SIDEBAR (Hidden on Mobile/Tablet, visible on Desktop xl) */}
-          <aside className={`hidden xl:flex flex-col justify-between w-64 min-w-[16rem] h-screen static xl:sticky top-0 border-r border-white/10 ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]/95' : 'bg-[#b8544a]/95'} backdrop-blur-2xl z-50 p-4 shrink-0`}>
+          <aside className={`hidden xl:flex flex-col justify-between w-64 min-w-[16rem] h-screen static xl:sticky top-0 border-r border-white/10 ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]/95' : 'bg-[#d81842]/95'} backdrop-blur-2xl z-50 p-4 shrink-0`}>
             {/* Top Section: Logo & Nav items */}
             <div className="flex flex-col gap-6">
               {/* Logo & Back button */}

@@ -444,7 +444,7 @@ export default function CockpitPage() {
         {/* Center Column: Attention, Felipe Tasks & Areas Map */}
         <div className="lg:col-span-5 space-y-8 min-w-0">
           <SafeBlock name="Sinais de Atenção">
-            <div className="bg-[#b8544a]/5 border border-[#b8544a]/15 rounded-3xl p-6">
+            <div className="bg-[#d81842]/5 border border-[#d81842]/15 rounded-3xl p-6">
               <div className="flex items-center gap-2 mb-6">
                 <AlertCircle size={18} className="text-[#e89083]" />
                 <h3 className="text-sm font-black uppercase tracking-widest text-[#e89083]/80">Sinais de Atenção</h3>
@@ -452,8 +452,8 @@ export default function CockpitPage() {
               
               <div className="space-y-4">
                 {topAttentionSignals.map((sig) => {
-                  const bgClass = sig.severity === 'critical' ? 'bg-[#b8544a]/5 border-[#b8544a]/15' : 'bg-[#cbb291]/5 border-[#cbb291]/15';
-                  const dotClass = sig.severity === 'critical' ? 'bg-[#b8544a] shadow-[0_0_8px_rgba(184,84,74,0.4)]' : 'bg-[#cbb291]';
+                  const bgClass = sig.severity === 'critical' ? 'bg-[#d81842]/5 border-[#d81842]/15' : 'bg-[#cbb291]/5 border-[#cbb291]/15';
+                  const dotClass = sig.severity === 'critical' ? 'bg-[#d81842] shadow-[0_0_8px_rgba(216, 24, 66,0.4)]' : 'bg-[#cbb291]';
                   
                   return (
                     <div key={sig.id} className={`flex items-start gap-4 p-3 rounded-xl border ${bgClass}`}>

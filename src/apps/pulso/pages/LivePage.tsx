@@ -41,7 +41,7 @@ function SortableAreaItem({ area, isActive, onClick, icon, hasUnread }: any) {
           isActive
             ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
             : hasUnread
-            ? 'text-[#b8544a] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(184,84,74,0.6)] font-bold'
+            ? 'text-[#d81842] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(216, 24, 66,0.6)] font-bold'
             : 'text-[#fbf9f5]/35 group-hover/item:text-[#fbf9f5]/80 group-hover/item:scale-110'
         }`}
         style={{ width: '24px' }}
@@ -50,7 +50,7 @@ function SortableAreaItem({ area, isActive, onClick, icon, hasUnread }: any) {
       </span>
       <span
         className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-300 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
-          isActive ? 'text-white font-medium' : hasUnread ? 'text-[#b8544a] font-bold animate-pulse' : 'text-[#fbf9f5]'
+          isActive ? 'text-white font-medium' : hasUnread ? 'text-[#d81842] font-bold animate-pulse' : 'text-[#fbf9f5]'
         }`}
       >
         {area.name}
@@ -2405,7 +2405,7 @@ export default function LivePage() {
                     isAreaActive
                       ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
                       : hasUnreadInArea
-                      ? 'text-[#b8544a] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(184,84,74,0.6)] font-bold'
+                      ? 'text-[#d81842] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(216, 24, 66,0.6)] font-bold'
                       : 'text-[#fbf9f5]/35 group-hover/sidebar:text-[#fbf9f5]/65 group-hover/item:text-[#fbf9f5]/90'
                   }`}
                   style={{ width: '24px' }}
@@ -2450,7 +2450,7 @@ export default function LivePage() {
                         isContextActive
                           ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
                           : isUnread
-                          ? 'text-[#b8544a] font-bold animate-pulse'
+                          ? 'text-[#d81842] font-bold animate-pulse'
                           : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
                       }`}
                     >
@@ -2637,15 +2637,15 @@ export default function LivePage() {
                           )}
 
                           {msg.handoffStatus === 'execution_blocked' && (
-                            <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/20 rounded-xl space-y-1.5 text-[#3d2f2f] mt-2">
-                              <p className="text-[9px] text-[#b8544a] font-bold lowercase">execução bloqueada</p>
+                            <div className="p-3 bg-[#fbf9f5] border border-[#d81842]/20 rounded-xl space-y-1.5 text-[#3d2f2f] mt-2">
+                              <p className="text-[9px] text-[#d81842] font-bold lowercase">execução bloqueada</p>
                               <p className="text-[10px] text-[#3d2f2f]/80 font-light leading-relaxed">{msg.executionError || 'responsável não designado.'}</p>
                               
                               {(msg.executionError || '').includes("ownerRefs") && (
                                 <button
                                   onClick={() => handleExecuteProposal(msg, true)}
                                   disabled={submittingExecutionId === msg.id}
-                                  className="text-[9px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
+                                  className="text-[9px] font-bold text-[#d81842] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
                                 >
                                   {submittingExecutionId === msg.id ? '[ executando... ]' : '[ confirmar como triagem & executar ]'}
                                 </button>
@@ -2654,15 +2654,15 @@ export default function LivePage() {
                           )}
 
                           {msg.openclawResult.requiresHumanApproval && msg.handoffStatus === 'waiting_user_approval' && (
-                            <div className="p-3 bg-[#fbf9f5] border border-[#b8544a]/25 rounded-xl space-y-3 text-[#3d2f2f] mt-2">
-                              <span className="block text-[9px] font-bold text-[#b8544a] tracking-widest lowercase">decisão pendente</span>
+                            <div className="p-3 bg-[#fbf9f5] border border-[#d81842]/25 rounded-xl space-y-3 text-[#3d2f2f] mt-2">
+                              <span className="block text-[9px] font-bold text-[#d81842] tracking-widest lowercase">decisão pendente</span>
                               
                               <input
                                 type="text"
                                 value={approvalNotes[msg.id] || ''}
                                 onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
                                 placeholder="nota (opcional)..."
-                                className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#b8544a] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
+                                className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#d81842] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
                                 disabled={submittingApprovalId === msg.id}
                               />
 
@@ -2670,7 +2670,7 @@ export default function LivePage() {
                                 <button
                                   onClick={() => handleApproveProposal(msg)}
                                   disabled={submittingApprovalId === msg.id}
-                                  className="text-[10px] font-bold text-[#b8544a] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                                  className="text-[10px] font-bold text-[#d81842] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
                                 >
                                   {submittingApprovalId === msg.id ? '[ registrando... ]' : '[ aprovar proposta ]'}
                                 </button>
@@ -2764,7 +2764,7 @@ export default function LivePage() {
           )}
         </div>
 
-        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8544a] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#d81842] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
           showAttachmentToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4 pointer-events-none'
         }`}>
           <Activity size={16} className="animate-pulse" />
@@ -2872,7 +2872,7 @@ export default function LivePage() {
               disabled={false}
               className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
                 voiceMode === 'recording_once' 
-                  ? 'text-[#b8544a] bg-white scale-105 shadow-md' 
+                  ? 'text-[#d81842] bg-white scale-105 shadow-md' 
                   : 'text-[#fbf9f5]/60 hover:text-white'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={voiceMode === 'recording_once' ? 'gravando... clique para parar' : 'capturar áudio'}
