@@ -530,8 +530,34 @@ export default function LivePage() {
   const latencyResponseReceivedRef = React.useRef<number | null>(null);
   const latencyAutoTtsStartRef = React.useRef<number | null>(null);
 
-  const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(false);
+  const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(true);
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+
+  // Helper to generate soft synth tones with smooth envelopes and no clicks (warm chords)
+  const playSynthTone = React.useCallback((ctx: AudioContext, freqs: number[], type: OscillatorType, startTime: number, duration: number, startVolume: number) => {
+    freqs.forEach((freq) => {
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, startTime);
+        
+        // Soft attack to avoid digital clicking (15ms fade-in)
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(startVolume / freqs.length, startTime + 0.015);
+        
+        // Soft release (decay to zero exponentially)
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      } catch (err) {
+        console.warn('Oscillator setup failed:', err);
+      }
+    });
+  }, []);
 
   const playPresenceSoundCue = React.useCallback((type: 'start_listening' | 'sent' | 'response_arrived' | 'speak_start' | 'error') => {
     if (!presenceSoundCuesEnabled) {
@@ -543,95 +569,28 @@ export default function LivePage() {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
-      
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
       const now = ctx.currentTime;
       
       if (type === 'start_listening') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(280, now);
-        osc.frequency.exponentialRampToValueAtTime(220, now + 0.25);
-        gain.gain.setValueAtTime(0.015, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
+        // Soft ascending fifth chord sweep (A3, E4, A4) - warm synthesizer rise
+        playSynthTone(ctx, [220.00, 330.00, 440.00], 'triangle', now, 0.35, 0.12);
       } else if (type === 'sent') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1200, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
-        gain.gain.setValueAtTime(0.008, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-        osc.start(now);
-        osc.stop(now + 0.15);
+        // Quick soft high chime (A5, E6) - clean chirp
+        playSynthTone(ctx, [880.00, 1318.51], 'sine', now, 0.15, 0.08);
       } else if (type === 'response_arrived') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(330, now);
-        osc.frequency.exponentialRampToValueAtTime(440, now + 0.2);
-        gain.gain.setValueAtTime(0.015, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-        
-        setTimeout(() => {
-          try {
-            const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const osc2 = ctx2.createOscillator();
-            const gain2 = ctx2.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx2.destination);
-            const now2 = ctx2.currentTime;
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(440, now2);
-            osc2.frequency.exponentialRampToValueAtTime(550, now2 + 0.15);
-            gain2.gain.setValueAtTime(0.01, now2);
-            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.15);
-            osc2.start(now2);
-            osc2.stop(now2 + 0.15);
-          } catch {}
-        }, 80);
+        // Warm C-Major 7th bell chord (C5, E5, G5, B5)
+        playSynthTone(ctx, [523.25, 659.25, 783.99, 987.77], 'sine', now, 0.5, 0.15);
       } else if (type === 'speak_start') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
-        gain.gain.setValueAtTime(0.006, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-        osc.start(now);
-        osc.stop(now + 0.4);
-        
-        setTimeout(() => {
-          try {
-            const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const osc2 = ctx2.createOscillator();
-            const gain2 = ctx2.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx2.destination);
-            const now2 = ctx2.currentTime;
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(1100, now2);
-            osc2.frequency.exponentialRampToValueAtTime(1500, now2 + 0.35);
-            gain2.gain.setValueAtTime(0.004, now2);
-            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.35);
-            osc2.start(now2);
-            osc2.stop(now2 + 0.35);
-          } catch {}
-        }, 60);
+        // Soft positive swell (A4, C#5, E5) - warm synthesizer chord
+        playSynthTone(ctx, [440.00, 554.37, 659.25], 'sine', now, 0.4, 0.10);
       } else if (type === 'error') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(220, now);
-        osc.frequency.linearRampToValueAtTime(110, now + 0.4);
-        gain.gain.setValueAtTime(0.015, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-        osc.start(now);
-        osc.stop(now + 0.4);
+        // Warm low warning (E3, G3)
+        playSynthTone(ctx, [164.81, 196.00], 'triangle', now, 0.45, 0.14);
       }
     } catch (e) {
       console.warn('Failed to play presence sound cue:', e);
     }
-  }, [presenceSoundCuesEnabled]);
+  }, [presenceSoundCuesEnabled, playSynthTone]);
 
   // ── Notification State & Programmatic Sound Cues ───────────────────────
   const [notificationSoundEnabled, setNotificationSoundEnabled] = React.useState(true);
@@ -649,68 +608,36 @@ export default function LivePage() {
       const now = ctx.currentTime;
 
       if (isSameSession) {
-        // Som A: Bipe duplo rápido e harmonioso (C5 e E5)
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(523.25, now); // C5
-        gain1.gain.setValueAtTime(0.015, now);
-        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-        osc1.start(now);
-        osc1.stop(now + 0.12);
-
+        // Som A (Sessão Ativa): Acorde C-Major 7th seguido de G-Major (bipe duplo harmônico)
+        // Primeiro acorde (Dó, Mi, Sol)
+        playSynthTone(ctx, [523.25, 659.25, 783.99], 'sine', now, 0.35, 0.18);
+        
+        // Segundo acorde ligeiramente atrasado (Sol, Si, Ré)
         setTimeout(() => {
           try {
             const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const osc2 = ctx2.createOscillator();
-            const gain2 = ctx2.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx2.destination);
             const now2 = ctx2.currentTime;
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(659.25, now2); // E5
-            gain2.gain.setValueAtTime(0.012, now2);
-            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.12);
-            osc2.start(now2);
-            osc2.stop(now2 + 0.12);
+            playSynthTone(ctx2, [783.99, 987.77, 1174.66], 'sine', now2, 0.35, 0.15);
           } catch {}
-        }, 70);
+        }, 80);
       } else {
-        // Som B: Tom ambiente de alerta mais encorpado (F4 e A4)
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(349.23, now); // F4
-        gain1.gain.setValueAtTime(0.02, now);
-        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-        osc1.start(now);
-        osc1.stop(now + 0.18);
-
+        // Som B (Sessão Inativa): Alerta de quinta perfeita em acorde suspenso (Fá, Dó depois Lá, Mi)
+        // Primeiro tom suspenso
+        playSynthTone(ctx, [349.23, 523.25], 'sine', now, 0.4, 0.18);
+        
+        // Segundo tom de resolução
         setTimeout(() => {
           try {
             const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const osc2 = ctx2.createOscillator();
-            const gain2 = ctx2.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx2.destination);
             const now2 = ctx2.currentTime;
-            osc2.type = 'sine';
-            osc2.frequency.setValueAtTime(440.00, now2); // A4
-            gain2.gain.setValueAtTime(0.015, now2);
-            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.18);
-            osc2.start(now2);
-            osc2.stop(now2 + 0.18);
+            playSynthTone(ctx2, [440.00, 659.25], 'sine', now2, 0.4, 0.15);
           } catch {}
-        }, 90);
+        }, 100);
       }
     } catch (e) {
       console.warn('Failed to play notification sound cue:', e);
     }
-  }, [notificationSoundEnabled]);
+  }, [notificationSoundEnabled, playSynthTone]);
 
   // ── Voice Input State ────────────────────────────────────────────────
   type VoiceState = 'idle' | 'listening' | 'transcribing' | 'ready' | 'error_permission' | 'unsupported';
