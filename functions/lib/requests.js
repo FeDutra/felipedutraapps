@@ -82,11 +82,15 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
     try {
         // ── GET /pending ──────────────────────────────────────────────────────
         if (req.method === "GET" && (path === "/pending" || path === "")) {
-            const { limit = "20", requestType, status = "requested" } = req.query;
+            const { limit = "20", requestType, status } = req.query;
             let query = db.collection(BASE);
             query = query.where("archived", "==", false);
-            if (status)
+            if (status) {
                 query = query.where("status", "==", status);
+            }
+            else {
+                query = query.where("status", "in", ["requested", "queued_for_openclaw"]);
+            }
             if (requestType)
                 query = query.where("requestType", "==", requestType);
             const snapshot = await query.limit(Number(limit)).get();
@@ -112,8 +116,9 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 if (!docSnap.exists)
                     return { status: 404, message: "Request not found" };
                 const data = docSnap.data();
-                if (data.status !== "requested")
+                if (data.status !== "requested" && data.status !== "queued_for_openclaw") {
                     return { status: 409, message: `Request is in status ${data.status}` };
+                }
                 const ts = admin.firestore.FieldValue.serverTimestamp();
                 transaction.update(docRef, { status: "running", processedBy, startedAt: ts, updatedAt: ts });
                 return { status: 200, message: "claimed" };

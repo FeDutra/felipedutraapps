@@ -53,10 +53,14 @@ export const pulsoRequests = onRequest(
     try {
       // ── GET /pending ──────────────────────────────────────────────────────
       if (req.method === "GET" && (path === "/pending" || path === "")) {
-        const { limit = "20", requestType, status = "requested" } = req.query;
+        const { limit = "20", requestType, status } = req.query;
         let query: admin.firestore.Query = db.collection(BASE);
         query = query.where("archived", "==", false);
-        if (status) query = query.where("status", "==", status);
+        if (status) {
+          query = query.where("status", "==", status);
+        } else {
+          query = query.where("status", "in", ["requested", "queued_for_openclaw"]);
+        }
         if (requestType) query = query.where("requestType", "==", requestType);
         
         const snapshot = await query.limit(Number(limit)).get();
@@ -82,7 +86,9 @@ export const pulsoRequests = onRequest(
           const docSnap = await transaction.get(docRef);
           if (!docSnap.exists) return { status: 404, message: "Request not found" };
           const data = docSnap.data()!;
-          if (data.status !== "requested") return { status: 409, message: `Request is in status ${data.status}` };
+          if (data.status !== "requested" && data.status !== "queued_for_openclaw") {
+            return { status: 409, message: `Request is in status ${data.status}` };
+          }
           const ts = admin.firestore.FieldValue.serverTimestamp();
           transaction.update(docRef, { status: "running", processedBy, startedAt: ts, updatedAt: ts });
           return { status: 200, message: "claimed" };
