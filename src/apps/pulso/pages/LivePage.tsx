@@ -110,7 +110,9 @@ import {
   ArrowDown,
   UploadCloud,
   ExternalLink,
-  Download
+  Download,
+  Edit2,
+  Archive
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -404,7 +406,10 @@ export default function LivePage() {
     }
   }, []);
 
-  const allContextNodes = React.useMemo(() => [...INITIAL_CONTEXT_NODES, ...customContextNodes], [customContextNodes]);
+  const allContextNodes = React.useMemo(() => {
+    const visibleCustom = customContextNodes.filter(n => !n.archived);
+    return [...INITIAL_CONTEXT_NODES, ...visibleCustom];
+  }, [customContextNodes]);
 
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(INITIAL_CONTEXT_NODES[0]);
   const activeContextNodeRef = React.useRef(activeContextNode);
@@ -413,6 +418,8 @@ export default function LivePage() {
   }, [activeContextNode]);
   const activeAreaId = activeContextNode.areaId;
 
+  const [editingContextId, setEditingContextId] = React.useState<string | null>(null);
+  const [editingContextLabel, setEditingContextLabel] = React.useState('');
   const [addingChatAreaId, setAddingChatAreaId] = React.useState<string | null>(null);
   const [newChatName, setNewChatName] = React.useState('');
   const [hoveredAreaId, setHoveredAreaId] = React.useState<string | null>(null);
@@ -1794,11 +1801,47 @@ export default function LivePage() {
         id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
         text: `falha ao enviar para a Lótus: ${err?.message || 'erro de persistência'}.`,
-        timestamp: new Date()
+        timestamp: new Date(),
+        contextId: activeContextNode.contextId
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleRenameChat = (contextId: string) => {
+    const trimmed = editingContextLabel.trim();
+    if (trimmed) {
+      const updated = customContextNodes.map(node => {
+        if (node.contextId === contextId) {
+          return { ...node, label: trimmed };
+        }
+        return node;
+      });
+      setCustomContextNodes(updated);
+      localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+      
+      if (activeContextNode.contextId === contextId) {
+        setActiveContextNode(prev => ({ ...prev, label: trimmed }));
+      }
+    }
+    setEditingContextId(null);
+  };
+
+  const handleArchiveChat = (contextId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customContextNodes.map(node => {
+      if (node.contextId === contextId) {
+        return { ...node, archived: true };
+      }
+      return node;
+    });
+    setCustomContextNodes(updated);
+    localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+    
+    if (activeContextNode.contextId === contextId) {
+      setActiveContextNode(INITIAL_CONTEXT_NODES[0]);
     }
   };
 
@@ -2216,7 +2259,7 @@ export default function LivePage() {
   const currentMessages = React.useMemo(() => {
     return messages.filter(msg => {
       if (msg.id === 'welcome') return true;
-      return !msg.contextId || msg.contextId === activeContextNode.contextId;
+      return msg.contextId === activeContextNode.contextId;
     });
   }, [messages, activeContextNode.contextId]);
 
@@ -2608,6 +2651,8 @@ export default function LivePage() {
                 {areaContexts.map((ctx) => {
                   const isContextActive = activeContextNode.contextId === ctx.contextId;
                   const isUnread = !!unreadContexts[ctx.contextId];
+                  const isCustom = customContextNodes.some(n => n.contextId === ctx.contextId);
+                  
                   return (
                     <div
                       key={ctx.contextId}
@@ -2622,15 +2667,58 @@ export default function LivePage() {
                           return prev;
                         });
                       }}
-                      className={`text-[8px] tracking-wider uppercase font-sans font-light py-0.5 cursor-pointer transition-all duration-200 select-none whitespace-nowrap ${
-                        isContextActive
-                          ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
-                          : isUnread
-                          ? 'text-[#b8283e] font-bold animate-pulse'
-                          : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
-                      }`}
+                      className="group/ctx flex items-center justify-between gap-2 w-full py-0.5"
                     >
-                      {ctx.label}
+                      {editingContextId === ctx.contextId ? (
+                        <input
+                          type="text"
+                          value={editingContextLabel}
+                          onChange={(e) => setEditingContextLabel(e.target.value)}
+                          onBlur={() => handleRenameChat(ctx.contextId)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameChat(ctx.contextId);
+                            if (e.key === 'Escape') setEditingContextId(null);
+                          }}
+                          className="bg-white/15 text-white border border-white/20 rounded px-1 py-0.5 text-[8px] outline-none w-20"
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span
+                          className={`text-[8px] tracking-wider uppercase font-sans font-light cursor-pointer transition-all duration-200 select-none truncate flex-1 text-left ${
+                            isContextActive
+                              ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
+                              : isUnread
+                              ? 'text-[#b8283e] font-bold animate-pulse'
+                              : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
+                          }`}
+                        >
+                          {ctx.label}
+                        </span>
+                      )}
+                      
+                      {isCustom && editingContextId !== ctx.contextId && (
+                        <div className="opacity-0 group-hover/ctx:opacity-100 transition-opacity flex items-center gap-1 shrink-0 select-none mr-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingContextId(ctx.contextId);
+                              setEditingContextLabel(ctx.label);
+                            }}
+                            className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+                            title="Renomear chat"
+                          >
+                            <Edit2 size={8} />
+                          </button>
+                          <button
+                            onClick={(e) => handleArchiveChat(ctx.contextId, e)}
+                            className="p-0.5 text-[#fbf9f5]/35 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
+                            title="Arquivar chat"
+                          >
+                            <Archive size={8} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
