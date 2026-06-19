@@ -2351,11 +2351,11 @@ export default function LivePage() {
       {/* 1. Main Icon Sidebar */}
       <div 
         onMouseLeave={() => {
-          if (!isAddingChat) {
+          if (!addingChatAreaId) {
             setHoveredAreaId(null);
           }
         }}
-        className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none rounded-2xl p-3 border border-transparent backdrop-blur-none hover:bg-[#fbf9f5]/10 hover:backdrop-blur-md hover:border-[#fbf9f5]/10 transition-all duration-200 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none transition-all duration-200 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
       >
         {AREA_ORDER.map((areaId) => {
           const areaName = AREA_NAMES[areaId] || areaId;
@@ -2363,12 +2363,13 @@ export default function LivePage() {
           const isHovered = hoveredAreaId === areaId;
           const isAreaActive = activeAreaId === areaId;
           const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
+          const isAddingChatForThisArea = addingChatAreaId === areaId;
           
           return (
             <div 
               key={areaId} 
               onMouseEnter={() => {
-                if (!isAddingChat) {
+                if (!addingChatAreaId) {
                   setHoveredAreaId(areaId);
                 }
               }}
@@ -2393,7 +2394,7 @@ export default function LivePage() {
               >
                 {/* Icon */}
                 <span 
-                  className={`text-lg text-center transition-all duration-300 font-mono ${
+                  className={`text-lg text-center transition-all duration-200 font-mono ${
                     isAreaActive
                       ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
                       : hasUnreadInArea
@@ -2407,7 +2408,7 @@ export default function LivePage() {
 
                 {/* Area Text Label */}
                 <span 
-                  className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-300 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
+                  className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-200 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
                     isAreaActive ? 'text-white font-medium' : 'text-[#fbf9f5]'
                   }`}
                 >
@@ -2453,7 +2454,7 @@ export default function LivePage() {
 
                 {/* Add Chat Input/Button */}
                 <div className="mt-0.5">
-                  {isAddingChat ? (
+                  {isAddingChatForThisArea ? (
                     <input
                       autoFocus
                       type="text"
@@ -2479,18 +2480,18 @@ export default function LivePage() {
                             localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
                             setActiveContextNode(newNode);
                             setNewChatName('');
-                            setIsAddingChat(false);
+                            setAddingChatAreaId(null);
                             setHoveredAreaId(null);
                           }
                         } else if (e.key === 'Escape') {
-                          setIsAddingChat(false);
+                          setAddingChatAreaId(null);
                           setNewChatName('');
                           setHoveredAreaId(null);
                         }
                       }}
                       onBlur={() => {
                         setTimeout(() => {
-                          setIsAddingChat(false);
+                          setAddingChatAreaId(null);
                           setNewChatName('');
                           setHoveredAreaId(null);
                         }, 200);
@@ -2501,9 +2502,9 @@ export default function LivePage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setIsAddingChat(true);
+                        setAddingChatAreaId(areaId);
                       }}
-                      className="text-[8px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left"
+                      className="text-[8px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left w-full"
                     >
                       + novo
                     </button>
