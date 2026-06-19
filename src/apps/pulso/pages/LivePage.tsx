@@ -2437,18 +2437,37 @@ export default function LivePage() {
                       onChange={(e) => setNewChatName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          const name = newChatName.trim().toLowerCase();
-                          if (name) {
-                            const slug = name.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
-                            const contextId = `${areaId}_${slug}`;
+                          const rawLabel = newChatName.trim();
+                          if (rawLabel) {
+                            // Robust slugification: removes accents, replaces spaces with hyphens, removes special characters
+                            const cleanAreaPrefix = areaId.replace('area_', '');
+                            const slug = rawLabel
+                              .toLowerCase()
+                              .normalize('NFD')
+                              .replace(/[\u0300-\u036f]/g, '')
+                              .replace(/[^a-z0-9\s-]/g, '')
+                              .replace(/\s+/g, '-')
+                              .replace(/-+/g, '-');
+                            
+                            let baseContextId = `${cleanAreaPrefix}_${slug}`;
+                            let contextId = baseContextId;
+                            let counter = 1;
+                            
+                            // Check for collisions inside allContextNodes (which includes INITIAL_CONTEXT_NODES and customContextNodes)
+                            while (allContextNodes.some(node => node.contextId === contextId)) {
+                              contextId = `${baseContextId}-${counter}`;
+                              counter++;
+                            }
+                            
                             const openclawSessionKey = `agent:main:pulso:${contextId}`;
                             const newNode: PulsoContextNode = {
                               areaId,
                               contextId,
-                              chatId: "default",
+                              chatId: "default", // local/provisional compatibility flag
                               openclawSessionKey,
-                              label: name
+                              label: rawLabel
                             };
+                            
                             const updated = [...customContextNodes, newNode];
                             setCustomContextNodes(updated);
                             localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
