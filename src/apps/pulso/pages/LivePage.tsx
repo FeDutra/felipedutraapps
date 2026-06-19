@@ -117,8 +117,9 @@ import { firestorePaths } from '../services/firestorePaths';
 import { PulsoContextNode } from '../types/pulso.types';
 
 const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
+  // Sistema
   {
-    areaId: "area_pulso_ia",
+    areaId: "area_sistema",
     subareaId: "pulso",
     contextId: "sistema_pulso",
     chatId: "default",
@@ -126,7 +127,41 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "pulso"
   },
   {
-    areaId: "area_casa_jardim",
+    areaId: "area_sistema",
+    subareaId: "infraestrutura",
+    contextId: "sistema_infraestrutura",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:sistema_infraestrutura",
+    label: "infraestrutura"
+  },
+  {
+    areaId: "area_sistema",
+    subareaId: "openclaw_agentes",
+    contextId: "sistema_openclaw_agentes",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:sistema_openclaw_agentes",
+    label: "openclaw e agentes"
+  },
+  // Trabalho
+  {
+    areaId: "area_trabalho",
+    subareaId: "modu",
+    contextId: "trabalho_modu",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:trabalho_modu",
+    label: "modú"
+  },
+  {
+    areaId: "area_trabalho",
+    subareaId: "despertar",
+    contextId: "trabalho_despertar",
+    chatId: "default",
+    openclawSessionKey: "agent:main:pulso:trabalho_despertar",
+    label: "despertar"
+  },
+  // Casa
+  {
+    areaId: "area_casa",
     subareaId: "construcao",
     contextId: "casa_construcao",
     chatId: "default",
@@ -134,21 +169,14 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "construção"
   },
   {
-    areaId: "area_casa_jardim",
+    areaId: "area_casa",
     subareaId: "horta",
     contextId: "casa_horta",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:casa_horta",
     label: "horta"
   },
-  {
-    areaId: "area_familia",
-    subareaId: "familia",
-    contextId: "familia",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:familia",
-    label: "família"
-  },
+  // Família
   {
     areaId: "area_familia",
     subareaId: "escola_guayi",
@@ -157,62 +185,34 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     openclawSessionKey: "agent:main:pulso:familia_escola_guayi",
     label: "escola guayi"
   },
+  // Criação
   {
-    areaId: "area_modu",
-    subareaId: "modu",
-    contextId: "trabalho_modu",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:trabalho_modu",
-    label: "modú"
-  },
-  {
-    areaId: "area_despertar",
-    subareaId: "despertar",
-    contextId: "trabalho_despertar",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:trabalho_despertar",
-    label: "despertar"
-  },
-  {
-    areaId: "area_projetos_autorais",
+    areaId: "area_criacao",
     subareaId: "producao_autoral",
     contextId: "criacao_producao_autoral",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:criacao_producao_autoral",
     label: "produção autoral"
   },
+  // Eu (Semente)
   {
-    areaId: "area_pulso_ia",
-    subareaId: "infraestrutura",
-    contextId: "sistema_infraestrutura",
+    areaId: "area_eu",
+    subareaId: "eu",
+    contextId: "eu",
     chatId: "default",
-    openclawSessionKey: "agent:main:pulso:sistema_infraestrutura",
-    label: "infraestrutura"
+    openclawSessionKey: "agent:main:pulso:eu",
+    label: "eu"
   },
+  // Dinheiro (Semente)
   {
-    areaId: "area_pulso_ia",
-    subareaId: "openclaw_agentes",
-    contextId: "sistema_openclaw_agentes",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:sistema_openclaw_agentes",
-    label: "openclaw e agentes"
-  },
-  {
-    areaId: "area_relacoes",
-    subareaId: "pessoas",
-    contextId: "pessoas",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:pessoas",
-    label: "pessoas"
-  },
-  {
-    areaId: "area_financeiro_familiar",
+    areaId: "area_dinheiro",
     subareaId: "dinheiro",
     contextId: "dinheiro",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:dinheiro",
     label: "dinheiro"
   },
+  // Saúde (Semente)
   {
     areaId: "area_saude",
     subareaId: "saude",
@@ -221,42 +221,49 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     openclawSessionKey: "agent:main:pulso:saude",
     label: "saúde"
   },
+  // Pessoas (Semente)
   {
-    areaId: "area_vida_rotina",
-    subareaId: "eu",
-    contextId: "eu",
+    areaId: "area_pessoas",
+    subareaId: "pessoas",
+    contextId: "pessoas",
     chatId: "default",
-    openclawSessionKey: "agent:main:pulso:eu",
-    label: "eu"
+    openclawSessionKey: "agent:main:pulso:pessoas",
+    label: "pessoas"
   }
 ];
 
 const AREA_NAMES: Record<string, string> = {
-  area_vida_rotina: "eu",
-  area_modu: "trabalho",
-  area_casa_jardim: "casa",
+  area_eu: "eu",
+  area_trabalho: "trabalho",
+  area_casa: "casa",
   area_familia: "família",
-  area_projetos_autorais: "criação",
-  area_relacoes: "pessoas",
-  area_financeiro_familiar: "dinheiro",
+  area_criacao: "criação",
+  area_estudo: "estudo",
+  area_habitos: "hábitos",
   area_saude: "saúde",
-  area_despertar: "despertar",
-  area_arca: "arca",
-  area_pulso_ia: "sistema"
+  area_dinheiro: "dinheiro",
+  area_pessoas: "pessoas",
+  area_viagens: "viagens",
+  area_lazer: "lazer",
+  area_sistema: "sistema",
+  area_futuro: "futuro"
 };
 
 const AREA_ORDER = [
-  "area_vida_rotina",
-  "area_modu",
-  "area_casa_jardim",
+  "area_eu",
+  "area_trabalho",
+  "area_casa",
   "area_familia",
-  "area_projetos_autorais",
-  "area_relacoes",
-  "area_financeiro_familiar",
+  "area_criacao",
+  "area_estudo",
+  "area_habitos",
   "area_saude",
-  "area_despertar",
-  "area_arca",
-  "area_pulso_ia"
+  "area_dinheiro",
+  "area_pessoas",
+  "area_viagens",
+  "area_lazer",
+  "area_sistema",
+  "area_futuro"
 ];
 
 // Safe array helper
@@ -456,20 +463,20 @@ export default function LivePage() {
     if (!area) return '○';
     const identifier = (area.slug || area.id || area.name || '').toLowerCase();
     
-    if (identifier.includes('casa') || identifier.includes('obra') || identifier.includes('construção')) return '⌂';
-    if (identifier.includes('fam')) return '◎';
-    if (identifier.includes('vida') || identifier.includes('rotina')) return '〰';
-    if (identifier.includes('saud') || identifier.includes('saúd')) return '✚';
-    if (identifier.includes('finan')) return '◌';
-    if (identifier.includes('modu') || identifier.includes('modú')) return '▦';
-    if (identifier.includes('despertar')) return '✹';
-    if (identifier.includes('projeto') || identifier.includes('autoral') || identifier.includes('produção')) return '✦';
-    if (identifier.includes('pulso') || identifier.includes('ia') || identifier.includes('tecnologia') || identifier.includes('openclaw') || identifier.includes('agente')) return '⌘';
-    if (identifier.includes('relacoes') || identifier.includes('relações') || identifier.includes('pessoa')) return '⟡';
-    if (identifier.includes('pesquisa') || identifier.includes('arca')) return '◍';
-    if (identifier.includes('guayi') || identifier.includes('escola')) return '◈';
-    if (identifier.includes('horta') || identifier.includes('terra')) return '⑆';
-    if (identifier.includes('infra')) return '▤';
+    if (identifier.includes('casa')) return '⌂';
+    if (identifier.includes('familia') || identifier.includes('família')) return '◎';
+    if (identifier.includes('trabalho')) return '▦';
+    if (identifier.includes('criacao') || identifier.includes('criação')) return '✦';
+    if (identifier.includes('estudo')) return '◈';
+    if (identifier.includes('habitos') || identifier.includes('hábitos')) return '〰';
+    if (identifier.includes('saude') || identifier.includes('saúd')) return '✚';
+    if (identifier.includes('dinheiro')) return '◌';
+    if (identifier.includes('pessoas')) return '⟡';
+    if (identifier.includes('viagens')) return '▻';
+    if (identifier.includes('lazer')) return '✹';
+    if (identifier.includes('sistema')) return '⌘';
+    if (identifier.includes('futuro')) return '▲';
+    if (identifier.includes('eu')) return '⊙';
     
     return '⚬';
   };
