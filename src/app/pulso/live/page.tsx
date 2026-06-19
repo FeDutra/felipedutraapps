@@ -8,7 +8,7 @@ export const metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#d81842',
+  themeColor: '#b8283e',
 };
 
 export default function Page() {

@@ -411,9 +411,9 @@ export default function TasksPage() {
                 onChange={(e) => setAreaFilter(e.target.value)}
                 className="bg-transparent text-xs text-white/80 focus:outline-none w-full cursor-pointer font-semibold"
               >
-                <option value="all" className="bg-[#d81842] text-white">Todas as Áreas</option>
+                <option value="all" className="bg-[#b8283e] text-white">Todas as Áreas</option>
                 {areas.map(a => (
-                  <option key={a.id} value={a.id} className="bg-[#d81842] text-white">{a.name}</option>
+                  <option key={a.id} value={a.id} className="bg-[#b8283e] text-white">{a.name}</option>
                 ))}
               </select>
             </div>
@@ -426,9 +426,9 @@ export default function TasksPage() {
                 onChange={(e) => setProjectFilter(e.target.value)}
                 className="bg-transparent text-xs text-white/80 focus:outline-none w-full cursor-pointer font-semibold"
               >
-                <option value="all" className="bg-[#d81842] text-white">Todos os Projetos</option>
+                <option value="all" className="bg-[#b8283e] text-white">Todos os Projetos</option>
                 {projects.map(p => (
-                  <option key={p.id} value={p.id} className="bg-[#d81842] text-white">{p.name}</option>
+                  <option key={p.id} value={p.id} className="bg-[#b8283e] text-white">{p.name}</option>
                 ))}
               </select>
             </div>

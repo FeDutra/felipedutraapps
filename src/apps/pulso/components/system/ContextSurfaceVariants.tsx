@@ -40,7 +40,7 @@ export const ContextSurfaceVariants: React.FC<ContextSurfaceProps> = ({ variant,
               <ul className="space-y-2">
                 {locks.map(l => (
                   <li key={l} className="flex items-center gap-2 text-xs font-light">
-                    <Lock size={12} className="text-[#d81842]" /> {l}
+                    <Lock size={12} className="text-[#b8283e]" /> {l}
                   </li>
                 ))}
               </ul>
@@ -110,8 +110,8 @@ export const ContextSurfaceVariants: React.FC<ContextSurfaceProps> = ({ variant,
         </div>
 
         <div className="absolute bottom-32 right-16 animate-fade-in pointer-events-auto" style={{ animationDelay: '150ms' }}>
-           <div className="bg-[#d81842]/10 backdrop-blur-xl border border-[#d81842]/20 rounded-full px-5 py-3 text-[#fbf9f5] flex items-center gap-3 shadow-2xl">
-            <AlertTriangle size={14} className="text-[#d81842]" />
+           <div className="bg-[#b8283e]/10 backdrop-blur-xl border border-[#b8283e]/20 rounded-full px-5 py-3 text-[#fbf9f5] flex items-center gap-3 shadow-2xl">
+            <AlertTriangle size={14} className="text-[#b8283e]" />
             <span className="text-xs font-light tracking-wide">{locks.length} travas ativas</span>
           </div>
         </div>
@@ -155,8 +155,8 @@ export const ContextSurfaceVariants: React.FC<ContextSurfaceProps> = ({ variant,
                </div>
             </div>
 
-            <div className="bg-[#d81842]/10 backdrop-blur-md border border-[#d81842]/20 rounded-xl p-5 text-[#fbf9f5]">
-               <h3 className="text-[9px] font-bold tracking-widest uppercase text-[#d81842] mb-2 flex items-center gap-2"><Lock size={12}/> Gargalos</h3>
+            <div className="bg-[#b8283e]/10 backdrop-blur-md border border-[#b8283e]/20 rounded-xl p-5 text-[#fbf9f5]">
+               <h3 className="text-[9px] font-bold tracking-widest uppercase text-[#b8283e] mb-2 flex items-center gap-2"><Lock size={12}/> Gargalos</h3>
                <div className="text-xs font-light text-white/80 flex flex-col gap-1.5">
                   {locks.map(l => <span key={l}>- {l}</span>)}
                </div>
