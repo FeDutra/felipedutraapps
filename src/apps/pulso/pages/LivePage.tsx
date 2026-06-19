@@ -1490,7 +1490,7 @@ export default function LivePage() {
       cleanTranscript: (mode === 'presence' || mode === 'voice') ? cleanMsg : undefined,
       timestamp: new Date().toISOString(),
       clientCreatedAtMs: Date.now(),
-      conversationId: options?.conversationId || `conv_${Date.now()}`,
+      conversationId: options?.conversationId || `conv_${options?.contextId || activeContextNode.contextId}`,
       messageId: `msg_${Date.now()}`,
       approvalMode: "allow_read_only" as const,
       context: {
