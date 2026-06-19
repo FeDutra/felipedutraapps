@@ -1870,6 +1870,13 @@ export default function LivePage() {
     return req.status !== 'success' && req.status !== 'error' && req.status !== 'timeout';
   }, [allRequests, lastSentRequestId]);
 
+  const currentMessages = React.useMemo(() => {
+    return messages.filter(msg => {
+      if (msg.id === 'welcome') return true;
+      return !msg.contextId || msg.contextId === activeContextNode.contextId;
+    });
+  }, [messages, activeContextNode.contextId]);
+
   if (loading) {
     return (
       <div className="theme-her flex flex-col items-center justify-center h-[100dvh] pb-[env(safe-area-inset-bottom)] text-[#fbf9f5]">
@@ -2071,12 +2078,6 @@ export default function LivePage() {
     return 'lotus-idle-anim';
   };
 
-  const currentMessages = React.useMemo(() => {
-    return messages.filter(msg => {
-      if (msg.id === 'welcome') return true;
-      return !msg.contextId || msg.contextId === activeContextNode.contextId;
-    });
-  }, [messages, activeContextNode.contextId]);
 
   return (
     <div 
