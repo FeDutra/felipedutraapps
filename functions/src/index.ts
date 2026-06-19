@@ -102,3 +102,4 @@ export const pulsoIngest = onRequest(
   }
 );
 export { pulsoRequests } from "./requests";
+export { processOpenClawQueue } from "./openclawQueueProcessor";

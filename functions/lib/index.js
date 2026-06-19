@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.pulsoRequests = exports.pulsoIngest = void 0;
+exports.processOpenClawQueue = exports.pulsoRequests = exports.pulsoIngest = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 admin.initializeApp();
@@ -137,4 +137,6 @@ exports.pulsoIngest = (0, https_1.onRequest)({ region: "us-central1", secrets: [
 });
 var requests_1 = require("./requests");
 Object.defineProperty(exports, "pulsoRequests", { enumerable: true, get: function () { return requests_1.pulsoRequests; } });
+var openclawQueueProcessor_1 = require("./openclawQueueProcessor");
+Object.defineProperty(exports, "processOpenClawQueue", { enumerable: true, get: function () { return openclawQueueProcessor_1.processOpenClawQueue; } });
 //# sourceMappingURL=index.js.map
