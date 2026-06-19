@@ -21,6 +21,7 @@ export const PULSO_NAV_ITEMS = [
 
 export default function PulsoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const cleanPathname = pathname ? (pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname) : '';
   const [user, setUser] = React.useState<User | null>(null);
   const [pulsoTheme, setPulsoTheme] = React.useState('orange');
 
@@ -60,7 +61,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     };
   }, []);
 
-  const isLivePage = pathname === '/pulso/live';
+  const isLivePage = cleanPathname === '/pulso/live';
 
   return (
     <div className={`min-h-screen ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]' : 'bg-[#b8544a]'} text-[#fbf9f5] w-full selection:bg-white/20 flex flex-col xl:flex-row overflow-x-hidden relative`}>
@@ -121,7 +122,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
             {/* Center Section: Navigation pill container */}
             <div className="flex items-center justify-start sm:justify-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10 w-full max-w-full overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
               {PULSO_NAV_ITEMS.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                const isActive = cleanPathname === item.href || cleanPathname.startsWith(item.href + '/');
                 return (
                   <Link 
                     key={item.href}
@@ -168,7 +169,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
               <div className="flex flex-col gap-1.5 mt-2">
                 <p className="text-[8px] font-black uppercase tracking-widest text-[#fbf9f5]/40 px-3 mb-1">Navegação</p>
                 {PULSO_NAV_ITEMS.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  const isActive = cleanPathname === item.href || cleanPathname.startsWith(item.href + '/');
                   return (
                     <Link 
                       key={item.href}

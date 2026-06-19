@@ -24,7 +24,7 @@ export default function EdenCentral() {
     };
 
     if (checkIsTauri()) {
-      router.replace('/pulso/live');
+      router.replace('/pulso/live/');
     }
   }, [router]);
 

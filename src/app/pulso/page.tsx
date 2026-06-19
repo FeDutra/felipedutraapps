@@ -18,9 +18,9 @@ export default function PulsoRootPage() {
     };
 
     if (checkIsTauri()) {
-      router.replace('/pulso/live');
+      router.replace('/pulso/live/');
     } else {
-      router.replace('/pulso/cockpit');
+      router.replace('/pulso/cockpit/');
     }
   }, [router]);
 
