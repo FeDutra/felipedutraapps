@@ -1589,7 +1589,7 @@ export default function LivePage() {
 
     if (isFirestore && storage) {
       try {
-        setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 0 } }));
+        setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 0, status: 'enviando' } }));
         
         // Define Storage Path
         const path = `pulso/chats/${contextId}/attachments/${id}_${name}`;
@@ -1604,13 +1604,13 @@ export default function LivePage() {
               const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
               setUploadingFiles(prev => ({
                 ...prev,
-                [id]: { name, progress }
+                [id]: { name, progress, status: 'enviando' }
               }));
             },
             (error) => {
               setUploadingFiles(prev => ({
                 ...prev,
-                [id]: { name, progress: 0, error: true }
+                [id]: { name, progress: 0, status: 'erro', error: true }
               }));
               reject(error);
             },
@@ -1622,6 +1622,14 @@ export default function LivePage() {
         
         // Get URL
         const downloadUrl = await getDownloadURL(fileRef);
+        
+        setUploadingFiles(prev => ({
+          ...prev,
+          [id]: { name, progress: 100, status: 'concluido' }
+        }));
+        
+        // UX delay for success state
+        await new Promise(r => setTimeout(r, 600));
         
         setUploadingFiles(prev => {
           const next = { ...prev };
@@ -1641,6 +1649,14 @@ export default function LivePage() {
         };
       } catch (err) {
         console.error('Firebase Storage upload failed, falling back to local URL:', err);
+        setUploadingFiles(prev => ({
+          ...prev,
+          [id]: { name, progress: 0, status: 'erro', error: true }
+        }));
+        
+        // UX delay for error state
+        await new Promise(r => setTimeout(r, 2000));
+        
         setUploadingFiles(prev => {
           const next = { ...prev };
           delete next[id];
@@ -1658,7 +1674,15 @@ export default function LivePage() {
         };
       }
     } else {
-      // In mock mode or offline, use Object URL
+      // In mock mode or offline, use Object URL.
+      // We also show a quick "concluido" feedback for mock mode!
+      setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 100, status: 'concluido' } }));
+      await new Promise(r => setTimeout(r, 600));
+      setUploadingFiles(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       return {
         id,
         name,
@@ -1675,12 +1699,9 @@ export default function LivePage() {
   const handleAttachFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
-    // Create new user message with attachments
-    const attachedItems: Attachment[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const att = await uploadFile(files[i]);
-      attachedItems.push(att);
-    }
+    // Create new user message with attachments in parallel
+    const uploadPromises = Array.from(files).map(file => uploadFile(file));
+    const attachedItems = await Promise.all(uploadPromises);
 
     if (attachedItems.length === 0) return;
 
@@ -3196,26 +3217,40 @@ export default function LivePage() {
 
         {Object.keys(uploadingFiles).length > 0 && (
           <div className="w-full bg-[#111111]/85 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2.5 animate-fade-in text-[10px] text-[#fbf9f5]/80 max-h-36 overflow-y-auto no-scrollbar shadow-lg">
-            {Object.entries(uploadingFiles).map(([id, fileInfo]) => (
-              <div key={id} className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="truncate max-w-[220px] lowercase font-light">{fileInfo.name}</span>
-                  {fileInfo.error ? (
-                    <span className="text-[#b8283e] font-semibold lowercase">erro no envio</span>
-                  ) : (
-                    <span className="font-mono text-[#b8283e] font-semibold">{fileInfo.progress}%</span>
+            {Object.entries(uploadingFiles).map(([id, fileInfo]) => {
+              const isError = fileInfo.status === 'erro' || fileInfo.error;
+              const isConcluido = fileInfo.status === 'concluido';
+              
+              return (
+                <div key={id} className="flex flex-col gap-1.5 animate-fade-in">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate max-w-[220px] lowercase font-light text-[#fbf9f5]/90">{fileInfo.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0 select-none">
+                      {isError ? (
+                        <span className="text-[#b8283e] font-semibold lowercase animate-pulse">falhou</span>
+                      ) : isConcluido ? (
+                        <span className="text-emerald-500 font-semibold lowercase flex items-center gap-0.5 animate-fade-in">
+                          <Check size={10} strokeWidth={2.5} />
+                          <span>concluído</span>
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[#b8283e] font-semibold">
+                          {fileInfo.progress === 0 ? 'preparando...' : `enviando... ${fileInfo.progress}%`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {!isError && (
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 rounded-full ${isConcluido ? 'bg-emerald-500' : 'bg-[#b8283e]'}`} 
+                        style={{ width: `${fileInfo.progress}%` }}
+                      />
+                    </div>
                   )}
                 </div>
-                {!fileInfo.error && (
-                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[#b8283e] transition-all duration-300 rounded-full" 
-                      style={{ width: `${fileInfo.progress}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
