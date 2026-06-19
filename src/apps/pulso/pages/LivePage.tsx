@@ -634,6 +634,8 @@ export default function LivePage() {
   const recognitionRef = React.useRef<any>(null);
   const silenceTimeoutRef = React.useRef<any>(null);
   const finalTranscriptRef = React.useRef<string>('');
+  const hasRetriedSpeechRecognitionRef = React.useRef<boolean>(false);
+  const isSpeechRecognitionRetryingRef = React.useRef<boolean>(false);
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -1624,6 +1626,7 @@ export default function LivePage() {
 
     setVoiceMode(mode);
     voiceModeRef.current = mode;
+    isSpeechRecognitionRetryingRef.current = false;
     if (mode === 'presence') {
       presenceStateRef.current = 'presence_listening';
       setPresenceState('presence_listening');
@@ -1639,7 +1642,9 @@ export default function LivePage() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
-    recognition.continuous = true;
+    // continuous=true is needed for background presence mode, but for single capture, 
+    // using continuous=false is significantly more stable in Chrome and avoids 'network' errors.
+    recognition.continuous = mode === 'presence' ? true : !hasRetriedSpeechRecognitionRef.current;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
@@ -1714,6 +1719,19 @@ export default function LivePage() {
         return;
       }
       
+      if (event.error === 'network' && !hasRetriedSpeechRecognitionRef.current) {
+        hasRetriedSpeechRecognitionRef.current = true;
+        isSpeechRecognitionRetryingRef.current = true;
+        stopVoiceRecognition();
+        console.log('[PULSO_VOICE_RETRYING] Retrying speech recognition with simplified config due to network error...');
+        setTimeout(() => {
+          if (voiceModeRef.current !== 'off') {
+            startSpeechRecognition(mode);
+          }
+        }, 150);
+        return;
+      }
+
       stopVoiceRecognition();
       
       if (mode === 'presence') {
@@ -1753,6 +1771,10 @@ export default function LivePage() {
     };
 
     recognition.onend = () => {
+      if (isSpeechRecognitionRetryingRef.current) {
+        console.log('[PULSO_VOICE_ONEND] Ignored onend during retry.');
+        return;
+      }
       if (presenceStateRef.current === 'presence_speaking') {
         // Prevent auto-restarts while Lótus is speaking
         return;
@@ -1816,6 +1838,7 @@ export default function LivePage() {
   }, [handleSendMessage, stopVoiceRecognition, ttsAdapter, exitPresenceMode]);
 
   const toggleRecordingOnce = React.useCallback(async () => {
+    hasRetriedSpeechRecognitionRef.current = false;
     if (voiceModeRef.current === 'recording_once') {
       stopVoiceRecognition();
       setVoiceMode('off');
