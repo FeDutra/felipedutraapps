@@ -107,14 +107,29 @@ import {
   Camera,
   Volume2,
   Square,
-  ArrowDown
+  ArrowDown,
+  UploadCloud,
+  ExternalLink,
+  Download
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
 import { onSnapshot, collection, query, where } from "firebase/firestore";
-import { db } from '../../../shared/lib/firebase/client';
+import { db, storage } from '../../../shared/lib/firebase/client';
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
 import { PulsoContextNode } from '../types/pulso.types';
+
+interface Attachment {
+  id: string;
+  name: string;
+  type: 'image' | 'pdf' | 'audio' | 'generic';
+  mimeType: string;
+  url: string;
+  sizeBytes?: number;
+  createdAt: Date;
+  contextId: string;
+}
 
 // NOTA: Esta lista estática é estritamente temporária/de transição.
 // Ela será totalmente descontinuada na próxima fase para dar lugar à criação
@@ -340,6 +355,7 @@ interface Message {
   createdEntityRef?: string;
   executionError?: string;
   contextId?: string | null;
+  attachments?: Attachment[];
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence';
@@ -403,6 +419,23 @@ export default function LivePage() {
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
   const headerMenuRef = React.useRef<HTMLDivElement>(null);
+  
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [previewImage, setPreviewImage] = React.useState<Attachment | null>(null);
+  const [previewPdf, setPreviewPdf] = React.useState<Attachment | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = React.useState(false);
+  const [uploadingFiles, setUploadingFiles] = React.useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewImage(null);
+        setPreviewPdf(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1164,12 +1197,18 @@ export default function LivePage() {
             const reqTime = safeConvertToDate(req.requestedAt) || new Date();
             
             if (req.requestType !== "active_message") {
+              const atts = Array.isArray(req.attachments) ? req.attachments.map((a: any) => ({
+                ...a,
+                createdAt: a.createdAt ? new Date(a.createdAt) : new Date()
+              })) : undefined;
+
               chatHistory.push({
                 id: `user-${req.id}`,
                 sender: 'user',
                 text: req.input || req.rawInput || req.summary || req.title || '',
                 timestamp: reqTime,
-                contextId: req.contextId || null
+                contextId: req.contextId || null,
+                attachments: atts
               });
             }
 
@@ -1521,6 +1560,153 @@ export default function LivePage() {
       throw err;
     }
   }, [state, activeContextNode]);
+
+  const uploadFile = async (file: File): Promise<Attachment> => {
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const id = `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const name = file.name;
+    const sizeBytes = file.size;
+    const mimeType = file.type;
+    const createdAt = new Date();
+    const contextId = activeContextNode.contextId;
+
+    // Detect type
+    let type: 'image' | 'pdf' | 'audio' | 'generic' = 'generic';
+    if (mimeType.startsWith('image/')) type = 'image';
+    else if (mimeType === 'application/pdf') type = 'pdf';
+    else if (mimeType.startsWith('audio/')) type = 'audio';
+
+    // Local fallback Object URL
+    const localUrl = URL.createObjectURL(file);
+
+    if (isFirestore && storage) {
+      try {
+        setUploadingFiles(prev => ({ ...prev, [id]: 0 }));
+        
+        // Define Storage Path
+        const path = `pulso/chats/${contextId}/attachments/${id}_${name}`;
+        const fileRef = storageRef(storage, path);
+        
+        // Upload bytes
+        await uploadBytes(fileRef, file);
+        
+        // Get URL
+        const downloadUrl = await getDownloadURL(fileRef);
+        
+        setUploadingFiles(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+
+        return {
+          id,
+          name,
+          type,
+          mimeType,
+          url: downloadUrl,
+          sizeBytes,
+          createdAt,
+          contextId
+        };
+      } catch (err) {
+        console.error('Firebase Storage upload failed, falling back to local URL:', err);
+        setUploadingFiles(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        return {
+          id,
+          name,
+          type,
+          mimeType,
+          url: localUrl,
+          sizeBytes,
+          createdAt,
+          contextId
+        };
+      }
+    } else {
+      // In mock mode or offline, use Object URL
+      return {
+        id,
+        name,
+        type,
+        mimeType,
+        url: localUrl,
+        sizeBytes,
+        createdAt,
+        contextId
+      };
+    }
+  };
+
+  const handleAttachFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    // Create new user message with attachments
+    const attachedItems: Attachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const att = await uploadFile(files[i]);
+      attachedItems.push(att);
+    }
+
+    if (attachedItems.length === 0) return;
+
+    // Send a message indicating files uploaded
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    setIsTyping(true);
+
+    try {
+      const fileNames = attachedItems.map(a => a.name).join(', ');
+      const cleanMsg = `[anexo] ${fileNames}`;
+      const newRequest = await createPulsoConversationRequest(cleanMsg, {
+        mode: 'text',
+        areaId: activeContextNode.areaId,
+        contextId: activeContextNode.contextId,
+        chatId: activeContextNode.chatId,
+        openclawSessionKey: activeContextNode.openclawSessionKey
+      });
+
+      // Save request in Firestore with attachments metadata
+      if (isFirestore && db && newRequest.id) {
+        const { doc, updateDoc } = await import('firebase/firestore');
+        const reqDocRef = doc(db, `workspaces/felipe_dutra/pulso_requests`, newRequest.id);
+        const serializedAttachments = attachedItems.map(a => ({
+          ...a,
+          createdAt: a.createdAt.toISOString()
+        }));
+        await updateDoc(reqDocRef, {
+          attachments: serializedAttachments
+        }).catch(err => console.error('Failed to update request doc with attachments metadata:', err));
+      }
+
+      setLastSentRequestId(newRequest.id);
+
+      const userMsg: Message = {
+        id: `user-msg-${newRequest.id || Date.now()}`,
+        sender: 'user',
+        text: cleanMsg,
+        timestamp: new Date(),
+        contextId: activeContextNode.contextId,
+        attachments: attachedItems
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      if (state) {
+        setState((prev: any) => {
+          if (!prev) return prev;
+          const updatedRequests = [{ ...newRequest, attachments: attachedItems }, ...(prev.allRequests || [])];
+          return { ...prev, allRequests: updatedRequests };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to process message with attachments:', err);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' }) => {
     if (isTyping) {
@@ -2528,9 +2714,35 @@ export default function LivePage() {
             </div>
           </div>
 
-          <div className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[400px] md:max-h-[60vh] h-[350px] md:h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
-            presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
-          }`}>
+          <div 
+            className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[400px] md:max-h-[60vh] h-[350px] md:h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
+              presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingFile(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDraggingFile(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingFile(false);
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleAttachFiles(e.dataTransfer.files);
+              }
+            }}
+          >
+            {isDraggingFile && (
+              <div className="absolute inset-0 z-50 bg-[#b8283e]/10 backdrop-blur-md border-2 border-dashed border-[#b8283e]/50 rounded-2xl flex flex-col items-center justify-center animate-fade-in pointer-events-none">
+                <div className="bg-black/80 p-6 rounded-2xl border border-white/10 flex flex-col items-center gap-2 max-w-xs text-center">
+                  <UploadCloud size={28} className="text-[#b8283e] animate-bounce" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#fbf9f5]">Solte para anexar</p>
+                  <p className="text-[10px] text-[#fbf9f5]/60 lowercase font-light">imagens, áudios, PDFs ou qualquer arquivo ao chat</p>
+                </div>
+              </div>
+            )}
             <div 
               ref={scrollContainerRef}
               onScroll={handleScroll}
@@ -2555,6 +2767,71 @@ export default function LivePage() {
                       <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
                         <MessageRenderer text={msg.text} sender={msg.sender} />
                       </div>
+
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={`flex flex-wrap gap-2 mt-2 ${!isLotus ? 'justify-end' : 'justify-start'}`}>
+                          {msg.attachments.map((att) => {
+                            if (att.type === 'image') {
+                              return (
+                                <div 
+                                  key={att.id}
+                                  onClick={() => setPreviewImage(att)}
+                                  className="relative group cursor-pointer overflow-hidden rounded-lg border border-white/10 max-h-24 max-w-[200px]"
+                                >
+                                  <img 
+                                    src={att.url} 
+                                    alt={att.name} 
+                                    className="object-cover h-24 w-auto transition-transform group-hover:scale-105"
+                                  />
+                                </div>
+                              );
+                            }
+                            if (att.type === 'audio') {
+                              return (
+                                <div key={att.id} className="w-full max-w-xs mt-1">
+                                  <audio 
+                                    controls 
+                                    src={att.url} 
+                                    className="w-full h-8 opacity-80 hover:opacity-100 transition-opacity" 
+                                  />
+                                </div>
+                              );
+                            }
+                            if (att.type === 'pdf') {
+                              return (
+                                <div 
+                                  key={att.id}
+                                  onClick={() => setPreviewPdf(att)}
+                                  className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none text-[10px] uppercase tracking-wider text-[#fbf9f5]/85 hover:text-white transition-all w-full max-w-xs text-left"
+                                >
+                                  <FileText size={14} className="text-[#b8283e] shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-medium">{att.name}</p>
+                                    <p className="text-[8px] text-[#fbf9f5]/40 mt-0.5">pdf • {att.sizeBytes ? `${(att.sizeBytes/1024).toFixed(1)}kb` : ''}</p>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            // Generic
+                            return (
+                              <a 
+                                key={att.id}
+                                href={att.url}
+                                download={att.name}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none text-[10px] uppercase tracking-wider text-[#fbf9f5]/85 hover:text-white transition-all w-full max-w-xs text-left"
+                              >
+                                <Paperclip size={14} className="text-white/40 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-medium">{att.name}</p>
+                                  <p className="text-[8px] text-[#fbf9f5]/40 mt-0.5">arquivo • {att.sizeBytes ? `${(att.sizeBytes/1024).toFixed(1)}kb` : ''}</p>
+                                </div>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {/* User Message Timestamp */}
                       {!isLotus && msg.sender !== 'system' && (
@@ -2792,6 +3069,13 @@ export default function LivePage() {
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
 
           <div className="relative" ref={attachmentMenuRef}>
+            <input
+              type="file"
+              multiple
+              ref={fileInputRef}
+              onChange={(e) => handleAttachFiles(e.target.files)}
+              className="hidden"
+            />
             <button
               onClick={() => setIsAttachmentMenuOpen(!isAttachmentMenuOpen)}
               className="p-1.5 text-[#fbf9f5]/60 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
@@ -2805,25 +3089,25 @@ export default function LivePage() {
             }`}>
               <div className="flex flex-col text-xs font-light tracking-wide text-[#fbf9f5]">
                 <button 
-                  onClick={() => { setShowAttachmentToast(true); setIsAttachmentMenuOpen(false); setTimeout(() => setShowAttachmentToast(false), 3000); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent"
+                  onClick={() => { fileInputRef.current?.setAttribute('accept', '*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
                 >
                   <FileText size={12} />
                   <span>arquivos</span>
                 </button>
                 <button 
-                  onClick={() => { setShowAttachmentToast(true); setIsAttachmentMenuOpen(false); setTimeout(() => setShowAttachmentToast(false), 3000); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent"
+                  onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
                 >
                   <ImageIcon size={12} />
                   <span>fotos</span>
                 </button>
                 <button 
-                  onClick={() => { setShowAttachmentToast(true); setIsAttachmentMenuOpen(false); setTimeout(() => setShowAttachmentToast(false), 3000); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left bg-transparent"
+                  onClick={() => { fileInputRef.current?.setAttribute('accept', 'audio/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left bg-transparent cursor-pointer"
                 >
-                  <Camera size={12} />
-                  <span>câmera</span>
+                  <Volume2 size={12} />
+                  <span>áudio</span>
                 </button>
               </div>
             </div>
@@ -3260,6 +3544,129 @@ export default function LivePage() {
             >
               fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 backdrop-blur-md animate-fade-in cursor-zoom-out p-4 md:p-8"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button 
+            className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors border border-white/10 cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}
+          >
+            <X size={20} />
+          </button>
+          <div 
+            className="relative max-w-full max-h-full flex flex-col items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              src={previewImage.url} 
+              alt={previewImage.name} 
+              className="max-w-full max-h-[85vh] object-contain rounded-lg border border-white/10 shadow-2xl animate-scale-in"
+            />
+            <div className="mt-4 px-4 py-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-xs font-light text-[#fbf9f5]/90 tracking-wide flex items-center gap-4">
+              <span className="truncate max-w-[200px] md:max-w-[400px] font-medium">{previewImage.name}</span>
+              <span className="text-[10px] text-[#fbf9f5]/40">{previewImage.sizeBytes ? `${(previewImage.sizeBytes/1024/1024).toFixed(2)} MB` : ''}</span>
+              <a 
+                href={previewImage.url} 
+                download={previewImage.name} 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-[#b8283e] hover:text-[#b8283e]/85 transition-colors cursor-pointer flex items-center gap-1 text-[10px] uppercase font-bold tracking-widest"
+              >
+                <Download size={12} />
+                <span>Download</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewPdf && (
+        <div className="fixed inset-0 z-[140] flex justify-end bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="absolute inset-0" onClick={() => setPreviewPdf(null)} />
+          
+          <div className="relative w-full md:w-[600px] lg:w-[700px] xl:w-[800px] h-full bg-[#0d0d0d] border-l border-white/10 shadow-2xl flex flex-col animate-slide-in-right z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black/20">
+              <div className="flex items-center gap-3 min-w-0">
+                <FileText size={18} className="text-[#b8283e]" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold tracking-wide text-white truncate lowercase">{previewPdf.name}</h3>
+                  <p className="text-[9px] text-[#fbf9f5]/40 uppercase tracking-widest mt-0.5">
+                    pdf • {previewPdf.sizeBytes ? `${(previewPdf.sizeBytes / 1024).toFixed(1)} kb` : ''}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <a 
+                  href={previewPdf.url} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors border border-white/10 cursor-pointer"
+                  title="Abrir em Nova Aba"
+                >
+                  <ExternalLink size={14} />
+                </a>
+                <a 
+                  href={previewPdf.url} 
+                  download={previewPdf.name} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors border border-white/10 cursor-pointer"
+                  title="Baixar Arquivo"
+                >
+                  <Download size={14} />
+                </a>
+                <button 
+                  onClick={() => setPreviewPdf(null)}
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors border border-white/10 cursor-pointer"
+                  title="Fechar"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-[#141414] relative flex flex-col items-center justify-center p-6">
+              <iframe 
+                src={`${previewPdf.url}#toolbar=0`}
+                className="w-full h-full border-none rounded-lg bg-white"
+                title={previewPdf.name}
+              />
+              
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 text-center max-w-sm sm:max-w-md shadow-2xl">
+                <div className="text-left min-w-0 flex-1">
+                  <p className="text-[11px] font-medium text-white">Visualização de PDF</p>
+                  <p className="text-[9px] text-white/60 lowercase">Caso a pré-visualização não carregue, escolha uma opção abaixo:</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a 
+                    href={previewPdf.url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#b8283e] hover:bg-[#b8283e]/90 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    <ExternalLink size={12} />
+                    <span>Abrir Aba</span>
+                  </a>
+                  <a 
+                    href={previewPdf.url} 
+                    download={previewPdf.name} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors border border-white/10 cursor-pointer"
+                  >
+                    <Download size={12} />
+                    <span>Baixar</span>
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
