@@ -423,7 +423,7 @@ export default function LivePage() {
   }, [activeContextNode]);
   const activeAreaId = activeContextNode.areaId;
 
-  const [isAddingChat, setIsAddingChat] = React.useState(false);
+  const [addingChatAreaId, setAddingChatAreaId] = React.useState<string | null>(null);
   const [newChatName, setNewChatName] = React.useState('');
   const [hoveredAreaId, setHoveredAreaId] = React.useState<string | null>(null);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
