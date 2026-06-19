@@ -118,7 +118,7 @@ import { PulsoContextNode } from '../types/pulso.types';
 
 const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
   {
-    areaId: "sistema",
+    areaId: "area_pulso_ia",
     subareaId: "pulso",
     contextId: "sistema_pulso",
     chatId: "default",
@@ -126,7 +126,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "pulso"
   },
   {
-    areaId: "casa",
+    areaId: "area_casa_jardim",
     subareaId: "construcao",
     contextId: "casa_construcao",
     chatId: "default",
@@ -134,7 +134,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "construção"
   },
   {
-    areaId: "casa",
+    areaId: "area_casa_jardim",
     subareaId: "horta",
     contextId: "casa_horta",
     chatId: "default",
@@ -142,7 +142,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "horta"
   },
   {
-    areaId: "familia",
+    areaId: "area_familia",
     subareaId: "familia",
     contextId: "familia",
     chatId: "default",
@@ -150,7 +150,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "família"
   },
   {
-    areaId: "familia",
+    areaId: "area_familia",
     subareaId: "escola_guayi",
     contextId: "familia_escola_guayi",
     chatId: "default",
@@ -158,7 +158,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "escola guayi"
   },
   {
-    areaId: "trabalho",
+    areaId: "area_modu",
     subareaId: "modu",
     contextId: "trabalho_modu",
     chatId: "default",
@@ -166,7 +166,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "modú"
   },
   {
-    areaId: "trabalho",
+    areaId: "area_despertar",
     subareaId: "despertar",
     contextId: "trabalho_despertar",
     chatId: "default",
@@ -174,7 +174,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "despertar"
   },
   {
-    areaId: "criacao",
+    areaId: "area_projetos_autorais",
     subareaId: "producao_autoral",
     contextId: "criacao_producao_autoral",
     chatId: "default",
@@ -182,7 +182,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "produção autoral"
   },
   {
-    areaId: "sistema",
+    areaId: "area_pulso_ia",
     subareaId: "infraestrutura",
     contextId: "sistema_infraestrutura",
     chatId: "default",
@@ -190,7 +190,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "infraestrutura"
   },
   {
-    areaId: "sistema",
+    areaId: "area_pulso_ia",
     subareaId: "openclaw_agentes",
     contextId: "sistema_openclaw_agentes",
     chatId: "default",
@@ -198,7 +198,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "openclaw e agentes"
   },
   {
-    areaId: "pessoas",
+    areaId: "area_relacoes",
     subareaId: "pessoas",
     contextId: "pessoas",
     chatId: "default",
@@ -206,7 +206,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "pessoas"
   },
   {
-    areaId: "dinheiro",
+    areaId: "area_financeiro_familiar",
     subareaId: "dinheiro",
     contextId: "dinheiro",
     chatId: "default",
@@ -214,7 +214,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "dinheiro"
   },
   {
-    areaId: "saude",
+    areaId: "area_saude",
     subareaId: "saude",
     contextId: "saude",
     chatId: "default",
@@ -222,7 +222,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     label: "saúde"
   },
   {
-    areaId: "eu",
+    areaId: "area_vida_rotina",
     subareaId: "eu",
     contextId: "eu",
     chatId: "default",
@@ -232,18 +232,32 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
 ];
 
 const AREA_NAMES: Record<string, string> = {
-  eu: "eu",
-  trabalho: "trabalho",
-  casa: "casa",
-  familia: "família",
-  criacao: "criação",
-  pessoas: "pessoas",
-  dinheiro: "dinheiro",
-  saude: "saúde",
-  sistema: "sistema"
+  area_vida_rotina: "eu",
+  area_modu: "trabalho",
+  area_casa_jardim: "casa",
+  area_familia: "família",
+  area_projetos_autorais: "criação",
+  area_relacoes: "pessoas",
+  area_financeiro_familiar: "dinheiro",
+  area_saude: "saúde",
+  area_despertar: "despertar",
+  area_arca: "arca",
+  area_pulso_ia: "sistema"
 };
 
-const AREA_ORDER = ["eu", "trabalho", "casa", "familia", "criacao", "pessoas", "dinheiro", "saude", "sistema"];
+const AREA_ORDER = [
+  "area_vida_rotina",
+  "area_modu",
+  "area_casa_jardim",
+  "area_familia",
+  "area_projetos_autorais",
+  "area_relacoes",
+  "area_financeiro_familiar",
+  "area_saude",
+  "area_despertar",
+  "area_arca",
+  "area_pulso_ia"
+];
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -411,6 +425,7 @@ export default function LivePage() {
 
   const [isAddingChat, setIsAddingChat] = React.useState(false);
   const [newChatName, setNewChatName] = React.useState('');
+  const [hoveredAreaId, setHoveredAreaId] = React.useState<string | null>(null);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
   const headerMenuRef = React.useRef<HTMLDivElement>(null);
@@ -2334,154 +2349,157 @@ export default function LivePage() {
       </header>
 
       {/* 1. Main Icon Sidebar */}
-      <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-3 group/sidebar select-none transition-all duration-300 py-4 px-2 bg-[#141414]/30 backdrop-blur-md rounded-2xl border border-[#fbf9f5]/5 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div 
+        onMouseLeave={() => setHoveredAreaId(null)}
+        className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none transition-all duration-300 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+      >
         {AREA_ORDER.map((areaId) => {
           const areaName = AREA_NAMES[areaId] || areaId;
           const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
-          const isActiveArea = activeAreaId === areaId;
+          const isHovered = hoveredAreaId === areaId;
+          const isAreaActive = activeAreaId === areaId;
           const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
           
           return (
-            <div key={areaId} className="relative group/area">
-              <button
+            <div 
+              key={areaId} 
+              onMouseEnter={() => setHoveredAreaId(areaId)}
+              className="flex flex-col items-start transition-all duration-300"
+            >
+              {/* Area Trigger */}
+              <div 
                 onClick={() => {
-                  if (isActiveArea) {
-                    // Keep active
-                  } else {
-                    // Switch to the first context of this area
-                    if (areaContexts.length > 0) {
-                      setActiveContextNode(areaContexts[0]);
-                      setUnreadContexts(prev => {
-                        if (prev[areaContexts[0].contextId]) {
-                          const next = { ...prev };
-                          delete next[areaContexts[0].contextId];
-                          return next;
-                        }
-                        return prev;
-                      });
-                    }
-                  }
-                }}
-                className={`relative w-8 h-8 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-300 border-none bg-transparent outline-none ${
-                  isActiveArea 
-                    ? 'bg-[#fbf9f5]/10 text-white shadow-[0_0_12px_rgba(255,255,255,0.05)]' 
-                    : 'text-[#fbf9f5]/40 hover:bg-white/5 hover:text-[#fbf9f5]/80'
-                }`}
-              >
-                {/* Icon */}
-                <span className="text-base select-none font-mono">
-                  {getAreaIcon({ id: areaId, name: areaName })}
-                </span>
-
-                {/* Unread Indicator */}
-                {hasUnreadInArea && !isActiveArea && (
-                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#b8544a] animate-pulse shadow-[0_0_8px_rgba(184,84,74,0.6)]" />
-                )}
-
-                {/* Tooltip on Hover */}
-                <div className="absolute left-10 pl-2 pointer-events-none opacity-0 translate-x-2 group-hover/area:opacity-100 group-hover/area:translate-x-0 transition-all duration-200 z-50">
-                  <div className="bg-[#141414]/90 backdrop-blur-md border border-[#fbf9f5]/5 text-[#fbf9f5]/80 text-[8px] tracking-[0.2em] uppercase px-2 py-1.5 rounded shadow-xl whitespace-nowrap font-black">
-                    {areaName}
-                  </div>
-                </div>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 2. Secondary Sub-contexts Panel */}
-      {activeAreaId && !presenceMode && (
-        <div className="fixed left-16 md:left-[72px] top-1/2 -translate-y-1/2 z-30 flex flex-col gap-4 py-4 px-3 bg-[#141414]/30 backdrop-blur-md rounded-2xl border border-[#fbf9f5]/5 w-32 transition-all duration-300">
-          <div className="text-[8px] tracking-[0.25em] font-black uppercase text-[#fbf9f5]/30 border-b border-[#fbf9f5]/5 pb-1 select-none">
-            {AREA_NAMES[activeAreaId] || activeAreaId}
-          </div>
-          <div className="flex flex-col gap-2">
-            {allContextNodes.filter(n => n.areaId === activeAreaId).map((ctx) => {
-              const isContextActive = activeContextNode.contextId === ctx.contextId;
-              const isUnread = !!unreadContexts[ctx.contextId];
-              return (
-                <button
-                  key={ctx.contextId}
-                  onClick={() => {
-                    setActiveContextNode(ctx);
+                  if (areaContexts.length > 0) {
+                    setActiveContextNode(areaContexts[0]);
                     setUnreadContexts(prev => {
-                      if (prev[ctx.contextId]) {
+                      if (prev[areaContexts[0].contextId]) {
                         const next = { ...prev };
-                        delete next[ctx.contextId];
+                        delete next[areaContexts[0].contextId];
                         return next;
                       }
                       return prev;
                     });
-                  }}
-                  className={`text-[9px] tracking-wider uppercase font-sans font-light text-left transition-all duration-200 select-none border-none bg-transparent outline-none hover:text-white cursor-pointer ${
-                    isContextActive
-                      ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
-                      : isUnread
-                      ? 'text-[#b8544a] font-bold animate-pulse'
-                      : 'text-[#fbf9f5]/40'
-                  }`}
-                >
-                  {ctx.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Add Chat Input/Button */}
-          <div className="mt-2 pt-2 border-t border-[#fbf9f5]/5">
-            {isAddingChat ? (
-              <input
-                autoFocus
-                type="text"
-                placeholder="NOME"
-                value={newChatName}
-                onChange={(e) => setNewChatName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const name = newChatName.trim().toLowerCase();
-                    if (name) {
-                      const slug = name.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
-                      const contextId = `${activeAreaId}_${slug}`;
-                      const openclawSessionKey = `agent:main:pulso:${contextId}`;
-                      const newNode: PulsoContextNode = {
-                        areaId: activeAreaId,
-                        contextId,
-                        chatId: "default",
-                        openclawSessionKey,
-                        label: name
-                      };
-                      const updated = [...customContextNodes, newNode];
-                      setCustomContextNodes(updated);
-                      localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
-                      setActiveContextNode(newNode);
-                      setNewChatName('');
-                      setIsAddingChat(false);
-                    }
-                  } else if (e.key === 'Escape') {
-                    setIsAddingChat(false);
-                    setNewChatName('');
                   }
                 }}
-                onBlur={() => {
-                  setTimeout(() => {
-                    setIsAddingChat(false);
-                    setNewChatName('');
-                  }, 200);
-                }}
-                className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[9px] tracking-wider uppercase w-full outline-none placeholder-[#fbf9f5]/20"
-              />
-            ) : (
-              <button
-                onClick={() => setIsAddingChat(true)}
-                className="text-[9px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none text-left w-full"
+                className="flex items-center gap-2.5 cursor-pointer py-1 group/item w-full"
               >
-                + novo chat
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+                {/* Icon */}
+                <span 
+                  className={`text-lg text-center transition-all duration-300 font-mono ${
+                    isAreaActive
+                      ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
+                      : hasUnreadInArea
+                      ? 'text-[#b8544a] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(184,84,74,0.6)] font-bold'
+                      : 'text-[#fbf9f5]/35 group-hover/sidebar:text-[#fbf9f5]/65 group-hover/item:text-[#fbf9f5]/90'
+                  }`}
+                  style={{ width: '24px' }}
+                >
+                  {getAreaIcon({ id: areaId, name: areaName })}
+                </span>
+
+                {/* Area Text Label */}
+                <span 
+                  className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-300 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
+                    isAreaActive ? 'text-white font-medium' : 'text-[#fbf9f5]'
+                  }`}
+                >
+                  {areaName}
+                </span>
+              </div>
+
+              {/* Sub-contexts (Sanfona style) */}
+              <div 
+                className={`flex flex-col gap-1.5 pl-8 overflow-hidden transition-all duration-300 ease-in-out ${
+                  isHovered ? 'max-h-40 opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0 pointer-events-none'
+                }`}
+              >
+                {areaContexts.map((ctx) => {
+                  const isContextActive = activeContextNode.contextId === ctx.contextId;
+                  const isUnread = !!unreadContexts[ctx.contextId];
+                  return (
+                    <div
+                      key={ctx.contextId}
+                      onClick={() => {
+                        setActiveContextNode(ctx);
+                        setUnreadContexts(prev => {
+                          if (prev[ctx.contextId]) {
+                            const next = { ...prev };
+                            delete next[ctx.contextId];
+                            return next;
+                          }
+                          return prev;
+                        });
+                      }}
+                      className={`text-[8px] tracking-wider uppercase font-sans font-light py-0.5 cursor-pointer transition-all duration-200 select-none whitespace-nowrap ${
+                        isContextActive
+                          ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
+                          : isUnread
+                          ? 'text-[#b8544a] font-bold animate-pulse'
+                          : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
+                      }`}
+                    >
+                      {ctx.label}
+                    </div>
+                  );
+                })}
+
+                {/* Add Chat Input/Button */}
+                <div className="mt-0.5">
+                  {isAddingChat ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="novo chat..."
+                      value={newChatName}
+                      onChange={(e) => setNewChatName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const name = newChatName.trim().toLowerCase();
+                          if (name) {
+                            const slug = name.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+                            const contextId = `${areaId}_${slug}`;
+                            const openclawSessionKey = `agent:main:pulso:${contextId}`;
+                            const newNode: PulsoContextNode = {
+                              areaId,
+                              contextId,
+                              chatId: "default",
+                              openclawSessionKey,
+                              label: name
+                            };
+                            const updated = [...customContextNodes, newNode];
+                            setCustomContextNodes(updated);
+                            localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+                            setActiveContextNode(newNode);
+                            setNewChatName('');
+                            setIsAddingChat(false);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setIsAddingChat(false);
+                          setNewChatName('');
+                        }
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setIsAddingChat(false);
+                          setNewChatName('');
+                        }, 200);
+                      }}
+                      className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[8px] tracking-wider uppercase w-20 py-0.5 outline-none placeholder-[#fbf9f5]/25"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setIsAddingChat(true)}
+                      className="text-[8px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left"
+                    >
+                      + novo
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
         <main className={`flex-1 min-h-0 overflow-y-auto overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end max-w-5xl w-full mx-auto mt-6 mb-4 z-10 relative transition-all duration-1000 ease-in-out`}>
           
