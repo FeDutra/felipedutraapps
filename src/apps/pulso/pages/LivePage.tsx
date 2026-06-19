@@ -116,6 +116,9 @@ import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
 import { PulsoContextNode } from '../types/pulso.types';
 
+// NOTA: Esta lista estática é estritamente temporária/de transição.
+// Ela será totalmente descontinuada na próxima fase para dar lugar à criação
+// e persistência dinâmica de chats vinculados a cada uma das 14 áreas estruturais.
 const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
   // Sistema
   {
@@ -193,42 +196,6 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:criacao_producao_autoral",
     label: "produção autoral"
-  },
-  // Eu (Semente)
-  {
-    areaId: "area_eu",
-    subareaId: "eu",
-    contextId: "eu",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:eu",
-    label: "eu"
-  },
-  // Dinheiro (Semente)
-  {
-    areaId: "area_dinheiro",
-    subareaId: "dinheiro",
-    contextId: "dinheiro",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:dinheiro",
-    label: "dinheiro"
-  },
-  // Saúde (Semente)
-  {
-    areaId: "area_saude",
-    subareaId: "saude",
-    contextId: "saude",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:saude",
-    label: "saúde"
-  },
-  // Pessoas (Semente)
-  {
-    areaId: "area_pessoas",
-    subareaId: "pessoas",
-    contextId: "pessoas",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:pessoas",
-    label: "pessoas"
   }
 ];
 
