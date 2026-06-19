@@ -123,7 +123,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "sistema_pulso",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:sistema_pulso",
-    label: "Sistema / PULSO"
+    label: "pulso"
   },
   {
     areaId: "casa",
@@ -131,7 +131,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "casa_construcao",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:casa_construcao",
-    label: "Casa / Construção"
+    label: "construção"
   },
   {
     areaId: "casa",
@@ -139,7 +139,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "casa_horta",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:casa_horta",
-    label: "Casa / Horta"
+    label: "horta"
   },
   {
     areaId: "familia",
@@ -147,7 +147,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "familia",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:familia",
-    label: "Família"
+    label: "família"
   },
   {
     areaId: "familia",
@@ -155,7 +155,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "familia_escola_guayi",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:familia_escola_guayi",
-    label: "Família / Escola Guayi"
+    label: "escola guayi"
   },
   {
     areaId: "trabalho",
@@ -163,7 +163,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "trabalho_modu",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:trabalho_modu",
-    label: "Trabalho / MODÚ"
+    label: "modú"
   },
   {
     areaId: "trabalho",
@@ -171,7 +171,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "trabalho_despertar",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:trabalho_despertar",
-    label: "Trabalho / Despertar"
+    label: "despertar"
   },
   {
     areaId: "criacao",
@@ -179,7 +179,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "criacao_producao_autoral",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:criacao_producao_autoral",
-    label: "Criação / Produção Autoral"
+    label: "produção autoral"
   },
   {
     areaId: "sistema",
@@ -187,7 +187,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "sistema_infraestrutura",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:sistema_infraestrutura",
-    label: "Sistema / Infraestrutura"
+    label: "infraestrutura"
   },
   {
     areaId: "sistema",
@@ -195,7 +195,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "sistema_openclaw_agentes",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:sistema_openclaw_agentes",
-    label: "Sistema / OpenClaw e Agentes"
+    label: "openclaw e agentes"
   },
   {
     areaId: "pessoas",
@@ -203,7 +203,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "pessoas",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:pessoas",
-    label: "Pessoas"
+    label: "pessoas"
   },
   {
     areaId: "dinheiro",
@@ -211,7 +211,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "dinheiro",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:dinheiro",
-    label: "Dinheiro"
+    label: "dinheiro"
   },
   {
     areaId: "saude",
@@ -219,7 +219,7 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "saude",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:saude",
-    label: "Saúde"
+    label: "saúde"
   },
   {
     areaId: "eu",
@@ -227,9 +227,23 @@ const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
     contextId: "eu",
     chatId: "default",
     openclawSessionKey: "agent:main:pulso:eu",
-    label: "Eu"
+    label: "eu"
   }
 ];
+
+const AREA_NAMES: Record<string, string> = {
+  eu: "eu",
+  trabalho: "trabalho",
+  casa: "casa",
+  familia: "família",
+  criacao: "criação",
+  pessoas: "pessoas",
+  dinheiro: "dinheiro",
+  saude: "saúde",
+  sistema: "sistema"
+};
+
+const AREA_ORDER = ["eu", "trabalho", "casa", "familia", "criacao", "pessoas", "dinheiro", "saude", "sistema"];
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -2299,28 +2313,50 @@ export default function LivePage() {
         </div>
       </header>
 
-      <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 md:gap-5 group/sidebar select-none transition-opacity duration-300 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 md:gap-5 group/sidebar select-none transition-opacity duration-300 max-h-[85vh] overflow-y-auto no-scrollbar py-4 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={INITIAL_CONTEXT_NODES.map(c => c.contextId)} strategy={verticalListSortingStrategy}>
-            {INITIAL_CONTEXT_NODES.map((ctx: PulsoContextNode) => (
-              <SortableAreaItem
-                key={ctx.contextId}
-                area={{ id: ctx.contextId, name: ctx.label }}
-                isActive={activeContextNode.contextId === ctx.contextId}
-                hasUnread={!!unreadContexts[ctx.contextId]}
-                icon={getAreaIcon({ id: ctx.areaId, name: ctx.label, slug: ctx.subareaId })}
-                onClick={() => {
-                  setActiveContextNode(ctx);
-                  setUnreadContexts(prev => {
-                    if (prev[ctx.contextId]) {
-                      const next = { ...prev };
-                      delete next[ctx.contextId];
-                      return next;
-                    }
-                    return prev;
-                  });
-                }}
-              />
+            {Object.entries(
+              INITIAL_CONTEXT_NODES.reduce((groups, node) => {
+                const area = node.areaId || 'sistema';
+                if (!groups[area]) groups[area] = [];
+                groups[area].push(node);
+                return groups;
+              }, {} as Record<string, PulsoContextNode[]>)
+            ).sort((a, b) => {
+              const orderA = AREA_ORDER.indexOf(a[0]);
+              const orderB = AREA_ORDER.indexOf(b[0]);
+              return (orderA === -1 ? 999 : orderA) - (orderB === -1 ? 999 : orderB);
+            }).map(([areaId, nodes]) => (
+              <div key={areaId} className="flex flex-col gap-1">
+                {/* Area Header */}
+                <div className="text-[8px] tracking-[0.25em] font-black uppercase text-[#fbf9f5]/15 group-hover/sidebar:text-[#fbf9f5]/30 transition-colors pl-1 py-1 select-none">
+                  {AREA_NAMES[areaId] || areaId}
+                </div>
+                {/* Context Nodes */}
+                <div className="flex flex-col gap-0.5 pl-1.5 md:pl-2">
+                  {nodes.map((ctx: PulsoContextNode) => (
+                    <SortableAreaItem
+                      key={ctx.contextId}
+                      area={{ id: ctx.contextId, name: ctx.label }}
+                      isActive={activeContextNode.contextId === ctx.contextId}
+                      hasUnread={!!unreadContexts[ctx.contextId]}
+                      icon={getAreaIcon({ id: ctx.areaId, name: ctx.label, slug: ctx.subareaId })}
+                      onClick={() => {
+                        setActiveContextNode(ctx);
+                        setUnreadContexts(prev => {
+                          if (prev[ctx.contextId]) {
+                            const next = { ...prev };
+                            delete next[ctx.contextId];
+                            return next;
+                          }
+                          return prev;
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </SortableContext>
         </DndContext>
