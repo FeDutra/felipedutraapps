@@ -1,7 +1,8 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { getFirestore, FieldValue, Query } from "firebase-admin/firestore";
 
-const db = admin.firestore();
+const db = getFirestore();
 
 /**
  * Sanitizes an object by removing undefined values
@@ -54,7 +55,7 @@ export const pulsoRequests = onRequest(
       // ── GET /pending ──────────────────────────────────────────────────────
       if (req.method === "GET" && (path === "/pending" || path === "")) {
         const { limit = "20", requestType, status } = req.query;
-        let query: admin.firestore.Query = db.collection(BASE);
+        let query: Query = db.collection(BASE);
         query = query.where("archived", "==", false);
         if (status) {
           if (status === "requested") {
@@ -68,7 +69,7 @@ export const pulsoRequests = onRequest(
         if (requestType) query = query.where("requestType", "==", requestType);
         
         const snapshot = await query.limit(Number(limit)).get();
-        const requests = snapshot.docs.map(doc => ({
+        const requests = snapshot.docs.map((doc: any) => ({
           ...doc.data(),
           id: doc.id,
           requestedAt: doc.data().requestedAt?.toDate()?.toISOString(),
@@ -86,14 +87,14 @@ export const pulsoRequests = onRequest(
           return;
         }
         const docRef = db.collection(BASE).doc(requestId);
-        const result = await db.runTransaction(async (transaction) => {
+        const result = await db.runTransaction(async (transaction: any) => {
           const docSnap = await transaction.get(docRef);
           if (!docSnap.exists) return { status: 404, message: "Request not found" };
           const data = docSnap.data()!;
           if (data.status !== "requested" && data.status !== "queued_for_openclaw") {
             return { status: 409, message: `Request is in status ${data.status}` };
           }
-          const ts = admin.firestore.FieldValue.serverTimestamp();
+          const ts = FieldValue.serverTimestamp();
           transaction.update(docRef, { status: "running", processedBy, startedAt: ts, updatedAt: ts });
           return { status: 200, message: "claimed" };
         });
@@ -117,7 +118,7 @@ export const pulsoRequests = onRequest(
         }
 
         const requestData = docSnap.data()!;
-        const ts = admin.firestore.FieldValue.serverTimestamp();
+        const ts = FieldValue.serverTimestamp();
 
         // ── MATERIALIZATION DISPATCHER ───────────────────────────────────────
         const materialize = async () => {
@@ -461,7 +462,7 @@ export const pulsoRequests = onRequest(
         await docRef.update(sanitize({
           status: finalStatus,
           result: finalResultObj,
-          error: isFailed ? matResult.summary || "Erro na materialização" : admin.firestore.FieldValue.delete(),
+          error: isFailed ? matResult.summary || "Erro na materialização" : FieldValue.delete(),
           emittedEvents: emittedEvents || null,
           pulsoEventId: pulsoEventId || null,
           processedAt: ts,
@@ -480,7 +481,7 @@ export const pulsoRequests = onRequest(
       if (req.method === "POST" && path === "/fail") {
         const { requestId, error, recoverable, nextSuggestedAction } = req.body;
         if (!requestId) { res.status(400).send("Missing requestId"); return; }
-        const ts = admin.firestore.FieldValue.serverTimestamp();
+        const ts = FieldValue.serverTimestamp();
         await db.collection(BASE).doc(requestId).update(sanitize({
           status: "failed", error: error || "Unknown error",
           recoverable: recoverable ?? false, nextSuggestedAction: nextSuggestedAction || null,
@@ -494,7 +495,7 @@ export const pulsoRequests = onRequest(
       if (req.method === "POST" && path === "/needs-clarification") {
         const { requestId, question, missingFields } = req.body;
         if (!requestId) { res.status(400).send("Missing requestId"); return; }
-        const ts = admin.firestore.FieldValue.serverTimestamp();
+        const ts = FieldValue.serverTimestamp();
         await db.collection(BASE).doc(requestId).update(sanitize({
           status: "needs_clarification",
           result: { question: question || "Necessário esclarecimento", missingFields: missingFields || [] },
@@ -508,7 +509,7 @@ export const pulsoRequests = onRequest(
       if (req.method === "POST" && path === "/needs-approval") {
         const { requestId, reason, blueprint } = req.body;
         if (!requestId) { res.status(400).send("Missing requestId"); return; }
-        const ts = admin.firestore.FieldValue.serverTimestamp();
+        const ts = FieldValue.serverTimestamp();
         await db.collection(BASE).doc(requestId).update(sanitize({
           status: "needs_approval",
           result: { reason: reason || "Requer aprovação humana estrutural", blueprint: blueprint || null },
@@ -536,7 +537,7 @@ export const pulsoRequests = onRequest(
           res.status(400).send(`Invalid requestType.`);
           return;
         }
-        const ts = admin.firestore.FieldValue.serverTimestamp();
+        const ts = FieldValue.serverTimestamp();
         if (data.dedupeKey) {
           const existingQuery = await db.collection(BASE).where("dedupeKey", "==", data.dedupeKey).where("status", "in", ["requested", "running", "needs_clarification"]).limit(1).get();
           if (!existingQuery.empty) {

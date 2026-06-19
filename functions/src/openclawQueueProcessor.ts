@@ -1,6 +1,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 /**
  * Scheduled Cloud Function that processes Pulso requests awaiting OpenClaw.
@@ -15,7 +16,7 @@ export const processOpenClawQueue = onSchedule(
     timeoutSeconds: 300,
   },
   async () => {
-    const db = admin.firestore();
+    const db = getFirestore();
     const WORKSPACE_ID = "felipe_dutra";
     const BASE = `workspaces/${WORKSPACE_ID}/pulso_requests`;
 
@@ -43,8 +44,8 @@ export const processOpenClawQueue = onSchedule(
         await docRef.update({
           status: "processing_by_openclaw",
           processedBy: "openclaw-queue-processor",
-          startedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          startedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         });
         logger.info(`🛠️ Claimed request ${requestId}`);
 
@@ -68,8 +69,8 @@ export const processOpenClawQueue = onSchedule(
         await docRef.update({
           openclawResult: simulatedResult,
           status: "proposal_ready",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          processedAt: FieldValue.serverTimestamp(),
         });
         logger.info(`✅ Processed request ${requestId} → proposal_ready`);
       } catch (err: any) {
@@ -77,7 +78,7 @@ export const processOpenClawQueue = onSchedule(
         await docRef.update({
           status: "failed",
           error: err.message ?? "unknown",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         });
         logger.error(`❌ Failed processing request ${requestId}:`, err);
       }

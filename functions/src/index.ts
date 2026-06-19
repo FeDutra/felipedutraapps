@@ -1,7 +1,10 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+
 admin.initializeApp();
-const db = admin.firestore();
+const db = getFirestore();
+
 
 export const pulsoIngest = onRequest(
   { region: "us-central1", secrets: ["PULSO_INGEST_TOKEN"] },
@@ -25,7 +28,7 @@ export const pulsoIngest = onRequest(
       const existing = await ref.get();
       if (existing.exists) { res.status(200).json({ status: "duplicate" }); return; }
 
-      const ts = admin.firestore.FieldValue.serverTimestamp();
+      const ts = FieldValue.serverTimestamp();
       const p  = event.payload || {};
       const eventTitle = p.title || p.summary || p.message || p.topic || event.event_type || "Ingestão externa";
 
