@@ -2350,8 +2350,12 @@ export default function LivePage() {
 
       {/* 1. Main Icon Sidebar */}
       <div 
-        onMouseLeave={() => setHoveredAreaId(null)}
-        className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none transition-all duration-300 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        onMouseLeave={() => {
+          if (!isAddingChat) {
+            setHoveredAreaId(null);
+          }
+        }}
+        className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none rounded-2xl p-3 border border-transparent backdrop-blur-none hover:bg-[#fbf9f5]/10 hover:backdrop-blur-md hover:border-[#fbf9f5]/10 transition-all duration-200 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
       >
         {AREA_ORDER.map((areaId) => {
           const areaName = AREA_NAMES[areaId] || areaId;
@@ -2363,7 +2367,11 @@ export default function LivePage() {
           return (
             <div 
               key={areaId} 
-              onMouseEnter={() => setHoveredAreaId(areaId)}
+              onMouseEnter={() => {
+                if (!isAddingChat) {
+                  setHoveredAreaId(areaId);
+                }
+              }}
               className="flex flex-col items-start transition-all duration-300"
             >
               {/* Area Trigger */}
@@ -2472,23 +2480,29 @@ export default function LivePage() {
                             setActiveContextNode(newNode);
                             setNewChatName('');
                             setIsAddingChat(false);
+                            setHoveredAreaId(null);
                           }
                         } else if (e.key === 'Escape') {
                           setIsAddingChat(false);
                           setNewChatName('');
+                          setHoveredAreaId(null);
                         }
                       }}
                       onBlur={() => {
                         setTimeout(() => {
                           setIsAddingChat(false);
                           setNewChatName('');
+                          setHoveredAreaId(null);
                         }, 200);
                       }}
                       className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[8px] tracking-wider uppercase w-20 py-0.5 outline-none placeholder-[#fbf9f5]/25"
                     />
                   ) : (
                     <button
-                      onClick={() => setIsAddingChat(true)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsAddingChat(true);
+                      }}
                       className="text-[8px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left"
                     >
                       + novo
