@@ -385,12 +385,32 @@ export default function LivePage() {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
+  const [customContextNodes, setCustomContextNodes] = React.useState<PulsoContextNode[]>([]);
+  
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('pulso_custom_contexts');
+        if (saved) {
+          setCustomContextNodes(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  const allContextNodes = React.useMemo(() => [...INITIAL_CONTEXT_NODES, ...customContextNodes], [customContextNodes]);
+
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(INITIAL_CONTEXT_NODES[0]);
   const activeContextNodeRef = React.useRef(activeContextNode);
   React.useEffect(() => {
     activeContextNodeRef.current = activeContextNode;
   }, [activeContextNode]);
   const activeAreaId = activeContextNode.areaId;
+
+  const [isAddingChat, setIsAddingChat] = React.useState(false);
+  const [newChatName, setNewChatName] = React.useState('');
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
   const headerMenuRef = React.useRef<HTMLDivElement>(null);
@@ -2313,54 +2333,155 @@ export default function LivePage() {
         </div>
       </header>
 
-      <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 md:gap-5 group/sidebar select-none transition-opacity duration-300 max-h-[85vh] overflow-y-auto no-scrollbar py-4 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={INITIAL_CONTEXT_NODES.map(c => c.contextId)} strategy={verticalListSortingStrategy}>
-            {Object.entries(
-              INITIAL_CONTEXT_NODES.reduce((groups, node) => {
-                const area = node.areaId || 'sistema';
-                if (!groups[area]) groups[area] = [];
-                groups[area].push(node);
-                return groups;
-              }, {} as Record<string, PulsoContextNode[]>)
-            ).sort((a, b) => {
-              const orderA = AREA_ORDER.indexOf(a[0]);
-              const orderB = AREA_ORDER.indexOf(b[0]);
-              return (orderA === -1 ? 999 : orderA) - (orderB === -1 ? 999 : orderB);
-            }).map(([areaId, nodes]) => (
-              <div key={areaId} className="flex flex-col gap-1">
-                {/* Area Header */}
-                <div className="text-[8px] tracking-[0.25em] font-black uppercase text-[#fbf9f5]/15 group-hover/sidebar:text-[#fbf9f5]/30 transition-colors pl-1 py-1 select-none">
-                  {AREA_NAMES[areaId] || areaId}
+      {/* 1. Main Icon Sidebar */}
+      <div className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-3 group/sidebar select-none transition-all duration-300 py-4 px-2 bg-[#141414]/30 backdrop-blur-md rounded-2xl border border-[#fbf9f5]/5 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        {AREA_ORDER.map((areaId) => {
+          const areaName = AREA_NAMES[areaId] || areaId;
+          const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
+          const isActiveArea = activeAreaId === areaId;
+          const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
+          
+          return (
+            <div key={areaId} className="relative group/area">
+              <button
+                onClick={() => {
+                  if (isActiveArea) {
+                    // Keep active
+                  } else {
+                    // Switch to the first context of this area
+                    if (areaContexts.length > 0) {
+                      setActiveContextNode(areaContexts[0]);
+                      setUnreadContexts(prev => {
+                        if (prev[areaContexts[0].contextId]) {
+                          const next = { ...prev };
+                          delete next[areaContexts[0].contextId];
+                          return next;
+                        }
+                        return prev;
+                      });
+                    }
+                  }
+                }}
+                className={`relative w-8 h-8 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-300 border-none bg-transparent outline-none ${
+                  isActiveArea 
+                    ? 'bg-[#fbf9f5]/10 text-white shadow-[0_0_12px_rgba(255,255,255,0.05)]' 
+                    : 'text-[#fbf9f5]/40 hover:bg-white/5 hover:text-[#fbf9f5]/80'
+                }`}
+              >
+                {/* Icon */}
+                <span className="text-base select-none font-mono">
+                  {getAreaIcon({ id: areaId, name: areaName })}
+                </span>
+
+                {/* Unread Indicator */}
+                {hasUnreadInArea && !isActiveArea && (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#b8544a] animate-pulse shadow-[0_0_8px_rgba(184,84,74,0.6)]" />
+                )}
+
+                {/* Tooltip on Hover */}
+                <div className="absolute left-10 pl-2 pointer-events-none opacity-0 translate-x-2 group-hover/area:opacity-100 group-hover/area:translate-x-0 transition-all duration-200 z-50">
+                  <div className="bg-[#141414]/90 backdrop-blur-md border border-[#fbf9f5]/5 text-[#fbf9f5]/80 text-[8px] tracking-[0.2em] uppercase px-2 py-1.5 rounded shadow-xl whitespace-nowrap font-black">
+                    {areaName}
+                  </div>
                 </div>
-                {/* Context Nodes */}
-                <div className="flex flex-col gap-0.5 pl-1.5 md:pl-2">
-                  {nodes.map((ctx: PulsoContextNode) => (
-                    <SortableAreaItem
-                      key={ctx.contextId}
-                      area={{ id: ctx.contextId, name: ctx.label }}
-                      isActive={activeContextNode.contextId === ctx.contextId}
-                      hasUnread={!!unreadContexts[ctx.contextId]}
-                      icon={getAreaIcon({ id: ctx.areaId, name: ctx.label, slug: ctx.subareaId })}
-                      onClick={() => {
-                        setActiveContextNode(ctx);
-                        setUnreadContexts(prev => {
-                          if (prev[ctx.contextId]) {
-                            const next = { ...prev };
-                            delete next[ctx.contextId];
-                            return next;
-                          }
-                          return prev;
-                        });
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </SortableContext>
-        </DndContext>
+              </button>
+            </div>
+          );
+        })}
       </div>
+
+      {/* 2. Secondary Sub-contexts Panel */}
+      {activeAreaId && !presenceMode && (
+        <div className="fixed left-16 md:left-[72px] top-1/2 -translate-y-1/2 z-30 flex flex-col gap-4 py-4 px-3 bg-[#141414]/30 backdrop-blur-md rounded-2xl border border-[#fbf9f5]/5 w-32 transition-all duration-300">
+          <div className="text-[8px] tracking-[0.25em] font-black uppercase text-[#fbf9f5]/30 border-b border-[#fbf9f5]/5 pb-1 select-none">
+            {AREA_NAMES[activeAreaId] || activeAreaId}
+          </div>
+          <div className="flex flex-col gap-2">
+            {allContextNodes.filter(n => n.areaId === activeAreaId).map((ctx) => {
+              const isContextActive = activeContextNode.contextId === ctx.contextId;
+              const isUnread = !!unreadContexts[ctx.contextId];
+              return (
+                <button
+                  key={ctx.contextId}
+                  onClick={() => {
+                    setActiveContextNode(ctx);
+                    setUnreadContexts(prev => {
+                      if (prev[ctx.contextId]) {
+                        const next = { ...prev };
+                        delete next[ctx.contextId];
+                        return next;
+                      }
+                      return prev;
+                    });
+                  }}
+                  className={`text-[9px] tracking-wider uppercase font-sans font-light text-left transition-all duration-200 select-none border-none bg-transparent outline-none hover:text-white cursor-pointer ${
+                    isContextActive
+                      ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
+                      : isUnread
+                      ? 'text-[#b8544a] font-bold animate-pulse'
+                      : 'text-[#fbf9f5]/40'
+                  }`}
+                >
+                  {ctx.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Add Chat Input/Button */}
+          <div className="mt-2 pt-2 border-t border-[#fbf9f5]/5">
+            {isAddingChat ? (
+              <input
+                autoFocus
+                type="text"
+                placeholder="NOME"
+                value={newChatName}
+                onChange={(e) => setNewChatName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const name = newChatName.trim().toLowerCase();
+                    if (name) {
+                      const slug = name.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+                      const contextId = `${activeAreaId}_${slug}`;
+                      const openclawSessionKey = `agent:main:pulso:${contextId}`;
+                      const newNode: PulsoContextNode = {
+                        areaId: activeAreaId,
+                        contextId,
+                        chatId: "default",
+                        openclawSessionKey,
+                        label: name
+                      };
+                      const updated = [...customContextNodes, newNode];
+                      setCustomContextNodes(updated);
+                      localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+                      setActiveContextNode(newNode);
+                      setNewChatName('');
+                      setIsAddingChat(false);
+                    }
+                  } else if (e.key === 'Escape') {
+                    setIsAddingChat(false);
+                    setNewChatName('');
+                  }
+                }}
+                onBlur={() => {
+                  setTimeout(() => {
+                    setIsAddingChat(false);
+                    setNewChatName('');
+                  }, 200);
+                }}
+                className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[9px] tracking-wider uppercase w-full outline-none placeholder-[#fbf9f5]/20"
+              />
+            ) : (
+              <button
+                onClick={() => setIsAddingChat(true)}
+                className="text-[9px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none text-left w-full"
+              >
+                + novo chat
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
         <main className={`flex-1 min-h-0 overflow-y-auto overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end max-w-5xl w-full mx-auto mt-6 mb-4 z-10 relative transition-all duration-1000 ease-in-out`}>
           
