@@ -116,7 +116,7 @@ import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
 import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { db, storage } from '../../../shared/lib/firebase/client';
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
 import { PulsoContextNode } from '../types/pulso.types';
 
@@ -421,10 +421,11 @@ export default function LivePage() {
   const headerMenuRef = React.useRef<HTMLDivElement>(null);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [previewImage, setPreviewImage] = React.useState<Attachment | null>(null);
   const [previewPdf, setPreviewPdf] = React.useState<Attachment | null>(null);
   const [isDraggingFile, setIsDraggingFile] = React.useState(false);
-  const [uploadingFiles, setUploadingFiles] = React.useState<Record<string, number>>({});
+  const [uploadingFiles, setUploadingFiles] = React.useState<Record<string, { name: string; progress: number; error?: boolean }>>({});
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1581,14 +1582,36 @@ export default function LivePage() {
 
     if (isFirestore && storage) {
       try {
-        setUploadingFiles(prev => ({ ...prev, [id]: 0 }));
+        setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 0 } }));
         
         // Define Storage Path
         const path = `pulso/chats/${contextId}/attachments/${id}_${name}`;
         const fileRef = storageRef(storage, path);
         
-        // Upload bytes
-        await uploadBytes(fileRef, file);
+        // Resumable upload task
+        const uploadTask = uploadBytesResumable(fileRef, file);
+        
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+              setUploadingFiles(prev => ({
+                ...prev,
+                [id]: { name, progress }
+              }));
+            },
+            (error) => {
+              setUploadingFiles(prev => ({
+                ...prev,
+                [id]: { name, progress: 0, error: true }
+              }));
+              reject(error);
+            },
+            () => {
+              resolve();
+            }
+          );
+        });
         
         // Get URL
         const downloadUrl = await getDownloadURL(fileRef);
@@ -1654,13 +1677,13 @@ export default function LivePage() {
 
     if (attachedItems.length === 0) return;
 
-    // Send a message indicating files uploaded
+    // Send a message indicating files uploaded (without [anexo] prefix)
     const isFirestore = pulsoService.getDataMode() === 'firestore';
     setIsTyping(true);
 
     try {
       const fileNames = attachedItems.map(a => a.name).join(', ');
-      const cleanMsg = `[anexo] ${fileNames}`;
+      const cleanMsg = fileNames;
       const newRequest = await createPulsoConversationRequest(cleanMsg, {
         mode: 'text',
         areaId: activeContextNode.areaId,
@@ -2764,36 +2787,45 @@ export default function LivePage() {
                       </span>
                       
                       {/* Text body & blocks renderer */}
-                      <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
-                        <MessageRenderer text={msg.text} sender={msg.sender} />
-                      </div>
+                      {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
+                        <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
+                          <MessageRenderer text={msg.text} sender={msg.sender} />
+                        </div>
+                      )}
 
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div className={`flex flex-wrap gap-2 mt-2 ${!isLotus ? 'justify-end' : 'justify-start'}`}>
                           {msg.attachments.map((att) => {
                             if (att.type === 'image') {
                               return (
-                                <div 
-                                  key={att.id}
-                                  onClick={() => setPreviewImage(att)}
-                                  className="relative group cursor-pointer overflow-hidden rounded-lg border border-white/10 max-h-24 max-w-[200px]"
-                                >
-                                  <img 
-                                    src={att.url} 
-                                    alt={att.name} 
-                                    className="object-cover h-24 w-auto transition-transform group-hover:scale-105"
-                                  />
+                                <div key={att.id} className="flex flex-col gap-1 w-full max-w-[200px]">
+                                  <div 
+                                    onClick={() => setPreviewImage(att)}
+                                    className="relative group cursor-pointer overflow-hidden rounded-lg border border-white/10 max-h-24"
+                                  >
+                                    <img 
+                                      src={att.url} 
+                                      alt={att.name} 
+                                      className="object-cover h-24 w-full transition-transform group-hover:scale-105"
+                                    />
+                                  </div>
+                                  <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                    {att.name}
+                                  </span>
                                 </div>
                               );
                             }
                             if (att.type === 'audio') {
                               return (
-                                <div key={att.id} className="w-full max-w-xs mt-1">
+                                <div key={att.id} className="flex flex-col gap-1 w-full max-w-xs mt-1">
                                   <audio 
                                     controls 
                                     src={att.url} 
                                     className="w-full h-8 opacity-80 hover:opacity-100 transition-opacity" 
                                   />
+                                  <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                    {att.name}
+                                  </span>
                                 </div>
                               );
                             }
@@ -2802,13 +2834,17 @@ export default function LivePage() {
                                 <div 
                                   key={att.id}
                                   onClick={() => setPreviewPdf(att)}
-                                  className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none text-[10px] uppercase tracking-wider text-[#fbf9f5]/85 hover:text-white transition-all w-full max-w-xs text-left"
+                                  className="flex flex-col gap-1 w-full max-w-xs mt-1"
                                 >
-                                  <FileText size={14} className="text-[#b8283e] shrink-0" />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate font-medium">{att.name}</p>
-                                    <p className="text-[8px] text-[#fbf9f5]/40 mt-0.5">pdf • {att.sizeBytes ? `${(att.sizeBytes/1024).toFixed(1)}kb` : ''}</p>
+                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none transition-all text-left">
+                                    <FileText size={14} className="text-[#b8283e] shrink-0" />
+                                    <span className="text-[9px] text-[#fbf9f5]/40 uppercase tracking-widest font-medium">
+                                      pdf {att.sizeBytes ? `• ${(att.sizeBytes/1024).toFixed(1)}kb` : ''}
+                                    </span>
                                   </div>
+                                  <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                    {att.name}
+                                  </span>
                                 </div>
                               );
                             }
@@ -2820,13 +2856,17 @@ export default function LivePage() {
                                 download={att.name}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none text-[10px] uppercase tracking-wider text-[#fbf9f5]/85 hover:text-white transition-all w-full max-w-xs text-left"
+                                className="flex flex-col gap-1 w-full max-w-xs mt-1"
                               >
-                                <Paperclip size={14} className="text-white/40 shrink-0" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate font-medium">{att.name}</p>
-                                  <p className="text-[8px] text-[#fbf9f5]/40 mt-0.5">arquivo • {att.sizeBytes ? `${(att.sizeBytes/1024).toFixed(1)}kb` : ''}</p>
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none transition-all text-left">
+                                  <Paperclip size={14} className="text-white/40 shrink-0" />
+                                  <span className="text-[9px] text-[#fbf9f5]/40 uppercase tracking-widest font-medium">
+                                    arquivo {att.sizeBytes ? `• ${(att.sizeBytes/1024).toFixed(1)}kb` : ''}
+                                  </span>
                                 </div>
+                                <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                  {att.name}
+                                </span>
                               </a>
                             );
                           })}
@@ -3066,6 +3106,31 @@ export default function LivePage() {
           ))}
         </div>
 
+        {Object.keys(uploadingFiles).length > 0 && (
+          <div className="w-full bg-[#111111]/85 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2.5 animate-fade-in text-[10px] text-[#fbf9f5]/80 max-h-36 overflow-y-auto no-scrollbar shadow-lg">
+            {Object.entries(uploadingFiles).map(([id, fileInfo]) => (
+              <div key={id} className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate max-w-[220px] lowercase font-light">{fileInfo.name}</span>
+                  {fileInfo.error ? (
+                    <span className="text-[#b8283e] font-semibold lowercase">erro no envio</span>
+                  ) : (
+                    <span className="font-mono text-[#b8283e] font-semibold">{fileInfo.progress}%</span>
+                  )}
+                </div>
+                {!fileInfo.error && (
+                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-[#b8283e] transition-all duration-300 rounded-full" 
+                      style={{ width: `${fileInfo.progress}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
 
           <div className="relative" ref={attachmentMenuRef}>
@@ -3073,6 +3138,14 @@ export default function LivePage() {
               type="file"
               multiple
               ref={fileInputRef}
+              onChange={(e) => handleAttachFiles(e.target.files)}
+              className="hidden"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={cameraInputRef}
               onChange={(e) => handleAttachFiles(e.target.files)}
               className="hidden"
             />
@@ -3084,7 +3157,7 @@ export default function LivePage() {
               <Paperclip size={14} strokeWidth={1.5} />
             </button>
             
-            <div className={`absolute bottom-full left-0 mb-2 w-36 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden pulso-transition ${
+            <div className={`absolute bottom-full left-0 mb-2 w-36 bg-black/85 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden pulso-transition shadow-2xl ${
               isAttachmentMenuOpen ? 'opacity-100 transform translate-y-0 pointer-events-auto scale-100' : 'opacity-0 transform translate-y-2 pointer-events-none scale-95'
             }`}>
               <div className="flex flex-col text-xs font-light tracking-wide text-[#fbf9f5]">
@@ -3092,21 +3165,28 @@ export default function LivePage() {
                   onClick={() => { fileInputRef.current?.setAttribute('accept', '*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
                   className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
                 >
-                  <FileText size={12} />
+                  <FileText size={12} className="opacity-70" />
                   <span>arquivos</span>
                 </button>
                 <button 
                   onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
                   className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
                 >
-                  <ImageIcon size={12} />
+                  <ImageIcon size={12} className="opacity-70" />
                   <span>fotos</span>
+                </button>
+                <button 
+                  onClick={() => { cameraInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
+                >
+                  <Camera size={12} className="opacity-70" />
+                  <span>câmera</span>
                 </button>
                 <button 
                   onClick={() => { fileInputRef.current?.setAttribute('accept', 'audio/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
                   className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left bg-transparent cursor-pointer"
                 >
-                  <Volume2 size={12} />
+                  <Volume2 size={12} className="opacity-70" />
                   <span>áudio</span>
                 </button>
               </div>
