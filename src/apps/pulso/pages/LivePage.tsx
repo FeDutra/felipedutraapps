@@ -104,7 +104,8 @@ import {
   Image as ImageIcon,
   Camera,
   Volume2,
-  Square
+  Square,
+  ArrowDown
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -662,6 +663,27 @@ export default function LivePage() {
   }, [presenceState, voiceMode]);
 
   const chatEndRef = React.useRef<HTMLDivElement>(null);
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = React.useState(false);
+
+  const scrollToBottom = React.useCallback((smooth = true) => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    }
+    chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
+
+  const handleScroll = React.useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const threshold = 120;
+    const isScrolledUp = container.scrollHeight - container.scrollTop - container.clientHeight > threshold;
+    setShowScrollButton(isScrolledUp);
+  }, []);
 
 
 
@@ -913,8 +935,27 @@ export default function LivePage() {
   };
 
   React.useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+    scrollToBottom(true);
+  }, [messages, isTyping, scrollToBottom]);
+
+  // Guarantee scroll to bottom on initial load / refresh and when messages are loaded
+  React.useEffect(() => {
+    if (messages.length > 0) {
+      // Immediate non-smooth scroll to bottom
+      scrollToBottom(false);
+      
+      // Secondary deferred scroll after layout/images render (important for slow connections/devices)
+      const t1 = setTimeout(() => scrollToBottom(false), 50);
+      const t2 = setTimeout(() => scrollToBottom(false), 200);
+      const t3 = setTimeout(() => scrollToBottom(false), 600);
+      
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [messages.length, scrollToBottom]);
 
   // Load database state once
   React.useEffect(() => {
@@ -2226,7 +2267,11 @@ export default function LivePage() {
           <div className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[400px] md:max-h-[60vh] h-[350px] md:h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
             presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
           }`}>
-            <div className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8">
+            <div 
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
+            >
               {currentMessages.map((msg) => {
                 const isLotus = msg.sender === 'lotus';
                 if (isLotus && !msg.text) return null;
@@ -2428,6 +2473,17 @@ export default function LivePage() {
 
             <div ref={chatEndRef} />
           </div>
+
+          {/* Floating button to return to bottom */}
+          {showScrollButton && (
+            <button
+              onClick={() => scrollToBottom(true)}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 p-2 bg-[#fbf9f5]/15 hover:bg-[#fbf9f5]/25 border border-[#fbf9f5]/20 backdrop-blur-md rounded-full text-white/80 hover:text-white transition-all duration-300 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 animate-fade-in"
+              title="Voltar para a mensagem mais recente"
+            >
+              <ArrowDown size={14} className="animate-bounce" />
+            </button>
+          )}
         </div>
 
         <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8544a] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${

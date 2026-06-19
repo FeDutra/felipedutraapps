@@ -89,7 +89,8 @@ const LoginScreen = () => {
   const [errorMsg, setErrorMsg] = React.useState("");
 
   React.useEffect(() => {
-    setIsTauri(checkIsTauri());
+    // Show email/password login form in Tauri OR local development
+    setIsTauri(checkIsTauri() || process.env.NODE_ENV === "development");
   }, []);
 
   const handleLogin = async () => {
