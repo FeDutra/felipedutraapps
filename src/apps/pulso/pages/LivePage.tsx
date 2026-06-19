@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-function SortableAreaItem({ area, isActive, onClick, icon }: any) {
+function SortableAreaItem({ area, isActive, onClick, icon, hasUnread }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -40,6 +40,8 @@ function SortableAreaItem({ area, isActive, onClick, icon }: any) {
         className={`text-lg text-center transition-all duration-300 font-mono ${
           isActive
             ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
+            : hasUnread
+            ? 'text-[#b8544a] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(184,84,74,0.6)] font-bold'
             : 'text-[#fbf9f5]/35 group-hover/item:text-[#fbf9f5]/80 group-hover/item:scale-110'
         }`}
         style={{ width: '24px' }}
@@ -48,7 +50,7 @@ function SortableAreaItem({ area, isActive, onClick, icon }: any) {
       </span>
       <span
         className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-300 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
-          isActive ? 'text-white font-medium' : 'text-[#fbf9f5]'
+          isActive ? 'text-white font-medium' : hasUnread ? 'text-[#b8544a] font-bold animate-pulse' : 'text-[#fbf9f5]'
         }`}
       >
         {area.name}
@@ -370,6 +372,10 @@ export default function LivePage() {
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(INITIAL_CONTEXT_NODES[0]);
+  const activeContextNodeRef = React.useRef(activeContextNode);
+  React.useEffect(() => {
+    activeContextNodeRef.current = activeContextNode;
+  }, [activeContextNode]);
   const activeAreaId = activeContextNode.areaId;
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
@@ -626,6 +632,85 @@ export default function LivePage() {
       console.warn('Failed to play presence sound cue:', e);
     }
   }, [presenceSoundCuesEnabled]);
+
+  // ── Notification State & Programmatic Sound Cues ───────────────────────
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = React.useState(true);
+  const [unreadContexts, setUnreadContexts] = React.useState<Record<string, boolean>>({});
+  
+  const seenMessagesRef = React.useRef<Set<string>>(new Set());
+  const isHistoryLoadedRef = React.useRef<boolean>(false);
+
+  const playNotificationSound = React.useCallback((isSameSession: boolean) => {
+    if (!notificationSoundEnabled) return;
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+
+      if (isSameSession) {
+        // Som A: Bipe duplo rápido e harmonioso (C5 e E5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(523.25, now); // C5
+        gain1.gain.setValueAtTime(0.015, now);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+        osc1.start(now);
+        osc1.stop(now + 0.12);
+
+        setTimeout(() => {
+          try {
+            const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc2 = ctx2.createOscillator();
+            const gain2 = ctx2.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx2.destination);
+            const now2 = ctx2.currentTime;
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(659.25, now2); // E5
+            gain2.gain.setValueAtTime(0.012, now2);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.12);
+            osc2.start(now2);
+            osc2.stop(now2 + 0.12);
+          } catch {}
+        }, 70);
+      } else {
+        // Som B: Tom ambiente de alerta mais encorpado (F4 e A4)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(349.23, now); // F4
+        gain1.gain.setValueAtTime(0.02, now);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        osc1.start(now);
+        osc1.stop(now + 0.18);
+
+        setTimeout(() => {
+          try {
+            const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc2 = ctx2.createOscillator();
+            const gain2 = ctx2.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx2.destination);
+            const now2 = ctx2.currentTime;
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(440.00, now2); // A4
+            gain2.gain.setValueAtTime(0.015, now2);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now2 + 0.18);
+            osc2.start(now2);
+            osc2.stop(now2 + 0.18);
+          } catch {}
+        }, 90);
+      }
+    } catch (e) {
+      console.warn('Failed to play notification sound cue:', e);
+    }
+  }, [notificationSoundEnabled]);
 
   // ── Voice Input State ────────────────────────────────────────────────
   type VoiceState = 'idle' | 'listening' | 'transcribing' | 'ready' | 'error_permission' | 'unsupported';
@@ -1305,6 +1390,41 @@ export default function LivePage() {
               });
             }
           });
+
+          // Detect new messages from Lótus to trigger sound/visual notifications
+          chatHistory.forEach((msg) => {
+            if (msg.sender === 'lotus' && msg.id) {
+              if (!seenMessagesRef.current.has(msg.id)) {
+                seenMessagesRef.current.add(msg.id);
+                
+                // Only trigger sound/visual indicators if the history has already loaded
+                if (isHistoryLoadedRef.current) {
+                  // Determine if the message context is the active one
+                  const activeContext = activeContextNodeRef.current;
+                  const isSame = !msg.contextId || msg.contextId === activeContext.contextId;
+                  
+                  if (isSame) {
+                    playNotificationSound(true);
+                  } else {
+                    playNotificationSound(false);
+                    // Mark this context as unread
+                    setUnreadContexts(prev => ({
+                      ...prev,
+                      [msg.contextId!]: true
+                    }));
+                  }
+                }
+              }
+            }
+          });
+
+          // Mark history as loaded after the initial processing of messages
+          if (!isHistoryLoadedRef.current) {
+            chatHistory.forEach(msg => {
+              if (msg.id) seenMessagesRef.current.add(msg.id);
+            });
+            isHistoryLoadedRef.current = true;
+          }
 
           setState((prev: any) => {
             if (!prev) return prev;
@@ -2260,8 +2380,19 @@ export default function LivePage() {
                 key={ctx.contextId}
                 area={{ id: ctx.contextId, name: ctx.label }}
                 isActive={activeContextNode.contextId === ctx.contextId}
+                hasUnread={!!unreadContexts[ctx.contextId]}
                 icon={getAreaIcon({ id: ctx.areaId, name: ctx.label, slug: ctx.subareaId })}
-                onClick={() => setActiveContextNode(ctx)}
+                onClick={() => {
+                  setActiveContextNode(ctx);
+                  setUnreadContexts(prev => {
+                    if (prev[ctx.contextId]) {
+                      const next = { ...prev };
+                      delete next[ctx.contextId];
+                      return next;
+                    }
+                    return prev;
+                  });
+                }}
               />
             ))}
           </SortableContext>
@@ -2946,6 +3077,19 @@ export default function LivePage() {
                     type="checkbox"
                     checked={presenceSoundCuesEnabled}
                     onChange={(e) => setPresenceSoundCuesEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-white/10 rounded-full peer peer-focus:ring-0 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-white/30 relative"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
+                <span className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">notificações sonoras</span>
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={notificationSoundEnabled}
+                    onChange={(e) => setNotificationSoundEnabled(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-8 h-4 bg-white/10 rounded-full peer peer-focus:ring-0 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-white/30 relative"></div>
