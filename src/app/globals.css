@@ -371,6 +371,16 @@ body.pulso-theme-black .theme-her {
   --background-her: #0f0f0f;
 }
 
+/* Dynamic Unread Indicator */
+.pulso-unread {
+  color: #0d0d0d !important;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+}
+body.pulso-theme-black .pulso-unread {
+  color: #b8283e !important;
+  text-shadow: 0 0 10px rgba(184, 40, 62, 0.7);
+}
+
 /* ==========================================================================
    PULSO IDENTITY - GLOBAL TRANSITIONS & ANIMATIONS
    ========================================================================== */

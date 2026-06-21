@@ -41,7 +41,7 @@ function SortableAreaItem({ area, isActive, onClick, icon, hasUnread }: any) {
           isActive
             ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
             : hasUnread
-            ? 'text-[#b8283e] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(184, 40, 62,0.6)] font-bold'
+            ? 'pulso-unread scale-110 opacity-100 animate-pulse font-bold'
             : 'text-[#fbf9f5]/35 group-hover/item:text-[#fbf9f5]/80 group-hover/item:scale-110'
         }`}
         style={{ width: '24px' }}
@@ -50,7 +50,7 @@ function SortableAreaItem({ area, isActive, onClick, icon, hasUnread }: any) {
       </span>
       <span
         className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-300 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
-          isActive ? 'text-white font-medium' : hasUnread ? 'text-[#b8283e] font-bold animate-pulse' : 'text-[#fbf9f5]'
+          isActive ? 'text-white font-medium' : hasUnread ? 'pulso-unread font-bold animate-pulse' : 'text-[#fbf9f5]'
         }`}
       >
         {area.name}
@@ -112,11 +112,13 @@ import {
   ExternalLink,
   Download,
   Edit2,
-  Archive
+  Archive,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
-import { onSnapshot, collection, query, where } from "firebase/firestore";
+import { onSnapshot, collection, query, where, doc, setDoc, updateDoc } from "firebase/firestore";
 import { db, storage } from '../../../shared/lib/firebase/client';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
@@ -386,24 +388,75 @@ export default function LivePage() {
       timestamp: new Date()
     }
   ]);
-  const [lastSentRequestId, setLastSentRequestId] = React.useState<string | null>(null);
-  const [isTyping, setIsTyping] = React.useState(false);
+  const [lastSentRequestsByContext, setLastSentRequestsByContext] = React.useState<Record<string, string>>({});
+  const [contextTypingStates, setContextTypingStates] = React.useState<Record<string, boolean>>({});
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
   const [customContextNodes, setCustomContextNodes] = React.useState<PulsoContextNode[]>([]);
   
   React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('pulso_custom_contexts');
-        if (saved) {
-          setCustomContextNodes(JSON.parse(saved));
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (!isFirestore) {
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = localStorage.getItem('pulso_custom_contexts');
+          if (saved) {
+            setCustomContextNodes(JSON.parse(saved));
+          }
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error(e);
       }
+      return;
     }
+
+    if (loading || !db) return;
+
+    let unsubscribe: any = null;
+    try {
+      const q = query(collection(db, firestorePaths.customContexts()));
+      unsubscribe = onSnapshot(q, (snapshot: any) => {
+        const nodes: PulsoContextNode[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          nodes.push({
+            areaId: data.areaId,
+            contextId: data.contextId,
+            chatId: data.chatId || "default",
+            openclawSessionKey: data.openclawSessionKey,
+            label: data.label,
+            archived: data.archived || false
+          });
+        });
+        setCustomContextNodes(nodes);
+      }, (error: any) => {
+        console.error("Firestore customContexts onSnapshot error:", error);
+      });
+    } catch (e) {
+      console.error("Failed to subscribe to customContexts:", e);
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [db, loading]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateThemeColor = () => {
+      const currentTheme = localStorage.getItem('pulso-theme') || 'orange';
+      let metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.setAttribute('name', 'theme-color');
+        document.head.appendChild(metaTheme);
+      }
+      metaTheme.setAttribute('content', currentTheme === 'black' ? '#0f0f0f' : '#b8283e');
+    };
+    updateThemeColor();
+    window.addEventListener('pulso-theme-change', updateThemeColor);
+    return () => window.removeEventListener('pulso-theme-change', updateThemeColor);
   }, []);
 
   const allContextNodes = React.useMemo(() => {
@@ -417,6 +470,17 @@ export default function LivePage() {
     activeContextNodeRef.current = activeContextNode;
   }, [activeContextNode]);
   const activeAreaId = activeContextNode.areaId;
+  const isTyping = contextTypingStates[activeContextNode?.contextId] || false;
+  const currentMessages = React.useMemo(() => {
+    return messages.filter(msg => {
+      if (msg.id === 'welcome') return true;
+      return msg.contextId === activeContextNode.contextId;
+    });
+  }, [messages, activeContextNode.contextId]);
+
+  const setContextTyping = (contextId: string, typing: boolean) => {
+    setContextTypingStates(prev => ({ ...prev, [contextId]: typing }));
+  };
 
   const [editingContextId, setEditingContextId] = React.useState<string | null>(null);
   const [editingContextLabel, setEditingContextLabel] = React.useState('');
@@ -424,6 +488,14 @@ export default function LivePage() {
   const [newChatName, setNewChatName] = React.useState('');
   const [hoveredAreaId, setHoveredAreaId] = React.useState<string | null>(null);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [activeMobileAreaId, setActiveMobileAreaId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (activeContextNode?.areaId) {
+      setActiveMobileAreaId(activeContextNode.areaId);
+    }
+  }, [activeContextNode?.areaId]);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = React.useState(false);
   const headerMenuRef = React.useRef<HTMLDivElement>(null);
   
@@ -432,7 +504,7 @@ export default function LivePage() {
   const [previewImage, setPreviewImage] = React.useState<Attachment | null>(null);
   const [previewPdf, setPreviewPdf] = React.useState<Attachment | null>(null);
   const [isDraggingFile, setIsDraggingFile] = React.useState(false);
-  const [uploadingFiles, setUploadingFiles] = React.useState<Record<string, { name: string; progress: number; error?: boolean }>>({});
+  const [uploadingFiles, setUploadingFiles] = React.useState<Record<string, { name: string; progress: number; status?: string; error?: boolean; contextId: string }>>({});
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1014,11 +1086,11 @@ export default function LivePage() {
 
   React.useEffect(() => {
     scrollToBottom(true);
-  }, [messages, isTyping, scrollToBottom]);
+  }, [currentMessages, isTyping, scrollToBottom]);
 
   // Guarantee scroll to bottom on initial load / refresh and when messages are loaded
   React.useEffect(() => {
-    if (messages.length > 0) {
+    if (currentMessages.length > 0) {
       // Immediate non-smooth scroll to bottom
       scrollToBottom(false);
       
@@ -1026,14 +1098,16 @@ export default function LivePage() {
       const t1 = setTimeout(() => scrollToBottom(false), 50);
       const t2 = setTimeout(() => scrollToBottom(false), 200);
       const t3 = setTimeout(() => scrollToBottom(false), 600);
+      const t4 = setTimeout(() => scrollToBottom(false), 1000);
       
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
         clearTimeout(t3);
+        clearTimeout(t4);
       };
     }
-  }, [messages.length, scrollToBottom]);
+  }, [currentMessages.length, activeContextNode.contextId, scrollToBottom]);
 
   // Load database state once
   React.useEffect(() => {
@@ -1171,212 +1245,192 @@ export default function LivePage() {
   React.useEffect(() => {
     const isFirestore = pulsoService.getDataMode() === 'firestore';
     if (!isFirestore) return;
+    if (loading || !db) return;
 
     let unsubscribe: any = null;
     try {
-      if (db) {
-        const q = query(
-          collection(db, firestorePaths.requests()),
-          where("requestType", "in", ["conversation_command", "active_message"])
-        );
+      const q = query(
+        collection(db, firestorePaths.requests()),
+        where("requestType", "in", ["conversation_command", "active_message"])
+      );
 
-        unsubscribe = onSnapshot(q, (snapshot: any) => {
-          const fetchedRequests: any[] = [];
-          snapshot.forEach((docSnap: any) => {
-            const data = docSnap.data();
-            if (data.archived === true) return; // filter archived in memory
+      unsubscribe = onSnapshot(q, (snapshot: any) => {
+        const fetchedRequests: any[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          if (data.archived === true) return; // filter archived in memory
 
-            Object.keys(data).forEach(key => {
-              if (data[key] && typeof data[key].toDate === 'function') {
-                data[key] = data[key].toDate();
-              }
-            });
-            fetchedRequests.push({ ...data, id: docSnap.id });
-          });
-
-          const sortedRequests = fetchedRequests.sort((a, b) => {
-            const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
-            const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
-            return timeA - timeB;
-          });
-
-          const chatHistory: Message[] = [];
-          sortedRequests.forEach((req: any) => {
-            const reqTime = safeConvertToDate(req.requestedAt) || new Date();
-            
-            if (req.requestType !== "active_message") {
-              const atts = Array.isArray(req.attachments) ? req.attachments.map((a: any) => ({
-                ...a,
-                createdAt: a.createdAt ? new Date(a.createdAt) : new Date()
-              })) : undefined;
-
-              chatHistory.push({
-                id: `user-${req.id}`,
-                sender: 'user',
-                text: req.input || req.rawInput || req.summary || req.title || '',
-                timestamp: reqTime,
-                contextId: req.contextId || null,
-                attachments: atts
-              });
+          Object.keys(data).forEach(key => {
+            if (data[key] && typeof data[key].toDate === 'function') {
+              data[key] = data[key].toDate();
             }
+          });
+          fetchedRequests.push({ ...data, id: docSnap.id });
+        });
 
-            const isConvCommand = req.requestType === 'conversation_command';
-            const isActiveMessage = req.requestType === "active_message";
+        const sortedRequests = fetchedRequests.sort((a, b) => {
+          const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
+          const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
+          return timeA - timeB;
+        });
 
-            if (isConvCommand) {
-              const status = req.status;
-              const responseText = req.openclawResult?.responseText ?? null;
-              const hasRealResponse = responseText && responseText.trim() !== '';
+        const chatHistory: Message[] = [];
+        sortedRequests.forEach((req: any) => {
+          const reqTime = safeConvertToDate(req.requestedAt) || new Date();
+          
+          if (req.requestType !== "active_message") {
+            const atts = Array.isArray(req.attachments) ? req.attachments.map((a: any) => ({
+              ...a,
+              createdAt: a.createdAt ? new Date(a.createdAt) : new Date()
+            })) : undefined;
 
-              // Check if auto TTS needs to be triggered in presence mode
-              const requestOriginMode = req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
-              const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
+            chatHistory.push({
+              id: `user-${req.id}`,
+              sender: 'user',
+              text: req.input || req.rawInput || req.summary || req.title || '',
+              timestamp: reqTime,
+              contextId: req.contextId || null,
+              attachments: atts
+            });
+          }
+
+          const isConvCommand = req.requestType === 'conversation_command';
+          const isActiveMessage = req.requestType === "active_message";
+
+          if (isConvCommand) {
+            const status = req.status;
+            const responseText = req.openclawResult?.responseText ?? null;
+            const hasRealResponse = responseText && responseText.trim() !== '';
+
+            // Check if auto TTS needs to be triggered in presence mode
+            const requestOriginMode = req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
+            const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
+            
+            if (status === 'success' && hasRealResponse && requestOriginMode === 'presence') {
+              const isPresenceActive = voiceModeRef.current === 'presence';
+              const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
               
-              if (status === 'success' && hasRealResponse && requestOriginMode === 'presence') {
-                const isPresenceActive = voiceModeRef.current === 'presence';
-                const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
+              if (!isPresenceActive || !isRecent) {
+                if (!spokenRequestsRef.current.has(req.id)) {
+                  spokenRequestsRef.current.add(req.id);
+                  console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_NOT_ACTIVE]', { 
+                    requestId: req.id, 
+                    isPresenceActive, 
+                    isRecent,
+                    reqTimeMs,
+                    sessionStart: presenceSessionStartTimeRef.current
+                  });
+                }
+              } else if (spokenRequestsRef.current.has(req.id)) {
+                console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: req.id });
+              } else if (presenceStateRef.current === 'presence_speaking') {
+                console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
+              } else {
+                spokenRequestsRef.current.add(req.id);
+                const msgId = `lotus-${req.id}`;
                 
-                if (!isPresenceActive || !isRecent) {
-                  if (!spokenRequestsRef.current.has(req.id)) {
-                    spokenRequestsRef.current.add(req.id);
-                    console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_NOT_ACTIVE]', { 
-                      requestId: req.id, 
-                      isPresenceActive, 
-                      isRecent,
-                      reqTimeMs,
-                      sessionStart: presenceSessionStartTimeRef.current
+                // Latency point 4: Response Received
+                latencyResponseReceivedRef.current = Date.now();
+                const diffReqToResp = latencyResponseReceivedRef.current - (latencyRequestCreatedRef.current || latencyResponseReceivedRef.current);
+                console.log(`[PULSO_LATENCY_REQUEST_CREATED_TO_RESPONSE_RECEIVED_MS] ${diffReqToResp} ms`);
+                
+                console.log('[PULSO_PRESENCE_RESPONSE_RECEIVED]', { requestId: req.id });
+                console.log('[PULSO_PRESENCE_AUTO_TTS_START]', { requestId: req.id });
+                
+                // Play response arrived sound cue
+                playPresenceSoundCue('response_arrived');
+                
+                // Block new recording & mute
+                stopVoiceRecognition();
+                console.log('[PULSO_PRESENCE_MIC_PAUSED_DURING_TTS]');
+                
+                presenceStateRef.current = 'presence_speaking';
+                setPresenceState('presence_speaking');
+                setPlayingMsgId(msgId);
+                setPlayingState('preparing');
+                
+                playPresenceSoundCue('speak_start');
+                
+                // Latency point 5: TTS Started
+                latencyAutoTtsStartRef.current = Date.now();
+                const diffRespToTts = latencyAutoTtsStartRef.current - (latencyResponseReceivedRef.current || latencyAutoTtsStartRef.current);
+                console.log(`[PULSO_LATENCY_RESPONSE_RECEIVED_TO_AUTO_TTS_START_MS] ${diffRespToTts} ms`);
+                
+                ttsAdapter.speak(
+                  responseText,
+                  () => {
+                    // Latency point 6: First Audio Playing
+                    const firstAudioTime = Date.now();
+                    const diffTtsToFirst = firstAudioTime - (latencyAutoTtsStartRef.current || firstAudioTime);
+                    console.log(`[PULSO_LATENCY_AUTO_TTS_START_TO_FIRST_AUDIO_MS] ${diffTtsToFirst} ms`);
+                    
+                    const totalTime = firstAudioTime - (latencyStopRecRef.current || firstAudioTime);
+                    console.log(`[PULSO_LATENCY_PRESENCE_TOTAL_MS] ${totalTime} ms`);
+                    
+                    setPlayingMsgId(prev => {
+                      if (prev === msgId) {
+                        setPlayingState('playing');
+                      }
+                      return prev;
+                    });
+                  },
+                  () => {
+                    setPlayingMsgId(prev => {
+                      if (prev === msgId) {
+                        setPlayingState('stopped');
+                        console.log('[PULSO_PRESENCE_AUTO_TTS_DONE]', { requestId: req.id });
+                        
+                        // Return to listening if we are still in presence mode
+                        if (voiceModeRef.current === 'presence') {
+                          console.log('[PULSO_PRESENCE_MIC_RESUMED_AFTER_TTS]');
+                          presenceStateRef.current = 'presence_listening';
+                          setPresenceState('presence_listening');
+                          startSpeechRecognition('presence');
+                        }
+                        return null;
+                      }
+                      return prev;
+                    });
+                  },
+                  () => {
+                    setPlayingMsgId(prev => {
+                      if (prev === msgId) {
+                        setPlayingState('preparing');
+                      }
+                      return prev;
                     });
                   }
-                } else if (spokenRequestsRef.current.has(req.id)) {
-                  console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: req.id });
-                } else if (presenceStateRef.current === 'presence_speaking') {
-                  console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
-                } else {
-                  spokenRequestsRef.current.add(req.id);
-                  const msgId = `lotus-${req.id}`;
-                  
-                  // Latency point 4: Response Received
-                  latencyResponseReceivedRef.current = Date.now();
-                  const diffReqToResp = latencyResponseReceivedRef.current - (latencyRequestCreatedRef.current || latencyResponseReceivedRef.current);
-                  console.log(`[PULSO_LATENCY_REQUEST_CREATED_TO_RESPONSE_RECEIVED_MS] ${diffReqToResp} ms`);
-                  
-                  console.log('[PULSO_PRESENCE_RESPONSE_RECEIVED]', { requestId: req.id });
-                  console.log('[PULSO_PRESENCE_AUTO_TTS_START]', { requestId: req.id });
-                  
-                  // Play response arrived sound cue
-                  playPresenceSoundCue('response_arrived');
-                  
-                  // Block new recording & mute
-                  stopVoiceRecognition();
-                  console.log('[PULSO_PRESENCE_MIC_PAUSED_DURING_TTS]');
-                  
-                  presenceStateRef.current = 'presence_speaking';
-                  setPresenceState('presence_speaking');
-                  setPlayingMsgId(msgId);
-                  setPlayingState('preparing');
-                  
-                  playPresenceSoundCue('speak_start');
-                  
-                  // Latency point 5: TTS Started
-                  latencyAutoTtsStartRef.current = Date.now();
-                  const diffRespToTts = latencyAutoTtsStartRef.current - (latencyResponseReceivedRef.current || latencyAutoTtsStartRef.current);
-                  console.log(`[PULSO_LATENCY_RESPONSE_RECEIVED_TO_AUTO_TTS_START_MS] ${diffRespToTts} ms`);
-                  
-                  ttsAdapter.speak(
-                    responseText,
-                    () => {
-                      // Latency point 6: First Audio Playing
-                      const firstAudioTime = Date.now();
-                      const diffTtsToFirst = firstAudioTime - (latencyAutoTtsStartRef.current || firstAudioTime);
-                      console.log(`[PULSO_LATENCY_AUTO_TTS_START_TO_FIRST_AUDIO_MS] ${diffTtsToFirst} ms`);
-                      
-                      const totalTime = firstAudioTime - (latencyStopRecRef.current || firstAudioTime);
-                      console.log(`[PULSO_LATENCY_PRESENCE_TOTAL_MS] ${totalTime} ms`);
-                      
-                      setPlayingMsgId(prev => {
-                        if (prev === msgId) {
-                          setPlayingState('playing');
-                        }
-                        return prev;
-                      });
-                    },
-                    () => {
-                      setPlayingMsgId(prev => {
-                        if (prev === msgId) {
-                          setPlayingState('stopped');
-                          console.log('[PULSO_PRESENCE_AUTO_TTS_DONE]', { requestId: req.id });
-                          
-                          // Return to listening if we are still in presence mode
-                          if (voiceModeRef.current === 'presence') {
-                            console.log('[PULSO_PRESENCE_MIC_RESUMED_AFTER_TTS]');
-                            presenceStateRef.current = 'presence_listening';
-                            setPresenceState('presence_listening');
-                            startSpeechRecognition('presence');
-                          }
-                          return null;
-                        }
-                        return prev;
-                      });
-                    },
-                    () => {
-                      setPlayingMsgId(prev => {
-                        if (prev === msgId) {
-                          setPlayingState('preparing');
-                        }
-                        return prev;
-                      });
-                    }
-                  );
-                }
+                );
               }
+            }
 
-              if (status === 'success' && hasRealResponse) {
-                console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
-                console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
-                console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
-                console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
-                chatHistory.push({
-                  id: `lotus-${req.id}`,
-                  sender: 'lotus',
-                  text: responseText || '',
-                  timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-                  interpretation: req.interpretation,
-                  openclawResult: req.openclawResult || undefined,
-                  handoffStatus: req.status,
-                  requestId: req.id || undefined,
-                  originalCommand: req.summary || req.title || undefined,
-                  executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
-                  executedBy: req.executedBy || undefined,
-                  createdEntityRef: req.createdEntityRef || undefined,
-                  executionError: req.executionError || undefined,
-                  contextId: req.contextId || null
-                });
-              } else if (status === 'error' || status === 'timeout') {
-                console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-                chatHistory.push({
-                  id: `lotus-${req.id}`,
-                  sender: 'lotus',
-                  text: 'falha operacional no processamento deste comando.',
-                  timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-                  interpretation: req.interpretation,
-                  openclawResult: req.openclawResult || undefined,
-                  handoffStatus: req.status,
-                  requestId: req.id || undefined,
-                  originalCommand: req.summary || req.title || undefined,
-                  contextId: req.contextId || null
-                });
-              } else {
-                console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
-                console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
-              }
-            } else if (isActiveMessage) {
-              console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
-              const replyText = req.message || req.text || '';
-              console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+            if (status === 'success' && hasRealResponse) {
+              console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+              console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
+              console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+              console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
-                text: replyText,
+                text: responseText || '',
+                timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                interpretation: req.interpretation,
+                openclawResult: req.openclawResult || undefined,
+                handoffStatus: req.status,
+                requestId: req.id || undefined,
+                originalCommand: req.summary || req.title || undefined,
+                executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
+                executedBy: req.executedBy || undefined,
+                createdEntityRef: req.createdEntityRef || undefined,
+                executionError: req.executionError || undefined,
+                contextId: req.contextId || null
+              });
+            } else if (status === 'error' || status === 'timeout') {
+              console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
+              chatHistory.push({
+                id: `lotus-${req.id}`,
+                sender: 'lotus',
+                text: 'falha operacional no processamento deste comando.',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -1385,60 +1439,81 @@ export default function LivePage() {
                 originalCommand: req.summary || req.title || undefined,
                 contextId: req.contextId || null
               });
+            } else {
+              console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
+              console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
             }
-          });
+          } else if (isActiveMessage) {
+            console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
+            const replyText = req.message || req.text || '';
+            console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+            chatHistory.push({
+              id: `lotus-${req.id}`,
+              sender: 'lotus',
+              text: replyText,
+              timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+              interpretation: req.interpretation,
+              openclawResult: req.openclawResult || undefined,
+              handoffStatus: req.status,
+              requestId: req.id || undefined,
+              originalCommand: req.summary || req.title || undefined,
+              contextId: req.contextId || null
+            });
+          }
+        });
 
-          // Detect new messages from Lótus to trigger sound/visual notifications
-          chatHistory.forEach((msg) => {
-            if (msg.sender === 'lotus' && msg.id) {
-              if (!seenMessagesRef.current.has(msg.id)) {
-                seenMessagesRef.current.add(msg.id);
+        // Detect new messages from Lótus to trigger sound/visual notifications
+        chatHistory.forEach((msg) => {
+          if (msg.sender === 'lotus' && msg.id) {
+            if (!seenMessagesRef.current.has(msg.id)) {
+              seenMessagesRef.current.add(msg.id);
+              
+              // Only trigger sound/visual indicators if the history has already loaded
+              if (isHistoryLoadedRef.current) {
+                // Determine if the message context is the active one
+                const activeContext = activeContextNodeRef.current;
+                const isSame = !msg.contextId || msg.contextId === activeContext.contextId;
                 
-                // Only trigger sound/visual indicators if the history has already loaded
-                if (isHistoryLoadedRef.current) {
-                  // Determine if the message context is the active one
-                  const activeContext = activeContextNodeRef.current;
-                  const isSame = !msg.contextId || msg.contextId === activeContext.contextId;
-                  
-                  if (isSame) {
-                    playNotificationSound(true);
-                  } else {
-                    playNotificationSound(false);
-                    // Mark this context as unread
-                    setUnreadContexts(prev => ({
-                      ...prev,
-                      [msg.contextId!]: true
-                    }));
-                  }
+                if (isSame) {
+                  playNotificationSound(true);
+                } else {
+                  playNotificationSound(false);
+                  // Mark this context as unread
+                  setUnreadContexts(prev => ({
+                    ...prev,
+                    [msg.contextId!]: true
+                  }));
                 }
               }
             }
-          });
-
-          // Mark history as loaded after the initial processing of messages
-          if (!isHistoryLoadedRef.current) {
-            chatHistory.forEach(msg => {
-              if (msg.id) seenMessagesRef.current.add(msg.id);
-            });
-            isHistoryLoadedRef.current = true;
           }
-
-          setState((prev: any) => {
-            if (!prev) return prev;
-            return { ...prev, allRequests: sortedRequests };
-          });
-
-          setMessages([
-            {
-              id: 'welcome',
-              sender: 'lotus',
-              text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
-              timestamp: new Date()
-            },
-            ...chatHistory
-          ]);
         });
-      }
+
+        // Mark history as loaded after the initial processing of messages
+        if (!isHistoryLoadedRef.current) {
+          chatHistory.forEach(msg => {
+            if (msg.id) seenMessagesRef.current.add(msg.id);
+          });
+          isHistoryLoadedRef.current = true;
+        }
+
+        setState((prev: any) => {
+          if (!prev) return prev;
+          return { ...prev, allRequests: sortedRequests };
+        });
+
+        setMessages([
+          {
+            id: 'welcome',
+            sender: 'lotus',
+            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+            timestamp: new Date()
+          },
+          ...chatHistory
+        ]);
+      }, (error: any) => {
+        console.error("Firestore requests onSnapshot error:", error);
+      });
     } catch (err) {
       console.error("Firestore onSnapshot subscription failed:", err);
     }
@@ -1446,7 +1521,7 @@ export default function LivePage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [loading]);
+  }, [db, loading]);
 
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
@@ -1589,7 +1664,7 @@ export default function LivePage() {
 
     if (isFirestore && storage) {
       try {
-        setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 0, status: 'enviando' } }));
+        setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 0, status: 'enviando', contextId } }));
         
         // Define Storage Path
         const path = `pulso/chats/${contextId}/attachments/${id}_${name}`;
@@ -1604,13 +1679,13 @@ export default function LivePage() {
               const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
               setUploadingFiles(prev => ({
                 ...prev,
-                [id]: { name, progress, status: 'enviando' }
+                [id]: { name, progress, status: 'enviando', contextId }
               }));
             },
             (error) => {
               setUploadingFiles(prev => ({
                 ...prev,
-                [id]: { name, progress: 0, status: 'erro', error: true }
+                [id]: { name, progress: 0, status: 'erro', error: true, contextId }
               }));
               reject(error);
             },
@@ -1625,7 +1700,7 @@ export default function LivePage() {
         
         setUploadingFiles(prev => ({
           ...prev,
-          [id]: { name, progress: 100, status: 'concluido' }
+          [id]: { name, progress: 100, status: 'concluido', contextId }
         }));
         
         // UX delay for success state
@@ -1651,7 +1726,7 @@ export default function LivePage() {
         console.error('Firebase Storage upload failed, falling back to local URL:', err);
         setUploadingFiles(prev => ({
           ...prev,
-          [id]: { name, progress: 0, status: 'erro', error: true }
+          [id]: { name, progress: 0, status: 'erro', error: true, contextId }
         }));
         
         // UX delay for error state
@@ -1676,7 +1751,7 @@ export default function LivePage() {
     } else {
       // In mock mode or offline, use Object URL.
       // We also show a quick "concluido" feedback for mock mode!
-      setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 100, status: 'concluido' } }));
+      setUploadingFiles(prev => ({ ...prev, [id]: { name, progress: 100, status: 'concluido', contextId } }));
       await new Promise(r => setTimeout(r, 600));
       setUploadingFiles(prev => {
         const next = { ...prev };
@@ -1707,7 +1782,8 @@ export default function LivePage() {
 
     // Send a message indicating files uploaded (without [anexo] prefix)
     const isFirestore = pulsoService.getDataMode() === 'firestore';
-    setIsTyping(true);
+    const sendingContextId = activeContextNode.contextId;
+    setContextTyping(sendingContextId, true);
 
     try {
       const fileNames = attachedItems.map(a => a.name).join(', ');
@@ -1733,7 +1809,7 @@ export default function LivePage() {
         }).catch(err => console.error('Failed to update request doc with attachments metadata:', err));
       }
 
-      setLastSentRequestId(newRequest.id);
+      setLastSentRequestsByContext(prev => ({ ...prev, [sendingContextId]: newRequest.id }));
 
       const userMsg: Message = {
         id: `user-msg-${newRequest.id || Date.now()}`,
@@ -1755,7 +1831,7 @@ export default function LivePage() {
     } catch (err) {
       console.error('Failed to process message with attachments:', err);
     } finally {
-      setIsTyping(false);
+      setContextTyping(sendingContextId, false);
     }
   };
 
@@ -1771,7 +1847,8 @@ export default function LivePage() {
     const originMode = options?.originMode || 'text';
     const cleanMsg = originMode === 'text' ? rawMsg : normalizeTranscript(rawMsg);
 
-    setIsTyping(true);
+    const sendingContextId = activeContextNode.contextId;
+    setContextTyping(sendingContextId, true);
 
     try {
       const sendMode = originMode === 'presence' ? 'presence' : (originMode === 'recording_once' ? 'voice' : 'text');
@@ -1782,7 +1859,7 @@ export default function LivePage() {
         chatId: activeContextNode.chatId,
         openclawSessionKey: activeContextNode.openclawSessionKey
       });
-      setLastSentRequestId(newRequest.id);
+      setLastSentRequestsByContext(prev => ({ ...prev, [sendingContextId]: newRequest.id }));
 
       // ONLY on success, clear the input
       setInputMessage('');
@@ -1827,7 +1904,7 @@ export default function LivePage() {
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
     } finally {
-      setIsTyping(false);
+      setContextTyping(sendingContextId, false);
     }
   };
 
@@ -1842,6 +1919,15 @@ export default function LivePage() {
       });
       setCustomContextNodes(updated);
       localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+      
+      const isFirestore = pulsoService.getDataMode() === 'firestore';
+      if (isFirestore && db) {
+        const path = firestorePaths.customContext(contextId);
+        const contextDocRef = doc(db, path);
+        updateDoc(contextDocRef, { label: trimmed }).catch((err: any) =>
+          console.error("Failed to update context label in Firestore:", err)
+        );
+      }
       
       if (activeContextNode.contextId === contextId) {
         setActiveContextNode(prev => ({ ...prev, label: trimmed }));
@@ -1860,6 +1946,15 @@ export default function LivePage() {
     });
     setCustomContextNodes(updated);
     localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+    
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (isFirestore && db) {
+      const path = firestorePaths.customContext(contextId);
+      const contextDocRef = doc(db, path);
+      updateDoc(contextDocRef, { archived: true }).catch((err: any) =>
+        console.error("Failed to archive context in Firestore:", err)
+      );
+    }
     
     if (activeContextNode.contextId === contextId) {
       setActiveContextNode(INITIAL_CONTEXT_NODES[0]);
@@ -2271,18 +2366,13 @@ export default function LivePage() {
 
   // Check if the most recent request is queued or processing (pending)
   const isLatestRequestPending = React.useMemo(() => {
-    if (!lastSentRequestId) return false;
-    const req = allRequests.find((r: any) => r.id === lastSentRequestId);
+    const lastSentIdForActive = lastSentRequestsByContext[activeContextNode.contextId];
+    if (!lastSentIdForActive) return false;
+    const req = allRequests.find((r: any) => r.id === lastSentIdForActive);
     if (!req) return false;
     return req.status !== 'success' && req.status !== 'error' && req.status !== 'timeout';
-  }, [allRequests, lastSentRequestId]);
+  }, [allRequests, lastSentRequestsByContext, activeContextNode.contextId]);
 
-  const currentMessages = React.useMemo(() => {
-    return messages.filter(msg => {
-      if (msg.id === 'welcome') return true;
-      return msg.contextId === activeContextNode.contextId;
-    });
-  }, [messages, activeContextNode.contextId]);
 
   if (loading) {
     return (
@@ -2512,10 +2602,33 @@ export default function LivePage() {
       </div>
       
       <header className={`flex justify-between items-center w-full max-w-4xl mx-auto relative z-20 select-none pulso-transition ${presenceMode ? 'pulso-hidden-up' : 'pulso-visible'}`}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
+          {/* Hamburger button on mobile */}
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMobileMenuOpen(!isMobileMenuOpen);
+            }}
+            className="md:hidden p-0 mr-1.5 text-[#fbf9f5]/55 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer flex items-center justify-center -translate-y-[2px]"
+            title="Menu de Navegação"
+          >
+            {isMobileMenuOpen ? <X size={16} strokeWidth={1.5} /> : <Menu size={16} strokeWidth={1.5} />}
+          </button>
+          
           <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#fbf9f5] opacity-75" />
-          <span className="text-[9px] font-light tracking-[0.1em] text-[#fbf9f5]/40 lowercase">
+          
+          {activeContextNode && (
+            <>
+              <span className="text-[9px] text-[#fbf9f5]/20 font-extralight select-none">/</span>
+              <span className="text-[9px] font-extralight tracking-widest text-[#fbf9f5]/25 lowercase truncate max-w-[100px] md:max-w-[200px]" title={activeContextNode.label}>
+                {activeContextNode.label}
+              </span>
+            </>
+          )}
+
+          <span className="w-1 h-1 rounded-full bg-[#fbf9f5] opacity-50 select-none shrink-0" />
+          
+          <span className="text-[9px] font-light tracking-[0.1em] text-[#fbf9f5]/40 lowercase shrink-0">
             {voiceState === 'listening' ? 'ouvindo...' : isTyping ? 'processando...' : 'conectada'}
           </span>
         </div>
@@ -2602,7 +2715,7 @@ export default function LivePage() {
             setHoveredAreaId(null);
           }
         }}
-        className={`fixed left-3 md:left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none transition-all duration-200 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`hidden md:flex fixed left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none transition-all duration-200 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
       >
         {AREA_ORDER.map((areaId) => {
           const areaName = AREA_NAMES[areaId] || areaId;
@@ -2639,13 +2752,12 @@ export default function LivePage() {
                 }}
                 className="flex items-center gap-2.5 cursor-pointer py-1 group/item w-full"
               >
-                {/* Icon */}
                 <span 
                   className={`text-lg text-center transition-all duration-200 font-mono ${
                     isAreaActive
                       ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
                       : hasUnreadInArea
-                      ? 'text-[#b8283e] scale-110 opacity-100 animate-pulse drop-shadow-[0_0_8px_rgba(184, 40, 62,0.6)] font-bold'
+                      ? 'pulso-unread scale-110 opacity-100 animate-pulse font-bold'
                       : 'text-[#fbf9f5]/35 group-hover/sidebar:text-[#fbf9f5]/65 group-hover/item:text-[#fbf9f5]/90'
                   }`}
                   style={{ width: '24px' }}
@@ -2710,7 +2822,7 @@ export default function LivePage() {
                             isContextActive
                               ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
                               : isUnread
-                              ? 'text-[#b8283e] font-bold animate-pulse'
+                              ? 'pulso-unread font-bold animate-pulse'
                               : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
                           }`}
                         >
@@ -2789,6 +2901,17 @@ export default function LivePage() {
                             const updated = [...customContextNodes, newNode];
                             setCustomContextNodes(updated);
                             localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+
+                            const isFirestore = pulsoService.getDataMode() === 'firestore';
+                            if (isFirestore && db) {
+                              const path = firestorePaths.customContext(contextId);
+                              const contextDocRef = doc(db, path);
+                              setDoc(contextDocRef, {
+                                ...newNode,
+                                createdAt: new Date().toISOString()
+                              }).catch((err: any) => console.error("Failed to save custom context to Firestore:", err));
+                            }
+
                             setActiveContextNode(newNode);
                             setNewChatName('');
                             setAddingChatAreaId(null);
@@ -2847,7 +2970,7 @@ export default function LivePage() {
           </div>
 
           <div 
-            className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition max-h-[400px] md:max-h-[60vh] h-[350px] md:h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
+            className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
               presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
             }`}
             onDragOver={(e) => {
@@ -3196,7 +3319,7 @@ export default function LivePage() {
           </div>
         )}
         
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full pb-1 whitespace-nowrap">
+        <div className="hidden md:flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full pb-1 whitespace-nowrap">
           {[
             { label: 'resumo do dia', text: 'Resumo do meu dia', icon: Activity },
             { label: 'o que depende de mim', text: 'O que depende de mim?', icon: Zap },
@@ -3215,9 +3338,11 @@ export default function LivePage() {
           ))}
         </div>
 
-        {Object.keys(uploadingFiles).length > 0 && (
+        {Object.values(uploadingFiles).some(fileInfo => fileInfo.contextId === activeContextNode.contextId) && (
           <div className="w-full bg-[#111111]/85 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2.5 animate-fade-in text-[10px] text-[#fbf9f5]/80 max-h-36 overflow-y-auto no-scrollbar shadow-lg">
-            {Object.entries(uploadingFiles).map(([id, fileInfo]) => {
+            {Object.entries(uploadingFiles)
+              .filter(([_, fileInfo]) => fileInfo.contextId === activeContextNode.contextId)
+              .map(([id, fileInfo]) => {
               const isError = fileInfo.status === 'erro' || fileInfo.error;
               const isConcluido = fileInfo.status === 'concluido';
               
@@ -3363,6 +3488,237 @@ export default function LivePage() {
           </button>
         </div>
       </footer>
+
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-[#0c0c0c]/70 backdrop-blur-xl p-8 flex flex-col text-left md:hidden animate-fade-in overflow-y-auto no-scrollbar"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div 
+            className="flex flex-col gap-6 w-full max-w-[260px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Title / Close Button */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 select-none">
+              <span className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/55 uppercase">áreas & chats</span>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center justify-center"
+              >
+                <X size={14} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            {/* Accordion list */}
+            <div className="flex flex-col gap-5">
+              {AREA_ORDER.map((areaId) => {
+                const areaName = AREA_NAMES[areaId] || areaId;
+                const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
+                const isAreaActive = activeAreaId === areaId;
+                const isExpanded = activeMobileAreaId === areaId;
+                const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
+                
+                return (
+                  <div key={areaId} className="flex flex-col gap-2">
+                    {/* Area Header Trigger */}
+                    <div 
+                      onClick={() => {
+                        // accordion reativo restrito: only one area open at a time
+                        setActiveMobileAreaId(isExpanded ? null : areaId);
+                      }}
+                      className="flex items-center justify-between cursor-pointer py-1 group/mobile-area select-none"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className={`text-base font-mono ${isAreaActive ? 'text-white' : hasUnreadInArea ? 'pulso-unread font-bold' : 'text-[#fbf9f5]/35'}`}>
+                          {getAreaIcon({ id: areaId, name: areaName })}
+                        </span>
+                        <span className={`text-[10px] tracking-wider uppercase font-sans ${isAreaActive ? 'text-white font-medium' : 'text-[#fbf9f5]/50'}`}>
+                          {areaName}
+                        </span>
+                      </div>
+                      <span className="text-[#fbf9f5]/25 group-hover/mobile-area:text-[#fbf9f5]/50 transition-colors">
+                        {isExpanded ? <ChevronDown size={12} strokeWidth={1.5} /> : <ChevronRight size={12} strokeWidth={1.5} />}
+                      </span>
+                    </div>
+
+                    {/* Chats list inside Area (Accordion Content) */}
+                    {isExpanded && (
+                      <div className="flex flex-col gap-2 pl-6 pb-2 border-l border-white/5 ml-2.5 animate-fade-in">
+                        {areaContexts.map((ctx) => {
+                          const isContextActive = activeContextNode.contextId === ctx.contextId;
+                          const isUnread = !!unreadContexts[ctx.contextId];
+                          const isCustom = customContextNodes.some(n => n.contextId === ctx.contextId);
+                          
+                          return (
+                            <div 
+                              key={ctx.contextId} 
+                              className="flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer"
+                              onClick={() => {
+                                setActiveContextNode(ctx);
+                                setUnreadContexts(prev => {
+                                  if (prev[ctx.contextId]) {
+                                    const next = { ...prev };
+                                    delete next[ctx.contextId];
+                                    return next;
+                                  }
+                                  return prev;
+                                });
+                                setIsMobileMenuOpen(false); // Close menu naturally
+                              }}
+                            >
+                              {editingContextId === ctx.contextId ? (
+                                <input
+                                  type="text"
+                                  value={editingContextLabel}
+                                  onChange={(e) => setEditingContextLabel(e.target.value)}
+                                  onBlur={() => handleRenameChat(ctx.contextId)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleRenameChat(ctx.contextId);
+                                    }
+                                    if (e.key === 'Escape') setEditingContextId(null);
+                                  }}
+                                  className="bg-white/10 text-white border border-white/20 rounded px-1.5 py-0.5 text-[9px] outline-none w-full lowercase"
+                                  autoFocus
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : (
+                                <span 
+                                  className={`text-[9px] tracking-wider uppercase font-sans cursor-pointer transition-all duration-200 select-none truncate flex-1 text-left ${
+                                    isContextActive 
+                                      ? 'text-white font-medium' 
+                                      : isUnread 
+                                      ? 'pulso-unread font-bold animate-pulse' 
+                                      : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80'
+                                  }`}
+                                >
+                                  {ctx.label}
+                                </span>
+                              )}
+
+                              {isCustom && editingContextId !== ctx.contextId && (
+                                <div className="flex items-center gap-1.5 shrink-0 select-none ml-2" onClick={(e) => e.stopPropagation()}>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingContextId(ctx.contextId);
+                                      setEditingContextLabel(ctx.label);
+                                    }}
+                                    className="p-0.5 text-[#fbf9f5]/30 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+                                    title="Renomear chat"
+                                  >
+                                    <Edit2 size={8} />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      handleArchiveChat(ctx.contextId, e);
+                                      setIsMobileMenuOpen(false); // Close menu naturally on archive
+                                    }}
+                                    className="p-0.5 text-[#fbf9f5]/30 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
+                                    title="Arquivar chat"
+                                  >
+                                    <Archive size={8} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Create dynamic chat in mobile area */}
+                        <div className="pt-1 select-none">
+                          {addingChatAreaId === areaId ? (
+                            <input 
+                              type="text"
+                              value={newChatName}
+                              onChange={(e) => setNewChatName(e.target.value)}
+                              placeholder="nome..."
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const rawLabel = newChatName.trim();
+                                  if (rawLabel) {
+                                    const cleanAreaPrefix = areaId.replace('area_', '');
+                                    const slug = rawLabel
+                                      .toLowerCase()
+                                      .normalize('NFD')
+                                      .replace(/[\u0300-\u036f]/g, '')
+                                      .replace(/[^a-z0-9\s-]/g, '')
+                                      .replace(/\s+/g, '-')
+                                      .replace(/-+/g, '-');
+                                    
+                                    let baseContextId = `${cleanAreaPrefix}_${slug}`;
+                                    let contextId = baseContextId;
+                                    let counter = 1;
+                                    
+                                    while (allContextNodes.some(node => node.contextId === contextId)) {
+                                      contextId = `${baseContextId}-${counter}`;
+                                      counter++;
+                                    }
+                                    
+                                    const openclawSessionKey = `agent:main:pulso:${contextId}`;
+                                    const newNode: PulsoContextNode = {
+                                      areaId,
+                                      contextId,
+                                      chatId: "default",
+                                      openclawSessionKey,
+                                      label: rawLabel
+                                    };
+                                    
+                                    const updated = [...customContextNodes, newNode];
+                                    setCustomContextNodes(updated);
+                                    localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
+                                    
+                                    const isFirestore = pulsoService.getDataMode() === 'firestore';
+                                    if (isFirestore && db) {
+                                      const path = firestorePaths.customContext(contextId);
+                                      const contextDocRef = doc(db, path);
+                                      setDoc(contextDocRef, {
+                                        ...newNode,
+                                        createdAt: new Date().toISOString()
+                                      }).catch((err: any) => console.error("Failed to save custom context to Firestore:", err));
+                                    }
+
+                                    setActiveContextNode(newNode);
+                                    setNewChatName('');
+                                    setAddingChatAreaId(null);
+                                    setIsMobileMenuOpen(false); // Close menu naturally
+                                  }
+                                } else if (e.key === 'Escape') {
+                                  setAddingChatAreaId(null);
+                                  setNewChatName('');
+                                }
+                              }}
+                              onBlur={() => {
+                                setTimeout(() => {
+                                  setAddingChatAreaId(null);
+                                  setNewChatName('');
+                                }, 200);
+                              }}
+                              className="bg-transparent border-b border-white/20 text-[#fbf9f5] text-[9px] tracking-wider uppercase w-full py-0.5 outline-none placeholder-white/20 lowercase"
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAddingChatAreaId(areaId);
+                              }}
+                              className="text-[8px] tracking-widest text-[#fbf9f5]/25 hover:text-white/60 transition-colors uppercase font-mono bg-transparent border-none cursor-pointer outline-none py-0.5"
+                            >
+                              [ + novo chat ]
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {(isSidebarOpen || isTtsSettingsOpen) && (
         <div 
