@@ -464,11 +464,89 @@ export default function LivePage() {
     return [...INITIAL_CONTEXT_NODES, ...visibleCustom];
   }, [customContextNodes]);
 
+  const pageLoadTimeRef = React.useRef(new Date());
+  const [lastReadTimes, setLastReadTimes] = React.useState<Record<string, string>>({});
+  
+  const unreadContexts = React.useMemo(() => {
+    const unreads: Record<string, boolean> = {};
+    messages.forEach(msg => {
+      if (msg.sender === 'lotus' && msg.contextId && msg.id !== 'welcome') {
+        const lastRead = lastReadTimes[msg.contextId] || pageLoadTimeRef.current.toISOString();
+        const msgTime = new Date(msg.timestamp).getTime();
+        if (msgTime > new Date(lastRead).getTime()) {
+          unreads[msg.contextId] = true;
+        }
+      }
+    });
+    return unreads;
+  }, [messages, lastReadTimes]);
+
+  const markContextAsRead = React.useCallback((contextId: string) => {
+    const nowStr = new Date().toISOString();
+    setLastReadTimes(prev => {
+      if (prev[contextId] === nowStr) return prev;
+      return { ...prev, [contextId]: nowStr };
+    });
+    localStorage.setItem(`pulso_last_read_${contextId}`, nowStr);
+    
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (isFirestore && db) {
+      setDoc(doc(db, `workspaces/felipe_dutra/pulso_meta/read_status`), {
+        [contextId]: nowStr
+      }, { merge: true }).catch(err => console.error("Failed to save read status to Firestore:", err));
+    }
+  }, []);
+
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(INITIAL_CONTEXT_NODES[0]);
   const activeContextNodeRef = React.useRef(activeContextNode);
   React.useEffect(() => {
     activeContextNodeRef.current = activeContextNode;
-  }, [activeContextNode]);
+    markContextAsRead(activeContextNode.contextId);
+  }, [activeContextNode, markContextAsRead]);
+
+  // Load and listen to read status from localStorage/Firestore
+  React.useEffect(() => {
+    // 1. Load from localStorage
+    const localTimes: Record<string, string> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('pulso_last_read_')) {
+        const contextId = key.replace('pulso_last_read_', '');
+        localTimes[contextId] = localStorage.getItem(key) || '';
+      }
+    }
+    setLastReadTimes(localTimes);
+
+    // 2. Load and listen from Firestore
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (isFirestore && db) {
+      const docRef = doc(db, 'workspaces/felipe_dutra/pulso_meta/read_status');
+      const unsubscribe = onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() || {};
+          setLastReadTimes(prev => {
+            const updated = { ...prev };
+            let hasChanges = false;
+            Object.entries(data).forEach(([contextId, timeStr]) => {
+              if (typeof timeStr === 'string') {
+                const localTime = prev[contextId] ? new Date(prev[contextId]).getTime() : 0;
+                const firestoreTime = new Date(timeStr).getTime();
+                if (firestoreTime > localTime) {
+                  updated[contextId] = timeStr;
+                  localStorage.setItem(`pulso_last_read_${contextId}`, timeStr);
+                  hasChanges = true;
+                }
+              }
+            });
+            return hasChanges ? updated : prev;
+          });
+        }
+      }, (err) => {
+        console.error("Failed to subscribe to read status:", err);
+      });
+      return unsubscribe;
+    }
+  }, []);
   const activeAreaId = activeContextNode.areaId;
   const isTyping = contextTypingStates[activeContextNode?.contextId] || false;
   const currentMessages = React.useMemo(() => {
@@ -730,7 +808,6 @@ export default function LivePage() {
 
   // ── Notification State & Programmatic Sound Cues ───────────────────────
   const [notificationSoundEnabled, setNotificationSoundEnabled] = React.useState(true);
-  const [unreadContexts, setUnreadContexts] = React.useState<Record<string, boolean>>({});
   
   const seenMessagesRef = React.useRef<Set<string>>(new Set());
   const isHistoryLoadedRef = React.useRef<boolean>(false);
@@ -1478,11 +1555,6 @@ export default function LivePage() {
                   playNotificationSound(true);
                 } else {
                   playNotificationSound(false);
-                  // Mark this context as unread
-                  setUnreadContexts(prev => ({
-                    ...prev,
-                    [msg.contextId!]: true
-                  }));
                 }
               }
             }
@@ -2740,14 +2812,6 @@ export default function LivePage() {
                 onClick={() => {
                   if (areaContexts.length > 0) {
                     setActiveContextNode(areaContexts[0]);
-                    setUnreadContexts(prev => {
-                      if (prev[areaContexts[0].contextId]) {
-                        const next = { ...prev };
-                        delete next[areaContexts[0].contextId];
-                        return next;
-                      }
-                      return prev;
-                    });
                   }
                 }}
                 className="flex items-center gap-2.5 cursor-pointer py-1 group/item w-full"
@@ -2791,14 +2855,6 @@ export default function LivePage() {
                       key={ctx.contextId}
                       onClick={() => {
                         setActiveContextNode(ctx);
-                        setUnreadContexts(prev => {
-                          if (prev[ctx.contextId]) {
-                            const next = { ...prev };
-                            delete next[ctx.contextId];
-                            return next;
-                          }
-                          return prev;
-                        });
                       }}
                       className="group/ctx flex items-center justify-between gap-2 w-full py-0.5"
                     >
@@ -3555,14 +3611,6 @@ export default function LivePage() {
                               className="flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer"
                               onClick={() => {
                                 setActiveContextNode(ctx);
-                                setUnreadContexts(prev => {
-                                  if (prev[ctx.contextId]) {
-                                    const next = { ...prev };
-                                    delete next[ctx.contextId];
-                                    return next;
-                                  }
-                                  return prev;
-                                });
                                 setIsMobileMenuOpen(false); // Close menu naturally
                               }}
                             >
