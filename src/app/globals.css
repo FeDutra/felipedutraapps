@@ -347,6 +347,11 @@ body {
 .chat-fade-mask {
   mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 5%, black 25%, black 92%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 5%, black 25%, black 92%, transparent 100%);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 @keyframes watermark-breathe {
