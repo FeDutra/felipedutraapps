@@ -30,7 +30,12 @@ export function normalizeTranscript(rawText: string): string {
     'ate': 'até',
     'nois': 'nós',
     'mais ou menos': 'mais ou menos',
-    'agente': 'a gente'
+    'agente': 'a gente',
+    'pulso': 'PULSO',
+    'eden': 'Eden',
+    'atelie': 'Ateliê',
+    'ateliê': 'Ateliê',
+    'regente': 'Regente'
   };
 
   // Replace words matching dictionary keys exactly on word boundaries

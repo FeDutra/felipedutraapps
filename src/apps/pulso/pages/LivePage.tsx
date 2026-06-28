@@ -351,15 +351,17 @@ interface Message {
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence';
-export type PresenceState = 
-  | 'presence_idle' 
-  | 'presence_requesting_permission' 
-  | 'presence_listening' 
-  | 'presence_transcribing' 
-  | 'presence_sending' 
-  | 'presence_waiting_response' 
-  | 'presence_speaking' 
-  | 'presence_error';
+
+export type UnifiedVoiceState =
+  | 'idle'
+  | 'recording_once'
+  | 'transcribing'
+  | 'submitting'
+  | 'waiting_lotus'
+  | 'speaking'
+  | 'presence_listening'
+  | 'presence_returning_to_listen'
+  | 'error';
 
 
 export default function LivePage() {
@@ -812,10 +814,10 @@ export default function LivePage() {
 
   // Voice State Machine additions
   const [voiceMode, setVoiceMode] = React.useState<VoiceMode>('off');
-  const [presenceState, setPresenceState] = React.useState<PresenceState>('presence_idle');
+  const [voiceState, setVoiceState] = React.useState<UnifiedVoiceState>('idle');
 
   const voiceModeRef = React.useRef<VoiceMode>('off');
-  const presenceStateRef = React.useRef<PresenceState>('presence_idle');
+  const voiceStateRef = React.useRef<UnifiedVoiceState>('idle');
   const maxRecordingTimeoutRef = React.useRef<any>(null);
   const spokenRequestsRef = React.useRef<Set<string>>(new Set());
   
@@ -945,8 +947,6 @@ export default function LivePage() {
   }, [notificationSoundEnabled, playSynthTone]);
 
   // ── Voice Input State ────────────────────────────────────────────────
-  type VoiceState = 'idle' | 'listening' | 'transcribing' | 'ready' | 'error_permission' | 'unsupported';
-  const [voiceState, setVoiceState] = React.useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = React.useState<string | null>(null);
   const recognitionRef = React.useRef<any>(null);
   const silenceTimeoutRef = React.useRef<any>(null);
@@ -957,29 +957,12 @@ export default function LivePage() {
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
     console.log('[PULSO_VOICE_MODE_CHANGED]', { mode: voiceMode });
-    
-    // Sync voiceState to maintain compatibility with existing UI checks
-    if (voiceMode === 'off') {
-      setVoiceState('idle');
-    } else if (voiceMode === 'recording_once') {
-      setVoiceState('listening');
-    } else if (voiceMode === 'presence') {
-      if (presenceState === 'presence_listening') setVoiceState('listening');
-      else if (presenceState === 'presence_transcribing' || presenceState === 'presence_sending' || presenceState === 'presence_waiting_response') setVoiceState('transcribing');
-      else setVoiceState('idle');
-    }
-  }, [voiceMode, presenceState]);
+  }, [voiceMode]);
 
   React.useEffect(() => {
-    presenceStateRef.current = presenceState;
-    
-    // Sync voiceState
-    if (voiceMode === 'presence') {
-      if (presenceState === 'presence_listening') setVoiceState('listening');
-      else if (presenceState === 'presence_transcribing' || presenceState === 'presence_sending' || presenceState === 'presence_waiting_response') setVoiceState('transcribing');
-      else setVoiceState('idle');
-    }
-  }, [presenceState, voiceMode]);
+    voiceStateRef.current = voiceState;
+    console.log('[PULSO_VOICE_STATE_CHANGED]', { state: voiceState });
+  }, [voiceState]);
 
   const chatEndRef = React.useRef<HTMLDivElement>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
@@ -1547,7 +1530,7 @@ export default function LivePage() {
                 }
               } else if (spokenRequestsRef.current.has(req.id)) {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: req.id });
-              } else if (presenceStateRef.current === 'presence_speaking') {
+              } else if (voiceStateRef.current === 'speaking') {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
               } else {
                 spokenRequestsRef.current.add(req.id);
@@ -1568,8 +1551,8 @@ export default function LivePage() {
                 stopVoiceRecognition();
                 console.log('[PULSO_PRESENCE_MIC_PAUSED_DURING_TTS]');
                 
-                presenceStateRef.current = 'presence_speaking';
-                setPresenceState('presence_speaking');
+                voiceStateRef.current = 'speaking';
+                setVoiceState('speaking');
                 setPlayingMsgId(msgId);
                 setPlayingState('preparing');
                 
@@ -1607,8 +1590,8 @@ export default function LivePage() {
                         // Return to listening if we are still in presence mode
                         if (voiceModeRef.current === 'presence') {
                           console.log('[PULSO_PRESENCE_MIC_RESUMED_AFTER_TTS]');
-                          presenceStateRef.current = 'presence_listening';
-                          setPresenceState('presence_listening');
+                          voiceStateRef.current = 'presence_listening';
+                          setVoiceState('presence_listening');
                           startSpeechRecognition('presence');
                         }
                         return null;
@@ -2355,8 +2338,8 @@ export default function LivePage() {
     setPresenceMode(false);
     setVoiceMode('off');
     voiceModeRef.current = 'off';
-    setPresenceState('presence_idle');
-    presenceStateRef.current = 'presence_idle';
+    setVoiceState('idle');
+    voiceStateRef.current = 'idle';
     stopVoiceRecognition();
     ttsAdapter.cancel();
     setPlayingMsgId(null);
@@ -2371,7 +2354,8 @@ export default function LivePage() {
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setVoiceState('unsupported');
+      setVoiceState('error');
+      setVoiceError('Transcrição não suportada neste navegador.');
       return;
     }
 
@@ -2398,12 +2382,14 @@ export default function LivePage() {
     voiceModeRef.current = mode;
     isSpeechRecognitionRetryingRef.current = false;
     if (mode === 'presence') {
-      presenceStateRef.current = 'presence_listening';
-      setPresenceState('presence_listening');
+      voiceStateRef.current = 'presence_listening';
+      setVoiceState('presence_listening');
       playPresenceSoundCue('start_listening');
       console.log('[PULSO_PRESENCE_START]');
       console.log('[PULSO_PRESENCE_LISTENING]');
     } else if (mode === 'recording_once') {
+      voiceStateRef.current = 'recording_once';
+      setVoiceState('recording_once');
       console.log('[PULSO_RECORDING_ONCE_START]');
     }
 
@@ -2458,33 +2444,33 @@ export default function LivePage() {
             latencyStopRecRef.current = Date.now();
             stopVoiceRecognition();
             
-            presenceStateRef.current = 'presence_transcribing';
-            setPresenceState('presence_transcribing');
+            voiceStateRef.current = 'transcribing';
+            setVoiceState('transcribing');
             console.log('[PULSO_PRESENCE_TRANSCRIPTION_READY]', { text: textToSend });
             
             latencyTranscriptionRef.current = Date.now();
             const diffStopToTrans = latencyTranscriptionRef.current - (latencyStopRecRef.current || latencyTranscriptionRef.current);
             console.log(`[PULSO_LATENCY_RECORDING_STOP_TO_TRANSCRIPTION_MS] ${diffStopToTrans} ms`);
             
-            presenceStateRef.current = 'presence_sending';
-            setPresenceState('presence_sending');
+            voiceStateRef.current = 'submitting';
+            setVoiceState('submitting');
             playPresenceSoundCue('sent');
             console.log('[PULSO_PRESENCE_REQUEST_SENT]');
             
             handleSendMessage(textToSend, { originMode: 'presence' });
             
-            presenceStateRef.current = 'presence_waiting_response';
-            setPresenceState('presence_waiting_response');
+            voiceStateRef.current = 'waiting_lotus';
+            setVoiceState('waiting_lotus');
           }
         }, 2500);
       }
     };
-
+ 
     recognition.onerror = (event: any) => {
       console.warn('SpeechRecognition error:', event.error);
       
       // Ignore errors that fire after mic is paused for TTS
-      if (presenceStateRef.current === 'presence_speaking') {
+      if (voiceStateRef.current === 'speaking') {
         console.log('[PULSO_PRESENCE_ERROR_IGNORED_DURING_TTS]', { error: event.error });
         return;
       }
@@ -2501,33 +2487,33 @@ export default function LivePage() {
         }, 150);
         return;
       }
-
+ 
       stopVoiceRecognition();
       
       if (mode === 'presence') {
         console.log('[PULSO_PRESENCE_ERROR]', { error: event.error });
-
+ 
         if (event.error === 'no-speech') {
-          if (voiceModeRef.current === 'presence' && (presenceStateRef.current as PresenceState) !== 'presence_speaking') {
-            presenceStateRef.current = 'presence_listening';
-            setPresenceState('presence_listening');
+          if (voiceModeRef.current === 'presence') {
+            voiceStateRef.current = 'presence_listening';
+            setVoiceState('presence_listening');
             startSpeechRecognition('presence');
           }
           return;
         }
         
         playPresenceSoundCue('error');
-        presenceStateRef.current = 'presence_error';
-        setPresenceState('presence_error');
+        voiceStateRef.current = 'error';
+        setVoiceState('error');
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           setVoiceError('Permissão de microfone negada ou indisponível.');
         } else {
           setVoiceError(`Erro de voz: ${event.error}.`);
         }
         setTimeout(() => {
-          if (voiceModeRef.current === 'presence' && (presenceStateRef.current as PresenceState) !== 'presence_speaking') {
-            presenceStateRef.current = 'presence_idle';
-            setPresenceState('presence_idle');
+          if (voiceModeRef.current === 'presence') {
+            voiceStateRef.current = 'idle';
+            setVoiceState('idle');
           }
         }, 3000);
       } else {
@@ -2539,17 +2525,17 @@ export default function LivePage() {
         }
       }
     };
-
+ 
     recognition.onend = () => {
       if (isSpeechRecognitionRetryingRef.current) {
         console.log('[PULSO_VOICE_ONEND] Ignored onend during retry.');
         return;
       }
-      if (presenceStateRef.current === 'presence_speaking') {
+      if (voiceStateRef.current === 'speaking') {
         // Prevent auto-restarts while Lótus is speaking
         return;
       }
-      if (voiceModeRef.current === 'presence' && presenceStateRef.current === 'presence_listening') {
+      if (voiceModeRef.current === 'presence' && voiceStateRef.current === 'presence_listening') {
         try {
           recognitionRef.current?.start();
         } catch (err) {
@@ -2566,7 +2552,7 @@ export default function LivePage() {
       }
     };
 
-    // Max recording timeout of 20 seconds
+    // Max recording timeout of 45 seconds
     maxRecordingTimeoutRef.current = setTimeout(() => {
       console.log('Max recording timeout reached.');
       if (voiceModeRef.current === 'presence') {
@@ -2575,35 +2561,35 @@ export default function LivePage() {
         stopVoiceRecognition();
         
         if (textToSend) {
-          presenceStateRef.current = 'presence_transcribing';
-          setPresenceState('presence_transcribing');
+          voiceStateRef.current = 'transcribing';
+          setVoiceState('transcribing');
           console.log('[PULSO_PRESENCE_TRANSCRIPTION_READY]', { text: textToSend });
           
           latencyTranscriptionRef.current = Date.now();
           const diffStopToTrans = latencyTranscriptionRef.current - (latencyStopRecRef.current || latencyTranscriptionRef.current);
           console.log(`[PULSO_LATENCY_RECORDING_STOP_TO_TRANSCRIPTION_MS] ${diffStopToTrans} ms`);
           
-          presenceStateRef.current = 'presence_sending';
-          setPresenceState('presence_sending');
+          voiceStateRef.current = 'submitting';
+          setVoiceState('submitting');
           playPresenceSoundCue('sent');
           console.log('[PULSO_PRESENCE_REQUEST_SENT]');
           handleSendMessage(textToSend, { originMode: 'presence' });
-          presenceStateRef.current = 'presence_waiting_response';
-          setPresenceState('presence_waiting_response');
+          voiceStateRef.current = 'waiting_lotus';
+          setVoiceState('waiting_lotus');
         } else {
           exitPresenceMode();
         }
       } else if (voiceModeRef.current === 'recording_once') {
         stopVoiceRecognition();
       }
-    }, 20000);
+    }, 45000);
 
     try {
       recognition.start();
     } catch (err) {
       console.error('Speech recognition start failed:', err);
       setVoiceMode('off');
-      setPresenceState('presence_idle');
+      setVoiceState('idle');
     }
   }, [handleSendMessage, stopVoiceRecognition, ttsAdapter, exitPresenceMode]);
 
@@ -2614,19 +2600,19 @@ export default function LivePage() {
       setVoiceMode('off');
     } else {
       if (!isSpeechRecognitionSupported()) {
-        setVoiceState('unsupported');
+        setVoiceState('error');
         setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
         return;
       }
       
-      setVoiceState('listening');
+      setVoiceState('recording_once');
       const granted = await requestMicrophonePermission();
       if (!granted) {
         setVoiceState('idle');
         setVoiceError('Permissão de microfone negada ou indisponível.');
         return;
       }
-
+ 
       startSpeechRecognition('recording_once');
     }
   }, [startSpeechRecognition, stopVoiceRecognition, requestMicrophonePermission, isSpeechRecognitionSupported]);
@@ -2644,17 +2630,17 @@ export default function LivePage() {
       
       if (!isSpeechRecognitionSupported()) {
         setPresenceMode(true);
-        setPresenceState('presence_error');
+        setVoiceState('error');
         setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
         return;
       }
       
       setPresenceMode(true);
-      setPresenceState('presence_requesting_permission');
+      setVoiceState('presence_listening');
       
       const granted = await requestMicrophonePermission();
       if (!granted) {
-        setPresenceState('presence_error');
+        setVoiceState('error');
         setVoiceError('Permissão de microfone negada ou indisponível.');
         return;
       }
@@ -2667,7 +2653,7 @@ export default function LivePage() {
 
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
-    if (voiceState === 'ready') setVoiceState('idle');
+    if (voiceState === 'recording_once') setVoiceState('idle');
     
     // Auto-resize
     if (textareaRef.current) {
@@ -2890,11 +2876,11 @@ export default function LivePage() {
   // Animation resolver
   const getLotusAnimClass = () => {
     if (voiceModeRef.current === 'presence') {
-      if (presenceStateRef.current === 'presence_listening') return 'lotus-listening-anim';
-      if (presenceStateRef.current === 'presence_transcribing' || presenceStateRef.current === 'presence_sending') return 'lotus-thinking-anim';
-      if (presenceStateRef.current === 'presence_waiting_response') return 'lotus-waiting-anim';
-      if (presenceStateRef.current === 'presence_speaking') return 'lotus-responding-anim';
-      if (presenceStateRef.current === 'presence_error') return 'lotus-error-anim';
+      if (voiceStateRef.current === 'presence_listening') return 'lotus-listening-anim';
+      if (voiceStateRef.current === 'transcribing' || voiceStateRef.current === 'submitting') return 'lotus-thinking-anim';
+      if (voiceStateRef.current === 'waiting_lotus') return 'lotus-waiting-anim';
+      if (voiceStateRef.current === 'speaking') return 'lotus-responding-anim';
+      if (voiceStateRef.current === 'error') return 'lotus-error-anim';
       return 'lotus-idle-anim';
     }
     
@@ -2966,7 +2952,7 @@ export default function LivePage() {
           <span className="w-1 h-1 rounded-full bg-[#fbf9f5] opacity-50 select-none shrink-0" />
           
           <span className="text-[9px] font-light tracking-[0.1em] text-[#fbf9f5]/40 lowercase shrink-0">
-            {voiceState === 'listening' ? 'ouvindo...' : isTyping ? 'processando...' : 'conectada'}
+            {(voiceState === 'presence_listening' || voiceState === 'recording_once') ? 'ouvindo...' : isTyping ? 'processando...' : 'conectada'}
           </span>
         </div>
         
@@ -3307,7 +3293,7 @@ export default function LivePage() {
             }`}>
               <div 
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
-                aria-label={`Modo Presença: ${presenceState}`}
+                aria-label={`Modo Presença: ${voiceState}`}
               />
             </div>
           </div>
@@ -3920,7 +3906,7 @@ export default function LivePage() {
             className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[160px] py-1.5 no-scrollbar"
           />
 
-          {voiceState !== 'unsupported' && (
+          {voiceState !== 'error' && (
             <button
               onClick={toggleRecordingOnce}
               disabled={false}
