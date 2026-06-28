@@ -437,6 +437,7 @@ export class TTSAdapter {
     this.currentPlaySessionId = playSessionId;
     this.sessionStartTime = startTime;
     this.currentAbortController = new AbortController();
+    const isSessionActive = () => this.currentPlaySessionId === playSessionId;
 
     if (onPreparing) onPreparing();
 
@@ -454,6 +455,69 @@ export class TTSAdapter {
       isRemoteWeb, 
       endpoint 
     });
+
+    const isPiper = this.preferences.ttsProvider === 'local_piper';
+    const volume = this.preferences.volume;
+
+    if (isPiper) {
+      const normalizedText = this.normalizeTextForSpeech(text);
+      if (isRemoteWeb || !isTauri) {
+        console.log('[PULSO_WEB_TTS_PIPER_SKIPPED_NOT_TAURI]');
+        console.log('[PULSO_WEB_TTS_FALLBACK_NATIVE]');
+        this.speakNative(normalizedText, onStart, onEnd);
+        return;
+      }
+
+      if (onPreparing) onPreparing();
+
+      try {
+        console.log('[PULSO_TTS_PIPER_START]', { text: normalizedText });
+        const { invoke } = await import('@tauri-apps/api/core');
+        const base64Wav = await invoke<string>('synthesize_piper', { text: normalizedText });
+        
+        if (!isSessionActive()) return;
+
+        // Convert base64 to Blob
+        const byteCharacters = atob(base64Wav);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'audio/wav' });
+
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = volume;
+        this.currentAudio = audio;
+
+        console.log('[PULSO_TTS_FIRST_AUDIO_PLAYING]', { durationMs: Math.round(performance.now() - startTime) });
+        console.log('[PULSO_WEB_TTS_FIRST_AUDIO_PLAYING]');
+        if (onStart) onStart();
+
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          if (this.currentAudio === audio) this.currentAudio = null;
+          console.log('[PULSO_TTS_QUEUE_DONE]');
+          if (onEnd) onEnd();
+        };
+
+        audio.onerror = (e) => {
+          URL.revokeObjectURL(url);
+          if (this.currentAudio === audio) this.currentAudio = null;
+          if (!isSessionActive()) return;
+          console.warn('[PULSO_TTS_PIPER_FAILED_FALLBACK_NATIVE] Error playing generated audio. Falling back to native.', e);
+          this.speakNative(normalizedText, onStart, onEnd);
+        };
+
+        await audio.play();
+      } catch (err) {
+        if (!isSessionActive()) return;
+        console.warn('[PULSO_TTS_PIPER_FAILED_FALLBACK_NATIVE] Failed to synthesize via Piper sidecar. Falling back to native.', err);
+        this.speakNative(normalizedText, onStart, onEnd);
+      }
+      return;
+    }
 
     const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http';
     
@@ -485,9 +549,6 @@ export class TTSAdapter {
     const voice = this.preferences.voiceName || 'pf_dora';
     const rate = this.preferences.rate;
     const provider = this.preferences.ttsProvider;
-    const volume = this.preferences.volume;
-
-    const isSessionActive = () => this.currentPlaySessionId === playSessionId;
 
     const fetchPromises: Promise<Blob>[] = [];
     const fetchStartTimes: number[] = [];

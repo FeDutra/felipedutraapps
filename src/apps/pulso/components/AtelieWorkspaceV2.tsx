@@ -1813,6 +1813,7 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
   const [octaveOffset, setOctaveOffset] = React.useState(0);
   const [globalPitchMultipliers, setGlobalPitchMultipliers] = React.useState<number[]>([1.0]);
   const [activeNoteName, setActiveNoteName] = React.useState("dó (c4)");
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = React.useState(false);
 
   // Load Saved Mesas from localStorage
   React.useEffect(() => {
@@ -4763,293 +4764,335 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
       )}
 
       {/* Sensory controls & Active notes */}
-      <div className="absolute bottom-20 left-[200px] right-[200px] flex items-center justify-between pointer-events-none z-10 text-[7px] font-mono tracking-widest text-[#fbf9f5]/15 lowercase">
-        <div className="flex items-center gap-6 pointer-events-auto">
-          <button 
-            onClick={toggleMute}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-          >
-            [ som: {isMuted ? 'mutado' : 'ativo'} ]
-          </button>
-          <div className="flex items-center gap-2 text-[#fbf9f5]/30">
-            <span>vol:</span>
-            <input 
-              type="range" 
-              min="0" 
-              max="6" 
-              step="0.1" 
-              value={masterVolume} 
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                setMasterVolume(val);
-                if (val > 0 && isMuted) {
-                  setIsMuted(false);
-                  const engine = getAudioEngine();
-                  if (engine) engine.mute(false);
-                }
-              }}
-              className="w-16 h-1 bg-[#fbf9f5]/10 rounded-lg appearance-none cursor-pointer accent-white pointer-events-auto"
-            />
-            <span className="text-[#fbf9f5]/50 w-6 text-right">{Math.round((masterVolume / 3.8) * 100)}%</span>
-          </div>
-          <button 
-            onClick={() => setZoom(1.0)}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-            title="Resetar escala"
-          >
-            [ zoom: {Math.round(zoom * 100)}% ]
-          </button>
-          <button 
-            onClick={() => setOctaveOffset(0)}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-            title="Resetar oitava (Z/X para alterar)"
-          >
-            [ oitava: {octaveOffset > 0 ? `+${octaveOffset}` : octaveOffset} ]
-          </button>
-          <button 
-            onClick={() => {
-              setGlobalPitchMultipliers([1.0]);
-              setActiveNoteName("dó (c4)");
-              const engine = getAudioEngine();
-              if (engine) engine.setGlobalPitchMultipliers([1.0]);
-            }}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-            title="Resetar tom para Dó"
-          >
-            [ tom: {activeNoteName} ]
-          </button>
-
-          {/* Board Manager (Novo, Salvar, Abrir) */}
-          <div className="flex items-center gap-3 border-l border-[#fbf9f5]/15 pl-6 text-[#fbf9f5]/30">
-            <button 
-              onClick={handleNewMesa}
-              className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-            >
-              [ novo ]
-            </button>
-
-            {isSaving ? (
-              <div className="flex items-center gap-1 font-mono text-[7px] text-[#fbf9f5]/50">
-                <span>nome:</span>
-                <input
-                  type="text"
-                  placeholder="mesa..."
-                  value={saveName}
-                  onChange={(e) => setSaveName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveMesa(saveName);
-                    if (e.key === 'Escape') setIsSaving(false);
-                  }}
-                  className="bg-transparent border-b border-[#fbf9f5]/25 text-[7px] text-white outline-none font-mono lowercase w-16"
-                  autoFocus
-                />
-                <button 
-                  onClick={() => handleSaveMesa(saveName)}
-                  className="border-none bg-transparent text-white/70 hover:text-white cursor-pointer font-mono"
-                >
-                  ✓
-                </button>
-                <button 
-                  onClick={() => setIsSaving(false)}
-                  className="border-none bg-transparent text-[#b8283e] cursor-pointer font-mono"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={() => setIsSaving(true)}
-                className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-              >
-                [ salvar ]
-              </button>
-            )}
-
-            <div className="relative">
-              <button 
-                onClick={() => setIsOpenMenu(!isOpenMenu)}
-                className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-              >
-                [ abrir: {Object.keys(savedMesas).length} ]
-              </button>
-              {isOpenMenu && Object.keys(savedMesas).length > 0 && (
-                <div className="absolute bottom-6 left-0 bg-[#141210]/95 border border-[#fbf9f5]/15 p-2 rounded flex flex-col gap-1 z-40 max-h-[120px] overflow-y-auto custom-scrollbar min-w-[80px]">
-                  {Object.keys(savedMesas).map(name => (
-                    <button
-                      key={name}
-                      onClick={() => handleOpenMesa(name)}
-                      className="text-[7px] font-mono text-left bg-transparent hover:bg-[#fbf9f5]/10 text-white/70 hover:text-white border-none py-0.5 px-1 cursor-pointer lowercase"
-                    >
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button 
-              onClick={downloadFullMixdown}
-              className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-[#ec4899] cursor-pointer outline-none font-mono transition-colors"
-              title="Baixar mixagem de todos os sons ativos"
-            >
-              [ mixar mesa ]
-            </button>
-
-            <button 
-              onClick={() => {
-                const link = document.createElement('a');
-                link.href = '/tabela_de_atuacao.md';
-                link.download = 'tabela_de_atuacao.md';
-                link.click();
-              }}
-              className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-              title="Baixar a tabela de atuação semiótica completa"
-            >
-              [ download atuação ]
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-6 pointer-events-auto text-[#fbf9f5]/30">
-          <span>[ imagens: {nodes.filter(n => n.type === 'imagem').length} | áudios: {nodes.filter(n => n.type === 'som' && n.audioDataId).length} no campo ]</span>
-          <button
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'image/*';
-              input.multiple = true;
-              input.style.display = 'none';
-              document.body.appendChild(input);
-              input.onchange = async (event) => {
-                const files = (event.target as HTMLInputElement).files;
-                if (!files) {
-                  document.body.removeChild(input);
-                  return;
-                }
-                const container = containerRef.current;
-                const rect = container?.getBoundingClientRect();
-                const spawnX = rect ? -panX / zoom + rect.width / 2 : 100;
-                const spawnY = rect ? -panY / zoom + rect.height / 2 : 100;
-                
-                for (let i = 0; i < files.length; i++) {
-                  const file = files[i];
-                  const reader = new FileReader();
-                  reader.onload = async (readerEvent) => {
-                    const dataUrl = readerEvent.target?.result as string;
-                    if (!dataUrl) return;
-                    const newId = `img-${Date.now()}-${i}`;
-                    await saveImageIDB(newId, dataUrl);
-                    
-                    const newNode: CanvasNode = {
-                      id: newId,
-                      label: file.name.split('.')[0] || 'imagem',
-                      x: spawnX + (i * 20),
-                      y: spawnY + (i * 20),
-                      vx: 0,
-                      vy: 0,
-                      type: 'imagem',
-                      imageDataId: newId,
-                      imageDataUrl: dataUrl,
-                      intensity: 1.0
-                    };
-                    setNodes(prev => [...prev, newNode]);
-                  };
-                  reader.readAsDataURL(file);
-                }
-                document.body.removeChild(input);
-              };
-              input.click();
-            }}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-            title="Importar imagens para o campo"
-          >
-            [ + carregar imagem ]
-          </button>
-
-          <button
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'audio/*';
-              input.multiple = true;
-              input.style.display = 'none';
-              document.body.appendChild(input);
-              input.onchange = async (event) => {
-                const files = (event.target as HTMLInputElement).files;
-                if (!files) {
-                  document.body.removeChild(input);
-                  return;
-                }
-                const container = containerRef.current;
-                const rect = container?.getBoundingClientRect();
-                const spawnX = rect ? -panX / zoom + rect.width / 2 : 100;
-                const spawnY = rect ? -panY / zoom + rect.height / 2 : 100;
-                
-                for (let i = 0; i < files.length; i++) {
-                  const file = files[i];
-                  try {
-                    const record = await processUploadedAudio(file);
-                    await saveAudioIDB(record);
-                    
-                    const arrayBuffer = dataURItoArrayBuffer(record.dataUrl);
-                    const engine = getAudioEngine();
-                    const mainCtx = engine ? engine.getAudioContext() : null;
-                    let decoded: AudioBuffer;
-                    if (mainCtx) {
-                      decoded = await mainCtx.decodeAudioData(arrayBuffer);
-                    } else {
-                      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                      const tempCtx = new AudioContextClass();
-                      decoded = await tempCtx.decodeAudioData(arrayBuffer);
-                      tempCtx.close();
-                    }
-                    audioBuffersRef.current.set(record.id, decoded);
-                    
-                    const newNode: CanvasNode = {
-                      id: record.id,
-                      label: record.name,
-                      x: spawnX + (i * 20),
-                      y: spawnY + (i * 20),
-                      vx: 0,
-                      vy: 0,
-                      type: 'som',
-                      audioDataId: record.id,
-                      audioDataUrl: record.dataUrl,
-                      audioDuration: record.duration,
-                      audioPeaks: record.peaks,
-                      isPlaying: false,
-                      isLooping: true,
-                      cropStart: 0,
-                      cropEnd: record.duration,
-                      playhead: 0,
-                      intensity: 1.0
-                    };
-                    setNodes(prev => [...prev, newNode]);
-                  } catch (err) {
-                    console.error("Erro no processamento do áudio V2:", err);
-                  }
-                }
-                document.body.removeChild(input);
-              };
-              input.click();
-            }}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-white/80 cursor-pointer outline-none font-mono"
-            title="Importar áudios customizados para manipulação"
-          >
-            [ + carregar áudio ]
-          </button>
-
-          <button
-            onClick={() => {
-              if (window.confirm("Remover todas as imagens do campo?")) {
-                setNodes(prev => prev.filter(n => n.type !== 'imagem'));
+      <div className="absolute bottom-6 left-[280px] flex items-center gap-6 pointer-events-auto z-10 text-[9.5px] font-mono tracking-widest text-[#fbf9f5]/20 lowercase">
+        <button 
+          onClick={toggleMute}
+          className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+        >
+          [ som: {isMuted ? 'mutado' : 'ativo'} ]
+        </button>
+        <div className="flex items-center gap-2 text-[#fbf9f5]/35 text-[9.5px]">
+          <span>vol:</span>
+          <input 
+            type="range" 
+            min="0" 
+            max="6" 
+            step="0.1" 
+            value={masterVolume} 
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setMasterVolume(val);
+              if (val > 0 && isMuted) {
+                setIsMuted(false);
+                const engine = getAudioEngine();
+                if (engine) engine.mute(false);
               }
             }}
-            className="border-none bg-transparent text-[#fbf9f5]/30 hover:text-[#b8283e] cursor-pointer outline-none font-mono"
-            title="Remover todas as imagens do campo"
-          >
-            [ limpar imagens ]
-          </button>
+            className="w-16 h-1 bg-[#fbf9f5]/10 rounded-lg appearance-none cursor-pointer accent-white pointer-events-auto"
+          />
+          <span className="text-[#fbf9f5]/55 w-6 text-right">{Math.round((masterVolume / 3.8) * 100)}%</span>
         </div>
+        <button 
+          onClick={() => setZoom(1.0)}
+          className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+          title="Resetar escala"
+        >
+          [ zoom: {Math.round(zoom * 100)}% ]
+        </button>
+        <button 
+          onClick={() => setOctaveOffset(0)}
+          className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+          title="Resetar oitava (Z/X para alterar)"
+        >
+          [ oitava: {octaveOffset > 0 ? `+${octaveOffset}` : octaveOffset} ]
+        </button>
+        <button 
+          onClick={() => {
+            setGlobalPitchMultipliers([1.0]);
+            setActiveNoteName("dó (c4)");
+            const engine = getAudioEngine();
+            if (engine) engine.setGlobalPitchMultipliers([1.0]);
+          }}
+          className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+          title="Resetar tom para Dó"
+        >
+          [ tom: {activeNoteName} ]
+        </button>
+      </div>
+
+      {/* Floating Collapsible Workspace Menu (Top-Right) */}
+      <div className="absolute top-20 right-6 flex flex-col items-end gap-1.5 z-40 text-[9.5px] font-mono tracking-widest text-[#fbf9f5]/35 lowercase pointer-events-none">
+        <button
+          onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
+          className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white pointer-events-auto cursor-pointer outline-none font-mono py-1 px-2 text-[9.5px]"
+          title="Abrir/Fechar menu de mesa"
+        >
+          [ gerenciar mesa {isWorkspaceMenuOpen ? '▲' : '▼'} ]
+        </button>
+        
+        {isWorkspaceMenuOpen && (
+          <div className="flex flex-col items-end gap-2.5 mt-2 pl-4 pointer-events-auto select-none">
+            {/* Mesa/Board Actions */}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[#fbf9f5]/15 text-[6.5px] tracking-widest uppercase mb-0.5">mesa</span>
+              <button 
+                onClick={handleNewMesa}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+              >
+                [ novo ]
+              </button>
+
+              {isSaving ? (
+                <div className="flex items-center gap-1 font-mono text-[9.5px] text-[#fbf9f5]/55">
+                  <span>nome:</span>
+                  <input
+                    type="text"
+                    placeholder="mesa..."
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveMesa(saveName);
+                      if (e.key === 'Escape') setIsSaving(false);
+                    }}
+                    className="bg-transparent border-b border-[#fbf9f5]/25 text-[9.5px] text-white outline-none font-mono lowercase w-16"
+                    autoFocus
+                  />
+                  <button 
+                    onClick={() => handleSaveMesa(saveName)}
+                    className="border-none bg-transparent text-white/70 hover:text-white cursor-pointer font-mono py-0 px-1 text-[9.5px]"
+                  >
+                    ✓
+                  </button>
+                  <button 
+                    onClick={() => setIsSaving(false)}
+                    className="border-none bg-transparent text-[#b8283e] cursor-pointer font-mono py-0 px-1 text-[9.5px]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setIsSaving(true)}
+                  className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                >
+                  [ salvar ]
+                </button>
+              )}
+
+              <div className="relative">
+                <button 
+                  onClick={() => setIsOpenMenu(!isOpenMenu)}
+                  className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                >
+                  [ abrir: {Object.keys(savedMesas).length} ]
+                </button>
+                {isOpenMenu && Object.keys(savedMesas).length > 0 && (
+                  <div className="absolute right-0 top-5 bg-[#141210]/95 border border-[#fbf9f5]/15 p-2 rounded flex flex-col gap-1 z-40 max-h-[120px] overflow-y-auto custom-scrollbar min-w-[80px]">
+                    {Object.keys(savedMesas).map(name => (
+                      <button
+                        key={name}
+                        onClick={() => handleOpenMesa(name)}
+                        className="text-[9px] font-mono text-right bg-transparent hover:bg-[#fbf9f5]/10 text-white/70 hover:text-white border-none py-0.5 px-1 cursor-pointer lowercase"
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Export Actions */}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[#fbf9f5]/15 text-[6.5px] tracking-widest uppercase mb-0.5">exportar</span>
+              <button 
+                onClick={downloadFullMixdown}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-[#ec4899] cursor-pointer outline-none font-mono py-0 px-1 transition-colors text-[9.5px]"
+                title="Baixar mixagem de todos os sons ativos"
+              >
+                [ mixar mesa ]
+              </button>
+
+              <button 
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = '/tabela_de_atuacao.md';
+                  link.download = 'tabela_de_atuacao.md';
+                  link.click();
+                }}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                title="Baixar a tabela de atuação semiótica completa"
+              >
+                [ download atuação ]
+              </button>
+            </div>
+
+            {/* Add Files */}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[#fbf9f5]/15 text-[6.5px] tracking-widest uppercase mb-0.5">carregar arquivos</span>
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.multiple = true;
+                  input.style.display = 'none';
+                  document.body.appendChild(input);
+                  input.onchange = async (event) => {
+                    const files = (event.target as HTMLInputElement).files;
+                    if (!files) {
+                      document.body.removeChild(input);
+                      return;
+                    }
+                    const container = containerRef.current;
+                    const rect = container?.getBoundingClientRect();
+                    const spawnX = rect ? -panX / zoom + rect.width / 2 : 100;
+                    const spawnY = rect ? -panY / zoom + rect.height / 2 : 100;
+                    
+                    for (let i = 0; i < files.length; i++) {
+                      const file = files[i];
+                      const reader = new FileReader();
+                      reader.onload = async (readerEvent) => {
+                        const dataUrl = readerEvent.target?.result as string;
+                        if (!dataUrl) return;
+                        const newId = `img-${Date.now()}-${i}`;
+                        await saveImageIDB(newId, dataUrl);
+                        
+                        const newNode: CanvasNode = {
+                          id: newId,
+                          label: file.name.split('.')[0] || 'imagem',
+                          x: spawnX + (i * 20),
+                          y: spawnY + (i * 20),
+                          vx: 0,
+                          vy: 0,
+                          type: 'imagem',
+                          imageDataId: newId,
+                          imageDataUrl: dataUrl,
+                          intensity: 1.0
+                        };
+                        setNodes(prev => [...prev, newNode]);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                    document.body.removeChild(input);
+                  };
+                  input.click();
+                }}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                title="Importar imagens para o campo"
+              >
+                [ + imagem ]
+              </button>
+
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'audio/*';
+                  input.multiple = true;
+                  input.style.display = 'none';
+                  document.body.appendChild(input);
+                  input.onchange = async (event) => {
+                    const files = (event.target as HTMLInputElement).files;
+                    if (!files) {
+                      document.body.removeChild(input);
+                      return;
+                    }
+                    const container = containerRef.current;
+                    const rect = container?.getBoundingClientRect();
+                    const spawnX = rect ? -panX / zoom + rect.width / 2 : 100;
+                    const spawnY = rect ? -panY / zoom + rect.height / 2 : 100;
+                    
+                    for (let i = 0; i < files.length; i++) {
+                      const file = files[i];
+                      try {
+                        const record = await processUploadedAudio(file);
+                        await saveAudioIDB(record);
+                        
+                        const arrayBuffer = dataURItoArrayBuffer(record.dataUrl);
+                        const engine = getAudioEngine();
+                        const mainCtx = engine ? engine.getAudioContext() : null;
+                        let decoded: AudioBuffer;
+                        if (mainCtx) {
+                          decoded = await mainCtx.decodeAudioData(arrayBuffer);
+                        } else {
+                          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                          const tempCtx = new AudioContextClass();
+                          decoded = await tempCtx.decodeAudioData(arrayBuffer);
+                          tempCtx.close();
+                        }
+                        audioBuffersRef.current.set(record.id, decoded);
+                        
+                        const newNode: CanvasNode = {
+                          id: record.id,
+                          label: record.name,
+                          x: spawnX + (i * 20),
+                          y: spawnY + (i * 20),
+                          vx: 0,
+                          vy: 0,
+                          type: 'som',
+                          audioDataId: record.id,
+                          audioDataUrl: record.dataUrl,
+                          audioDuration: record.duration,
+                          audioPeaks: record.peaks,
+                          isPlaying: false,
+                          isLooping: true,
+                          cropStart: 0,
+                          cropEnd: record.duration,
+                          playhead: 0,
+                          intensity: 1.0
+                        };
+                        setNodes(prev => [...prev, newNode]);
+                        setAudioEnabled(true);
+                      } catch (err) {
+                        console.error("Erro no processamento do áudio V2:", err);
+                      }
+                    }
+                    document.body.removeChild(input);
+                  };
+                  input.click();
+                }}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                title="Importar áudios customizados para manipulação"
+              >
+                [ + áudio ]
+              </button>
+            </div>
+
+            {/* Clear/Reset Actions */}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[#fbf9f5]/15 text-[6.5px] tracking-widest uppercase mb-0.5">limpar</span>
+              <button
+                onClick={() => {
+                  if (window.confirm("Remover todas as imagens do campo?")) {
+                    setNodes(prev => prev.filter(n => n.type !== 'imagem'));
+                  }
+                }}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-[#b8283e] cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                title="Remover todas as imagens do campo"
+              >
+                [ limpar imagens ]
+              </button>
+
+              <button
+                onClick={() => {
+                  if (window.confirm("Limpar toda a mesa de atuação?")) {
+                    setNodes([]);
+                  }
+                }}
+                className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-[#b8283e] cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
+                title="Limpar todos os elementos da mesa"
+              >
+                [ limpar mesa ]
+              </button>
+            </div>
+
+            {/* Info Status */}
+            <div className="text-[7.5px] text-[#fbf9f5]/15 select-none pt-1 border-t border-[#fbf9f5]/5 text-right w-full">
+              imagens: {nodes.filter(n => n.type === 'imagem').length} | áudios: {nodes.filter(n => n.type === 'som' && n.audioDataId).length}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating Semiotic Debug Panel */}
