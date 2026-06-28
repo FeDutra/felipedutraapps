@@ -2658,7 +2658,7 @@ export default function LivePage() {
     // Auto-resize
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [voiceState]);
 
@@ -3267,7 +3267,7 @@ export default function LivePage() {
       </div>
 
         <main className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative transition-all duration-1000 ease-in-out pointer-events-auto z-10 ${
-          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : 'overflow-y-auto max-w-5xl w-full mt-6 mb-4'
+          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : 'overflow-hidden max-w-5xl w-full mt-6 mb-4'
         }`}>
           
           {/* Atelie Workspace Container nested within main */}
@@ -3666,7 +3666,7 @@ export default function LivePage() {
         </div>
       </main>
 
-      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-40 gap-3 pb-6 md:pb-8 ${
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-[250px] gap-3 pb-6 md:pb-8 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
@@ -3863,7 +3863,7 @@ export default function LivePage() {
             value={inputMessage}
             onChange={handleInputChange}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSendMessage();
               }
@@ -3903,7 +3903,7 @@ export default function LivePage() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[160px] py-1.5 no-scrollbar"
+            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[120px] py-1.5 overflow-y-auto"
           />
 
           {voiceState !== 'error' && (
