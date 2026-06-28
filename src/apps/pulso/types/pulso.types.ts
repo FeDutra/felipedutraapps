@@ -230,6 +230,40 @@ export interface PulsoContextNode {
   chatId: string;
   openclawSessionKey: string;
   label: string;
+  archived?: boolean;
+  isDefault?: boolean;
+  lastMessageAt?: Date;
+  updatedAt?: Date;
+}
+
+/**
+ * @interface Session
+ * @description A persistent session entity in the Pulso ecosystem.
+ * Sessions are the primary unit of context separation — each session has
+ * its own conversation history, identity, and OpenClaw session key.
+ *
+ * areaId is optional: a session can be linked to an area (e.g. "work/modu")
+ * or be free/transversal (e.g. "general planning").
+ */
+export interface Session {
+  /** Unique identifier — used as the contextId in chat and requests */
+  id: string;
+  /** Human-readable display name */
+  label: string;
+  /** Optional area this session belongs to */
+  areaId?: string | null;
+  /** Optional subarea identifier for legacy compatibility */
+  subareaId?: string;
+  /** The OpenClaw session key used to route to the correct agent context */
+  openclawSessionKey: string;
+  /** Whether this is a seeded/system session that ships with the platform */
+  isDefault?: boolean;
+  /** ISO timestamp of last message activity */
+  lastMessageAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  archived?: boolean;
+  archivedAt?: Date;
 }
 
 export interface PulsoRequest {

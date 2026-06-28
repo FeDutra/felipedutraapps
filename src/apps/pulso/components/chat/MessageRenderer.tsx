@@ -47,6 +47,7 @@ export interface Message {
   executedBy?: string;
   createdEntityRef?: string;
   executionError?: string;
+  replyTo?: { id: string; sender: string; text: string } | null;
 }
 
 interface Block {
@@ -472,6 +473,7 @@ interface MessageActionsProps {
   onHearClick: (msg: Message) => void;
   onCopyText: (msg: Message) => void;
   onCopyPackage: (msg: Message) => void;
+  onReply?: (msg: Message) => void;
 }
 
 export const MessageActions = ({
@@ -480,7 +482,8 @@ export const MessageActions = ({
   playingState,
   onHearClick,
   onCopyText,
-  onCopyPackage
+  onCopyPackage,
+  onReply
 }: MessageActionsProps) => {
   const isPlayingThis = playingMsgId === msg.id;
   const isPreparing = isPlayingThis && playingState === 'preparing';
@@ -491,7 +494,7 @@ export const MessageActions = ({
                             (msg.openclawResult?.errors && msg.openclawResult.errors.length > 0);
 
   return (
-    <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-left select-none">
+<div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-left select-none">
       {/* Handoff Status & Timestamp */}
       <div className="flex items-center gap-2 text-[9px] text-[#fbf9f5]/60 font-light lowercase">
         {msg.handoffStatus === 'waiting_user_approval' ? (
@@ -501,9 +504,8 @@ export const MessageActions = ({
         ) : msg.openclawResult?.errors && msg.openclawResult.errors.length > 0 ? (
           <><AlertTriangle size={10} strokeWidth={1.5} className="text-white" /><span>falha</span></>
         ) : (
-          <Zap size={10} strokeWidth={1.5} className="opacity-60 text-white" title="resposta obtida" />
+          <Zap size={10} strokeWidth={1.5} className="opacity-60 text-white" />
         )}
-        
         <span className="opacity-75 font-light">
           {formatMessageTimestamp(msg.timestamp)}
         </span>
@@ -511,6 +513,20 @@ export const MessageActions = ({
 
       {/* Operations Bar */}
       <div className="flex items-center gap-3">
+        {/* Reply Action */}
+        {onReply && (
+          <button
+            onClick={() => onReply(msg)}
+            className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+            title="Responder esta mensagem"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 17 4 12 9 7" />
+              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+            </svg>
+          </button>
+        )}
+
         {/* Hear Action */}
         <button
           onClick={() => onHearClick(msg)}

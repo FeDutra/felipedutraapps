@@ -1,42 +1,9 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pulsoRequests = void 0;
 const https_1 = require("firebase-functions/v2/https");
-const admin = __importStar(require("firebase-admin"));
-const db = admin.firestore();
+const firestore_1 = require("firebase-admin/firestore");
+const db = (0, firestore_1.getFirestore)();
 /**
  * Sanitizes an object by removing undefined values
  */
@@ -99,7 +66,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
             if (requestType)
                 query = query.where("requestType", "==", requestType);
             const snapshot = await query.limit(Number(limit)).get();
-            const requests = snapshot.docs.map(doc => ({
+            const requests = snapshot.docs.map((doc) => ({
                 ...doc.data(),
                 id: doc.id,
                 requestedAt: doc.data().requestedAt?.toDate()?.toISOString(),
@@ -124,7 +91,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 if (data.status !== "requested" && data.status !== "queued_for_openclaw") {
                     return { status: 409, message: `Request is in status ${data.status}` };
                 }
-                const ts = admin.firestore.FieldValue.serverTimestamp();
+                const ts = firestore_1.FieldValue.serverTimestamp();
                 transaction.update(docRef, { status: "running", processedBy, startedAt: ts, updatedAt: ts });
                 return { status: 200, message: "claimed" };
             });
@@ -145,7 +112,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 return;
             }
             const requestData = docSnap.data();
-            const ts = admin.firestore.FieldValue.serverTimestamp();
+            const ts = firestore_1.FieldValue.serverTimestamp();
             // ── MATERIALIZATION DISPATCHER ───────────────────────────────────────
             const materialize = async () => {
                 const type = requestData.requestType;
@@ -503,7 +470,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
             await docRef.update(sanitize({
                 status: finalStatus,
                 result: finalResultObj,
-                error: isFailed ? matResult.summary || "Erro na materialização" : admin.firestore.FieldValue.delete(),
+                error: isFailed ? matResult.summary || "Erro na materialização" : firestore_1.FieldValue.delete(),
                 emittedEvents: emittedEvents || null,
                 pulsoEventId: pulsoEventId || null,
                 processedAt: ts,
@@ -523,7 +490,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 res.status(400).send("Missing requestId");
                 return;
             }
-            const ts = admin.firestore.FieldValue.serverTimestamp();
+            const ts = firestore_1.FieldValue.serverTimestamp();
             await db.collection(BASE).doc(requestId).update(sanitize({
                 status: "failed", error: error || "Unknown error",
                 recoverable: recoverable ?? false, nextSuggestedAction: nextSuggestedAction || null,
@@ -539,7 +506,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 res.status(400).send("Missing requestId");
                 return;
             }
-            const ts = admin.firestore.FieldValue.serverTimestamp();
+            const ts = firestore_1.FieldValue.serverTimestamp();
             await db.collection(BASE).doc(requestId).update(sanitize({
                 status: "needs_clarification",
                 result: { question: question || "Necessário esclarecimento", missingFields: missingFields || [] },
@@ -555,7 +522,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 res.status(400).send("Missing requestId");
                 return;
             }
-            const ts = admin.firestore.FieldValue.serverTimestamp();
+            const ts = firestore_1.FieldValue.serverTimestamp();
             await db.collection(BASE).doc(requestId).update(sanitize({
                 status: "needs_approval",
                 result: { reason: reason || "Requer aprovação humana estrutural", blueprint: blueprint || null },
@@ -582,7 +549,7 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
                 res.status(400).send(`Invalid requestType.`);
                 return;
             }
-            const ts = admin.firestore.FieldValue.serverTimestamp();
+            const ts = firestore_1.FieldValue.serverTimestamp();
             if (data.dedupeKey) {
                 const existingQuery = await db.collection(BASE).where("dedupeKey", "==", data.dedupeKey).where("status", "in", ["requested", "running", "needs_clarification"]).limit(1).get();
                 if (!existingQuery.empty) {

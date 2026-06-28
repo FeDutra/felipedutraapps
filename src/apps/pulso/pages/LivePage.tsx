@@ -118,11 +118,14 @@ import {
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
-import { onSnapshot, collection, query, where, doc, setDoc, updateDoc } from "firebase/firestore";
+import { onSnapshot, collection, query, where, doc, setDoc, updateDoc, getDocs } from "firebase/firestore";
 import { db, storage } from '../../../shared/lib/firebase/client';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
-import { PulsoContextNode } from '../types/pulso.types';
+import { PulsoContextNode, Session } from '../types/pulso.types';
+import { sessionsService } from '../services/sessionsService';
+import AtelieWorkspace from '../components/AtelieWorkspace';
+
 
 interface Attachment {
   id: string;
@@ -135,88 +138,57 @@ interface Attachment {
   contextId: string;
 }
 
-// NOTA: Esta lista estática é estritamente temporária/de transição.
-// Ela será totalmente descontinuada na próxima fase para dar lugar à criação
-// e persistência dinâmica de chats vinculados a cada uma das 14 áreas estruturais.
-const INITIAL_CONTEXT_NODES: PulsoContextNode[] = [
+/**
+ * Converts a persisted Session entity into the PulsoContextNode shape used throughout the UI.
+ * This keeps backward compat while the UI layer gradually adopts Session directly.
+ */
+const sessionToContextNode = (session: Session): PulsoContextNode => ({
+  areaId: session.areaId || '',
+  subareaId: session.subareaId || '',
+  contextId: session.id,
+  chatId: 'default',
+  openclawSessionKey: session.openclawSessionKey,
+  label: session.label,
+  archived: session.archived ?? false,
+  isDefault: session.isDefault ?? false,
+  lastMessageAt: session.lastMessageAt,
+  updatedAt: session.updatedAt,
+});
+
+/**
+ * Default sessions seeded on first use.
+ * Previously lived as INITIAL_CONTEXT_NODES hardcoded in the component.
+ * Now written to Firestore on startup if pulso_sessions is empty.
+ */
+const DEFAULT_SESSIONS: Omit<Session, 'createdAt' | 'updatedAt'>[] = [
   // Sistema
-  {
-    areaId: "area_sistema",
-    subareaId: "pulso",
-    contextId: "sistema_pulso",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:sistema_pulso",
-    label: "pulso"
-  },
-  {
-    areaId: "area_sistema",
-    subareaId: "infraestrutura",
-    contextId: "sistema_infraestrutura",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:sistema_infraestrutura",
-    label: "infraestrutura"
-  },
-  {
-    areaId: "area_sistema",
-    subareaId: "openclaw_agentes",
-    contextId: "sistema_openclaw_agentes",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:sistema_openclaw_agentes",
-    label: "openclaw e agentes"
-  },
+  { id: 'sistema_pulso',            areaId: 'area_sistema',  subareaId: 'pulso',               label: 'pulso',               openclawSessionKey: 'agent:main:pulso:sistema_pulso',            isDefault: true },
+  { id: 'sistema_infraestrutura',   areaId: 'area_sistema',  subareaId: 'infraestrutura',       label: 'infraestrutura',      openclawSessionKey: 'agent:main:pulso:sistema_infraestrutura',   isDefault: true },
+  { id: 'sistema_openclaw_agentes', areaId: 'area_sistema',  subareaId: 'openclaw_agentes',     label: 'openclaw e agentes',  openclawSessionKey: 'agent:main:pulso:sistema_openclaw_agentes', isDefault: true },
   // Trabalho
-  {
-    areaId: "area_trabalho",
-    subareaId: "modu",
-    contextId: "trabalho_modu",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:trabalho_modu",
-    label: "modú"
-  },
-  {
-    areaId: "area_trabalho",
-    subareaId: "despertar",
-    contextId: "trabalho_despertar",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:trabalho_despertar",
-    label: "despertar"
-  },
+  { id: 'trabalho_modu',            areaId: 'area_trabalho', subareaId: 'modu',                 label: 'modú',                openclawSessionKey: 'agent:main:pulso:trabalho_modu',            isDefault: true },
+  { id: 'trabalho_despertar',       areaId: 'area_trabalho', subareaId: 'despertar',            label: 'despertar',           openclawSessionKey: 'agent:main:pulso:trabalho_despertar',       isDefault: true },
   // Casa
-  {
-    areaId: "area_casa",
-    subareaId: "construcao",
-    contextId: "casa_construcao",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:casa_construcao",
-    label: "construção"
-  },
-  {
-    areaId: "area_casa",
-    subareaId: "horta",
-    contextId: "casa_horta",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:casa_horta",
-    label: "horta"
-  },
+  { id: 'casa_construcao',          areaId: 'area_casa',     subareaId: 'construcao',           label: 'construção',          openclawSessionKey: 'agent:main:pulso:casa_construcao',          isDefault: true },
+  { id: 'casa_horta',               areaId: 'area_casa',     subareaId: 'horta',                label: 'horta',               openclawSessionKey: 'agent:main:pulso:casa_horta',               isDefault: true },
   // Família
-  {
-    areaId: "area_familia",
-    subareaId: "escola_guayi",
-    contextId: "familia_escola_guayi",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:familia_escola_guayi",
-    label: "escola guayi"
-  },
+  { id: 'familia_escola_guayi',     areaId: 'area_familia',  subareaId: 'escola_guayi',         label: 'escola guayi',        openclawSessionKey: 'agent:main:pulso:familia_escola_guayi',     isDefault: true },
   // Criação
-  {
-    areaId: "area_criacao",
-    subareaId: "producao_autoral",
-    contextId: "criacao_producao_autoral",
-    chatId: "default",
-    openclawSessionKey: "agent:main:pulso:criacao_producao_autoral",
-    label: "produção autoral"
-  }
+  { id: 'criacao_producao_autoral', areaId: 'area_criacao',  subareaId: 'producao_autoral',     label: 'produção autoral',    openclawSessionKey: 'agent:main:pulso:criacao_producao_autoral', isDefault: true },
+  // Livre
+  { id: 'livre_geral',              areaId: 'area_livre',    subareaId: 'geral',                label: 'geral',               openclawSessionKey: 'agent:main:pulso:livre_geral',              isDefault: true },
 ];
+
+/** Placeholder used before sessions load from Firestore */
+const LOADING_PLACEHOLDER_NODE: PulsoContextNode = {
+  areaId: 'area_sistema',
+  subareaId: 'pulso',
+  contextId: 'sistema_pulso',
+  chatId: 'default',
+  openclawSessionKey: 'agent:main:pulso:sistema_pulso',
+  label: 'pulso',
+};
+
 
 const AREA_NAMES: Record<string, string> = {
   area_eu: "eu",
@@ -232,7 +204,8 @@ const AREA_NAMES: Record<string, string> = {
   area_viagens: "viagens",
   area_lazer: "lazer",
   area_sistema: "sistema",
-  area_futuro: "futuro"
+  area_futuro: "futuro",
+  area_livre: "livre"
 };
 
 const AREA_ORDER = [
@@ -249,7 +222,8 @@ const AREA_ORDER = [
   "area_viagens",
   "area_lazer",
   "area_sistema",
-  "area_futuro"
+  "area_futuro",
+  "area_livre"
 ];
 
 // Safe array helper
@@ -299,9 +273,22 @@ const renderMarkdown = (text: string): React.ReactNode[] => {
   });
 };
 
+interface PendingAttachment {
+  id: string;
+  name: string;
+  type: 'image' | 'pdf' | 'audio' | 'generic';
+  mimeType: string;
+  localUrl: string;
+  sizeBytes: number;
+  status: 'uploading' | 'done' | 'error';
+  storageUrl?: string;
+  progress: number;
+  file: File;
+}
+
 interface Message {
   id: string;
-  sender: 'user' | 'lotus';
+  sender: 'user' | 'lotus' | 'system';
   text: string;
   timestamp: Date;
   interpretation?: {
@@ -360,6 +347,7 @@ interface Message {
   executionError?: string;
   contextId?: string | null;
   attachments?: Attachment[];
+  replyTo?: { id: string; sender: string; text: string } | null;
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence';
@@ -393,54 +381,103 @@ export default function LivePage() {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
-  const [customContextNodes, setCustomContextNodes] = React.useState<PulsoContextNode[]>([]);
+  /** Reply-to (quoted message) state */
+  const [replyTo, setReplyTo] = React.useState<{ id: string; sender: string; text: string } | null>(null);
+  /** Pending attachments staged for send (not yet sent) */
+  const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
+  /** v2: sessions loaded from Firestore pulso_sessions (replaces customContextNodes + INITIAL_CONTEXT_NODES) */
+  const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
+  const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
+  const [isAtelieActive, setIsAtelieActive] = React.useState(false);
+  const [showAtelieChatHistory, setShowAtelieChatHistory] = React.useState(false);
   
+  const sessionsRef = React.useRef(sessions);
+  React.useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+  /**
+   * v2: Load sessions from Firestore pulso_sessions.
+   * On first run (empty collection), seeds the DEFAULT_SESSIONS list.
+   * Falls back to DEFAULT_SESSIONS locally if not in Firestore mode.
+   */
   React.useEffect(() => {
     const isFirestore = pulsoService.getDataMode() === 'firestore';
+
     if (!isFirestore) {
-      if (typeof window !== 'undefined') {
-        try {
-          const saved = localStorage.getItem('pulso_custom_contexts');
-          if (saved) {
-            setCustomContextNodes(JSON.parse(saved));
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
+      // Non-Firestore mode: use DEFAULT_SESSIONS directly
+      setSessions(DEFAULT_SESSIONS.map(s => sessionToContextNode({ ...s, createdAt: new Date(), updatedAt: new Date() })));
+      setSessionsLoaded(true);
       return;
     }
 
     if (loading || !db) return;
 
-    let unsubscribe: any = null;
-    try {
-      const q = query(collection(db, firestorePaths.customContexts()));
-      unsubscribe = onSnapshot(q, (snapshot: any) => {
-        const nodes: PulsoContextNode[] = [];
-        snapshot.forEach((docSnap: any) => {
-          const data = docSnap.data();
-          nodes.push({
-            areaId: data.areaId,
-            contextId: data.contextId,
-            chatId: data.chatId || "default",
-            openclawSessionKey: data.openclawSessionKey,
-            label: data.label,
-            archived: data.archived || false
-          });
-        });
-        setCustomContextNodes(nodes);
-      }, (error: any) => {
-        console.error("Firestore customContexts onSnapshot error:", error);
-      });
-    } catch (e) {
-      console.error("Failed to subscribe to customContexts:", e);
-    }
+    let unsubscribe: (() => void) | null = null;
 
-    return () => {
-      if (unsubscribe) unsubscribe();
+    const seedAndSubscribe = async () => {
+      try {
+        // Check if pulso_sessions already has documents
+        const snap = await getDocs(collection(db!, firestorePaths.sessions()));
+        if (snap.empty) {
+          console.log('[PULSO_SESSIONS] Seeding default sessions...');
+          // Seed all default sessions in parallel
+          await Promise.all(
+            DEFAULT_SESSIONS.map(s =>
+              sessionsService.createSession(s).catch(err =>
+                console.error('[PULSO_SESSIONS] Seed failed for', s.id, err)
+              )
+            )
+          );
+          console.log('[PULSO_SESSIONS] Default sessions seeded.');
+        }
+      } catch (err) {
+        console.error('[PULSO_SESSIONS] Seed check failed:', err);
+      }
+
+      // Real-time subscription to pulso_sessions
+      try {
+        unsubscribe = onSnapshot(
+          collection(db!, firestorePaths.sessions()),
+          (snapshot) => {
+            const loaded: PulsoContextNode[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as Session;
+              if (!data.archived) {
+                loaded.push(sessionToContextNode({ ...data, id: docSnap.id }));
+              }
+            });
+            // Sort: default sessions first (by their DEFAULT_SESSIONS order), then custom ones by createdAt
+            const defaultOrder = DEFAULT_SESSIONS.map(s => s.id);
+            loaded.sort((a, b) => {
+              const ai = defaultOrder.indexOf(a.contextId);
+              const bi = defaultOrder.indexOf(b.contextId);
+              if (ai !== -1 && bi !== -1) return ai - bi;
+              if (ai !== -1) return -1;
+              if (bi !== -1) return 1;
+              return 0;
+            });
+            setSessions(loaded.length > 0 ? loaded : [LOADING_PLACEHOLDER_NODE]);
+            setSessionsLoaded(true);
+          },
+          (err) => {
+            console.error('[PULSO_SESSIONS] onSnapshot error:', err);
+            // Fallback to defaults
+            setSessions(DEFAULT_SESSIONS.map(s => sessionToContextNode({ ...s, createdAt: new Date(), updatedAt: new Date() })));
+            setSessionsLoaded(true);
+          }
+        );
+      } catch (e) {
+        console.error('[PULSO_SESSIONS] Failed to subscribe:', e);
+        setSessions(DEFAULT_SESSIONS.map(s => sessionToContextNode({ ...s, createdAt: new Date(), updatedAt: new Date() })));
+        setSessionsLoaded(true);
+      }
     };
+
+    seedAndSubscribe();
+
+    return () => { if (unsubscribe) unsubscribe(); };
   }, [db, loading]);
+
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -454,15 +491,23 @@ export default function LivePage() {
       }
       metaTheme.setAttribute('content', currentTheme === 'black' ? '#0f0f0f' : '#b8283e');
     };
-    updateThemeColor();
     window.addEventListener('pulso-theme-change', updateThemeColor);
     return () => window.removeEventListener('pulso-theme-change', updateThemeColor);
   }, []);
 
-  const allContextNodes = React.useMemo(() => {
-    const visibleCustom = customContextNodes.filter(n => !n.archived);
-    return [...INITIAL_CONTEXT_NODES, ...visibleCustom];
-  }, [customContextNodes]);
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+  /**
+   * v2: All visible sessions — directly from Firestore pulso_sessions (no merging needed).
+   * Previously: [...INITIAL_CONTEXT_NODES, ...customContextNodes]
+   */
+  const allContextNodes = sessions;
+
 
   const pageLoadTimeRef = React.useRef(new Date());
   const [lastReadTimes, setLastReadTimes] = React.useState<Record<string, string>>({});
@@ -497,13 +542,50 @@ export default function LivePage() {
     }
   }, []);
 
-  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(INITIAL_CONTEXT_NODES[0]);
+  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
   const activeContextNodeRef = React.useRef(activeContextNode);
+
+  // ── Session Restore (runs once when sessions finish loading) ──────────────
+  // IMPORTANT: This ref tracks whether we already restored once, so the persist
+  // effect below does NOT overwrite the saved key before the restore can run.
+  const sessionRestoredRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!sessionsLoaded || sessions.length === 0) return;
+    if (sessionRestoredRef.current) return; // only run once
+    sessionRestoredRef.current = true;
+
+    const savedId = typeof window !== 'undefined' ? localStorage.getItem('pulso_active_session_id') : null;
+    if (savedId) {
+      const found = sessions.find(s => s.contextId === savedId);
+      if (found) {
+        setActiveContextNode(found);
+        return;
+      }
+    }
+    // Fallback: most recently active session
+    const sortedByLatest = [...sessions].sort((a, b) => {
+      const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+      const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+      return timeB - timeA;
+    });
+    setActiveContextNode(sortedByLatest[0] || sessions[0]);
+  }, [sessionsLoaded, sessions]);
+
+  // Persist active session to localStorage whenever it changes.
+  // Skip the placeholder node so we never overwrite a valid saved key with the loading state.
   React.useEffect(() => {
     activeContextNodeRef.current = activeContextNode;
     markContextAsRead(activeContextNode.contextId);
+    if (
+      typeof window !== 'undefined' &&
+      activeContextNode.contextId &&
+      activeContextNode.contextId !== 'loading' &&
+      activeContextNode.contextId !== LOADING_PLACEHOLDER_NODE.contextId
+    ) {
+      localStorage.setItem('pulso_active_session_id', activeContextNode.contextId);
+    }
   }, [activeContextNode, markContextAsRead]);
-
   // Load and listen to read status from localStorage/Firestore
   React.useEffect(() => {
     // 1. Load from localStorage
@@ -635,6 +717,7 @@ export default function LivePage() {
     if (identifier.includes('sistema')) return '⌘';
     if (identifier.includes('futuro')) return '▲';
     if (identifier.includes('eu')) return '⊙';
+    if (identifier.includes('livre')) return '✧';
     
     return '⚬';
   };
@@ -743,6 +826,15 @@ export default function LivePage() {
   const latencyRequestCreatedRef = React.useRef<number | null>(null);
   const latencyResponseReceivedRef = React.useRef<number | null>(null);
   const latencyAutoTtsStartRef = React.useRef<number | null>(null);
+  const latencyMapRef = React.useRef<Record<string, {
+    t1_client_submit?: number;
+    t2_firestore_queued?: number;
+    t3_processing_by_openclaw?: number;
+    t4_openclaw_finished?: number;
+    t5_firestore_completed?: number;
+    t6_client_rendered?: number;
+    reported?: boolean;
+  }>>({});
 
   const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(true);
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
@@ -896,12 +988,9 @@ export default function LivePage() {
   const scrollToBottom = React.useCallback((smooth = true) => {
     if (scrollContainerRef.current) {
       const container = scrollContainerRef.current;
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto'
-      });
+      container.scrollTop = container.scrollHeight;
+      chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
     }
-    chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   }, []);
 
   const handleScroll = React.useCallback(() => {
@@ -1160,32 +1249,35 @@ export default function LivePage() {
       setSubmittingExecutionId(null);
     }
   };
-
+  // Unified robust scroll-to-bottom controller.
+  // Fires when the active session changes (switching chats) or new messages arrive.
+  // Uses requestAnimationFrame so we scroll AFTER the browser has painted the new content.
   React.useEffect(() => {
-    scrollToBottom(true);
-  }, [currentMessages, isTyping, scrollToBottom]);
+    if (currentMessages.length === 0) return;
 
-  // Guarantee scroll to bottom on initial load / refresh and when messages are loaded
-  React.useEffect(() => {
-    if (currentMessages.length > 0) {
-      // Immediate non-smooth scroll to bottom
-      scrollToBottom(false);
-      
-      // Secondary deferred scroll after layout/images render (important for slow connections/devices)
-      const t1 = setTimeout(() => scrollToBottom(false), 50);
-      const t2 = setTimeout(() => scrollToBottom(false), 200);
-      const t3 = setTimeout(() => scrollToBottom(false), 600);
-      const t4 = setTimeout(() => scrollToBottom(false), 1000);
-      
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-        clearTimeout(t4);
-      };
-    }
-  }, [currentMessages.length, activeContextNode.contextId, scrollToBottom]);
+    // Immediate jump (no animation) to ensure the correct position before paint
+    scrollToBottom(false);
 
+    // Then cascade with smooth passes to catch async content (images, lazy markdown, typing bubble)
+    let raf: number;
+    const scheduleRaf = () => {
+      raf = requestAnimationFrame(() => scrollToBottom(false));
+    };
+    scheduleRaf();
+
+    const t1 = setTimeout(() => scrollToBottom(true), 80);
+    const t2 = setTimeout(() => scrollToBottom(true), 300);
+    const t3 = setTimeout(() => scrollToBottom(true), 700);
+    const t4 = setTimeout(() => scrollToBottom(true), 1500);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
+  }, [currentMessages.length, isTyping, activeContextNode.contextId, scrollToBottom]);
   // Load database state once
   React.useEffect(() => {
     async function load() {
@@ -1213,13 +1305,19 @@ export default function LivePage() {
         });
 
         const chatHistory: Message[] = [];
-          const commandRequests = safeArray(allRequests)
+        const commandRequests = safeArray(allRequests)
           .filter((req: any) => req && (req.requestType === 'conversation_command' || req.requestType === 'active_message') && req.archived !== true)
           .sort((a, b) => {
             const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
             const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
             return timeA - timeB;
           });
+
+        const activeMessageOrigins = new Set(
+          commandRequests
+            .filter((r: any) => r.requestType === 'active_message' && r.meta?.originRequestId)
+            .map((r: any) => r.meta.originRequestId)
+        );
 
         commandRequests.forEach((req: any) => {
           const reqTime = safeConvertToDate(req.requestedAt) || new Date();
@@ -1242,7 +1340,8 @@ export default function LivePage() {
             const responseText = req.openclawResult?.responseText ?? null;
             const hasRealResponse = responseText && responseText.trim() !== '';
             
-            if (status === 'success' && hasRealResponse) {
+            const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
+            if (status === 'success' && hasRealResponse && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
@@ -1284,15 +1383,16 @@ export default function LivePage() {
             console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
             const replyText = req.message || req.text || '';
             console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+            const originId = req.meta?.originRequestId || req.id;
             chatHistory.push({
-              id: `lotus-${req.id || Math.random()}`,
+              id: `lotus-${originId}`,
               sender: 'lotus',
               text: replyText,
               timestamp: safeConvertToDate(req.updatedAt) || reqTime,
               interpretation: req.interpretation,
               openclawResult: req.openclawResult || undefined,
               handoffStatus: req.status,
-              requestId: req.id || undefined,
+              requestId: originId,
               originalCommand: req.summary || req.title || undefined,
               contextId: req.contextId || null
             });
@@ -1351,10 +1451,57 @@ export default function LivePage() {
           return timeA - timeB;
         });
 
+        const activeMessageOrigins = new Set(
+          sortedRequests
+            .filter((r: any) => r.requestType === 'active_message' && r.meta?.originRequestId)
+            .map((r: any) => r.meta.originRequestId)
+        );
+
         const chatHistory: Message[] = [];
         sortedRequests.forEach((req: any) => {
-          const reqTime = safeConvertToDate(req.requestedAt) || new Date();
-          
+          const reqTime = safeConvertToDate(req.requestedAt) || safeConvertToDate(req.createdAt) || safeConvertToDate(req.updatedAt) || new Date(0);          
+
+          // Trace telemetry checkpoints t3, t4, and t5
+          const entry = latencyMapRef.current[req.id];
+          if (entry) {
+            if (req.status === 'processing_by_openclaw' && !entry.t3_processing_by_openclaw) {
+              const startVal = req.startedAt || req.updatedAt;
+              if (startVal) {
+                const date = safeConvertToDate(startVal);
+                if (date) entry.t3_processing_by_openclaw = date.getTime();
+              }
+            }
+            if (['success', 'completed', 'proposal_ready', 'failed', 'error', 'timeout'].includes(req.status)) {
+              if (!entry.t3_processing_by_openclaw) {
+                const startVal = req.startedAt || req.updatedAt || req.requestedAt;
+                if (startVal) {
+                  const date = safeConvertToDate(startVal);
+                  if (date) entry.t3_processing_by_openclaw = date.getTime();
+                }
+              }
+              if (!entry.t4_openclaw_finished) {
+                const procAtVal = req.openclawProcessedAt || req.openclawResult?.processedAt;
+                if (procAtVal) {
+                  const date = safeConvertToDate(procAtVal);
+                  if (date) entry.t4_openclaw_finished = date.getTime();
+                } else {
+                  const fallbackVal = req.updatedAt || req.startedAt;
+                  if (fallbackVal) {
+                    const date = safeConvertToDate(fallbackVal);
+                    if (date) entry.t4_openclaw_finished = date.getTime();
+                  }
+                }
+              }
+              if (!entry.t5_firestore_completed) {
+                const updatedVal = req.updatedAt;
+                if (updatedVal) {
+                  const date = safeConvertToDate(updatedVal);
+                  if (date) entry.t5_firestore_completed = date.getTime();
+                }
+              }
+            }
+          }
+
           if (req.requestType !== "active_message") {
             const atts = Array.isArray(req.attachments) ? req.attachments.map((a: any) => ({
               ...a,
@@ -1481,7 +1628,8 @@ export default function LivePage() {
               }
             }
 
-            if (status === 'success' && hasRealResponse) {
+            const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
+            if (status === 'success' && hasRealResponse && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
               console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
@@ -1524,49 +1672,69 @@ export default function LivePage() {
             console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
             const replyText = req.message || req.text || '';
             console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+            const originId = req.meta?.originRequestId || req.id;
             chatHistory.push({
-              id: `lotus-${req.id}`,
+              id: `lotus-${originId}`, // Same logical ID as the command response
               sender: 'lotus',
               text: replyText,
               timestamp: safeConvertToDate(req.updatedAt) || reqTime,
               interpretation: req.interpretation,
               openclawResult: req.openclawResult || undefined,
               handoffStatus: req.status,
-              requestId: req.id || undefined,
+              requestId: originId,
               originalCommand: req.summary || req.title || undefined,
               contextId: req.contextId || null
             });
           }
         });
-
-        // Detect new messages from Lótus to trigger sound/visual notifications
-        chatHistory.forEach((msg) => {
-          if (msg.sender === 'lotus' && msg.id) {
-            if (!seenMessagesRef.current.has(msg.id)) {
-              seenMessagesRef.current.add(msg.id);
-              
-              // Only trigger sound/visual indicators if the history has already loaded
-              if (isHistoryLoadedRef.current) {
-                // Determine if the message context is the active one
-                const activeContext = activeContextNodeRef.current;
-                const isSame = !msg.contextId || msg.contextId === activeContext.contextId;
-                
-                if (isSame) {
-                  playNotificationSound(true);
-                } else {
-                  playNotificationSound(false);
-                }
-              }
-            }
-          }
-        });
-
-        // Mark history as loaded after the initial processing of messages
+        // ── New-message sound / notification detection ───────────────────────
+        // On the very first snapshot (isHistoryLoadedRef = false) we just seed
+        // seenMessagesRef so that historical messages are never treated as new.
         if (!isHistoryLoadedRef.current) {
           chatHistory.forEach(msg => {
             if (msg.id) seenMessagesRef.current.add(msg.id);
           });
           isHistoryLoadedRef.current = true;
+        } else {
+          // All subsequent snapshots: only fire for messages we haven't seen yet
+          // AND whose timestamp is strictly AFTER the page load time.
+          chatHistory.forEach((msg) => {
+            if (msg.sender === 'lotus' && msg.id && !seenMessagesRef.current.has(msg.id)) {
+              seenMessagesRef.current.add(msg.id);
+
+              const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0;
+              // Use strict > (no negative window) so historical messages never sneak through
+              const isAfterPageLoad = msgTime > pageLoadTimeRef.current.getTime();
+
+              if (isAfterPageLoad) {
+                const activeContext = activeContextNodeRef.current;
+                const isSame = !msg.contextId || msg.contextId === activeContext.contextId;
+
+                if (isSame) {
+                  playNotificationSound(true);
+                } else {
+                  playNotificationSound(false);
+                }
+
+                // Visual Desktop Notification
+                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                  const sessionsList = sessionsRef.current;
+                  const session = sessionsList.find(s => s.contextId === msg.contextId);
+                  const chatLabel = session?.label || 'geral';
+                  const areaLabel = session?.areaId ? (AREA_NAMES[session.areaId] || session.areaId.replace('area_', '')) : 'livre';
+
+                  try {
+                    new window.Notification(`Lótus — [${areaLabel}] ${chatLabel}`, {
+                      body: msg.text,
+                      tag: msg.id,
+                    });
+                  } catch (err) {
+                    console.warn('Failed to fire desktop notification:', err);
+                  }
+                }
+              }
+            }
+          });
         }
 
         setState((prev: any) => {
@@ -1583,6 +1751,48 @@ export default function LivePage() {
           },
           ...chatHistory
         ]);
+
+        // Schedule t6 calculation (visible in UI) for any pending requests in latencyMapRef
+        requestAnimationFrame(() => {
+          const now = Date.now();
+          Object.keys(latencyMapRef.current).forEach((reqId) => {
+            const entry = latencyMapRef.current[reqId];
+            if (entry.t1_client_submit && !entry.reported) {
+              const responseMsgExists = chatHistory.some(m => m.requestId === reqId && m.sender === 'lotus');
+              if (responseMsgExists) {
+                entry.t6_client_rendered = now;
+                entry.reported = true;
+
+                const t1 = entry.t1_client_submit;
+                const t2 = entry.t2_firestore_queued || t1;
+                const t3 = entry.t3_processing_by_openclaw || t2;
+                const t4 = entry.t4_openclaw_finished || t3;
+                const t5 = entry.t5_firestore_completed || t4;
+                const t6 = entry.t6_client_rendered;
+
+                const total = t6 - t1;
+                const clientToFirestore = t2 - t1;
+                const firestoreToClaim = t3 - t2;
+                const openclawProcess = t4 - t3;
+                const openclawWrite = t5 - t4;
+                const syncToRender = t6 - t5;
+
+                console.log(
+                  `%c[PULSO_LATENCY_REPORT] ID: ${reqId}\n` +
+                  `---------------------------------------------\n` +
+                  `⏱️ Tempo Total Ponta a Ponta: ${(total / 1000).toFixed(2)}s (${total} ms)\n` +
+                  `  1. Submit -> Firestore Queued (t1 -> t2): ${(clientToFirestore / 1000).toFixed(2)}s (${clientToFirestore} ms)\n` +
+                  `  2. Queued -> Worker Claimed (t2 -> t3):   ${(firestoreToClaim / 1000).toFixed(2)}s (${firestoreToClaim} ms)\n` +
+                  `  3. Worker LLM Processing (t3 -> t4):     ${(openclawProcess / 1000).toFixed(2)}s (${openclawProcess} ms)\n` +
+                  `  4. Worker Write Back Time (t4 -> t5):    ${(openclawWrite / 1000).toFixed(2)}s (${openclawWrite} ms)\n` +
+                  `  5. Firestore Sync -> Render (t5 -> t6):   ${(syncToRender / 1000).toFixed(2)}s (${syncToRender} ms)\n` +
+                  `---------------------------------------------`,
+                  'color: #00ffcc; font-weight: bold;'
+                );
+              }
+            }
+          });
+        });
       }, (error: any) => {
         console.error("Firestore requests onSnapshot error:", error);
       });
@@ -1605,6 +1815,8 @@ export default function LivePage() {
       contextId?: string;
       chatId?: string;
       openclawSessionKey?: string;
+      attachments?: Array<{ id: string; name: string; type: string; mimeType: string; url: string; sizeBytes: number }>;
+      requestId?: string;
     }
   ) => {
     const mode = options?.mode || 'text';
@@ -1616,7 +1828,7 @@ export default function LivePage() {
 
     const currentUser = authService.getCurrentUser();
     const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
-    const reqId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const reqId = options?.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     // Routing
     const routeResult = routeInputToArea(rawMsg, state?.allAreas || [], {
@@ -1665,26 +1877,22 @@ export default function LivePage() {
     if (routeResult.areaRef) lotusPayload.areaRef = routeResult.areaRef;
     if (routeResult.routing) lotusPayload.routing = routeResult.routing;
     if (routeResult.routing?.secondaryTopics) lotusPayload.secondaryAreaRefs = routeResult.routing.secondaryTopics;
+    if (options?.attachments && options.attachments.length > 0) {
+      lotusPayload.attachments = options.attachments;
+    }
 
     console.log('[PULSO_FIRESTORE_PATH]', { path: `workspaces/felipe_dutra/pulso_requests` });
     console.log('[PULSO_FIRESTORE_PAYLOAD]', lotusPayload);
 
     try {
       const newRequest = await lotusOpenClawClient.queueRequest(lotusPayload);
-
       console.log('[PULSO_FIRESTORE_CREATED]', {
         path: `workspaces/felipe_dutra/pulso_requests`,
         documentId: newRequest.id,
         requestType: newRequest.requestType,
         status: newRequest.status,
-        input: newRequest.input,
-        rawInput: newRequest.rawInput,
-        source: newRequest.source,
-        conversationId: newRequest.conversationId,
-        messageId: newRequest.messageId,
         runtime: isTauri ? 'tauri' : 'web'
       });
-
       if (typeof window !== 'undefined') {
         (window as any).lastPulsoSubmit = {
           lastSubmitInput: cleanMsg,
@@ -1843,69 +2051,80 @@ export default function LivePage() {
     }
   };
 
+  /** Stage files into the pending tray and start background upload to Storage */
   const handleAttachFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    
-    // Create new user message with attachments in parallel
-    const uploadPromises = Array.from(files).map(file => uploadFile(file));
-    const attachedItems = await Promise.all(uploadPromises);
 
-    if (attachedItems.length === 0) return;
-
-    // Send a message indicating files uploaded (without [anexo] prefix)
     const isFirestore = pulsoService.getDataMode() === 'firestore';
     const sendingContextId = activeContextNode.contextId;
-    setContextTyping(sendingContextId, true);
 
-    try {
-      const fileNames = attachedItems.map(a => a.name).join(', ');
-      const cleanMsg = fileNames;
-      const newRequest = await createPulsoConversationRequest(cleanMsg, {
-        mode: 'text',
-        areaId: activeContextNode.areaId,
-        contextId: activeContextNode.contextId,
-        chatId: activeContextNode.chatId,
-        openclawSessionKey: activeContextNode.openclawSessionKey
-      });
-
-      // Save request in Firestore with attachments metadata
-      if (isFirestore && db && newRequest.id) {
-        const { doc, updateDoc } = await import('firebase/firestore');
-        const reqDocRef = doc(db, `workspaces/felipe_dutra/pulso_requests`, newRequest.id);
-        const serializedAttachments = attachedItems.map(a => ({
-          ...a,
-          createdAt: a.createdAt.toISOString()
-        }));
-        await updateDoc(reqDocRef, {
-          attachments: serializedAttachments
-        }).catch(err => console.error('Failed to update request doc with attachments metadata:', err));
-      }
-
-      setLastSentRequestsByContext(prev => ({ ...prev, [sendingContextId]: newRequest.id }));
-
-      const userMsg: Message = {
-        id: `user-msg-${newRequest.id || Date.now()}`,
-        sender: 'user',
-        text: cleanMsg,
-        timestamp: new Date(),
-        contextId: activeContextNode.contextId,
-        attachments: attachedItems
+    const newPending: PendingAttachment[] = Array.from(files).map(file => {
+      const id = `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      let type: 'image' | 'pdf' | 'audio' | 'generic' = 'generic';
+      if (file.type.startsWith('image/')) type = 'image';
+      else if (file.type === 'application/pdf') type = 'pdf';
+      else if (file.type.startsWith('audio/')) type = 'audio';
+      return {
+        id,
+        name: file.name,
+        type,
+        mimeType: file.type,
+        localUrl: URL.createObjectURL(file),
+        sizeBytes: file.size,
+        status: 'uploading' as const,
+        progress: 0,
+        file
       };
-      setMessages(prev => [...prev, userMsg]);
+    });
 
-      if (state) {
-        setState((prev: any) => {
-          if (!prev) return prev;
-          const updatedRequests = [{ ...newRequest, attachments: attachedItems }, ...(prev.allRequests || [])];
-          return { ...prev, allRequests: updatedRequests };
-        });
-      }
-    } catch (err) {
-      console.error('Failed to process message with attachments:', err);
-    } finally {
-      setContextTyping(sendingContextId, false);
+    // Add to pending tray immediately so user sees the preview
+    setPendingAttachments(prev => [...prev, ...newPending]);
+
+    // Start background upload for each file
+    if (isFirestore && storage) {
+      newPending.forEach(async (att) => {
+        try {
+          const path = `pulso/chats/${sendingContextId}/attachments/${att.id}_${att.name}`;
+          const fileRef = storageRef(storage!, path);
+          const uploadTask = uploadBytesResumable(fileRef, att.file);
+
+          uploadTask.on('state_changed',
+            snapshot => {
+              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+              setPendingAttachments(prev => prev.map(p =>
+                p.id === att.id ? { ...p, progress } : p
+              ));
+            },
+            (err) => {
+              console.error('Upload error for', att.name, err);
+              setPendingAttachments(prev => prev.map(p =>
+                p.id === att.id ? { ...p, status: 'error' } : p
+              ));
+            },
+            async () => {
+              const storageUrl = await getDownloadURL(fileRef);
+              setPendingAttachments(prev => prev.map(p =>
+                p.id === att.id ? { ...p, status: 'done', progress: 100, storageUrl } : p
+              ));
+            }
+          );
+        } catch (err) {
+          console.error('Failed to start upload for', att.name, err);
+          setPendingAttachments(prev => prev.map(p =>
+            p.id === att.id ? { ...p, status: 'error' } : p
+          ));
+        }
+      });
+    } else {
+      // Mock/offline mode: mark all as done immediately with local URL
+      setPendingAttachments(prev => prev.map(p =>
+        newPending.find(np => np.id === p.id)
+          ? { ...p, status: 'done', progress: 100, storageUrl: p.localUrl }
+          : p
+      ));
     }
   };
+
 
   const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' }) => {
     if (isTyping) {
@@ -1914,7 +2133,8 @@ export default function LivePage() {
     }
 
     const rawMsg = textToSend || inputMessage;
-    if (!rawMsg.trim()) return;
+    const hasPending = pendingAttachments.length > 0;
+    if (!rawMsg.trim() && !hasPending) return;
 
     const originMode = options?.originMode || 'text';
     const cleanMsg = originMode === 'text' ? rawMsg : normalizeTranscript(rawMsg);
@@ -1922,32 +2142,86 @@ export default function LivePage() {
     const sendingContextId = activeContextNode.contextId;
     setContextTyping(sendingContextId, true);
 
-    try {
-      const sendMode = originMode === 'presence' ? 'presence' : (originMode === 'recording_once' ? 'voice' : 'text');
-      const newRequest = await createPulsoConversationRequest(cleanMsg, {
-        mode: sendMode,
-        areaId: activeContextNode.areaId,
-        contextId: activeContextNode.contextId,
-        chatId: activeContextNode.chatId,
-        openclawSessionKey: activeContextNode.openclawSessionKey
-      });
+    // Capture and clear pending attachments before async work
+    const attachmentsToSend = [...pendingAttachments];
+    setPendingAttachments([]);
+
+    // Build attachment metadata for the request (prefer storageUrl, fall back to localUrl)
+    const attachmentsMeta = attachmentsToSend.map(a => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      mimeType: a.mimeType,
+      url: a.storageUrl || a.localUrl,
+      sizeBytes: a.sizeBytes
+    }));
+
+    // Build Attachment[] for optimistic local message
+    const messageAttachments: Attachment[] = attachmentsToSend.map(a => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      mimeType: a.mimeType,
+      url: a.storageUrl || a.localUrl,
+      sizeBytes: a.sizeBytes,
+      createdAt: new Date(),
+      contextId: sendingContextId
+    }));
+
+    const sendMode = originMode === 'presence' ? 'presence' : (originMode === 'recording_once' ? 'voice' : 'text');
+    const messageText = cleanMsg || (attachmentsToSend.length > 0 ? attachmentsToSend.map(a => a.name).join(', ') : '');
+    const preGeneratedReqId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // t1: Moment the message enters PULSO
+    latencyMapRef.current[preGeneratedReqId] = {
+      t1_client_submit: Date.now()
+    };
+
+    // Optimistic UI Update: Clear text and append user message instantly
+    setInputMessage('');
+    currentTextRef.current = '';
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+
+    const capturedReplyTo = replyTo;
+    setReplyTo(null);
+
+    const userMsg: Message = {
+      id: `user-msg-${preGeneratedReqId}`,
+      sender: 'user',
+      text: cleanMsg,
+      timestamp: new Date(),
+      contextId: activeContextNode.contextId,
+      replyTo: capturedReplyTo || undefined,
+      attachments: messageAttachments.length > 0 ? messageAttachments : undefined
+    };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Send the request in the background
+    createPulsoConversationRequest(messageText, {
+      mode: sendMode,
+      areaId: activeContextNode.areaId,
+      contextId: activeContextNode.contextId,
+      chatId: activeContextNode.chatId,
+      attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
+      requestId: preGeneratedReqId
+    }).then(async (newRequest) => {
+      // t2: Moment request vira queued_for_openclaw in Firestore
+      if (latencyMapRef.current[newRequest.id]) {
+        latencyMapRef.current[newRequest.id].t2_firestore_queued = Date.now();
+      }
+      sessionsService.touchSession(sendingContextId);
       setLastSentRequestsByContext(prev => ({ ...prev, [sendingContextId]: newRequest.id }));
 
-      // ONLY on success, clear the input
-      setInputMessage('');
-      currentTextRef.current = '';
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+      // Save attachment metadata to Firestore so the snapshot renders file bubbles
+      if (attachmentsMeta.length > 0 && db && newRequest.id) {
+        const { doc: fsDoc, updateDoc } = await import('firebase/firestore');
+        const reqDocRef = fsDoc(db, `workspaces/felipe_dutra/pulso_requests`, newRequest.id);
+        const serialized = attachmentsMeta.map(a => ({ ...a, createdAt: new Date().toISOString() }));
+        updateDoc(reqDocRef, { attachments: serialized })
+          .catch(err => console.warn('Could not save attachment metadata to request:', err));
       }
-
-      const userMsg: Message = {
-        id: `user-msg-${newRequest.id || Date.now()}`,
-        sender: 'user',
-        text: cleanMsg,
-        timestamp: new Date(),
-        contextId: activeContextNode.contextId
-      };
-      setMessages(prev => [...prev, userMsg]);
 
       if (state) {
         setState((prev: any) => {
@@ -1965,8 +2239,7 @@ export default function LivePage() {
         const diffTransToReq = latencyRequestCreatedRef.current - (latencyTranscriptionRef.current || latencyRequestCreatedRef.current);
         console.log(`[PULSO_LATENCY_TRANSCRIPTION_TO_REQUEST_CREATED_MS] ${diffTransToReq} ms`);
       }
-
-    } catch (err: any) {
+    }).catch((err: any) => {
       const lotusErrorMsg: Message = {
         id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
@@ -1975,30 +2248,20 @@ export default function LivePage() {
         contextId: activeContextNode.contextId
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
-    } finally {
+    }).finally(() => {
       setContextTyping(sendingContextId, false);
-    }
+    });
   };
 
-  const handleRenameChat = (contextId: string) => {
+  const handleRenameChat = async (contextId: string) => {
     const trimmed = editingContextLabel.trim();
     if (trimmed) {
-      const updated = customContextNodes.map(node => {
-        if (node.contextId === contextId) {
-          return { ...node, label: trimmed };
-        }
-        return node;
-      });
-      setCustomContextNodes(updated);
-      localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
-      
-      const isFirestore = pulsoService.getDataMode() === 'firestore';
-      if (isFirestore && db) {
-        const path = firestorePaths.customContext(contextId);
-        const contextDocRef = doc(db, path);
-        updateDoc(contextDocRef, { label: trimmed }).catch((err: any) =>
-          console.error("Failed to update context label in Firestore:", err)
-        );
+      await sessionsService.renameSession(contextId, trimmed).catch(err =>
+        console.error("Failed to rename session:", err)
+      );
+      if (pulsoService.getDataMode() !== 'firestore') {
+        const list = await sessionsService.getAll();
+        setSessions(list.map(s => sessionToContextNode(s)));
       }
       
       if (activeContextNode.contextId === contextId) {
@@ -2008,28 +2271,25 @@ export default function LivePage() {
     setEditingContextId(null);
   };
 
-  const handleArchiveChat = (contextId: string, e: React.MouseEvent) => {
+  const handleArchiveChat = async (contextId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = customContextNodes.map(node => {
-      if (node.contextId === contextId) {
-        return { ...node, archived: true };
-      }
-      return node;
-    });
-    setCustomContextNodes(updated);
-    localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
-    
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
-    if (isFirestore && db) {
-      const path = firestorePaths.customContext(contextId);
-      const contextDocRef = doc(db, path);
-      updateDoc(contextDocRef, { archived: true }).catch((err: any) =>
-        console.error("Failed to archive context in Firestore:", err)
-      );
+    await sessionsService.archiveSession(contextId).catch(err =>
+      console.error("Failed to archive session:", err)
+    );
+    let updatedSessions = sessions;
+    if (pulsoService.getDataMode() !== 'firestore') {
+      const list = await sessionsService.getAll();
+      updatedSessions = list.map(s => sessionToContextNode(s));
+      setSessions(updatedSessions);
     }
     
     if (activeContextNode.contextId === contextId) {
-      setActiveContextNode(INITIAL_CONTEXT_NODES[0]);
+      const remaining = updatedSessions.filter(s => s.contextId !== contextId);
+      if (remaining.length > 0) {
+        setActiveContextNode(remaining[0]);
+      } else {
+        setActiveContextNode(LOADING_PLACEHOLDER_NODE);
+      }
     }
   };
 
@@ -2246,8 +2506,9 @@ export default function LivePage() {
       
       if (mode === 'presence') {
         console.log('[PULSO_PRESENCE_ERROR]', { error: event.error });
+
         if (event.error === 'no-speech') {
-          if (voiceModeRef.current === 'presence' && presenceStateRef.current !== 'presence_speaking') {
+          if (voiceModeRef.current === 'presence' && (presenceStateRef.current as PresenceState) !== 'presence_speaking') {
             presenceStateRef.current = 'presence_listening';
             setPresenceState('presence_listening');
             startSpeechRecognition('presence');
@@ -2263,9 +2524,8 @@ export default function LivePage() {
         } else {
           setVoiceError(`Erro de voz: ${event.error}.`);
         }
-        
         setTimeout(() => {
-          if (voiceModeRef.current === 'presence' && presenceStateRef.current !== 'presence_speaking') {
+          if (voiceModeRef.current === 'presence' && (presenceStateRef.current as PresenceState) !== 'presence_speaking') {
             presenceStateRef.current = 'presence_idle';
             setPresenceState('presence_idle');
           }
@@ -2655,6 +2915,7 @@ export default function LivePage() {
         presenceMode ? 'cursor-pointer' : ''
       }`}
     >
+
       {/* Camada Contextual */}
       <ContextSurfaceVariants 
         variant={activeVariant} 
@@ -2663,17 +2924,21 @@ export default function LivePage() {
         activeContext={activeContextNode.label}
       />
 
-      {/* Botão sutil de saída do Modo Foco */}
-      <div className={`fixed top-8 right-8 z-30 pulso-transition ${presenceMode ? 'pulso-visible' : 'pulso-hidden-up'}`}>
+      {/* Botão sutil de saída do Modo Foco ou Ateliê */}
+      <div className={`fixed top-8 right-8 z-30 pulso-transition ${(presenceMode || isAtelieActive) ? 'pulso-visible' : 'pulso-hidden-up'}`}>
         <button
-          onClick={(e) => { e.stopPropagation(); exitPresenceMode(); }}
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            if (presenceMode) exitPresenceMode(); 
+            if (isAtelieActive) setIsAtelieActive(false);
+          }}
           className="text-[10px] font-light tracking-widest text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80 transition-colors lowercase bg-transparent border-none outline-none cursor-pointer"
         >
-          [ sair do foco ]
+          {isAtelieActive ? '[ sair do ateliê ]' : '[ sair do foco ]'}
         </button>
       </div>
       
-      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto relative z-20 select-none pulso-transition ${presenceMode ? 'pulso-hidden-up' : 'pulso-visible'}`}>
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto relative z-20 select-none pulso-transition ${presenceMode || isAtelieActive ? 'pulso-hidden-up' : 'pulso-visible'}`}>
         <div className="flex items-center gap-2 md:gap-3">
           {/* Hamburger button on mobile */}
           <button 
@@ -2724,6 +2989,17 @@ export default function LivePage() {
             className="hidden md:flex text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
           >
             <span>[ presença ]</span>
+          </button>
+          <button 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setIsAtelieActive(!isAtelieActive); 
+            }}
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+              isAtelieActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
+            }`}
+          >
+            <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
           </button>
           
           <div className="relative" ref={headerMenuRef}>
@@ -2787,7 +3063,9 @@ export default function LivePage() {
             setHoveredAreaId(null);
           }
         }}
-        className={`hidden md:flex fixed left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none transition-all duration-200 ${presenceMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`hidden md:flex fixed left-6 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4 group/sidebar select-none pulso-transition ${
+          presenceMode ? 'pulso-hidden-left' : 'pulso-visible'
+        }`}
       >
         {AREA_ORDER.map((areaId) => {
           const areaName = AREA_NAMES[areaId] || areaId;
@@ -2848,7 +3126,7 @@ export default function LivePage() {
                 {areaContexts.map((ctx) => {
                   const isContextActive = activeContextNode.contextId === ctx.contextId;
                   const isUnread = !!unreadContexts[ctx.contextId];
-                  const isCustom = customContextNodes.some(n => n.contextId === ctx.contextId);
+                  const isCustom = !ctx.isDefault;
                   
                   return (
                     <div
@@ -2939,36 +3217,32 @@ export default function LivePage() {
                             let contextId = baseContextId;
                             let counter = 1;
                             
-                            // Check for collisions inside allContextNodes (which includes INITIAL_CONTEXT_NODES and customContextNodes)
+                            // Check for collisions inside allContextNodes
                             while (allContextNodes.some(node => node.contextId === contextId)) {
                               contextId = `${baseContextId}-${counter}`;
                               counter++;
                             }
                             
-                            const openclawSessionKey = `agent:main:pulso:${contextId}`;
-                            const newNode: PulsoContextNode = {
-                              areaId,
-                              contextId,
-                              chatId: "default", // local/provisional compatibility flag
-                              openclawSessionKey,
-                              label: rawLabel
-                            };
+                            (async () => {
+                              const createdSession = await sessionsService.createSession({
+                                id: contextId,
+                                label: rawLabel,
+                                areaId: areaId,
+                              }).catch(err => {
+                                console.error("Failed to create session:", err);
+                                return null;
+                              });
+
+                              if (createdSession) {
+                                const newNode = sessionToContextNode(createdSession);
+                                if (pulsoService.getDataMode() !== 'firestore') {
+                                  const list = await sessionsService.getAll();
+                                  setSessions(list.map(s => sessionToContextNode(s)));
+                                }
+                                setActiveContextNode(newNode);
+                              }
+                            })();
                             
-                            const updated = [...customContextNodes, newNode];
-                            setCustomContextNodes(updated);
-                            localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
-
-                            const isFirestore = pulsoService.getDataMode() === 'firestore';
-                            if (isFirestore && db) {
-                              const path = firestorePaths.customContext(contextId);
-                              const contextDocRef = doc(db, path);
-                              setDoc(contextDocRef, {
-                                ...newNode,
-                                createdAt: new Date().toISOString()
-                              }).catch((err: any) => console.error("Failed to save custom context to Firestore:", err));
-                            }
-
-                            setActiveContextNode(newNode);
                             setNewChatName('');
                             setAddingChatAreaId(null);
                             setHoveredAreaId(null);
@@ -3006,17 +3280,30 @@ export default function LivePage() {
         })}
       </div>
 
-        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end max-w-5xl w-full mx-auto mt-6 mb-4 z-10 relative transition-all duration-1000 ease-in-out`}>
+        <main className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative transition-all duration-1000 ease-in-out pointer-events-auto z-10 ${
+          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : 'overflow-y-auto max-w-5xl w-full mt-6 mb-4'
+        }`}>
+          
+          {/* Atelie Workspace Container nested within main */}
+          <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
+            isAtelieActive ? 'opacity-100 filter-none pointer-events-auto' : 'opacity-0 blur-md pointer-events-none'
+          }`}>
+            <AtelieWorkspace activeContextNode={activeContextNode} isActive={isAtelieActive} />
+          </div>
           
           <div 
             onClick={togglePresenceMode}
-            className={`relative w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-1000 ease-in-out ${!presenceMode ? 'cursor-pointer' : ''} ${
-            presenceMode 
-              ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
-              : 'mt-auto mb-4 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-[-2vh] md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
-          }`}>
+            className={isAtelieActive
+              ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
+              : `relative w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
+                  presenceMode 
+                    ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
+                    : 'mt-auto mb-4 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-[-2vh] md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
+                }`
+            }
+          >
             <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-              presenceMode ? 'scale-[0.75] md:scale-100' : 'scale-[0.417] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
+              presenceMode && !isAtelieActive ? 'scale-[0.75] md:scale-100' : 'scale-[0.417] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
             }`}>
               <div 
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
@@ -3025,10 +3312,15 @@ export default function LivePage() {
             </div>
           </div>
 
-          <div 
-            className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative bg-transparent border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 ${
-              presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
-            }`}
+          {(!isAtelieActive || showAtelieChatHistory) && (
+            <div 
+              className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 pointer-events-auto ${
+                presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
+              } ${
+                isAtelieActive 
+                  ? 'bg-black/55 backdrop-blur-xl border border-white/5 rounded-2xl p-4 shadow-2xl' 
+                  : 'bg-transparent'
+              }`}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDraggingFile(true);
@@ -3073,7 +3365,18 @@ export default function LivePage() {
                       }`}>
                         {isLotus ? 'lótus' : 'fê'}
                       </span>
-                      
+
+                      {/* Reply quote block */}
+                      {msg.replyTo && (
+                        <div className={`border-l-2 border-white/20 pl-2.5 py-1 mb-1 rounded-r-lg bg-white/5 ${isLotus ? 'text-left' : 'text-right border-l-0 border-r-2 pr-2.5 pl-0 rounded-r-none rounded-l-lg'}`}>
+                          <span className="block text-[8px] tracking-widest uppercase text-white/35 font-medium mb-0.5 select-none">
+                            {msg.replyTo.sender === 'lotus' ? 'lótus' : 'fê'}
+                          </span>
+                          <span className="block text-[10px] text-[#fbf9f5]/50 font-light leading-snug line-clamp-2">
+                            {msg.replyTo.text.slice(0, 120)}{msg.replyTo.text.length > 120 ? '…' : ''}
+                          </span>
+                        </div>
+                      )}
                       {/* Text body & blocks renderer */}
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
                         <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
@@ -3161,10 +3464,22 @@ export default function LivePage() {
                         </div>
                       )}
 
-                      {/* User Message Timestamp */}
+                      {/* User Message Timestamp + Reply button */}
                       {!isLotus && msg.sender !== 'system' && (
-                        <div className="text-right text-[9px] text-[#fbf9f5]/40 select-none lowercase">
-                          {formatMessageTimestamp(msg.timestamp)}
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => setReplyTo({ id: msg.id, sender: msg.sender, text: msg.text })}
+                            className="text-[#fbf9f5]/30 hover:text-white/70 transition-colors bg-transparent border-none cursor-pointer outline-none"
+                            title="Responder"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="9 17 4 12 9 7" />
+                              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                            </svg>
+                          </button>
+                          <span className="text-[9px] text-[#fbf9f5]/40 select-none lowercase">
+                            {formatMessageTimestamp(msg.timestamp)}
+                          </span>
                         </div>
                       )}
 
@@ -3216,6 +3531,7 @@ export default function LivePage() {
                           onHearClick={handleHearClick}
                           onCopyText={handleCopyText}
                           onCopyPackage={handleCopyPackage}
+                          onReply={(m) => setReplyTo({ id: m.id, sender: m.sender, text: m.text })}
                         />
                       )}
 
@@ -3354,6 +3670,7 @@ export default function LivePage() {
             </button>
           )}
         </div>
+      )}
 
         <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8283e] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
           showAttachmentToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4 pointer-events-none'
@@ -3368,31 +3685,21 @@ export default function LivePage() {
       }`}>
         
         {activeContextNode && (
-          <div className="w-full flex justify-center mb-0.5 animate-fade-in select-none">
+          <div className="w-full flex items-center justify-center gap-3 mb-0.5 animate-fade-in select-none">
             <span className="text-[9px] text-[#fbf9f5]/25 tracking-widest uppercase font-mono font-light">
               [ contexto ativo: {activeContextNode.label} ]
             </span>
+            {isAtelieActive && (
+              <button
+                onClick={() => setShowAtelieChatHistory(!showAtelieChatHistory)}
+                className="text-[9px] text-[#fbf9f5]/40 hover:text-white transition-colors font-mono tracking-widest bg-transparent border-none outline-none cursor-pointer"
+                title={showAtelieChatHistory ? 'Ocultar Histórico' : 'Exibir Histórico'}
+              >
+                [ {showAtelieChatHistory ? '↓' : '↑'} ]
+              </button>
+            )}
           </div>
         )}
-        
-        <div className="hidden md:flex items-center gap-3 overflow-x-auto no-scrollbar max-w-full pb-1 whitespace-nowrap">
-          {[
-            { label: 'resumo do dia', text: 'Resumo do meu dia', icon: Activity },
-            { label: 'o que depende de mim', text: 'O que depende de mim?', icon: Zap },
-            { label: 'tarefas atrasadas', text: 'Quais tarefas estão atrasadas?', icon: Clock },
-            { label: 'projetos estagnados', text: 'Quais projetos estão travados?', icon: AlertTriangle }
-          ].map((sugg, i) => (
-            <button
-              key={i}
-              onClick={() => handleSendMessage(sugg.text)}
-              disabled={false}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all text-[#fbf9f5]/85 hover:text-white cursor-pointer select-none text-[9px] font-medium tracking-wide outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <sugg.icon size={10} strokeWidth={1.5} />
-              <span>{sugg.label}</span>
-            </button>
-          ))}
-        </div>
 
         {Object.values(uploadingFiles).some(fileInfo => fileInfo.contextId === activeContextNode.contextId) && (
           <div className="w-full bg-[#111111]/85 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2.5 animate-fade-in text-[10px] text-[#fbf9f5]/80 max-h-36 overflow-y-auto no-scrollbar shadow-lg">
@@ -3416,7 +3723,7 @@ export default function LivePage() {
                         </span>
                       ) : (
                         <span className="font-mono text-[#b8283e] font-semibold">
-                          {fileInfo.progress === 0 ? 'preparando...' : `enviando... ${fileInfo.progress}%`}
+                          {fileInfo.progress === 0 ? 'enviando...' : `enviando... ${fileInfo.progress}%`}
                         </span>
                       )}
                     </div>
@@ -3432,6 +3739,72 @@ export default function LivePage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Pending Attachments Tray — staged files waiting to be sent */}
+        {pendingAttachments.length > 0 && (
+          <div className="w-full flex flex-wrap gap-2 px-1 py-2 border-b border-white/10">
+            {pendingAttachments.map(att => (
+              <div key={att.id} className="relative flex flex-col items-center gap-1 group">
+                {att.type === 'image' ? (
+                  <div className="w-16 h-16 rounded-lg overflow-hidden border border-white/15 bg-white/5 relative">
+                    <img src={att.localUrl} alt={att.name} className="w-full h-full object-cover" />
+                    {att.status === 'uploading' && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <span className="text-[9px] font-mono text-white">{att.progress}%</span>
+                      </div>
+                    )}
+                    {att.status === 'done' && (
+                      <div className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full flex items-center justify-center">
+                        <svg width="7" height="7" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </div>
+                    )}
+                    {att.status === 'error' && (
+                      <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center">
+                        <span className="text-[9px] text-red-300">erro</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg max-w-[120px]">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/50 shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                    <span className="text-[9px] text-white/60 truncate font-light">{att.name}</span>
+                    {att.status === 'uploading' && <span className="text-[8px] text-[#b8283e] shrink-0">{att.progress}%</span>}
+                    {att.status === 'done' && <span className="text-[8px] text-emerald-400 shrink-0">✓</span>}
+                  </div>
+                )}
+                <button
+                  onClick={() => setPendingAttachments(prev => prev.filter(p => p.id !== att.id))}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-black/80 border border-white/20 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  <svg width="6" height="6" viewBox="0 0 12 12" fill="none"><line x1="2" y1="2" x2="10" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round"/><line x1="10" y1="2" x2="2" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Quote/Reply preview bar — sits above the input row, full width */}
+        {replyTo && (
+          <div className="w-full flex items-start gap-2 px-1 py-2 border-b border-white/10 bg-transparent">
+            <div className="flex-1 border-l-2 border-white/25 pl-2.5">
+              <span className="block text-[8px] tracking-widest uppercase text-white/35 font-medium mb-0.5 select-none">
+                respondendo {replyTo.sender === 'lotus' ? 'lótus' : 'fê'}
+              </span>
+              <span className="block text-[10px] text-[#fbf9f5]/50 font-light leading-snug line-clamp-1">
+                {replyTo.text.slice(0, 120)}{replyTo.text.length > 120 ? '…' : ''}
+              </span>
+            </div>
+            <button
+              onClick={() => setReplyTo(null)}
+              className="text-white/30 hover:text-white/70 transition-colors bg-transparent border-none cursor-pointer outline-none mt-0.5 shrink-0"
+              title="Cancelar resposta"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
         )}
 
@@ -3496,7 +3869,9 @@ export default function LivePage() {
               </div>
             </div>
           </div>
-          
+
+        {/* Quote preview bar was moved above the input row — removed from here */}
+
           <textarea
             ref={textareaRef}
             value={inputMessage}
@@ -3507,10 +3882,35 @@ export default function LivePage() {
                 handleSendMessage();
               }
             }}
+            onPaste={(e) => {
+              const cd = e.clipboardData;
+              // 1. Try files (drag-drop style paste, works in some browsers)
+              if (cd.files && cd.files.length > 0) {
+                e.preventDefault();
+                handleAttachFiles(cd.files);
+                return;
+              }
+              // 2. Try items (covers macOS screenshots via Cmd+Shift+4 → clipboard)
+              if (cd.items) {
+                const imageItems: File[] = [];
+                for (let i = 0; i < cd.items.length; i++) {
+                  const item = cd.items[i];
+                  if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) imageItems.push(file);
+                  }
+                }
+                if (imageItems.length > 0) {
+                  e.preventDefault();
+                  // Build a synthetic FileList-like iterable for handleAttachFiles
+                  const dt = new DataTransfer();
+                  imageItems.forEach(f => dt.items.add(f));
+                  handleAttachFiles(dt.files);
+                }
+              }
+            }}
             placeholder={
-              voiceState === 'transcribing' ? 'transcrevendo...' : 
-               
-              'digitar comando (cmd + enter envia)'
+              voiceState === 'transcribing' ? 'transcrevendo...' : ''
             }
             disabled={voiceState === 'transcribing'}
             rows={1}
@@ -3603,7 +4003,7 @@ export default function LivePage() {
                         {areaContexts.map((ctx) => {
                           const isContextActive = activeContextNode.contextId === ctx.contextId;
                           const isUnread = !!unreadContexts[ctx.contextId];
-                          const isCustom = customContextNodes.some(n => n.contextId === ctx.contextId);
+                          const isCustom = !ctx.isDefault;
                           
                           return (
                             <div 
@@ -3703,30 +4103,26 @@ export default function LivePage() {
                                       counter++;
                                     }
                                     
-                                    const openclawSessionKey = `agent:main:pulso:${contextId}`;
-                                    const newNode: PulsoContextNode = {
-                                      areaId,
-                                      contextId,
-                                      chatId: "default",
-                                      openclawSessionKey,
-                                      label: rawLabel
-                                    };
-                                    
-                                    const updated = [...customContextNodes, newNode];
-                                    setCustomContextNodes(updated);
-                                    localStorage.setItem('pulso_custom_contexts', JSON.stringify(updated));
-                                    
-                                    const isFirestore = pulsoService.getDataMode() === 'firestore';
-                                    if (isFirestore && db) {
-                                      const path = firestorePaths.customContext(contextId);
-                                      const contextDocRef = doc(db, path);
-                                      setDoc(contextDocRef, {
-                                        ...newNode,
-                                        createdAt: new Date().toISOString()
-                                      }).catch((err: any) => console.error("Failed to save custom context to Firestore:", err));
-                                    }
+                                    (async () => {
+                                      const createdSession = await sessionsService.createSession({
+                                        id: contextId,
+                                        label: rawLabel,
+                                        areaId: areaId,
+                                      }).catch(err => {
+                                        console.error("Failed to create session:", err);
+                                        return null;
+                                      });
 
-                                    setActiveContextNode(newNode);
+                                      if (createdSession) {
+                                        const newNode = sessionToContextNode(createdSession);
+                                        if (pulsoService.getDataMode() !== 'firestore') {
+                                          const list = await sessionsService.getAll();
+                                          setSessions(list.map(s => sessionToContextNode(s)));
+                                        }
+                                        setActiveContextNode(newNode);
+                                      }
+                                    })();
+
                                     setNewChatName('');
                                     setAddingChatAreaId(null);
                                     setIsMobileMenuOpen(false); // Close menu naturally

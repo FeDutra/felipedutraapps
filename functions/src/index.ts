@@ -106,3 +106,13 @@ export const pulsoIngest = onRequest(
 );
 export { pulsoRequests } from "./requests";
 export { processOpenClawQueue } from "./openclawQueueProcessor";
+export {
+  pulsoHealthCheck,
+  pulsoQueueWatchdog,
+  pulsoLatencyReport,
+  pulsoActiveMessageCheck,
+  pulsoSessionConsistency,
+  pulsoFrontBackendSync,
+  pulsoRegressionCheck,
+  pulsoDailyReport,
+} from "./pulsoMonitor";

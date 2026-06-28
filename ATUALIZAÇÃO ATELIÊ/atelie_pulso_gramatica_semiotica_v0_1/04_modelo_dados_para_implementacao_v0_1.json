@@ -1,0 +1,148 @@
+{
+  "version": "0.1",
+  "project": "Ateliê PULSO",
+  "coreRule": {
+    "elementPlusTarget": "modulation",
+    "elementPlusElement": "temporaryCompound",
+    "compoundPlusTarget": "hybridAction"
+  },
+  "proximityWeights": {
+    "overlap": 1.0,
+    "veryNear": 0.7,
+    "near": 0.4,
+    "wideField": 0.15,
+    "outside": 0.0
+  },
+  "influenceScales": [
+    "local",
+    "radial",
+    "global"
+  ],
+  "visualVocabulary": [
+    "glitch",
+    "pixel_sort",
+    "dithering",
+    "halftone",
+    "ascii",
+    "threshold",
+    "edge_detection",
+    "contour",
+    "scanline",
+    "vhs",
+    "chromatic_aberration",
+    "point_cloud",
+    "depth_map",
+    "rasterization",
+    "horizontal_displacement",
+    "radial_displacement",
+    "ghost_trail",
+    "directional_blur",
+    "fine_noise",
+    "coarse_noise",
+    "fragmentation",
+    "mask",
+    "edge_dissolution",
+    "scale_compression",
+    "field_expansion"
+  ],
+  "soundVocabulary": [
+    "pitch",
+    "volume",
+    "attack",
+    "decay",
+    "sustain",
+    "release",
+    "filter",
+    "resonance",
+    "distortion",
+    "granulation",
+    "delay",
+    "feedback",
+    "vibrato",
+    "tremolo",
+    "jitter",
+    "noise",
+    "spatiality",
+    "silence",
+    "compression",
+    "pulse",
+    "breath"
+  ],
+  "exampleElements": [
+    {
+      "id": "melancolia",
+      "category": "emotion",
+      "family": "tristeza",
+      "signature": "beleza triste, profundidade, demora",
+      "sound": {
+        "pitch": -0.35,
+        "filter": -0.5,
+        "delay": 0.8,
+        "grain": 0.3
+      },
+      "image": {
+        "saturation": -0.8,
+        "blur": 0.4,
+        "shadow": 0.7,
+        "ghostTrail": 0.3
+      },
+      "combinations": {
+        "azul": "saudade fria",
+        "nevoa": "lembrança fantasmática",
+        "translucido": "presença quase apagada"
+      }
+    },
+    {
+      "id": "colerico",
+      "category": "temperament",
+      "signature": "impulso, corte, comando",
+      "sound": {
+        "distortion": 0.9,
+        "volume": 0.35,
+        "attack": 0.8,
+        "compression": 0.6
+      },
+      "image": {
+        "horizontalGlitch": 0.8,
+        "redSaturation": 0.7,
+        "edgeHardness": 0.8,
+        "jitter": 0.5
+      },
+      "combinations": {
+        "aspero": "agressão seca",
+        "vermelho": "explosão quente",
+        "fogo": "combustão ativa"
+      }
+    },
+    {
+      "id": "satisfacao",
+      "category": "emotion",
+      "family": "alegria",
+      "signature": "repouso pleno, calor assentado",
+      "sound": {
+        "warmth": 0.45,
+        "stability": 0.8,
+        "attack": -0.3,
+        "tension": -0.5
+      },
+      "image": {
+        "softGlow": 0.55,
+        "stabilization": 0.8,
+        "warmth": 0.4,
+        "edgeComfort": 0.5
+      },
+      "combinations": {
+        "terroso": "repouso encarnado",
+        "paisagem_visual": "contemplação",
+        "ambar": "conforto morno"
+      }
+    }
+  ],
+  "implementationNotes": [
+    "Do not treat elements as isolated presets.",
+    "When multiple elements are near the same target, calculate dominant, modifiers and residue.",
+    "Sub-emotions inherit family tendencies but need individual deviations.",
+    "Image modulation should include material interference, not just color overlays.",
+    "Sound modulation should include envelope, texture and time behavior, not just pitch/filter/volume."
+  ]
+}

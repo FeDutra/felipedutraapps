@@ -61,6 +61,10 @@ export const firestorePaths = {
   customContexts: () => `${BASE_PATH}/pulso_custom_contexts`,
   customContext: (id: string) => `${BASE_PATH}/pulso_custom_contexts/${id}`,
 
+  /** v2: Session entities — replace pulso_custom_contexts as the source of truth */
+  sessions: () => `${BASE_PATH}/pulso_sessions`,
+  session: (id: string) => `${BASE_PATH}/pulso_sessions/${id}`,
+
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`
 };

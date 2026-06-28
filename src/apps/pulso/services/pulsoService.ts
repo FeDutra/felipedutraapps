@@ -13,6 +13,7 @@ import { routinesService } from "./routinesService";
 import { agentsService } from "./agentsService";
 import { syncJobsService } from "./syncJobsService";
 import { requestsService } from "./requestsService";
+import { sessionsService } from "./sessionsService";
 
 // Re-export all services for backward compatibility
 export { 
@@ -31,7 +32,8 @@ export {
   routinesService,
   agentsService,
   syncJobsService,
-  requestsService
+  requestsService,
+  sessionsService
 };
 
 const safeArray = (arr: any) => Array.isArray(arr) ? arr.filter(Boolean) : [];

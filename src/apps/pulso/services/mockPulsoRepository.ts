@@ -7,8 +7,9 @@ import {
 import { 
   Area, Project, InboxItem, Task, Decision, 
   Routine, Agent, Source, Alert, Log, Person, Status, SyncJob,
-  PulsoEvent, IngestionEvent, PulsoRequest
+  PulsoEvent, IngestionEvent, PulsoRequest, Session
 } from "../types/pulso.types";
+
 
 /**
  * @class MockPulsoRepository
@@ -305,4 +306,55 @@ export class MockPulsoRepository implements IPulsoRepository {
     const all = await this.getRequests();
     return all.find(r => r.id === id);
   }
+
+  // ── Sessions (v2) ─────────────────────────────────────────────
+  private _sessions: Session[] = [];
+
+  async getSessions(): Promise<Session[]> {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pulso_mock_sessions');
+      if (stored) return JSON.parse(stored) as Session[];
+    }
+    return this._sessions.filter(s => !s.archived);
+  }
+
+  async saveSession(session: Partial<Session>): Promise<Session> {
+    const now = new Date();
+    const newSession: Session = {
+      id: session.id || `sess_${Date.now()}`,
+      label: session.label || 'nova sessão',
+      openclawSessionKey: session.openclawSessionKey || `agent:main:pulso:${session.id || Date.now()}`,
+      areaId: session.areaId ?? null,
+      subareaId: session.subareaId,
+      isDefault: session.isDefault ?? false,
+      archived: false,
+      createdAt: session.createdAt || now,
+      updatedAt: now,
+    };
+    this._sessions = [newSession, ...this._sessions];
+    if (typeof window !== 'undefined') {
+      const all = await this.getSessions();
+      localStorage.setItem('pulso_mock_sessions', JSON.stringify([newSession, ...all.filter(s => s.id !== newSession.id)]));
+    }
+    return newSession;
+  }
+
+  async updateSession(id: string, data: Partial<Session>): Promise<Session> {
+    this._sessions = this._sessions.map(s => s.id === id ? { ...s, ...data, updatedAt: new Date() } : s);
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pulso_mock_sessions');
+      if (stored) {
+        const all: Session[] = JSON.parse(stored);
+        const updated = all.map(s => s.id === id ? { ...s, ...data, updatedAt: new Date() } : s);
+        localStorage.setItem('pulso_mock_sessions', JSON.stringify(updated));
+        return updated.find(s => s.id === id) || data as Session;
+      }
+    }
+    return this._sessions.find(s => s.id === id) || data as Session;
+  }
+
+  async archiveSession(id: string): Promise<Session> {
+    return this.updateSession(id, { archived: true, archivedAt: new Date() });
+  }
 }
+

@@ -13,7 +13,8 @@ import {
   SyncJob,
   PulsoEvent,
   IngestionEvent,
-  PulsoRequest
+  PulsoRequest,
+  Session
 } from "../types/pulso.types";
 
 /**
@@ -99,4 +100,10 @@ export interface IPulsoRepository {
   saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest>;
   updateRequest(id: string, data: Partial<PulsoRequest>): Promise<PulsoRequest>;
   getRequest(id: string): Promise<PulsoRequest | undefined>;
+
+  // Sessions (v2)
+  getSessions(): Promise<Session[]>;
+  saveSession(session: Partial<Session>): Promise<Session>;
+  updateSession(id: string, data: Partial<Session>): Promise<Session>;
+  archiveSession(id: string): Promise<Session>;
 }

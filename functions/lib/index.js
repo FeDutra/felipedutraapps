@@ -33,11 +33,12 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processOpenClawQueue = exports.pulsoRequests = exports.pulsoIngest = void 0;
+exports.pulsoDailyReport = exports.pulsoRegressionCheck = exports.pulsoFrontBackendSync = exports.pulsoSessionConsistency = exports.pulsoActiveMessageCheck = exports.pulsoLatencyReport = exports.pulsoQueueWatchdog = exports.pulsoHealthCheck = exports.processOpenClawQueue = exports.pulsoRequests = exports.pulsoIngest = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
+const firestore_1 = require("firebase-admin/firestore");
 admin.initializeApp();
-const db = admin.firestore();
+const db = (0, firestore_1.getFirestore)();
 exports.pulsoIngest = (0, https_1.onRequest)({ region: "us-central1", secrets: ["PULSO_INGEST_TOKEN"] }, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
@@ -65,7 +66,7 @@ exports.pulsoIngest = (0, https_1.onRequest)({ region: "us-central1", secrets: [
             res.status(200).json({ status: "duplicate" });
             return;
         }
-        const ts = admin.firestore.FieldValue.serverTimestamp();
+        const ts = firestore_1.FieldValue.serverTimestamp();
         const p = event.payload || {};
         const eventTitle = p.title || p.summary || p.message || p.topic || event.event_type || "Ingestão externa";
         // ── Normalize Area and Project Refs ────────────────────────────────────
@@ -139,4 +140,13 @@ var requests_1 = require("./requests");
 Object.defineProperty(exports, "pulsoRequests", { enumerable: true, get: function () { return requests_1.pulsoRequests; } });
 var openclawQueueProcessor_1 = require("./openclawQueueProcessor");
 Object.defineProperty(exports, "processOpenClawQueue", { enumerable: true, get: function () { return openclawQueueProcessor_1.processOpenClawQueue; } });
+var pulsoMonitor_1 = require("./pulsoMonitor");
+Object.defineProperty(exports, "pulsoHealthCheck", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoHealthCheck; } });
+Object.defineProperty(exports, "pulsoQueueWatchdog", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoQueueWatchdog; } });
+Object.defineProperty(exports, "pulsoLatencyReport", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoLatencyReport; } });
+Object.defineProperty(exports, "pulsoActiveMessageCheck", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoActiveMessageCheck; } });
+Object.defineProperty(exports, "pulsoSessionConsistency", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoSessionConsistency; } });
+Object.defineProperty(exports, "pulsoFrontBackendSync", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoFrontBackendSync; } });
+Object.defineProperty(exports, "pulsoRegressionCheck", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoRegressionCheck; } });
+Object.defineProperty(exports, "pulsoDailyReport", { enumerable: true, get: function () { return pulsoMonitor_1.pulsoDailyReport; } });
 //# sourceMappingURL=index.js.map

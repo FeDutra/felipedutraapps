@@ -1,42 +1,9 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processOpenClawQueue = void 0;
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const v2_1 = require("firebase-functions/v2");
-const admin = __importStar(require("firebase-admin"));
+const firestore_1 = require("firebase-admin/firestore");
 /**
  * Scheduled Cloud Function that processes Pulso requests awaiting OpenClaw.
  * Runs every minute (configurable) and handles the lifecycle:
@@ -48,7 +15,7 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
     schedule: "every 1 minutes", // adjust after approval if needed
     timeoutSeconds: 300,
 }, async () => {
-    const db = admin.firestore();
+    const db = (0, firestore_1.getFirestore)();
     const WORKSPACE_ID = "felipe_dutra";
     const BASE = `workspaces/${WORKSPACE_ID}/pulso_requests`;
     // 1️⃣ Find pending requests (requested or queued_for_openclaw)
@@ -72,8 +39,8 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
             await docRef.update({
                 status: "processing_by_openclaw",
                 processedBy: "openclaw-queue-processor",
-                startedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                startedAt: firestore_1.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
             });
             v2_1.logger.info(`🛠️ Claimed request ${requestId}`);
             // 3️⃣ Mock OpenClaw adapter (replace with real call when available)
@@ -94,8 +61,8 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
             await docRef.update({
                 openclawResult: simulatedResult,
                 status: "proposal_ready",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+                processedAt: firestore_1.FieldValue.serverTimestamp(),
             });
             v2_1.logger.info(`✅ Processed request ${requestId} → proposal_ready`);
         }
@@ -104,7 +71,7 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
             await docRef.update({
                 status: "failed",
                 error: err.message ?? "unknown",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
             });
             v2_1.logger.error(`❌ Failed processing request ${requestId}:`, err);
         }

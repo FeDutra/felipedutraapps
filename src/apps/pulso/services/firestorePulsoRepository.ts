@@ -20,8 +20,9 @@ import { firestorePaths } from "./firestorePaths";
 import { 
   Area, Project, InboxItem, Task, Decision, 
   Routine, Agent, Source, Alert, Log, Person, SyncJob,
-  PulsoEvent, IngestionEvent, PulsoRequest, Note, Meeting
+  PulsoEvent, IngestionEvent, PulsoRequest, Note, Meeting, Session
 } from "../types/pulso.types";
+
 
 /**
  * Helper to recursively remove undefined values from objects before sending to Firestore.
@@ -576,7 +577,7 @@ export class FirestorePulsoRepository implements IPulsoRepository {
       id, 
       status: request.status || 'requested',
       archived: false,
-      createdAt: request.createdAt || serverTimestamp(),
+      createdAt: (request as any).createdAt || serverTimestamp(),
       requestedAt: serverTimestamp(),
       updatedAt: serverTimestamp() 
     };
@@ -606,4 +607,51 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     if (!snap.exists()) return undefined;
     return this.toData<PulsoRequest>(snap);
   }
+
+  // ── Sessions (v2) ───────────────────────────────────────────────────────
+
+  /**
+   * Returns all non-archived sessions ordered by createdAt ascending
+   * (so the UI sees them in creation order).
+   */
+  async getSessions(): Promise<Session[]> {
+    const snap = await getDocs(collection(db!, firestorePaths.sessions()));
+    const all = snap.docs.map(d => this.toData<Session>(d));
+    return all
+      .filter(s => !s.archived)
+      .sort((a: any, b: any) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+        return dateA - dateB;
+      });
+  }
+
+  /** Creates or upserts a session document. */
+  async saveSession(session: Partial<Session>): Promise<Session> {
+    const id = session.id || `sess_${Date.now()}`;
+    const now = serverTimestamp();
+    const data = sanitizeForFirestore({
+      ...session,
+      id,
+      updatedAt: now,
+      createdAt: session.createdAt ? session.createdAt : now,
+    });
+    await setDoc(doc(db!, firestorePaths.session(id)), data, { merge: true });
+    return { ...session, id, createdAt: new Date(), updatedAt: new Date() } as Session;
+  }
+
+  /** Partially updates a session document. */
+  async updateSession(id: string, data: Partial<Session>): Promise<Session> {
+    const ref = doc(db!, firestorePaths.session(id));
+    const clean = sanitizeForFirestore(data);
+    await updateDoc(ref, { ...clean, updatedAt: serverTimestamp() });
+    const snap = await getDoc(ref);
+    return this.toData<Session>(snap);
+  }
+
+  /** Soft-deletes a session (sets archived = true). */
+  async archiveSession(id: string): Promise<Session> {
+    return this.updateSession(id, { archived: true, archivedAt: new Date() });
+  }
 }
+
