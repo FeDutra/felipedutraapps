@@ -94,6 +94,11 @@ const LoginScreen = () => {
   }, []);
 
   const handleLogin = async () => {
+    const isTauriDevMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('pulso_tauri_dev') === '1';
+    if (checkIsTauri() && !isTauriDevMode) {
+      setErrorMsg("Login com Google indisponível no app Desktop (limitação de WebView). Por favor, utilize E-mail e Senha abaixo.");
+      return;
+    }
     setSigningIn(true);
     setErrorMsg("");
     try {
