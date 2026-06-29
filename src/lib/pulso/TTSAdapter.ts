@@ -621,7 +621,7 @@ export class TTSAdapter {
 
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
-        audio.volume = volume;
+        audio.volume = this.preferences.volume;
         this.currentAudio = audio;
 
         let audioStartedTime = performance.now();
