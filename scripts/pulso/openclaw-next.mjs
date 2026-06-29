@@ -117,6 +117,7 @@ function buildPackage(doc) {
         }
       : null,
     executionPrompt: handoff?.executionPrompt || "",
+    attachments: d.attachments || [],
     sourcesNeeded: interpretation?.sourcesNeeded || [],
     entitiesMentioned: handoff?.entitiesMentioned || [],
     riskLevel: handoff?.riskLevel || interpretation?.riskLevel || "low",

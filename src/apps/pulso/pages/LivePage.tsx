@@ -2123,11 +2123,16 @@ export default function LivePage() {
   };
 
 
+  const isSubmittingRef = React.useRef(false);
+
   const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' }) => {
-    if (isTyping) {
-      console.warn('Blocked duplicate send: message already processing.');
+    if (isTyping || isSubmittingRef.current) {
+      console.warn('Blocked duplicate send: message already processing or submitting.');
       return;
     }
+    
+    isSubmittingRef.current = true;
+    setTimeout(() => { isSubmittingRef.current = false; }, 500);
 
     const rawMsg = textToSend || inputMessage;
     const hasPending = pendingAttachments.length > 0;

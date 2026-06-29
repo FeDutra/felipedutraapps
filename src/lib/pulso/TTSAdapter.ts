@@ -390,6 +390,40 @@ export class TTSAdapter {
       return this.audioCache.get(cacheKey)!;
     }
 
+    if (provider === 'local_kokoro_sidecar') {
+      const response = await fetch('http://127.0.0.1:14321', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: chunkText,
+          voice: voice || 'pf_dora',
+          speed: rate,
+          lang: 'pt-br'
+        }),
+        signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Kokoro sidecar returned status ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(`Kokoro sidecar error: ${data.error}`);
+      }
+
+      const base64Wav = data.audio;
+      const byteCharacters = atob(base64Wav);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'audio/wav' });
+      this.audioCache.set(cacheKey, blob);
+      return blob;
+    }
+
     const endpoint = getKokoroEndpoint();
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -456,95 +490,16 @@ export class TTSAdapter {
       endpoint 
     });
 
-    const isKokoroSidecar = this.preferences.ttsProvider === 'local_kokoro_sidecar';
-    const volume = this.preferences.volume;
-
-    if (isKokoroSidecar) {
-      const normalizedText = this.normalizeTextForSpeech(text);
-      if (isRemoteWeb || !isTauri) {
-        console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_NOT_TAURI]');
-        console.log('[PULSO_WEB_TTS_FALLBACK_NATIVE]');
-        this.speakNative(normalizedText, onStart, onEnd);
-        return;
-      }
-
-      if (onPreparing) onPreparing();
-
-      try {
-        console.log('[PULSO_TTS_KOKORO_START]', { text: normalizedText });
-        
-        const response = await fetch('http://127.0.0.1:14321', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: normalizedText,
-            voice: "pf_dora",
-            speed: 1.0,
-            lang: "pt-br"
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Kokoro sidecar returned status ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        if (data.error) {
-          throw new Error(`Kokoro sidecar error: ${data.error}`);
-        }
-
-        if (!isSessionActive()) return;
-
-        // Convert base64 to Blob
-        const base64Wav = data.audio;
-        const byteCharacters = atob(base64Wav);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'audio/wav' });
-
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.volume = volume;
-        this.currentAudio = audio;
-
-        console.log('[PULSO_TTS_FIRST_AUDIO_PLAYING]', { durationMs: Math.round(performance.now() - startTime) });
-        console.log('[PULSO_WEB_TTS_FIRST_AUDIO_PLAYING]');
-        if (onStart) onStart();
-
-        audio.onended = () => {
-          URL.revokeObjectURL(url);
-          if (this.currentAudio === audio) this.currentAudio = null;
-          console.log('[PULSO_TTS_QUEUE_DONE]');
-          if (onEnd) onEnd();
-        };
-
-        audio.onerror = (e) => {
-          URL.revokeObjectURL(url);
-          if (this.currentAudio === audio) this.currentAudio = null;
-          if (!isSessionActive()) return;
-          console.warn('[PULSO_TTS_KOKORO_FAILED_FALLBACK_NATIVE] Error playing generated audio. Falling back to native.', e);
-          this.speakNative(normalizedText, onStart, onEnd);
-        };
-
-        await audio.play();
-      } catch (err) {
-        if (!isSessionActive()) return;
-        console.warn('[PULSO_TTS_KOKORO_FAILED_FALLBACK_NATIVE] Failed to synthesize via Kokoro sidecar. Falling back to native.', err);
-        this.speakNative(normalizedText, onStart, onEnd);
-      }
-      return;
-    }
-
-    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http';
+    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http' || this.preferences.ttsProvider === 'local_kokoro_sidecar';
     
     let skipKokoro = false;
-    if (isKokoro && isRemoteWeb && isEndpointLocalhost) {
+    if (this.preferences.ttsProvider === 'local_kokoro_sidecar') {
+      if (isRemoteWeb || !isTauri) {
+        console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_NOT_TAURI]');
+        skipKokoro = true;
+      }
+    } else if (isKokoro && isRemoteWeb && isEndpointLocalhost) {
       console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_NOT_LOCAL]', { endpoint });
-      console.log('[PULSO_WEB_TTS_FALLBACK_NATIVE]');
       skipKokoro = true;
     }
 
