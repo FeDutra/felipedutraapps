@@ -4,6 +4,7 @@ exports.processOpenClawQueue = void 0;
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const v2_1 = require("firebase-functions/v2");
 const firestore_1 = require("firebase-admin/firestore");
+const pulsoLedgerEmitter_1 = require("./lib/pulsoLedgerEmitter");
 /**
  * Scheduled Cloud Function that processes Pulso requests awaiting OpenClaw.
  * Runs every minute (configurable) and handles the lifecycle:
@@ -44,12 +45,54 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
             });
             v2_1.logger.info(`🛠️ Claimed request ${requestId}`);
             // 3️⃣ Mock OpenClaw adapter (replace with real call when available)
+            let simulatedText = "SIMULATED_RESPONSE";
+            let detectedEvents = [];
+            if (data.input) {
+                const inputLower = data.input.toLowerCase();
+                if (inputLower.includes("ping real no ledger")) {
+                    detectedEvents.push({
+                        source: "lotus_openclaw",
+                        intent: "Registrar teste real da Lótus no Ledger da PULSO",
+                        action: "system.ledger_ping",
+                        target: "pulso/live",
+                        payload: { message: "Lótus enviou um evento para a PULSO durante uma conversa real." },
+                        status: "success",
+                        result: { ok: true },
+                        externalRefs: {},
+                        surface: "openclaw"
+                    });
+                    simulatedText = "Pronto! Registrei o ping no Ledger da PULSO com sucesso.";
+                }
+                else if (inputLower.includes("tarefa de teste no ledger")) {
+                    detectedEvents.push({
+                        source: "lotus_openclaw",
+                        intent: "Registrar intenção de tarefa criada pela Lótus",
+                        action: "notion.create_task",
+                        target: "notion/test",
+                        payload: {
+                            title: "Teste real de tarefa via Lótus/OpenClaw",
+                            assignee: "Fê",
+                            project: "PULSO"
+                        },
+                        status: "success",
+                        result: { taskId: "openclaw_test_task_001" },
+                        externalRefs: { notionPageId: "openclaw_test_task_001" },
+                        surface: "openclaw"
+                    });
+                    simulatedText = "Maravilha! Já enviei o evento de criação da tarefa para o Ledger.";
+                }
+                else if (data.input.includes("PULSO_DIRECT_TEST_001")) {
+                    simulatedText = "DIRECT_OK_001";
+                }
+            }
+            if (detectedEvents.length > 0) {
+                v2_1.logger.info(`[OpenClaw] Detectados ${detectedEvents.length} pulsoEvents. Chamando emissor...`);
+                await (0, pulsoLedgerEmitter_1.emitPulsoLedgerEvents)(detectedEvents, db);
+            }
             const simulatedResult = {
                 status: "success",
                 intent: "unknown",
-                responseText: data.input && data.input.includes("PULSO_DIRECT_TEST_001")
-                    ? "DIRECT_OK_001"
-                    : "SIMULATED_RESPONSE",
+                responseText: simulatedText,
                 summary: "Mocked OpenClaw response",
                 confidence: "high",
                 riskLevel: "low",

@@ -1,6 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { getFirestore, FieldValue, Query } from "firebase-admin/firestore";
+import { emitPulsoLedgerEvents, PulsoLedgerEvent } from "./lib/pulsoLedgerEmitter";
 
 const db = getFirestore();
 
@@ -109,6 +110,46 @@ export const pulsoRequests = onRequest(
           res.status(400).send("Missing requestId");
           return;
         }
+
+        // --- PULSO EVENTS EXTRACTION & EMISSION ---
+        if (result && result.responseText && typeof result.responseText === 'string') {
+          // Look for JSON blocks or parse raw JSON if it starts with {
+          try {
+            let extractedJsonStr = "";
+            let jsonMatch = result.responseText.match(/```json\s*(\{[\s\S]*?"pulsoEvents"[\s\S]*?\})\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+              extractedJsonStr = jsonMatch[1];
+              // Strip JSON block from text
+              result.responseText = result.responseText.replace(jsonMatch[0], "").trim();
+            } else if (result.responseText.includes('"pulsoEvents"')) {
+              // Try parsing the whole thing if it's pure JSON
+              const firstBrace = result.responseText.indexOf('{');
+              const lastBrace = result.responseText.lastIndexOf('}');
+              if (firstBrace !== -1 && lastBrace !== -1) {
+                const subStr = result.responseText.substring(firstBrace, lastBrace + 1);
+                if (subStr.includes('"pulsoEvents"')) {
+                  extractedJsonStr = subStr;
+                  result.responseText = result.responseText.replace(subStr, "").trim();
+                }
+              }
+            }
+
+            if (extractedJsonStr) {
+              const parsed = JSON.parse(extractedJsonStr);
+              if (parsed && Array.isArray(parsed.pulsoEvents)) {
+                console.log(`[Requests complete] Intercepted ${parsed.pulsoEvents.length} pulsoEvents. Emitting...`);
+                await emitPulsoLedgerEvents(parsed.pulsoEvents, db);
+                // Also provide a clean fallback text if empty
+                if (!result.responseText.trim()) {
+                  result.responseText = "Pronto! Processado com sucesso no Ledger da PULSO.";
+                }
+              }
+            }
+          } catch (err) {
+            console.error("[Requests complete] Failed to parse or emit intercepted pulsoEvents:", err);
+          }
+        }
+        // ------------------------------------------
 
         const docRef = db.collection(BASE).doc(requestId);
         const docSnap = await docRef.get();

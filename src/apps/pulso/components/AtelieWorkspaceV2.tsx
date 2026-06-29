@@ -843,6 +843,7 @@ class AudioEngine {
       playhead?: number;
       isLooping?: boolean;
       playbackSeekTrigger?: number;
+      audioPitch?: number;
     }>,
     activeModulations: Map<string, any>,
     audioBuffers?: Map<string, AudioBuffer>
@@ -1110,12 +1111,13 @@ class AudioEngine {
       }
 
       const targetCount = this.globalPitchMultipliers.length;
+      const nodePitch = node.audioPitch ?? 1.0;
 
       // --- Polyphony/Audio Source playback update ---
       if (voice.audioSource) {
         const jitterRate = (mods.jitter ?? 0.0) * 35; // 0 to 35Hz
         const jitterVal = jitterRate > 0 ? Math.sin(now * jitterRate) * (mods.jitter ?? 0.0) * 15 : 0;
-        const pitchMultiplier = (pitchFreq + jitterVal) / 220; // 220 is standard A3 base
+        const pitchMultiplier = ((pitchFreq + jitterVal) / 220) * nodePitch; // 220 is standard A3 base
         if (isFinite(pitchMultiplier)) {
           voice.audioSource.playbackRate.setTargetAtTime(Math.max(0.05, Math.min(4.0, pitchMultiplier)), now, 0.08);
         }
@@ -1129,7 +1131,7 @@ class AudioEngine {
           try {
             const oscA = this.ctx.createOscillator();
             oscA.type = voice.baseOscType;
-            const freq = pitchFreq * this.globalPitchMultipliers[pi];
+            const freq = pitchFreq * this.globalPitchMultipliers[pi] * nodePitch;
             oscA.frequency.setValueAtTime(isFinite(freq) ? freq : pitchFreq, now);
             oscA.connect(voice.waveShaperNode);
             oscA.start(now);
@@ -1164,7 +1166,7 @@ class AudioEngine {
         const jitterRate = (mods.jitter ?? 0.0) * 35; // 0 to 35Hz
         const jitterVal = jitterRate > 0 ? Math.sin(now * jitterRate) * (mods.jitter ?? 0.0) * 15 : 0;
         voice.polyOscPairs.forEach(([oscA, oscB], pi) => {
-          const freq = (pitchFreq + jitterVal) * (this.globalPitchMultipliers[pi] ?? 1.0);
+          const freq = (pitchFreq + jitterVal) * (this.globalPitchMultipliers[pi] ?? 1.0) * nodePitch;
           if (isFinite(freq)) {
             oscA.frequency.setTargetAtTime(freq, now, 0.05);
             if (oscA.detune) {
@@ -2812,7 +2814,9 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
     const node = nodes.find(n => n.id === id);
     if (!node || !node.audioDuration) return;
     
-    const currentPlayhead = node.playhead || (node.cropStart ?? 0) + ((node.cropEnd ?? node.audioDuration) - (node.cropStart ?? 0)) / 2;
+    // The user has selected a region using node.cropStart and node.cropEnd
+    const selectedStart = node.cropStart ?? 0;
+    const selectedEnd = node.cropEnd ?? node.audioDuration;
     
     setNodes(prev => {
       const list = [...prev];
@@ -2820,23 +2824,31 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
       if (idx === -1) return prev;
       
       const orig = list[idx];
-      const segA = {
+      
+      // 1. Keep original untouched / restore full integrity
+      const restoredOrig = {
         ...orig,
-        label: `${orig.label}-a`,
-        cropEnd: currentPlayhead,
-        isPlaying: false
-      };
-      const segB = {
-        ...orig,
-        id: `aud-${Date.now()}-split`,
-        label: `${orig.label}-b`,
-        x: orig.x + 80,
-        y: orig.y,
-        cropStart: currentPlayhead,
+        cropStart: 0,
+        cropEnd: orig.audioDuration,
+        playhead: 0,
         isPlaying: false
       };
       
-      list[idx] = segA;
+      // 2. The crop segment B is born with the selection and placed exactly below A (vertical shift of 110px)
+      const segB = {
+        ...orig,
+        id: `aud-${Date.now()}-split`,
+        label: `${orig.label}-recorte`,
+        x: orig.x,
+        y: orig.y + 110, // Exactly linear below
+        cropStart: selectedStart,
+        cropEnd: selectedEnd,
+        playhead: selectedStart,
+        isPlaying: false,
+        audioPitch: orig.audioPitch ?? 1.0
+      };
+      
+      list[idx] = restoredOrig;
       list.push(segB);
       
       const buffer = audioBuffersRef.current.get(id);
@@ -3057,7 +3069,7 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
 
       const params = computeOfflineAudioParams(mods, node.label);
 
-      const pitchMultiplier = params.baseFreq / 220;
+      const pitchMultiplier = (params.baseFreq / 220) * (node.audioPitch ?? 1.0);
       source.playbackRate.setValueAtTime(pitchMultiplier, 0);
 
       filter.frequency.setValueAtTime(Math.max(20, Math.min(20000, params.filterCutoff)), 0);
@@ -3082,8 +3094,13 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = `${node.label}-atelie.wav`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(downloadUrl);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }, 100);
     } catch (err) {
       console.error("Offline render error:", err);
       alert("Erro ao processar e baixar áudio.");
@@ -3177,9 +3194,9 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
         const params = computeOfflineAudioParams(mods, node.label);
 
         if (source instanceof OscillatorNode) {
-          source.frequency.setValueAtTime(params.baseFreq, 0);
+          source.frequency.setValueAtTime(params.baseFreq * (node.audioPitch ?? 1.0), 0);
         } else if (source instanceof AudioBufferSourceNode) {
-          const pitchMultiplier = params.baseFreq / 220;
+          const pitchMultiplier = (params.baseFreq / 220) * (node.audioPitch ?? 1.0);
           source.playbackRate.setValueAtTime(pitchMultiplier, 0);
         }
 
@@ -3191,9 +3208,9 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
         const nodeIntensity = node.intensity ?? 1.0;
         const canvasWidth = 1200;
         const normalizedX = (node.x / canvasWidth) * 2 - 1; // -1 to 1
-        const pan = Math.max(-1.0, Math.min(1.0, normalizedX + (mods.spatiality ?? 0.0)));
-        if (panNode && panNode.pan) {
-          panNode.pan.setValueAtTime(pan, 0);
+        const panVal = Math.max(-1.0, Math.min(1.0, normalizedX + (mods.spatiality ?? 0.0)));
+        if (panNode) {
+          panNode.pan.setValueAtTime(panVal, 0);
         }
 
         gainNode.gain.setValueAtTime(params.volume * 1.5 * nodeIntensity, 0);
@@ -3211,8 +3228,13 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = `mesa-mixdown-${Date.now()}.wav`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(downloadUrl);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }, 100);
     } catch (err) {
       console.error("Erro na mixagem da mesa:", err);
       alert("Não foi possível gerar a mixagem da mesa.");
@@ -3554,7 +3576,8 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
         cropEnd: n.cropEnd,
         playhead: n.playhead,
         isLooping: n.isLooping,
-        playbackSeekTrigger: n.playbackSeekTrigger
+        playbackSeekTrigger: n.playbackSeekTrigger,
+        audioPitch: n.audioPitch
       })),
       computedRelations.activeModulations,
       audioBuffersRef.current
@@ -3893,8 +3916,8 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
               )}
             </div>
             
-            {/* Controls panel: play/pause, loop, cut, download */}
-            <div className="flex items-center justify-center gap-2.5 mt-0.5 text-[8px] select-none">
+            {/* Controls panel: play/pause, loop, cut, pitch, download */}
+            <div className="flex items-center justify-center gap-2 mt-0.5 text-[8px] select-none">
               <button 
                 onClick={(e) => togglePlayAudioNode(node.id, e)}
                 className="bg-transparent border-none text-[#fbf9f5]/55 hover:text-[#ec4899] p-0.5 cursor-pointer font-mono text-[9px] transition-colors"
@@ -3916,9 +3939,41 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
               <button 
                 onClick={(e) => splitAudioNode(node.id, e)}
                 className="bg-transparent border-none text-[#fbf9f5]/35 hover:text-[#ec4899] p-0.5 cursor-pointer font-mono text-[8px] transition-colors"
-                title="Cortar no meio"
+                title="Cortar na seleção"
               >
                 {"\u2702"}
+              </button>
+
+              {/* Pitch modification buttons */}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNodes(prev => prev.map(n => n.id === node.id ? { ...n, audioPitch: Math.max(0.25, (n.audioPitch ?? 1.0) / 1.05946) } : n));
+                }}
+                className="bg-transparent border-none text-[#fbf9f5]/35 hover:text-[#ec4899] p-0.5 cursor-pointer font-mono text-[9px] transition-colors"
+                title="Diminuir Tom (semitom abaixo)"
+              >
+                ♭
+              </button>
+              <span 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNodes(prev => prev.map(n => n.id === node.id ? { ...n, audioPitch: 1.0 } : n));
+                }}
+                className="text-[6.5px] text-[#fbf9f5]/50 select-none min-w-[12px] text-center cursor-pointer hover:text-[#ec4899] font-mono lowercase"
+                title="Clique para resetar tom"
+              >
+                {Math.round((node.audioPitch ?? 1.0) * 100)}%
+              </span>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNodes(prev => prev.map(n => n.id === node.id ? { ...n, audioPitch: Math.min(4.0, (n.audioPitch ?? 1.0) * 1.05946) } : n));
+                }}
+                className="bg-transparent border-none text-[#fbf9f5]/35 hover:text-[#ec4899] p-0.5 cursor-pointer font-mono text-[9px] transition-colors"
+                title="Aumentar Tom (semitom acima)"
+              >
+                ♯
               </button>
 
               <button 
@@ -4915,10 +4970,30 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
 
               <button 
                 onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = '/tabela_de_atuacao.md';
-                  link.download = 'tabela_de_atuacao.md';
-                  link.click();
+                  fetch('/tabela_de_atuacao.md')
+                    .then(r => r.blob())
+                    .then(blob => {
+                      const downloadUrl = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = downloadUrl;
+                      link.download = 'tabela_de_atuacao.md';
+                      link.style.display = 'none';
+                      document.body.appendChild(link);
+                      link.click();
+                      setTimeout(() => {
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(downloadUrl);
+                      }, 100);
+                    })
+                    .catch(err => {
+                      const link = document.createElement('a');
+                      link.href = '/tabela_de_atuacao.md';
+                      link.download = 'tabela_de_atuacao.md';
+                      link.style.display = 'none';
+                      document.body.appendChild(link);
+                      link.click();
+                      setTimeout(() => document.body.removeChild(link), 100);
+                    });
                 }}
                 className="border-none bg-transparent text-[#fbf9f5]/35 hover:text-white cursor-pointer outline-none font-mono py-0 px-1 text-[9.5px]"
                 title="Baixar a tabela de atuação semiótica completa"

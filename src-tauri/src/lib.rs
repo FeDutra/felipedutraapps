@@ -1,10 +1,14 @@
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
+mod agent;
+use agent::local_machine::local_open_url;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
+    .invoke_handler(tauri::generate_handler![local_open_url])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

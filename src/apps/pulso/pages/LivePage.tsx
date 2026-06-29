@@ -84,6 +84,10 @@ import { routeInputToArea } from '../../../lib/pulso/AreaRouter';
 import { normalizeTranscript } from '../../../lib/pulso/normalizeTranscript';
 import { candidateAreas } from '../scripts/seedAreas';
 import { TTSAdapter, TTSPreferences } from '../../../lib/pulso/TTSAdapter';
+import { actionLedgerClient } from '../../../lib/pulso/ledger/ActionLedgerClient';
+import { SummaryCards } from '../../../components/pulso/SummaryCards';
+import { PulsoDebugPanel } from '../../../components/pulso/PulsoDebugPanel';
+
 import { 
   Send, 
   Mic, 
@@ -370,6 +374,16 @@ export default function LivePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
+
+  const pulsoJarvisLayerEnabled = true;
+
+  React.useEffect(() => {
+    if (pulsoJarvisLayerEnabled) {
+      actionLedgerClient.startListening();
+      return () => actionLedgerClient.stopListening();
+    }
+  }, []);
+
   const [messages, setMessages] = React.useState<Message[]>([
     {
       id: 'welcome',
@@ -2348,6 +2362,11 @@ export default function LivePage() {
     setInputMessage('');
   }, [stopVoiceRecognition, ttsAdapter]);
 
+  const inputMessageRef = React.useRef(inputMessage);
+  React.useEffect(() => {
+    inputMessageRef.current = inputMessage;
+  }, [inputMessage]);
+
   const startSpeechRecognition = React.useCallback((mode: VoiceMode) => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
@@ -2393,8 +2412,14 @@ export default function LivePage() {
       console.log('[PULSO_RECORDING_ONCE_START]');
     }
 
-    finalTranscriptRef.current = '';
-    currentTextRef.current = '';
+    if (mode === 'recording_once' && inputMessageRef.current.trim().length > 0) {
+      const existingText = inputMessageRef.current.trim() + ' ';
+      finalTranscriptRef.current = existingText;
+      currentTextRef.current = existingText;
+    } else {
+      finalTranscriptRef.current = '';
+      currentTextRef.current = '';
+    }
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
@@ -2542,12 +2567,11 @@ export default function LivePage() {
           console.warn('Speech recognition restart failed:', err);
         }
       } else if (voiceModeRef.current === 'recording_once') {
-        setVoiceMode('off');
-        const finalVal = currentTextRef.current.trim();
-        if (finalVal) {
-          console.log('[PULSO_RECORDING_TRANSCRIPTION_READY]', { text: finalVal });
-        } else {
-          console.log('[PULSO_RECORDING_TRANSCRIPTION_FAILED]', { reason: 'No speech detected' });
+        // Auto-restart if stopped prematurely by silence timeout in continuous mode
+        try {
+          recognitionRef.current?.start();
+        } catch (err) {
+          console.warn('Speech recognition restart failed:', err);
         }
       }
     };
@@ -2596,6 +2620,7 @@ export default function LivePage() {
   const toggleRecordingOnce = React.useCallback(async () => {
     hasRetriedSpeechRecognitionRef.current = false;
     if (voiceModeRef.current === 'recording_once') {
+      voiceModeRef.current = 'off'; // Mark as off immediately so onend doesn't restart
       stopVoiceRecognition();
       setVoiceMode('off');
     } else {
@@ -2901,6 +2926,9 @@ export default function LivePage() {
         presenceMode ? 'cursor-pointer' : ''
       }`}
     >
+
+      {pulsoJarvisLayerEnabled && <SummaryCards />}
+      {pulsoJarvisLayerEnabled && <PulsoDebugPanel />}
 
       {/* Camada Contextual */}
       <ContextSurfaceVariants 
