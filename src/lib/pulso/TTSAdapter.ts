@@ -1,4 +1,4 @@
-export type TTSProvider = 'browser_native' | 'local_piper' | 'local_kokoro' | 'kokoro_http' | 'cloud_google';
+export type TTSProvider = 'browser_native' | 'local_kokoro_sidecar' | 'local_kokoro' | 'kokoro_http' | 'cloud_google';
 
 const isTauriApp = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -456,13 +456,13 @@ export class TTSAdapter {
       endpoint 
     });
 
-    const isPiper = this.preferences.ttsProvider === 'local_piper';
+    const isKokoroSidecar = this.preferences.ttsProvider === 'local_kokoro_sidecar';
     const volume = this.preferences.volume;
 
-    if (isPiper) {
+    if (isKokoroSidecar) {
       const normalizedText = this.normalizeTextForSpeech(text);
       if (isRemoteWeb || !isTauri) {
-        console.log('[PULSO_WEB_TTS_PIPER_SKIPPED_NOT_TAURI]');
+        console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_NOT_TAURI]');
         console.log('[PULSO_WEB_TTS_FALLBACK_NATIVE]');
         this.speakNative(normalizedText, onStart, onEnd);
         return;
@@ -471,13 +471,33 @@ export class TTSAdapter {
       if (onPreparing) onPreparing();
 
       try {
-        console.log('[PULSO_TTS_PIPER_START]', { text: normalizedText });
-        const { invoke } = await import('@tauri-apps/api/core');
-        const base64Wav = await invoke<string>('synthesize_piper', { text: normalizedText });
+        console.log('[PULSO_TTS_KOKORO_START]', { text: normalizedText });
         
+        const response = await fetch('http://127.0.0.1:14321', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: normalizedText,
+            voice: "pf_dora",
+            speed: 1.0,
+            lang: "pt-br"
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Kokoro sidecar returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(`Kokoro sidecar error: ${data.error}`);
+        }
+
         if (!isSessionActive()) return;
 
         // Convert base64 to Blob
+        const base64Wav = data.audio;
         const byteCharacters = atob(base64Wav);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -506,14 +526,14 @@ export class TTSAdapter {
           URL.revokeObjectURL(url);
           if (this.currentAudio === audio) this.currentAudio = null;
           if (!isSessionActive()) return;
-          console.warn('[PULSO_TTS_PIPER_FAILED_FALLBACK_NATIVE] Error playing generated audio. Falling back to native.', e);
+          console.warn('[PULSO_TTS_KOKORO_FAILED_FALLBACK_NATIVE] Error playing generated audio. Falling back to native.', e);
           this.speakNative(normalizedText, onStart, onEnd);
         };
 
         await audio.play();
       } catch (err) {
         if (!isSessionActive()) return;
-        console.warn('[PULSO_TTS_PIPER_FAILED_FALLBACK_NATIVE] Failed to synthesize via Piper sidecar. Falling back to native.', err);
+        console.warn('[PULSO_TTS_KOKORO_FAILED_FALLBACK_NATIVE] Failed to synthesize via Kokoro sidecar. Falling back to native.', err);
         this.speakNative(normalizedText, onStart, onEnd);
       }
       return;

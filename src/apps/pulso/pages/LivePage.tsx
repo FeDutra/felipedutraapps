@@ -4299,9 +4299,9 @@ export default function LivePage() {
                   className="pulso-select w-full"
                 >
                   <option value="browser_native" className="bg-[#121212]">nativo do navegador</option>
+                  <option value="local_kokoro_sidecar" className="bg-[#121212]">sidecar nativo (pf_dora)</option>
                   <option value="kokoro_http" className="bg-[#121212]">kokoro http (oficial)</option>
                   <option value="local_kokoro" className="bg-[#121212]">kokoro-fastapi (beta)</option>
-                  <option value="local_piper" className="bg-[#121212]">piper local (experimental)</option>
                   <option value="cloud_google" disabled className="bg-[#121212]">google cloud tts (indisponível)</option>
                 </select>
               </div>
