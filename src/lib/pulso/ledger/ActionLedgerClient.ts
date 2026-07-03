@@ -15,9 +15,19 @@ export class ActionLedgerClient {
     const eventsRef = collection(db, 'workspaces/felipe_dutra/pulso_events');
     const q = query(eventsRef, orderBy('createdAt', 'desc'), limit(10));
 
+    // Flag para ignorar o snapshot inicial — só processa eventos realmente novos
+    let initialSnapshotProcessed = false;
+
     this.unsubscribe = onSnapshot(q, (snapshot) => {
-      // Ignora a primeira leitura para não carregar eventos muito velhos, a menos que seja intencional.
-      // Para esta fase mínima, processaremos tudo para garantir que mock events criados antes de abrir a aba funcionem.
+      // Ignora a primeira leitura (estado pré-existente no Firestore).
+      // Apenas eventos adicionados APÓS o listener ser registrado são processados.
+      if (!initialSnapshotProcessed) {
+        initialSnapshotProcessed = true;
+        this.initialized = true;
+        console.log('[ActionLedgerClient] Snapshot inicial ignorado — aguardando eventos novos.');
+        return;
+      }
+
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const event = { id: change.doc.id, ...change.doc.data() } as PulsoLedgerEvent;
@@ -41,6 +51,13 @@ export class ActionLedgerClient {
           }
           if (!validActions.includes(event.action)) {
             console.warn('[ActionLedgerClient] Ignorando evento com action não permitida:', event.action);
+            return;
+          }
+
+          // Guard de frescor: ignora eventos com mais de 5 minutos
+          const eventAge = Date.now() - new Date(event.createdAt as string).getTime();
+          if (eventAge > 5 * 60 * 1000) {
+            console.warn('[ActionLedgerClient] Ignorando evento antigo (>5min):', event.id, `(${Math.round(eventAge / 60000)}min atrás)`);
             return;
           }
 

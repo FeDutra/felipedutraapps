@@ -113,6 +113,10 @@ export {
   pulsoActiveMessageCheck,
   pulsoSessionConsistency,
   pulsoFrontBackendSync,
-  pulsoRegressionCheck,
+  // pulsoRegressionCheck,
   pulsoDailyReport,
 } from "./pulsoMonitor";
+export {
+  onPulsoRequestCreated,
+  onPulsoRequestUpdated,
+} from "./pulsoArtifactExtractor";

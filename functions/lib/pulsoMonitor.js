@@ -322,7 +322,7 @@ exports.pulsoHealthCheck = (0, scheduler_1.onSchedule)({ schedule: "every 5 minu
 // ═══════════════════════════════════════════════════════════════════════════════
 // CRON 2 — Watchdog de Fila Presa (a cada 2 minutos)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.pulsoQueueWatchdog = (0, scheduler_1.onSchedule)({ schedule: "every 2 minutes", region: "us-central1", timeoutSeconds: 30 }, async () => {
+exports.pulsoQueueWatchdog = (0, scheduler_1.onSchedule)({ schedule: "every 5 minutes", region: "us-central1", timeoutSeconds: 30 }, async () => {
     currentCronContext = "pulsoQueueWatchdog";
     const now = Date.now();
     // Janela aceitável para requests simples: 3 minutos
@@ -660,7 +660,7 @@ exports.pulsoSessionConsistency = (0, scheduler_1.onSchedule)({ schedule: "every
 // ═══════════════════════════════════════════════════════════════════════════════
 // CAMADA 2 — CRON 6: Sincronização Backend-Front (a cada 15 min)
 // ═══════════════════════════════════════════════════════════════════════════════
-exports.pulsoFrontBackendSync = (0, scheduler_1.onSchedule)({ schedule: "every 15 minutes", region: "us-central1", timeoutSeconds: 60 }, async () => {
+exports.pulsoFrontBackendSync = (0, scheduler_1.onSchedule)({ schedule: "every 30 minutes", region: "us-central1", timeoutSeconds: 60 }, async () => {
     currentCronContext = "pulsoFrontBackendSync";
     const now = Date.now();
     const since = new Date(now - 15 * 60 * 1000);
@@ -716,6 +716,7 @@ exports.pulsoFrontBackendSync = (0, scheduler_1.onSchedule)({ schedule: "every 1
 // ═══════════════════════════════════════════════════════════════════════════════
 // CAMADA 2 — CRON 7: Regressão Funcional (a cada 1 hora)
 // ═══════════════════════════════════════════════════════════════════════════════
+// Disabled regression check (commented export in index.ts)
 exports.pulsoRegressionCheck = (0, scheduler_1.onSchedule)({ schedule: "every 60 minutes", region: "us-central1", timeoutSeconds: 90 }, async () => {
     currentCronContext = "pulsoRegressionCheck";
     const now = Date.now();

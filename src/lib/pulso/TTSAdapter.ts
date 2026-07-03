@@ -494,8 +494,8 @@ export class TTSAdapter {
     
     let skipKokoro = false;
     if (this.preferences.ttsProvider === 'local_kokoro_sidecar') {
-      if (isRemoteWeb || !isTauri) {
-        console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_NOT_TAURI]');
+      if (isRemoteWeb) {
+        console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_REMOTE_WEB]');
         skipKokoro = true;
       }
     } else if (isKokoro && isRemoteWeb && isEndpointLocalhost) {

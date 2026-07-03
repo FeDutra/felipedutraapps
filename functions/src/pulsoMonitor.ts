@@ -361,7 +361,7 @@ export const pulsoHealthCheck = onSchedule(
 // CRON 2 — Watchdog de Fila Presa (a cada 2 minutos)
 // ═══════════════════════════════════════════════════════════════════════════════
 export const pulsoQueueWatchdog = onSchedule(
-  { schedule: "every 2 minutes", region: "us-central1", timeoutSeconds: 30 },
+  { schedule: "every 5 minutes", region: "us-central1", timeoutSeconds: 30 },
   async () => {
     currentCronContext = "pulsoQueueWatchdog";
     const now = Date.now();
@@ -746,7 +746,7 @@ export const pulsoSessionConsistency = onSchedule(
 // CAMADA 2 — CRON 6: Sincronização Backend-Front (a cada 15 min)
 // ═══════════════════════════════════════════════════════════════════════════════
 export const pulsoFrontBackendSync = onSchedule(
-  { schedule: "every 15 minutes", region: "us-central1", timeoutSeconds: 60 },
+  { schedule: "every 30 minutes", region: "us-central1", timeoutSeconds: 60 },
   async () => {
     currentCronContext = "pulsoFrontBackendSync";
     const now   = Date.now();
@@ -809,6 +809,7 @@ export const pulsoFrontBackendSync = onSchedule(
 // ═══════════════════════════════════════════════════════════════════════════════
 // CAMADA 2 — CRON 7: Regressão Funcional (a cada 1 hora)
 // ═══════════════════════════════════════════════════════════════════════════════
+// Disabled regression check (commented export in index.ts)
 export const pulsoRegressionCheck = onSchedule(
   { schedule: "every 60 minutes", region: "us-central1", timeoutSeconds: 90 },
   async () => {

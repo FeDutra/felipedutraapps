@@ -117,7 +117,20 @@ function buildPackage(doc) {
         }
       : null,
     executionPrompt: handoff?.executionPrompt || "",
-    attachments: d.attachments || [],
+    attachments: (d.attachments || []).map((a: any) => ({
+      artifactId: a.id || a.artifactId,
+      name: a.name,
+      mimeType: a.mimeType,
+      sizeBytes: a.sizeBytes || 0,
+      summary: a.summary || "",
+      keyExcerpts: a.keyExcerpts || [],
+      sectionIndex: a.sectionIndex || [],
+      textExtracted: a.textExtracted || "",
+      availableToLotus: a.availableToLotus ?? false,
+      includedInline: a.includedInline ?? false,
+      fullTextDeferred: a.fullTextDeferred ?? false,
+      extractionMode: a.extractionMode || "none"
+    })),
     sourcesNeeded: interpretation?.sourcesNeeded || [],
     entitiesMentioned: handoff?.entitiesMentioned || [],
     riskLevel: handoff?.riskLevel || interpretation?.riskLevel || "low",

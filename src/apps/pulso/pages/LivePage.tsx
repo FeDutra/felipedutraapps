@@ -86,7 +86,7 @@ import { candidateAreas } from '../scripts/seedAreas';
 import { TTSAdapter, TTSPreferences } from '../../../lib/pulso/TTSAdapter';
 import { actionLedgerClient } from '../../../lib/pulso/ledger/ActionLedgerClient';
 import { SummaryCards } from '../../../components/pulso/SummaryCards';
-import { PulsoDebugPanel } from '../../../components/pulso/PulsoDebugPanel';
+
 
 import { 
   Send, 
@@ -128,7 +128,11 @@ import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } 
 import { firestorePaths } from '../services/firestorePaths';
 import { PulsoContextNode, Session } from '../types/pulso.types';
 import { sessionsService } from '../services/sessionsService';
-import AtelieWorkspace from '../components/AtelieWorkspace';
+import dynamic from 'next/dynamic';
+const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
+  ssr: false,
+  loading: () => <div className="p-8 text-white/50 text-xs font-mono">Carregando ateliê...</div>
+});
 
 
 interface Attachment {
@@ -140,6 +144,19 @@ interface Attachment {
   sizeBytes?: number;
   createdAt: Date;
   contextId: string;
+  
+  // Camada de Texto Interoperável
+  textExtracted?: string;
+  summary?: string;
+  keyExcerpts?: string[];
+  sectionIndex?: Array<{ title: string; pageRange: string; summaryExcerpt: string }>;
+
+  // Controles de Ciclo de Vida e Envio
+  status?: 'uploading' | 'processing_extraction' | 'ready' | 'failed';
+  availableToLotus?: boolean;
+  includedInline?: boolean;
+  fullTextDeferred?: boolean;
+  extractionMode?: 'none' | 'text' | 'ocr' | 'transcription' | 'multimodal';
 }
 
 /**
@@ -2155,7 +2172,12 @@ export default function LivePage() {
       type: a.type,
       mimeType: a.mimeType,
       url: a.storageUrl || a.localUrl,
-      sizeBytes: a.sizeBytes
+      sizeBytes: a.sizeBytes,
+      status: 'processing_extraction' as const,
+      availableToLotus: false,
+      includedInline: false,
+      fullTextDeferred: false,
+      extractionMode: (a.type === 'image' ? 'ocr' : (a.type === 'audio' ? 'transcription' : 'text')) as any
     }));
 
     // Build Attachment[] for optimistic local message
@@ -2167,7 +2189,12 @@ export default function LivePage() {
       url: a.storageUrl || a.localUrl,
       sizeBytes: a.sizeBytes,
       createdAt: new Date(),
-      contextId: sendingContextId
+      contextId: sendingContextId,
+      status: 'processing_extraction',
+      availableToLotus: false,
+      includedInline: false,
+      fullTextDeferred: false,
+      extractionMode: (a.type === 'image' ? 'ocr' : (a.type === 'audio' ? 'transcription' : 'text')) as any
     }));
 
     const sendMode = originMode === 'presence' ? 'presence' : (originMode === 'recording_once' ? 'voice' : 'text');
@@ -2933,7 +2960,7 @@ export default function LivePage() {
     >
 
       {pulsoJarvisLayerEnabled && <SummaryCards />}
-      {pulsoJarvisLayerEnabled && <PulsoDebugPanel />}
+
 
       {/* Camada Contextual */}
       <ContextSurfaceVariants 
