@@ -2350,15 +2350,11 @@ export default function LivePage() {
   }, []);
 
   const isSpeechRecognitionSupported = React.useCallback((): boolean => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-      console.log('[PULSO_STT_API_AVAILABLE]');
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) {
+      console.log('[PULSO_MEDIA_RECORDER_AVAILABLE]');
       return true;
     } else {
-      console.log('[PULSO_STT_API_UNAVAILABLE]');
+      console.log('[PULSO_MEDIA_RECORDER_UNAVAILABLE]');
       return false;
     }
   }, []);
