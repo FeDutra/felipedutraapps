@@ -2546,6 +2546,51 @@ export default function LivePage() {
 
       mediaRecorder.start(250); // emit chunks regularly
 
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+         const recognition = new SpeechRecognition();
+         recognition.lang = 'pt-BR';
+         recognition.continuous = mode === 'presence';
+         recognition.interimResults = true;
+         recognition.maxAlternatives = 1;
+         recognitionRef.current = recognition;
+
+         if (mode === 'recording_once' && inputMessageRef.current.trim().length > 0) {
+            finalTranscriptRef.current = inputMessageRef.current.trim() + ' ';
+         } else {
+            finalTranscriptRef.current = '';
+         }
+         currentTextRef.current = finalTranscriptRef.current;
+
+         recognition.onresult = (event: any) => {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+               const chunk = event.results[i][0].transcript;
+               if (event.results[i].isFinal) {
+                  finalTranscriptRef.current += ' ' + chunk;
+               } else {
+                  interimTranscript += ' ' + chunk;
+               }
+            }
+            const currentText = (finalTranscriptRef.current + ' ' + interimTranscript).trim().replace(/\\s+/g, ' ');
+            currentTextRef.current = currentText;
+            setInputMessage(currentText);
+         };
+         
+         recognition.onerror = () => {};
+
+         try {
+            recognition.start();
+         } catch (e) {}
+      } else {
+         if (mode === 'recording_once') {
+           const baseText = inputMessageRef.current.trim();
+           setInputMessage(baseText ? baseText + ' (Gravando...)' : '(Gravando...)');
+         } else if (mode === 'presence') {
+           setInputMessage('Ouvindo atentamente...');
+         }
+      }
+
       if (mode === 'presence') {
         voiceStateRef.current = 'presence_listening';
         setVoiceState('presence_listening');
