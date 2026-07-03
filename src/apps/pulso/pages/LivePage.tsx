@@ -985,6 +985,16 @@ export default function LivePage() {
   const hasRetriedSpeechRecognitionRef = React.useRef<boolean>(false);
   const isSpeechRecognitionRetryingRef = React.useRef<boolean>(false);
 
+  // Gemini Audio Recording Refs
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const audioContextRef = React.useRef<AudioContext | null>(null);
+  const analyserRef = React.useRef<AnalyserNode | null>(null);
+  const microphoneStreamRef = React.useRef<MediaStream | null>(null);
+  const audioChunksRef = React.useRef<Blob[]>([]);
+  const silenceStartRef = React.useRef<number>(0);
+  const animationFrameRef = React.useRef<number>(0);
+  const startSpeechRecognitionRef = React.useRef<any>(null);
+
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
     console.log('[PULSO_VOICE_MODE_CHANGED]', { mode: voiceMode });
@@ -2354,6 +2364,9 @@ export default function LivePage() {
   }, []);
 
   const stopVoiceRecognition = React.useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
@@ -2362,20 +2375,17 @@ export default function LivePage() {
       clearTimeout(maxRecordingTimeoutRef.current);
       maxRecordingTimeoutRef.current = null;
     }
-    
-    if (voiceModeRef.current === 'presence') {
-      console.log('[PULSO_PRESENCE_STOP]');
-    } else if (voiceModeRef.current === 'recording_once') {
-      console.log('[PULSO_RECORDING_ONCE_STOP]');
-    }
 
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        console.warn('Recognition stop error:', e);
-      }
-      recognitionRef.current = null;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach(track => track.stop());
+      microphoneStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(console.error);
+      audioContextRef.current = null;
     }
   }, []);
 
@@ -2399,255 +2409,173 @@ export default function LivePage() {
     inputMessageRef.current = inputMessage;
   }, [inputMessage]);
 
-  const startSpeechRecognition = React.useCallback((mode: VoiceMode) => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
+  const transcribeAudioBlob = React.useCallback(async (blob: Blob, mode: VoiceMode) => {
+    try {
+      voiceStateRef.current = 'transcribing';
+      setVoiceState('transcribing');
+      
+      const formData = new FormData();
+      formData.append('file', blob, 'audio.webm');
 
-    if (!SpeechRecognition) {
+      const response = await fetch('/api/pulso/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha na transcrição');
+      }
+
+      const data = await response.json();
+      const transcribedText = data.text || '';
+      
+      if (mode === 'recording_once') {
+         const currentBase = inputMessageRef.current.trim();
+         const newText = currentBase ? `${currentBase} ${transcribedText}` : transcribedText;
+         setInputMessage(newText);
+         currentTextRef.current = newText;
+         inputMessageRef.current = newText;
+         
+         setVoiceState('idle');
+         voiceStateRef.current = 'idle';
+         setVoiceMode('off');
+         voiceModeRef.current = 'off';
+      } else if (mode === 'presence') {
+         setInputMessage(transcribedText);
+         currentTextRef.current = transcribedText;
+         inputMessageRef.current = transcribedText;
+         
+         if (transcribedText.trim().length > 0) {
+            voiceStateRef.current = 'submitting';
+            setVoiceState('submitting');
+            playPresenceSoundCue('sent');
+            handleSendMessage(transcribedText, { originMode: 'presence' });
+            voiceStateRef.current = 'waiting_lotus';
+            setVoiceState('waiting_lotus');
+         } else {
+            // Restart presence if nothing was heard
+            if (voiceModeRef.current === 'presence') {
+              startSpeechRecognitionRef.current?.('presence');
+            }
+         }
+      }
+    } catch (err) {
+      console.error('[PULSO_TRANSCRIBE_ERROR]', err);
       setVoiceState('error');
-      setVoiceError('Transcrição não suportada neste navegador.');
-      return;
+      setVoiceError('Erro ao transcrever o áudio.');
+      if (mode === 'presence' && voiceModeRef.current === 'presence') {
+        setTimeout(() => {
+          startSpeechRecognitionRef.current?.('presence');
+        }, 2000);
+      }
     }
+  }, [handleSendMessage]);
 
-    // Cancel any active speech from Lótus before listening
+  const startSpeechRecognition = React.useCallback(async (mode: VoiceMode) => {
     ttsAdapter.cancel();
-
-    // Clear any existing recognition or timeouts
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {}
-      recognitionRef.current = null;
-    }
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-    if (maxRecordingTimeoutRef.current) {
-      clearTimeout(maxRecordingTimeoutRef.current);
-      maxRecordingTimeoutRef.current = null;
-    }
+    stopVoiceRecognition();
 
     setVoiceMode(mode);
     voiceModeRef.current = mode;
     isSpeechRecognitionRetryingRef.current = false;
-    if (mode === 'presence') {
-      voiceStateRef.current = 'presence_listening';
-      setVoiceState('presence_listening');
-      playPresenceSoundCue('start_listening');
-      console.log('[PULSO_PRESENCE_START]');
-      console.log('[PULSO_PRESENCE_LISTENING]');
-    } else if (mode === 'recording_once') {
-      voiceStateRef.current = 'recording_once';
-      setVoiceState('recording_once');
-      console.log('[PULSO_RECORDING_ONCE_START]');
-    }
-
-    if (mode === 'recording_once' && inputMessageRef.current.trim().length > 0) {
-      const existingText = inputMessageRef.current.trim() + ' ';
-      finalTranscriptRef.current = existingText;
-      currentTextRef.current = existingText;
-    } else {
-      finalTranscriptRef.current = '';
-      currentTextRef.current = '';
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'pt-BR';
-    // continuous=true is needed for background presence mode, but for single capture, 
-    // using continuous=false is significantly more stable in Chrome and avoids 'network' errors.
-    recognition.continuous = mode === 'presence' ? true : !hasRetriedSpeechRecognitionRef.current;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
-
-    recognition.onstart = () => {
-      setVoiceError(null);
-      if (mode === 'presence') {
-        console.log('[PULSO_PRESENCE_LISTENING]');
-      } else if (mode === 'recording_once') {
-        console.log('[PULSO_RECORDING_AUDIO_CAPTURE_STARTED]');
-      }
-    };
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const chunk = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscriptRef.current += ' ' + chunk;
-        } else {
-          interimTranscript += ' ' + chunk;
-        }
-      }
-
-      const currentText = (finalTranscriptRef.current + ' ' + interimTranscript)
-        .trim()
-        .replace(/\s+/g, ' ');
-
-      currentTextRef.current = currentText;
-      setInputMessage(currentText);
-
-      // Presence mode auto-send on silence
-      if (mode === 'presence') {
-        if (silenceTimeoutRef.current) {
-          clearTimeout(silenceTimeoutRef.current);
-        }
-
-        silenceTimeoutRef.current = setTimeout(() => {
-          const textToSend = currentTextRef.current.trim();
-          if (textToSend) {
-            latencyStopRecRef.current = Date.now();
-            stopVoiceRecognition();
-            
-            voiceStateRef.current = 'transcribing';
-            setVoiceState('transcribing');
-            console.log('[PULSO_PRESENCE_TRANSCRIPTION_READY]', { text: textToSend });
-            
-            latencyTranscriptionRef.current = Date.now();
-            const diffStopToTrans = latencyTranscriptionRef.current - (latencyStopRecRef.current || latencyTranscriptionRef.current);
-            console.log(`[PULSO_LATENCY_RECORDING_STOP_TO_TRANSCRIPTION_MS] ${diffStopToTrans} ms`);
-            
-            voiceStateRef.current = 'submitting';
-            setVoiceState('submitting');
-            playPresenceSoundCue('sent');
-            console.log('[PULSO_PRESENCE_REQUEST_SENT]');
-            
-            handleSendMessage(textToSend, { originMode: 'presence' });
-            
-            voiceStateRef.current = 'waiting_lotus';
-            setVoiceState('waiting_lotus');
-          }
-        }, 2500);
-      }
-    };
- 
-    recognition.onerror = (event: any) => {
-      console.warn('SpeechRecognition error:', event.error);
-      
-      // Ignore errors that fire after mic is paused for TTS
-      if (voiceStateRef.current === 'speaking') {
-        console.log('[PULSO_PRESENCE_ERROR_IGNORED_DURING_TTS]', { error: event.error });
-        return;
-      }
-      
-      if (event.error === 'network' && !hasRetriedSpeechRecognitionRef.current) {
-        hasRetriedSpeechRecognitionRef.current = true;
-        isSpeechRecognitionRetryingRef.current = true;
-        stopVoiceRecognition();
-        console.log('[PULSO_VOICE_RETRYING] Retrying speech recognition with simplified config due to network error...');
-        setTimeout(() => {
-          if (voiceModeRef.current !== 'off') {
-            startSpeechRecognition(mode);
-          }
-        }, 150);
-        return;
-      }
- 
-      stopVoiceRecognition();
-      
-      if (mode === 'presence') {
-        console.log('[PULSO_PRESENCE_ERROR]', { error: event.error });
- 
-        if (event.error === 'no-speech') {
-          if (voiceModeRef.current === 'presence') {
-            voiceStateRef.current = 'presence_listening';
-            setVoiceState('presence_listening');
-            startSpeechRecognition('presence');
-          }
-          return;
-        }
-        
-        playPresenceSoundCue('error');
-        voiceStateRef.current = 'error';
-        setVoiceState('error');
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          setVoiceError('Permissão de microfone negada ou indisponível.');
-        } else {
-          setVoiceError(`Erro de voz: ${event.error}.`);
-        }
-        setTimeout(() => {
-          if (voiceModeRef.current === 'presence') {
-            voiceStateRef.current = 'idle';
-            setVoiceState('idle');
-          }
-        }, 3000);
-      } else {
-        console.log('[PULSO_RECORDING_TRANSCRIPTION_FAILED]', { error: event.error });
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          setVoiceError('Permissão de microfone negada ou indisponível.');
-        } else {
-          setVoiceError(`Erro de voz: ${event.error}.`);
-        }
-      }
-    };
- 
-    recognition.onend = () => {
-      if (isSpeechRecognitionRetryingRef.current) {
-        console.log('[PULSO_VOICE_ONEND] Ignored onend during retry.');
-        return;
-      }
-      if (voiceStateRef.current === 'speaking') {
-        // Prevent auto-restarts while Lótus is speaking
-        return;
-      }
-      if (voiceModeRef.current === 'presence' && voiceStateRef.current === 'presence_listening') {
-        try {
-          recognitionRef.current?.start();
-        } catch (err) {
-          console.warn('Speech recognition restart failed:', err);
-        }
-      } else if (voiceModeRef.current === 'recording_once') {
-        // Auto-restart if stopped prematurely by silence timeout in continuous mode
-        try {
-          recognitionRef.current?.start();
-        } catch (err) {
-          console.warn('Speech recognition restart failed:', err);
-        }
-      }
-    };
-
-    // Max recording timeout of 45 seconds
-    maxRecordingTimeoutRef.current = setTimeout(() => {
-      console.log('Max recording timeout reached.');
-      if (voiceModeRef.current === 'presence') {
-        const textToSend = currentTextRef.current.trim();
-        latencyStopRecRef.current = Date.now();
-        stopVoiceRecognition();
-        
-        if (textToSend) {
-          voiceStateRef.current = 'transcribing';
-          setVoiceState('transcribing');
-          console.log('[PULSO_PRESENCE_TRANSCRIPTION_READY]', { text: textToSend });
-          
-          latencyTranscriptionRef.current = Date.now();
-          const diffStopToTrans = latencyTranscriptionRef.current - (latencyStopRecRef.current || latencyTranscriptionRef.current);
-          console.log(`[PULSO_LATENCY_RECORDING_STOP_TO_TRANSCRIPTION_MS] ${diffStopToTrans} ms`);
-          
-          voiceStateRef.current = 'submitting';
-          setVoiceState('submitting');
-          playPresenceSoundCue('sent');
-          console.log('[PULSO_PRESENCE_REQUEST_SENT]');
-          handleSendMessage(textToSend, { originMode: 'presence' });
-          voiceStateRef.current = 'waiting_lotus';
-          setVoiceState('waiting_lotus');
-        } else {
-          exitPresenceMode();
-        }
-      } else if (voiceModeRef.current === 'recording_once') {
-        stopVoiceRecognition();
-      }
-    }, 45000);
+    setVoiceError(null);
 
     try {
-      recognition.start();
-    } catch (err) {
-      console.error('Speech recognition start failed:', err);
-      setVoiceMode('off');
-      setVoiceState('idle');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      microphoneStreamRef.current = stream;
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        audioChunksRef.current = [];
+        // Only transcribe if we haven't manually aborted or completely exited
+        if (voiceModeRef.current === mode || (mode === 'presence' && voiceStateRef.current === 'transcribing')) {
+           transcribeAudioBlob(audioBlob, mode);
+        }
+      };
+
+      if (mode === 'presence') {
+        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new AudioContextCtor();
+        audioContextRef.current = audioCtx;
+        const analyser = audioCtx.createAnalyser();
+        analyser.minDecibels = -70;
+        analyser.maxDecibels = -10;
+        analyser.smoothingTimeConstant = 0.85;
+        analyserRef.current = analyser;
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        
+        silenceStartRef.current = Date.now();
+
+        const checkSilence = () => {
+          if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
+          analyser.getByteFrequencyData(dataArray);
+          
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / bufferLength;
+
+          if (average > 10) {
+            silenceStartRef.current = Date.now();
+          } else {
+            // Trigger auto-stop on 2.5s of silence
+            if (Date.now() - silenceStartRef.current > 2500) {
+               console.log('[PULSO_PRESENCE_SILENCE_DETECTED]');
+               stopVoiceRecognition();
+               voiceStateRef.current = 'transcribing';
+               setVoiceState('transcribing');
+               return;
+            }
+          }
+          animationFrameRef.current = requestAnimationFrame(checkSilence);
+        };
+        checkSilence();
+      }
+
+      mediaRecorder.start(250); // emit chunks regularly
+
+      if (mode === 'presence') {
+        voiceStateRef.current = 'presence_listening';
+        setVoiceState('presence_listening');
+        playPresenceSoundCue('start_listening');
+        console.log('[PULSO_PRESENCE_LISTENING]');
+      } else if (mode === 'recording_once') {
+        voiceStateRef.current = 'recording_once';
+        setVoiceState('recording_once');
+        console.log('[PULSO_RECORDING_ONCE_START]');
+      }
+      
+      maxRecordingTimeoutRef.current = setTimeout(() => {
+        console.log('Max recording timeout reached.');
+        stopVoiceRecognition();
+      }, 60000); // 60 seconds max
+
+    } catch (error) {
+      console.error('Microphone error:', error);
+      setVoiceState('error');
+      setVoiceError('Permissão de microfone negada ou indisponível.');
     }
-  }, [handleSendMessage, stopVoiceRecognition, ttsAdapter, exitPresenceMode]);
+  }, [stopVoiceRecognition, ttsAdapter, transcribeAudioBlob]);
+
+  React.useEffect(() => {
+    startSpeechRecognitionRef.current = startSpeechRecognition;
+  }, [startSpeechRecognition]);
 
   const toggleRecordingOnce = React.useCallback(async () => {
     hasRetriedSpeechRecognitionRef.current = false;
