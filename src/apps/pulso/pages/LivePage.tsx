@@ -994,6 +994,7 @@ export default function LivePage() {
   const silenceStartRef = React.useRef<number>(0);
   const animationFrameRef = React.useRef<number>(0);
   const startSpeechRecognitionRef = React.useRef<any>(null);
+  const baseTextBeforeRecordingRef = React.useRef<string>('');
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -2426,7 +2427,7 @@ export default function LivePage() {
       const transcribedText = data.text || '';
       
       if (mode === 'recording_once') {
-         const currentBase = inputMessageRef.current.trim();
+         const currentBase = baseTextBeforeRecordingRef.current;
          const newText = currentBase ? `${currentBase} ${transcribedText}` : transcribedText;
          setInputMessage(newText);
          currentTextRef.current = newText;
@@ -2494,7 +2495,7 @@ export default function LivePage() {
         const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
         audioChunksRef.current = [];
         // Only transcribe if we haven't manually aborted or completely exited
-        if (voiceModeRef.current === mode || (mode === 'presence' && voiceStateRef.current === 'transcribing')) {
+        if (voiceStateRef.current === 'recording_once' || voiceStateRef.current === 'presence_listening' || voiceStateRef.current === 'transcribing') {
            transcribeAudioBlob(audioBlob, mode);
         }
       };
@@ -2560,6 +2561,7 @@ export default function LivePage() {
          } else {
             finalTranscriptRef.current = '';
          }
+         baseTextBeforeRecordingRef.current = finalTranscriptRef.current;
          currentTextRef.current = finalTranscriptRef.current;
 
          recognition.onresult = (event: any) => {
@@ -2585,8 +2587,10 @@ export default function LivePage() {
       } else {
          if (mode === 'recording_once') {
            const baseText = inputMessageRef.current.trim();
+           baseTextBeforeRecordingRef.current = baseText ? baseText + ' ' : '';
            setInputMessage(baseText ? baseText + ' (Gravando...)' : '(Gravando...)');
          } else if (mode === 'presence') {
+           baseTextBeforeRecordingRef.current = '';
            setInputMessage('Ouvindo atentamente...');
          }
       }
@@ -3892,9 +3896,21 @@ export default function LivePage() {
             value={inputMessage}
             onChange={handleInputChange}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
+              if (e.key === 'Enter') {
+                const isMobileDevice = typeof window !== 'undefined' && (
+                  window.matchMedia('(max-width: 768px)').matches || 
+                  window.matchMedia('(pointer: coarse)').matches
+                );
+                
+                if (isMobileDevice) {
+                  // Let Enter insert newline/paragraph on mobile
+                  return;
+                }
+                
+                if (!e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
               }
             }}
             onPaste={(e) => {
