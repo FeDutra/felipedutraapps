@@ -22,7 +22,18 @@ export const pulsoActiveMessageTrigger = onDocumentCreated(
 
     // A Lótus prometeu enviar os eventos como um campo estruturado no payload.
     // Vamos sondar nos três lugares mais comuns (raiz, payload ou meta).
-    const events = data.pulsoEvents || data.payload?.pulsoEvents || data.meta?.pulsoEvents;
+    let rawEvents = data.pulsoEvents || data.payload?.pulsoEvents || data.meta?.pulsoEvents;
+    let events = rawEvents;
+
+    // A Lótus reportou que o emissor Python pode estar gravando o array como string (JSON serializado)
+    if (typeof rawEvents === "string") {
+      try {
+        events = JSON.parse(rawEvents);
+      } catch (e) {
+        console.error(`[pulsoActiveMessageTrigger] Erro ao fazer parse de pulsoEvents:`, rawEvents);
+        events = null;
+      }
+    }
 
     if (events && Array.isArray(events) && events.length > 0) {
       const db = getFirestore();

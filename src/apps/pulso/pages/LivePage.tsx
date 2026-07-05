@@ -392,20 +392,6 @@ export default function LivePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
   const [inputHeight, setInputHeight] = React.useState(36);
-  const [windowWidth, setWindowWidth] = React.useState<number>(1024);
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setWindowWidth(window.innerWidth);
-      const handleResize = () => setWindowWidth(window.innerWidth);
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, []);
-
-  const chatMarginBottom = React.useMemo(() => {
-    return `${inputHeight + 24}px`;
-  }, [inputHeight]);
 
   const pulsoJarvisLayerEnabled = true;
 
@@ -3333,7 +3319,7 @@ export default function LivePage() {
       </div>
 
         <main className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative transition-all duration-1000 ease-in-out pointer-events-auto z-10 ${
-          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : 'overflow-hidden max-w-5xl w-full mt-6 mb-4'
+          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : 'overflow-hidden max-w-5xl w-full mt-6 mb-4 pb-28'
         }`}>
           
           {/* Atelie Workspace Container nested within main */}
@@ -3373,7 +3359,7 @@ export default function LivePage() {
                   ? 'bg-black/55 backdrop-blur-xl border border-white/5 rounded-2xl p-4 shadow-2xl' 
                   : 'bg-transparent'
               }`}
-              style={{ marginBottom: chatMarginBottom }}
+              style={{ marginBottom: `${inputHeight - 36}px` }}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDraggingFile(true);
