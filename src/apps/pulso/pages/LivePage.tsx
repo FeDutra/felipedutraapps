@@ -3333,10 +3333,10 @@ export default function LivePage() {
             onClick={togglePresenceMode}
             className={isAtelieActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
-              : `relative w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
+              : `absolute top-[90px] lg:top-1/2 lg:-translate-y-1/2 left-1/2 lg:left-[8%] -translate-x-1/2 lg:translate-x-0 w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
                     ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
-                    : 'mt-auto mb-4 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-[-2vh] md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
+                    : 'z-10'
                 }`
             }
           >
@@ -3352,7 +3352,7 @@ export default function LivePage() {
 
           {(!isAtelieActive || showAtelieChatHistory) && (
             <div 
-              className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 pointer-events-auto ${
+              className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-auto md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-auto mt-[280px] lg:mt-2 mb-4 pointer-events-auto ${
                 presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
               } ${
                 isAtelieActive 
@@ -3388,7 +3388,6 @@ export default function LivePage() {
               ref={scrollContainerRef}
               onScroll={handleScroll}
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
-              style={{ paddingBottom: `${inputHeight + 60}px` }}
             >
               {currentMessages.map((msg) => {
                 const isLotus = msg.sender === 'lotus';
@@ -3719,7 +3718,7 @@ export default function LivePage() {
         </div>
       </main>
 
-      <footer className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
+      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
@@ -3847,7 +3846,7 @@ export default function LivePage() {
           </div>
         )}
 
-        <div className="w-full flex items-end gap-3.5 bg-transparent backdrop-blur-lg border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+        <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
 
           <div className="relative" ref={attachmentMenuRef}>
             <input

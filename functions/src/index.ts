@@ -121,3 +121,4 @@ export {
   onPulsoRequestUpdated,
 } from "./pulsoArtifactExtractor";
 export { pulsoTranscribe } from "./transcribe";
+export { pulsoActiveMessageTrigger } from "./pulsoActiveMessageTrigger";
