@@ -120,3 +120,4 @@ export {
   onPulsoRequestCreated,
   onPulsoRequestUpdated,
 } from "./pulsoArtifactExtractor";
+export { pulsoTranscribe } from "./transcribe";

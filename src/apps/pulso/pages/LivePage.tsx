@@ -391,6 +391,7 @@ export default function LivePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
+  const [inputHeight, setInputHeight] = React.useState(36);
 
   const pulsoJarvisLayerEnabled = true;
 
@@ -1303,6 +1304,10 @@ export default function LivePage() {
       clearTimeout(t4);
     };
   }, [currentMessages.length, isTyping, activeContextNode.contextId, scrollToBottom]);
+
+  React.useEffect(() => {
+    scrollToBottom(false);
+  }, [inputHeight, scrollToBottom]);
   // Load database state once
   React.useEffect(() => {
     async function load() {
@@ -2222,6 +2227,7 @@ export default function LivePage() {
     currentTextRef.current = '';
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+      setInputHeight(36);
     }
 
     const capturedReplyTo = replyTo;
@@ -2411,12 +2417,12 @@ export default function LivePage() {
       voiceStateRef.current = 'transcribing';
       setVoiceState('transcribing');
       
-      const formData = new FormData();
-      formData.append('file', blob, 'audio.webm');
-
       const response = await fetch('/api/pulso/transcribe', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': blob.type || 'audio/webm',
+        },
+        body: blob,
       });
 
       if (!response.ok) {
@@ -2428,7 +2434,7 @@ export default function LivePage() {
       
       if (mode === 'recording_once') {
          const currentBase = baseTextBeforeRecordingRef.current;
-         const newText = currentBase ? `${currentBase} ${transcribedText}` : transcribedText;
+         const newText = transcribedText.trim() ? (currentBase ? `${currentBase}${transcribedText}` : transcribedText) : currentBase.trim();
          setInputMessage(newText);
          currentTextRef.current = newText;
          inputMessageRef.current = newText;
@@ -2460,6 +2466,17 @@ export default function LivePage() {
       console.error('[PULSO_TRANSCRIBE_ERROR]', err);
       setVoiceState('error');
       setVoiceError('Erro ao transcrever o áudio.');
+      if (mode === 'recording_once') {
+         const originalText = baseTextBeforeRecordingRef.current.trim();
+         setInputMessage(originalText);
+         currentTextRef.current = originalText;
+         inputMessageRef.current = originalText;
+         
+         setVoiceState('idle');
+         voiceStateRef.current = 'idle';
+         setVoiceMode('off');
+         voiceModeRef.current = 'off';
+      }
       if (mode === 'presence' && voiceModeRef.current === 'presence') {
         setTimeout(() => {
           startSpeechRecognitionRef.current?.('presence');
@@ -2548,7 +2565,7 @@ export default function LivePage() {
       mediaRecorder.start(250); // emit chunks regularly
 
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
+      if (false && SpeechRecognition) {
          const recognition = new SpeechRecognition();
          recognition.lang = 'pt-BR';
          recognition.continuous = mode === 'presence';
@@ -2588,7 +2605,7 @@ export default function LivePage() {
          if (mode === 'recording_once') {
            const baseText = inputMessageRef.current.trim();
            baseTextBeforeRecordingRef.current = baseText ? baseText + ' ' : '';
-           setInputMessage(baseText ? baseText + ' (Gravando...)' : '(Gravando...)');
+           setInputMessage(baseText ? baseText + ' [gravando...]' : '[gravando...]');
          } else if (mode === 'presence') {
            baseTextBeforeRecordingRef.current = '';
            setInputMessage('Ouvindo atentamente...');
@@ -2688,7 +2705,9 @@ export default function LivePage() {
     // Auto-resize
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      const newHeight = Math.min(textareaRef.current.scrollHeight, 212);
+      textareaRef.current.style.height = `${newHeight}px`;
+      setInputHeight(newHeight);
     }
   }, [voiceState]);
 
@@ -3369,6 +3388,7 @@ export default function LivePage() {
               ref={scrollContainerRef}
               onScroll={handleScroll}
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
+              style={{ paddingBottom: `${inputHeight + 60}px` }}
             >
               {currentMessages.map((msg) => {
                 const isLotus = msg.sender === 'lotus';
@@ -3699,7 +3719,7 @@ export default function LivePage() {
         </div>
       </main>
 
-      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-[250px] gap-3 pb-6 md:pb-8 ${
+      <footer className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
@@ -3827,7 +3847,7 @@ export default function LivePage() {
           </div>
         )}
 
-        <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+        <div className="w-full flex items-end gap-3.5 bg-transparent backdrop-blur-lg border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
 
           <div className="relative" ref={attachmentMenuRef}>
             <input
@@ -3948,7 +3968,7 @@ export default function LivePage() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[120px] py-1.5 overflow-y-auto"
+            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[212px] py-1.5 overflow-y-auto no-scrollbar"
           />
 
           {voiceState !== 'error' && (

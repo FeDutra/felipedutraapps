@@ -1,57 +1,67 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-    
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = await req.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const base64Audio = buffer.toString('base64');
     
-    // Extract mime type, fallback to audio/webm if missing
-    let mimeType = file.type || 'audio/webm';
-    
-    // Gemini strictly accepts standard formats. 
-    // Strip codecs from mimeType (e.g. "audio/webm;codecs=opus" -> "audio/webm")
+    let mimeType = req.headers.get('content-type') || 'audio/webm';
     if (mimeType.includes(';')) {
       mimeType = mimeType.split(';')[0];
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const rawKey = process.env.GEMINI_API_KEY;
+    const apiKey = rawKey ? rawKey.trim() : "";
     if (!apiKey) {
       console.error('[PULSO_TRANSCRIBE] GEMINI_API_KEY missing in environment.');
       return NextResponse.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const prompt = `Você é o transcritor e redator oficial de áudio do PULSO. Sua tarefa é transcrever o áudio fornecido em português brasileiro com perfeição profissional.
+
+Siga rigorosamente as diretrizes abaixo:
+1. **Pontuação Impecável:** Adicione vírgulas, pontos finais, pontos de interrogação, exclamação e travessões de forma gramaticalmente correta e fluida, de acordo com o sentido e entonação da fala.
+2. **Correção Gramatical:** Ajuste discretamente desvios gramaticais ou erros de concordância típicos de linguagem falada informal, convertendo-os em um português claro, correto e profissional, mantendo o sentido original.
+3. **Remover Disfluências e Hesitações:** Remova gagueiras, vícios de linguagem ("né", "tipo", "hã", "ééé", "então", "tá") e repetições de palavras decorrentes de hesitação.
+4. **Formatação Apropriada:** Escreva números, valores monetários (ex: "R$ 50", "cento e cento e cinquenta") e datas de forma limpa e padronizada. Capitalize nomes próprios e siglas.
+5. **Saída Limpa:** Retorne EXCLUSIVAMENTE o texto transcrito. Não adicione introduções, aspas, notas de rodapé, explicações ou qualquer outro caractere adicional.`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
-    // Using gemini-1.5-flash for ultra-fast audio transcription
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    const prompt = "Você é um assistente de transcrição de altíssima precisão. Transcreva o áudio a seguir preservando perfeitamente a pontuação (vírgulas, pontos finais, interrogações e exclamações) e a concordância. Não adicione nenhum comentário, saudação ou aspas na sua resposta. Retorne EXCLUSIVAMENTE o texto que foi falado no áudio.";
-
-    console.log(`[PULSO_TRANSCRIBE] Sending audio to Gemini. Size: ${buffer.length} bytes, Mime: ${mimeType}`);
-    const startTime = Date.now();
-
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          data: base64Audio,
-          mimeType
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: base64Audio
+              }
+            },
+            {
+              text: prompt
+            }
+          ]
         }
-      },
-      prompt
-    ]);
+      ]
+    };
 
-    const transcription = result.response.text();
-    const duration = Date.now() - startTime;
-    console.log(`[PULSO_TRANSCRIBE] Transcribed in ${duration}ms: "${transcription}"`);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google API responded with status ${response.status}: ${errorText}`);
+    }
+
+    const json = await response.json();
+    const transcription = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return NextResponse.json({ text: transcription.trim() });
   } catch (error: any) {

@@ -28,6 +28,10 @@
         "function": "pulsoRequests"
       },
       {
+        "source": "/api/pulso/transcribe",
+        "function": "pulsoTranscribe"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
