@@ -392,6 +392,26 @@ export default function LivePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
   const [inputHeight, setInputHeight] = React.useState(36);
+  const [windowWidth, setWindowWidth] = React.useState<number>(1024);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setWindowWidth(window.innerWidth);
+      const handleResize = () => setWindowWidth(window.innerWidth);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  const chatHeight = React.useMemo(() => {
+    if (windowWidth < 768) return 'auto';
+    const baseHeight = windowWidth >= 1536 ? '45vh' : '60vh';
+    return `calc(${baseHeight} - ${inputHeight - 36}px)`;
+  }, [windowWidth, inputHeight]);
+
+  const chatMarginBottom = React.useMemo(() => {
+    return `${inputHeight - 36 + 16}px`;
+  }, [inputHeight]);
 
   const pulsoJarvisLayerEnabled = true;
 
@@ -3359,7 +3379,7 @@ export default function LivePage() {
                   ? 'bg-black/55 backdrop-blur-xl border border-white/5 rounded-2xl p-4 shadow-2xl' 
                   : 'bg-transparent'
               }`}
-              style={{ marginBottom: `${inputHeight - 36}px` }}
+              style={{ height: chatHeight, marginBottom: chatMarginBottom }}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDraggingFile(true);
