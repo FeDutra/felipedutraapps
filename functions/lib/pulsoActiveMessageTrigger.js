@@ -35,8 +35,16 @@ exports.pulsoActiveMessageTrigger = (0, firestore_1.onDocumentCreated)({ documen
     if (events && Array.isArray(events) && events.length > 0) {
         const db = (0, firestore_2.getFirestore)();
         console.log(`[pulsoActiveMessageTrigger] Encontrados ${events.length} pulsoEvents no active_message ${snap.id}`);
+        // Injeta as chaves estruturais de segurança obrigatórias do Ledger
+        // para evitar que a Lótus precise mandar todo esse boilerplate no payload do CRON
+        const enrichedEvents = events.map((evt) => ({
+            source: "lotus_openclaw",
+            surface: "openclaw",
+            status: "success",
+            ...evt
+        }));
         // 1. Emite o Ledger da PULSO (os cards flutuantes na UI)
-        await (0, pulsoLedgerEmitter_1.emitPulsoLedgerEvents)(events, db);
+        await (0, pulsoLedgerEmitter_1.emitPulsoLedgerEvents)(enrichedEvents, db);
         // 2. Grava a confirmação de recebimento (Ack) exigida pela arquitetura da Lótus
         await snap.ref.update({
             "meta.pulsoAck": {
