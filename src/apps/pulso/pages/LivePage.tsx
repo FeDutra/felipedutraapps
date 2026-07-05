@@ -392,6 +392,20 @@ export default function LivePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
   const [inputHeight, setInputHeight] = React.useState(36);
+  const [windowWidth, setWindowWidth] = React.useState<number>(1024);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setWindowWidth(window.innerWidth);
+      const handleResize = () => setWindowWidth(window.innerWidth);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  const chatMarginBottom = React.useMemo(() => {
+    return `${inputHeight + 24}px`;
+  }, [inputHeight]);
 
   const pulsoJarvisLayerEnabled = true;
 
@@ -3333,10 +3347,10 @@ export default function LivePage() {
             onClick={togglePresenceMode}
             className={isAtelieActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
-              : `absolute top-[90px] lg:top-1/2 lg:-translate-y-1/2 left-1/2 lg:left-[8%] -translate-x-1/2 lg:translate-x-0 w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
+              : `relative w-64 h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
                     ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
-                    : 'z-10'
+                    : 'mt-auto mb-4 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-[-2vh] md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
                 }`
             }
           >
@@ -3352,13 +3366,14 @@ export default function LivePage() {
 
           {(!isAtelieActive || showAtelieChatHistory) && (
             <div 
-              className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-auto md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-auto mt-[280px] lg:mt-2 mb-4 pointer-events-auto ${
+              className={`w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%] relative border-none shadow-none overflow-hidden pulso-transition flex-1 min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-2 mb-4 pointer-events-auto ${
                 presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
               } ${
                 isAtelieActive 
                   ? 'bg-black/55 backdrop-blur-xl border border-white/5 rounded-2xl p-4 shadow-2xl' 
                   : 'bg-transparent'
               }`}
+              style={{ marginBottom: chatMarginBottom }}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDraggingFile(true);
@@ -3718,7 +3733,7 @@ export default function LivePage() {
         </div>
       </main>
 
-      <footer className={`w-full max-w-xl mx-auto flex flex-col items-center z-10 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 ${
+      <footer className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
