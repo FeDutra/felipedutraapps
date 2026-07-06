@@ -274,9 +274,9 @@ const agentTools: ToolDefinition[] = [
 
 // Modelos Groq em ordem de preferência (melhor primeiro)
 const GROQ_MODEL_CHAIN = [
-  'llama-3.3-70b-versatile',   // preferído: mais capaz
+  'llama-3.3-70b-versatile',   // preferido: mais capaz
   'llama-3.1-8b-instant',      // fallback 1: rápido, 5x mais cota
-  'gemma2-9b-it',              // fallback 2: alternativo
+  'llama3-70b-8192',           // fallback 2: 70b versão antiga, quota separada
   'llama3-8b-8192',            // fallback 3: modelo antigo estável
 ];
 
@@ -357,8 +357,8 @@ export class AgentOrchestrator {
         const msg = err?.message || '';
         if (msg.includes('429') || msg.includes('rate_limit') || msg.includes('Too Many Requests')) {
           // Extrai retryAfter do erro se disponível (em segundos)
-          const retryMatch = msg.match(/try again in (\d+)s/);
-          const retryMs = retryMatch ? parseInt(retryMatch[1]) * 1000 + 5000 : 60 * 60 * 1000;
+          const retryMatch = msg.match(/try again in ([\d.]+)s/);
+          const retryMs = retryMatch ? Math.ceil(parseFloat(retryMatch[1]) * 1000) + 5000 : 60 * 60 * 1000;
           markModelRateLimited(model, retryMs);
           console.warn(`[AgentOrchestrator] 429 no modelo ${model}, tentando próximo...`);
           i--; // não conta essa iteração
