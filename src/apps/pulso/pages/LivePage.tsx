@@ -125,8 +125,7 @@ import {
   ChevronDown,
   ChevronRight,
   Globe,
-  Activity,
-  Settings
+  Layers
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
