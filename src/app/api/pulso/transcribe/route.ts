@@ -20,8 +20,20 @@ export async function POST(req: Request) {
     const formData = new FormData();
     const blob = new Blob([buffer], { type: mimeType });
     
-    // We must pass a file name. Groq uses it to detect the format (webm/m4a/etc).
-    const extension = mimeType === 'audio/mp4' ? 'm4a' : 'webm';
+    // Mapeamento dinâmico de extensões de áudio para compatibilidade com o Safari/iOS
+    let extension = 'webm';
+    if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
+      extension = 'm4a';
+    } else if (mimeType.includes('wav')) {
+      extension = 'wav';
+    } else if (mimeType.includes('aac')) {
+      extension = 'aac';
+    } else if (mimeType.includes('ogg')) {
+      extension = 'ogg';
+    } else if (mimeType.includes('mpeg')) {
+      extension = 'mp3';
+    }
+    
     formData.append('file', blob, `audio.${extension}`);
     
     formData.append('model', 'whisper-large-v3-turbo');
