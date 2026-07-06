@@ -2833,7 +2833,23 @@ export default function LivePage() {
       
       console.log('[PULSO_PRESENCE_MIC_READY]');
       console.log('[PULSO_PRESENCE_STT_READY]');
-      startSpeechRecognition('presence');
+      
+      const hour = new Date().getHours();
+      let greeting = 'Boa noite, Fê. Como posso ajudar?';
+      if (hour < 12) greeting = 'Bom dia, Fê. Como posso ajudar?';
+      else if (hour < 18) greeting = 'Boa tarde, Fê. Como posso ajudar?';
+      
+      setVoiceState('speaking');
+      ttsAdapter.speak(
+        greeting,
+        undefined,
+        () => {
+          if (voiceModeRef.current === 'presence') {
+            setVoiceState('presence_listening');
+            startSpeechRecognition('presence');
+          }
+        }
+      );
     }
   }, [presenceMode, startSpeechRecognition, exitPresenceMode, requestMicrophonePermission, isSpeechRecognitionSupported]);
 
