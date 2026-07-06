@@ -2572,7 +2572,17 @@ export default function LivePage() {
       voiceStateRef.current = 'transcribing';
       setVoiceState('transcribing');
       
-      const response = await fetch('/api/pulso/transcribe', {
+      const isTauriEnv = typeof window !== 'undefined' && (
+        window.location.protocol === 'tauri:' ||
+        !!(window as any).__TAURI__ ||
+        !!(window as any).__TAURI_INTERNALS__
+      );
+
+      const endpointUrl = isTauriEnv 
+        ? 'https://felipedutraapps.web.app/api/pulso/transcribe' 
+        : '/api/pulso/transcribe';
+
+      const response = await fetch(endpointUrl, {
         method: 'POST',
         headers: {
           'Content-Type': blob.type || 'audio/webm',
@@ -2650,7 +2660,13 @@ export default function LivePage() {
     setVoiceError(null);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true, 
+          noiseSuppression: true, 
+          autoGainControl: true 
+        } 
+      });
       microphoneStreamRef.current = stream;
 
       const mediaRecorder = new MediaRecorder(stream);
