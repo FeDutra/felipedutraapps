@@ -216,3 +216,79 @@ const PORT = 3005;
 app.listen(PORT, () => {
     console.log(`[WhatsApp Service] Rodando na porta ${PORT}`);
 });
+
+// ==== MODO DEUS ====
+
+// Ler Chats Recentes
+app.get('/chats', async (req, res) => {
+    if (connectionStatus !== 'connected') return res.status(400).json({ error: 'WhatsApp offline' });
+    try {
+        const chats = await client.getChats();
+        const simplified = chats.slice(0, 30).map(c => ({
+            id: c.id._serialized,
+            name: c.name,
+            isGroup: c.isGroup,
+            unreadCount: c.unreadCount,
+            timestamp: c.timestamp
+        }));
+        res.json({ success: true, chats: simplified });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Ler Histórico de Mensagens de um Chat
+app.get('/chat/messages', async (req, res) => {
+    const { chatName, limit = 10 } = req.query;
+    if (connectionStatus !== 'connected') return res.status(400).json({ error: 'WhatsApp offline' });
+    if (!chatName) return res.status(400).json({ error: 'Faltam parâmetros (chatName)' });
+    try {
+        const chatId = await resolveWhatsAppId(chatName);
+        if (!chatId) return res.status(404).json({ error: 'Chat não encontrado' });
+        const chat = await client.getChatById(chatId);
+        const messages = await chat.fetchMessages({ limit: parseInt(limit, 10) });
+        const simplified = messages.map(m => ({
+            id: m.id._serialized,
+            fromMe: m.fromMe,
+            body: m.body,
+            timestamp: m.timestamp,
+            author: m.author,
+            type: m.type
+        }));
+        res.json({ success: true, messages: simplified });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Ações de Estado de Chat
+app.post('/chat/action', async (req, res) => {
+    const { chatName, action } = req.body; // action: markRead, markUnread, mute, unmute, archive, unarchive, pin, unpin
+    if (connectionStatus !== 'connected') return res.status(400).json({ error: 'WhatsApp offline' });
+    if (!chatName || !action) return res.status(400).json({ error: 'Faltam parâmetros' });
+    
+    try {
+        const chatId = await resolveWhatsAppId(chatName);
+        if (!chatId) return res.status(404).json({ error: 'Chat não encontrado' });
+        const chat = await client.getChatById(chatId);
+        
+        switch (action) {
+            case 'markRead': await chat.sendSeen(); break;
+            case 'markUnread': await chat.markUnread(); break;
+            case 'mute': 
+                const date = new Date();
+                date.setFullYear(date.getFullYear() + 1); // 1 ano mutado
+                await chat.mute(date); 
+                break;
+            case 'unmute': await chat.unmute(); break;
+            case 'archive': await chat.archive(); break;
+            case 'unarchive': await chat.unarchive(); break;
+            case 'pin': await chat.pin(); break;
+            case 'unpin': await chat.unpin(); break;
+            default: return res.status(400).json({ error: 'Ação inválida' });
+        }
+        res.json({ success: true, action: action });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});

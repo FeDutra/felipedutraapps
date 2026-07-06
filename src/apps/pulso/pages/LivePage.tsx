@@ -1417,7 +1417,7 @@ export default function LivePage() {
             });
           }
           
-          const isConvCommand = req.requestType === 'conversation_command';
+          const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction';
           const isActiveMessage = req.requestType === "active_message";
           
           if (isConvCommand) {
@@ -1451,7 +1451,7 @@ export default function LivePage() {
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
                 sender: 'lotus',
-                text: 'falha operacional no processamento deste comando.',
+                text: '[OpenClaw] Falha operacional (Nuvem indisponível / Sem quota).',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -1513,7 +1513,7 @@ export default function LivePage() {
     try {
       const q = query(
         collection(db, firestorePaths.requests()),
-        where("requestType", "in", ["conversation_command", "active_message"])
+        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"])
       );
 
       unsubscribe = onSnapshot(q, (snapshot: any) => {
@@ -1603,7 +1603,7 @@ export default function LivePage() {
             });
           }
 
-          const isConvCommand = req.requestType === 'conversation_command';
+          const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction';
           const isActiveMessage = req.requestType === "active_message";
 
           if (isConvCommand) {
@@ -1740,7 +1740,7 @@ export default function LivePage() {
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
-                text: 'falha operacional no processamento deste comando.',
+                text: '[OpenClaw] Falha operacional (Nuvem indisponível / Sem quota).',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -2331,6 +2331,23 @@ export default function LivePage() {
             contextId: activeContextNode.contextId
           };
           setMessages(prev => [...prev, pulsoMsg]);
+          
+          if (db) {
+            const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+            addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
+              requestType: 'local_interaction',
+              status: 'success',
+              input: messageText,
+              openclawResult: { responseText: result.responseText },
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              mode: sendMode,
+              areaId: activeContextNode.areaId,
+              contextId: activeContextNode.contextId,
+              chatId: activeContextNode.chatId
+            }).catch(e => console.warn('Falha ao salvar interação local', e));
+          }
+
           setContextTyping(sendingContextId, false);
           
           if (originMode === 'presence' || originMode === 'recording_once') {

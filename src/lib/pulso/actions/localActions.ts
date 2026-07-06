@@ -57,6 +57,15 @@ export const localActions = {
   updateWhatsappSettings: async (groupName: string, adminsOnlyMessages?: boolean, adminsOnlySettings?: boolean): Promise<string> => {
     return whatsappActions.updateGroupSettings(groupName, adminsOnlyMessages, adminsOnlySettings);
   },
+  getWhatsappChats: async (): Promise<string> => {
+    return whatsappActions.getRecentChats();
+  },
+  getWhatsappMessages: async (chatName: string, limit: number = 10): Promise<string> => {
+    return whatsappActions.getChatMessages(chatName, limit);
+  },
+  performWhatsappAction: async (chatName: string, action: string): Promise<string> => {
+    return whatsappActions.performChatAction(chatName, action);
+  },
   runAntigravityCli: async (commandArgs: string): Promise<string> => {
     try {
       const fullCommand = `cd /Users/felipedutra/Projetos/eden-terra && ${commandArgs}`;

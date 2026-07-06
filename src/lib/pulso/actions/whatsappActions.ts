@@ -79,5 +79,43 @@ export const whatsappActions = {
     } catch (error: any) {
       return `Falha ao atualizar permissões do grupo: ${error.message}`;
     }
+  },
+
+  // ==== MODO DEUS ====
+  getRecentChats: async (): Promise<any> => {
+    try {
+      const response = await fetch('http://localhost:3005/chats');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro desconhecido');
+      return JSON.stringify(data.chats);
+    } catch (error: any) {
+      return `Falha ao buscar chats recentes: ${error.message}`;
+    }
+  },
+
+  getChatMessages: async (chatName: string, limit: number = 10): Promise<any> => {
+    try {
+      const response = await fetch(`http://localhost:3005/chat/messages?chatName=${encodeURIComponent(chatName)}&limit=${limit}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro desconhecido');
+      return JSON.stringify(data.messages);
+    } catch (error: any) {
+      return `Falha ao buscar mensagens: ${error.message}`;
+    }
+  },
+
+  performChatAction: async (chatName: string, action: string): Promise<string> => {
+    try {
+      const response = await fetch('http://localhost:3005/chat/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatName, action })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro desconhecido');
+      return `Ação "${action}" executada com sucesso no chat "${chatName}".`;
+    } catch (error: any) {
+      return `Falha ao executar ação "${action}": ${error.message}`;
+    }
   }
 };

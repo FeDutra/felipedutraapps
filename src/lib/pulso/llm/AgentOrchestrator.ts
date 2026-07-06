@@ -155,10 +155,48 @@ const agentTools: ToolDefinition[] = [
         type: 'object',
         properties: {
           groupName: { type: 'string', description: 'O nome do grupo.' },
-          adminsOnlyMessages: { type: 'boolean', description: 'Se true, apenas admins podem enviar mensagens no grupo.' },
-          adminsOnlySettings: { type: 'boolean', description: 'Se true, apenas admins podem mudar configurações do grupo.' }
+          adminsOnlyMessages: { type: 'boolean', description: 'Apenas admins podem mandar mensagens?' },
+          adminsOnlySettings: { type: 'boolean', description: 'Apenas admins podem mudar configurações?' }
         },
         required: ['groupName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_whatsapp_chats',
+      description: 'Lê a lista de conversas e grupos recentes do WhatsApp, retornando nome, status de não lido e timestamp.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_whatsapp_messages',
+      description: 'Lê o histórico recente de mensagens de um chat ou grupo específico no WhatsApp.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chatName: { type: 'string', description: 'Nome do contato ou grupo.' },
+          limit: { type: 'number', description: 'Quantidade de mensagens para ler (padrão 10).' }
+        },
+        required: ['chatName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'perform_whatsapp_action',
+      description: 'Executa ações num chat: markRead, markUnread, mute, unmute, archive, unarchive, pin, unpin.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chatName: { type: 'string', description: 'Nome do contato ou grupo.' },
+          action: { type: 'string', description: 'Ação: markRead, markUnread, mute, unmute, archive, unarchive, pin, unpin' }
+        },
+        required: ['chatName', 'action']
       }
     }
   },
@@ -310,6 +348,15 @@ export class AgentOrchestrator {
             } else if (functionName === 'update_whatsapp_settings') {
               if (onStatusUpdate) onStatusUpdate(`Atualizando permissões do grupo ${args.groupName}...`);
               toolResult = await localActions.updateWhatsappSettings(args.groupName, args.adminsOnlyMessages, args.adminsOnlySettings);
+            } else if (functionName === 'read_whatsapp_chats') {
+              if (onStatusUpdate) onStatusUpdate(`Consultando chats recentes do WhatsApp...`);
+              toolResult = await localActions.getWhatsappChats();
+            } else if (functionName === 'read_whatsapp_messages') {
+              if (onStatusUpdate) onStatusUpdate(`Lendo mensagens de ${args.chatName}...`);
+              toolResult = await localActions.getWhatsappMessages(args.chatName, args.limit);
+            } else if (functionName === 'perform_whatsapp_action') {
+              if (onStatusUpdate) onStatusUpdate(`Aplicando ${args.action} em ${args.chatName}...`);
+              toolResult = await localActions.performWhatsappAction(args.chatName, args.action);
             } else if (functionName === 'open_app') {
               if (onStatusUpdate) onStatusUpdate(`Abrindo ${args.appName}...`);
               toolResult = await localActions.openApp(args.appName);
