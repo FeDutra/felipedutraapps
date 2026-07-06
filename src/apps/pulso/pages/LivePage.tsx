@@ -2915,23 +2915,6 @@ export default function LivePage() {
       }
 
       await controller.start(syncAudioCtx);
-
-      const hour = new Date().getHours();
-      let greeting = 'Boa noite, Fê. Como posso ajudar?';
-      if (hour < 12) greeting = 'Bom dia, Fê. Como posso ajudar?';
-      else if (hour < 18) greeting = 'Boa tarde, Fê. Como posso ajudar?';
-      
-      const pulsoMsg = {
-        id: `pulso-local-${Date.now()}`,
-        sender: 'lotus' as const,
-        text: greeting,
-        timestamp: new Date(),
-        contextId: activeContextNode.contextId
-      };
-      setMessages(prev => [...prev, pulsoMsg]);
-
-      // Toca a saudação inicial de forma controlada pela sessão
-      await controller.generateAndPlayTTS(greeting);
     }
   }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage]);
 
