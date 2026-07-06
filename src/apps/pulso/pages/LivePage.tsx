@@ -2341,8 +2341,8 @@ export default function LivePage() {
         const result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity);
         console.log('[AGENT_ORCHESTRATOR]', result);
 
-        // Se o Agente NÃO repassou pra Lótus, significa que ele resolveu localmente
-        if (result.responseText) {
+        // Se o Agente NÃO repassou pra Lótus e retornou uma resposta definitiva
+        if (result.responseText && !result.isLotusHandoff) {
           const pulsoMsg: Message = {
             id: `pulso-local-${Date.now()}`,
             sender: 'lotus', // Usando UI da Lótus para a fala do sistema
@@ -2377,9 +2377,9 @@ export default function LivePage() {
               result.responseText,
               undefined,
               () => {
-                if (originMode === 'presence' && startSpeechRecognitionRef.current && voiceModeRef.current === 'presence') {
+                if (originMode === 'presence' && voiceModeRef.current === 'presence') {
                   setVoiceState('presence_listening');
-                  startSpeechRecognitionRef.current('presence');
+                  startSpeechRecognition('presence');
                 } else {
                   setVoiceState('idle');
                 }
@@ -2542,8 +2542,9 @@ export default function LivePage() {
       microphoneStreamRef.current = null;
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(console.error);
-      audioContextRef.current = null;
+      if (audioContextRef.current.state === 'running') {
+        audioContextRef.current.suspend().catch(console.error);
+      }
     }
   }, []);
 
@@ -2623,7 +2624,7 @@ export default function LivePage() {
          } else {
             // Restart presence if nothing was heard
             if (voiceModeRef.current === 'presence') {
-              startSpeechRecognitionRef.current?.('presence');
+              startSpeechRecognition('presence');
             }
          }
       }
@@ -2644,11 +2645,11 @@ export default function LivePage() {
       }
       if (mode === 'presence' && voiceModeRef.current === 'presence') {
         setTimeout(() => {
-          startSpeechRecognitionRef.current?.('presence');
+          startSpeechRecognition('presence');
         }, 2000);
       }
     }
-  }, [handleSendMessage]);
+  }, [handleSendMessage, startSpeechRecognition]);
 
   const startSpeechRecognition = React.useCallback(async (mode: VoiceMode) => {
     ttsAdapter.cancel();
@@ -2689,9 +2690,15 @@ export default function LivePage() {
       };
 
       if (mode === 'presence') {
-        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-        const audioCtx = new AudioContextCtor();
-        audioContextRef.current = audioCtx;
+        if (!audioContextRef.current) {
+          const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+          audioContextRef.current = new AudioContextCtor();
+        }
+        const audioCtx = audioContextRef.current;
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(console.warn);
+        }
+        
         const analyser = audioCtx.createAnalyser();
         analyser.minDecibels = -70;
         analyser.maxDecibels = -10;
@@ -2716,7 +2723,7 @@ export default function LivePage() {
           }
           const average = sum / bufferLength;
 
-          if (average > 5) {
+          if (average > 10) {
             silenceStartRef.current = Date.now();
             if (voiceStateRef.current === 'speaking') {
               console.log('[PULSO_PRESENCE_VOICE_INTERRUPTION]');
@@ -2877,6 +2884,14 @@ export default function LivePage() {
       setVoiceMode('presence');
       voiceModeRef.current = 'presence';
 
+      // Inicializa e força o AudioContext a rodar imediatamente na interação física do usuário
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContextCtor();
+      audioContextRef.current = audioCtx;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(console.warn);
+      }
+
       const hour = new Date().getHours();
       let greeting = 'Boa noite, Fê. Como posso ajudar?';
       if (hour < 12) greeting = 'Bom dia, Fê. Como posso ajudar?';
@@ -2890,23 +2905,6 @@ export default function LivePage() {
         contextId: activeContextNode.contextId
       };
       setMessages(prev => [...prev, pulsoMsg]);
-      
-      if (db) {
-        import('firebase/firestore').then(({ collection, addDoc, serverTimestamp }) => {
-          addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
-            requestType: 'conversation_command',
-            status: 'success',
-            input: 'Ativou modo presença',
-            openclawResult: { responseText: greeting },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            mode: 'presence',
-            areaId: activeContextNode.areaId,
-            contextId: activeContextNode.contextId,
-            chatId: activeContextNode.chatId
-          }).catch(e => console.warn('Falha ao salvar saudação', e));
-        });
-      }
 
       voiceStateRef.current = 'speaking';
       setVoiceState('speaking');
