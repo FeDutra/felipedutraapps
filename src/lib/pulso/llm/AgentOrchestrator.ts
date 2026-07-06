@@ -272,31 +272,60 @@ const agentTools: ToolDefinition[] = [
   }
 ];
 
+// Modelos Groq em ordem de preferência (melhor primeiro)
+const GROQ_MODEL_CHAIN = [
+  'llama-3.3-70b-versatile',   // preferído: mais capaz
+  'llama-3.1-8b-instant',      // fallback 1: rápido, 5x mais cota
+  'gemma2-9b-it',              // fallback 2: alternativo
+  'llama3-8b-8192',            // fallback 3: modelo antigo estável
+];
+
+// Cache de rate-limit por modelo: model -> timestamp de quando expirará
+const rateLimitedUntil: Record<string, number> = {};
+
+function getAvailableModel(): string | null {
+  const now = Date.now();
+  for (const model of GROQ_MODEL_CHAIN) {
+    const blockedUntil = rateLimitedUntil[model] || 0;
+    if (now > blockedUntil) {
+      return model;
+    }
+  }
+  return null; // todos em rate limit
+}
+
+function markModelRateLimited(model: string, retryAfterMs = 60 * 60 * 1000) {
+  rateLimitedUntil[model] = Date.now() + retryAfterMs;
+  console.warn(`[AgentOrchestrator] Modelo ${model} em rate limit por ${retryAfterMs / 1000}s`);
+}
+
 export class AgentOrchestrator {
-  private llm: PulsoLLMClient;
+  private apiKey: string;
   private maxIterations = 5;
 
   constructor() {
-    const key = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
-    this.llm = new PulsoLLMClient({
+    this.apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
+  }
+
+  private createClient(model: string): PulsoLLMClient {
+    return new PulsoLLMClient({
       provider: 'groq',
-      model: 'llama-3.3-70b-versatile',
-      apiKey: key,
+      model,
+      apiKey: this.apiKey,
     });
   }
 
   public async run(
-    userMessage: string, 
+    userMessage: string,
     onStatusUpdate?: (status: string) => void,
     injectedSystemPrompt?: string
   ): Promise<{ responseText: string; isLotusHandoff?: boolean }> {
-    const key = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
-    if (!key) {
+    if (!this.apiKey) {
       return { responseText: '', isLotusHandoff: true };
     }
 
-    const finalSystemPrompt = injectedSystemPrompt 
-      ? `${injectedSystemPrompt}\n\n${AGENT_SYSTEM_PROMPT}` 
+    const finalSystemPrompt = injectedSystemPrompt
+      ? `${injectedSystemPrompt}\n\n${AGENT_SYSTEM_PROMPT}`
       : AGENT_SYSTEM_PROMPT;
 
     const messages: ChatMessage[] = [
@@ -306,13 +335,37 @@ export class AgentOrchestrator {
 
     for (let i = 0; i < this.maxIterations; i++) {
       console.log(`[AgentOrchestrator] Iteração ${i + 1}`);
-      
-      // Delay to avoid hitting Groq's burst limits (RPM/TPM) on free tier
+
       if (i > 0) {
         await new Promise(r => setTimeout(r, 600));
       }
-      
-      const response = await this.llm.chat(messages, 0.2, agentTools);
+
+      // Escolhe o melhor modelo disponível no momento
+      const model = getAvailableModel();
+      if (!model) {
+        console.error('[AgentOrchestrator] Todos os modelos Groq estão em rate limit.');
+        return { responseText: 'Todos os modelos estão com cota esgotada agora. Tente em alguns minutos.' };
+      }
+
+      const llm = this.createClient(model);
+      console.log(`[AgentOrchestrator] Usando modelo: ${model}`);
+
+      let response: { content: string; tool_calls?: any[] };
+      try {
+        response = await llm.chat(messages, 0.2, agentTools);
+      } catch (err: any) {
+        const msg = err?.message || '';
+        if (msg.includes('429') || msg.includes('rate_limit') || msg.includes('Too Many Requests')) {
+          // Extrai retryAfter do erro se disponível (em segundos)
+          const retryMatch = msg.match(/try again in (\d+)s/);
+          const retryMs = retryMatch ? parseInt(retryMatch[1]) * 1000 + 5000 : 60 * 60 * 1000;
+          markModelRateLimited(model, retryMs);
+          console.warn(`[AgentOrchestrator] 429 no modelo ${model}, tentando próximo...`);
+          i--; // não conta essa iteração
+          continue;
+        }
+        throw err; // outro erro, propaga
+      }
       
       messages.push({
         role: 'assistant',
