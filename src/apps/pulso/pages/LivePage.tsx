@@ -1615,7 +1615,12 @@ export default function LivePage() {
             const requestOriginMode = req.mode || req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
             const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
             
-            if (status === 'success' && hasRealResponse && requestOriginMode === 'presence') {
+            const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
+            const isErrorState = (status === 'error' || status === 'timeout') && !hasActiveMessageDelivery;
+            const ttsText = isErrorState ? 'Falha operacional. Nuvem indisponível ou sem cota.' : responseText;
+            const hasSpeakableResponse = (status === 'success' && hasRealResponse) || isErrorState;
+
+            if (hasSpeakableResponse && requestOriginMode === 'presence') {
               const isPresenceActive = voiceModeRef.current === 'presence';
               const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
               
@@ -1666,7 +1671,7 @@ export default function LivePage() {
                 console.log(`[PULSO_LATENCY_RESPONSE_RECEIVED_TO_AUTO_TTS_START_MS] ${diffRespToTts} ms`);
                 
                 ttsAdapter.speak(
-                  responseText,
+                  ttsText,
                   () => {
                     // Latency point 6: First Audio Playing
                     const firstAudioTime = Date.now();
