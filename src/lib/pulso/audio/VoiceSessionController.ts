@@ -3,11 +3,11 @@ import { TTSAdapter } from '../TTSAdapter';
 export type VoiceSessionState =
   | 'idle'
   | 'starting'
-  | 'listening'
+  | 'presence_listening'
   | 'user_speaking'
   | 'transcribing'
   | 'thinking'
-  | 'assistant_speaking'
+  | 'speaking'
   | 'interrupted'
   | 'error';
 
@@ -179,7 +179,7 @@ export class VoiceSessionController {
    */
   private startListeningLoop() {
     if (!this.stream) return;
-    this.transition('listening');
+    this.transition('presence_listening');
     this.log('LISTENING_STARTED');
     this.playSoundCue('start_listening');
 
@@ -220,7 +220,7 @@ export class VoiceSessionController {
       const dataArray = new Uint8Array(bufferLength);
 
       const checkSilence = () => {
-        if (this.state !== 'listening' && this.state !== 'assistant_speaking') {
+        if (this.state !== 'presence_listening' && this.state !== 'speaking') {
           this.animationFrameId = requestAnimationFrame(checkSilence);
           return;
         }
@@ -232,8 +232,8 @@ export class VoiceSessionController {
         }
         const average = sum / bufferLength;
 
-        // Se o usuário falou (threshold de 25)
-        if (average > 25) {
+        // Se o usuário falou (threshold de 15)
+        if (average > 15) {
           // Interrompe assistente se estiver falando (Barge-in)
           if (this.isAssistantSpeaking) {
             this.interruptAssistant();
@@ -265,7 +265,7 @@ export class VoiceSessionController {
     // Timeout máximo de segurança (60 segundos)
     if (this.maxRecordTimeout) clearTimeout(this.maxRecordTimeout);
     this.maxRecordTimeout = setTimeout(() => {
-      if (this.state === 'listening' || this.state === 'user_speaking') {
+      if (this.state === 'presence_listening' || this.state === 'user_speaking') {
         this.finalizeUserTurn();
       }
     }, 60000);
@@ -346,7 +346,7 @@ export class VoiceSessionController {
       }
 
       // Envia ao LLM local (AgentOrchestrator)
-      this.transition('thinking');
+      this.transition('transcribing');
       this.log('LLM_REQUEST_STARTED');
       this.playSoundCue('sent');
 
@@ -371,7 +371,7 @@ export class VoiceSessionController {
    * Gera o áudio da resposta (TTS) e inicia a reprodução controlada.
    */
   private async generateAndPlayTTS(text: string) {
-    this.transition('assistant_speaking');
+    this.transition('speaking');
     this.log('TTS_REQUEST_STARTED');
     this.isAssistantSpeaking = true;
 
