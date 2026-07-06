@@ -59,19 +59,20 @@ export const localActions = {
   },
   runAntigravityCli: async (commandArgs: string): Promise<string> => {
     try {
-      const fullCommand = `cd /Users/felipedutra/Projetos/eden-terra && agy ${commandArgs}`;
+      const fullCommand = `cd /Users/felipedutra/Projetos/eden-terra && ${commandArgs}`;
       const output = await invoke<string>('execute_shell_command', { command: fullCommand });
       return output;
-    } catch (e: any) {
-      return `Erro na Antigravity: ${e}`;
+    } catch (error) {
+      console.error('Failed to run local command:', error);
+      throw error;
     }
   },
   runAntigravityStream: async (commandArgs: string): Promise<void> => {
     try {
-      const fullCommand = `cd /Users/felipedutra/Projetos/eden-terra && agy ${commandArgs}`;
+      const fullCommand = `cd /Users/felipedutra/Projetos/eden-terra && ${commandArgs}`;
       await invoke('execute_long_command_stream', { command: fullCommand });
     } catch (e: any) {
-      console.error(`Erro ao iniciar Antigravity stream: ${e}`);
+      console.error('Failed to run stream command:', e);
     }
   }
 };
