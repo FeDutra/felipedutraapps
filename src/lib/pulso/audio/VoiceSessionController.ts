@@ -38,6 +38,7 @@ export class VoiceSessionController {
   
   // Barge-in (Interrupção)
   private isAssistantSpeaking = false;
+  private assistantSpeechStartMs = 0;
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
@@ -274,7 +275,7 @@ export class VoiceSessionController {
       const timeData = new Uint8Array(bufferLength);
 
       const checkSilence = () => {
-        if (this.state !== 'presence_listening' && this.state !== 'speaking') {
+        if (this.state !== 'presence_listening' && this.state !== 'speaking' && this.state !== 'user_speaking') {
           this.animationFrameId = requestAnimationFrame(checkSilence);
           return;
         }
@@ -301,17 +302,22 @@ export class VoiceSessionController {
         // Se o usuário falou (threshold RMS de 0.015)
         if (rms > 0.015) {
           // Interrompe assistente se estiver falando (Barge-in)
-          if (this.isAssistantSpeaking) {
+          // Mas impede interrupção nos primeiros 1200ms de reprodução (evita eco inicial e falsas interrupções de início de frase)
+          if (this.isAssistantSpeaking && (Date.now() - this.assistantSpeechStartMs) > 1200) {
             this.interruptAssistant();
             return;
           }
 
-          if (!this.hasSpoken) {
-            this.hasSpoken = true;
-            this.log('VAD_SPEECH_START');
-            this.transition('user_speaking');
+          if (this.state === 'presence_listening') {
+            if (!this.hasSpoken) {
+              this.hasSpoken = true;
+              this.log('VAD_SPEECH_START');
+              this.transition('user_speaking');
+            }
+            this.silenceStart = Date.now();
+          } else if (this.state === 'user_speaking') {
+            this.silenceStart = Date.now();
           }
-          this.silenceStart = Date.now();
         } else {
           // Se o usuário já falou e agora está em silêncio por > 2s
           if (this.hasSpoken && this.silenceStart > 0 && Date.now() - this.silenceStart > 2000) {
@@ -443,9 +449,11 @@ export class VoiceSessionController {
 
     try {
       // Usaremos o próprio TTSAdapter para buscar o áudio via API
+      this.assistantSpeechStartMs = Date.now();
       this.ttsAdapter.speak(
         text,
         () => {
+          this.assistantSpeechStartMs = Date.now();
           this.log('ASSISTANT_AUDIO_STARTED');
         },
         () => {
