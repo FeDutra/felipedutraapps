@@ -126,10 +126,43 @@ export class VoiceSessionController {
     }
   }
 
+  private debugMicStream(stream: MediaStream, ctx: AudioContext, recorder?: MediaRecorder) {
+    const tracks = stream.getAudioTracks();
+
+    console.log("[MIC_DEBUG_STREAM]", {
+      active: stream.active,
+      trackCount: tracks.length,
+      ctxState: ctx.state,
+      sampleRate: ctx.sampleRate
+    });
+
+    for (const track of tracks) {
+      console.log("[MIC_DEBUG_TRACK]", {
+        label: track.label,
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+        settings: track.getSettings(),
+        constraints: track.getConstraints()
+      });
+
+      track.onmute = () => console.warn("[MIC_TRACK_MUTED]");
+      track.onunmute = () => console.warn("[MIC_TRACK_UNMUTED]");
+      track.onended = () => console.warn("[MIC_TRACK_ENDED]");
+    }
+
+    if (recorder) {
+      console.log("[RECORDER_DEBUG]", {
+        state: recorder.state,
+        mimeType: recorder.mimeType
+      });
+    }
+  }
+
   /**
    * Inicia a sessão de voz e solicita permissões e AudioContext.
    */
-  public async start() {
+  public async start(passedAudioContext?: AudioContext) {
     this.log('VOICE_SESSION_START_REQUESTED');
     this.transition('starting');
 
@@ -145,10 +178,14 @@ export class VoiceSessionController {
       this.stream = micStream;
       this.log('MIC_OPENED');
 
-      // Inicializa AudioContext no clique físico
-      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioContext = new AudioContextCtor();
-      this.log('AUDIO_CONTEXT_CREATED');
+      if (passedAudioContext) {
+        this.audioContext = passedAudioContext;
+        this.log('AUDIO_CONTEXT_PASSED');
+      } else {
+        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+        this.audioContext = new AudioContextCtor();
+        this.log('AUDIO_CONTEXT_CREATED');
+      }
 
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
@@ -162,6 +199,13 @@ export class VoiceSessionController {
       
       const source = this.audioContext.createMediaStreamSource(micStream);
       source.connect(this.analyser);
+      
+      // Conectar a destino silencioso no Safari para manter grafo vivo
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      this.analyser.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+
       this.log('VAD_READY');
 
       // Inicializa e começa escuta
@@ -193,7 +237,14 @@ export class VoiceSessionController {
       this.mediaRecorder = new MediaRecorder(this.stream);
     }
 
+    this.debugMicStream(this.stream, this.audioContext!, this.mediaRecorder);
+
     this.mediaRecorder.ondataavailable = (event) => {
+      console.log("[RECORDER_CHUNK_DEBUG]", {
+        size: event.data?.size,
+        type: event.data?.type,
+        recorderState: this.mediaRecorder?.state
+      });
       if (event.data.size > 0) {
         this.audioChunks.push(event.data);
       }
@@ -213,11 +264,14 @@ export class VoiceSessionController {
     this.silenceStart = 0;
     this.mediaRecorder.start(250);
 
-    // VAD (checkSilence)
+    // VAD (checkSilence) usando time domain (RMS)
     const analyser = this.analyser;
-    if (analyser) {
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+    const ctx = this.audioContext;
+    const stream = this.stream;
+    if (analyser && ctx) {
+      analyser.fftSize = 256;
+      const bufferLength = analyser.fftSize;
+      const timeData = new Uint8Array(bufferLength);
 
       const checkSilence = () => {
         if (this.state !== 'presence_listening' && this.state !== 'speaking') {
@@ -225,15 +279,27 @@ export class VoiceSessionController {
           return;
         }
 
-        analyser.getByteFrequencyData(dataArray);
+        analyser.getByteTimeDomainData(timeData);
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
+          const value = (timeData[i] - 128) / 128;
+          sum += value * value;
         }
-        const average = sum / bufferLength;
+        const rms = Math.sqrt(sum / bufferLength);
 
-        // Se o usuário falou (threshold de 15)
-        if (average > 15) {
+        // Print debug VAD de sinal em tempo real
+        if (Math.random() < 0.05) { // throttled print
+          console.log("[VAD_RMS_DEBUG]", {
+            rms,
+            ctxState: ctx.state,
+            streamActive: stream.active,
+            trackMuted: stream.getAudioTracks()[0]?.muted,
+            trackReadyState: stream.getAudioTracks()[0]?.readyState
+          });
+        }
+
+        // Se o usuário falou (threshold RMS de 0.015)
+        if (rms > 0.015) {
           // Interrompe assistente se estiver falando (Barge-in)
           if (this.isAssistantSpeaking) {
             this.interruptAssistant();
