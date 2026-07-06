@@ -11,6 +11,7 @@
     "pulso:desktop": "tauri dev",
     "pulso:whatsapp": "node src-tauri/whatsapp-service/index.js",
     "pulso:whatsapp:setup": "npm install -g pm2 && cd src-tauri/whatsapp-service && npm install && pm2 start index.js --name pulso-whatsapp-service && pm2 save",
+    "pulso:update": "git pull && npm install && npm run pulso:whatsapp:setup && npm run pulso:app:build",
     "pulso:desktop:dev": "npm run pulso:desktop",
     "pulso:app:dev": "npm run pulso:desktop:dev",
     "pulso:app:build": "tauri build"
