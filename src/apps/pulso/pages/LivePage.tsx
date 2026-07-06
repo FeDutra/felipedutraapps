@@ -105,8 +105,10 @@ import {
   Copy, 
   X, 
   Menu,
-  Activity,
-  Layers,
+  Activity, 
+  Settings,
+  Circle,
+  Hash,
   Database,
   Paperclip,
   FileText,
@@ -395,6 +397,7 @@ export default function LivePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
+  const [forceOpenClaw, setForceOpenClaw] = React.useState(false);
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
 
@@ -4156,6 +4159,14 @@ export default function LivePage() {
               {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
             </button>
           )}
+
+          <button
+            onClick={() => setForceOpenClaw(!forceOpenClaw)}
+            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 ${forceOpenClaw ? 'opacity-100' : 'opacity-30 hover:opacity-100'}`}
+            title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
+          >
+            <Circle size={10} strokeWidth={3} className="text-white" fill={forceOpenClaw ? "currentColor" : "none"} />
+          </button>
 
           <button
             onClick={() => handleSendMessage()}

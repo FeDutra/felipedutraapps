@@ -504,7 +504,7 @@ export const MessageActions = ({
         ) : msg.openclawResult?.errors && msg.openclawResult.errors.length > 0 ? (
           <><AlertTriangle size={10} strokeWidth={1.5} className="text-white" /><span>falha</span></>
         ) : (
-          <Zap size={10} strokeWidth={1.5} className="opacity-60 text-white" />
+          <div className="w-[4px] h-[4px] rounded-full bg-white/40" />
         )}
         <span className="opacity-75 font-light">
           {formatMessageTimestamp(msg.timestamp)}
