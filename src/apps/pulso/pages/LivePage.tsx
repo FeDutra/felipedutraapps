@@ -2355,7 +2355,7 @@ export default function LivePage() {
           if (db) {
             const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
             addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
-              requestType: 'conversation_command',
+              requestType: 'local_interaction',
               status: 'success',
               input: messageText,
               openclawResult: { responseText: result.responseText },
