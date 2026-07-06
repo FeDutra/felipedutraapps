@@ -2391,7 +2391,18 @@ export default function LivePage() {
         }
       }
     } catch (e) {
-      console.warn('[AGENT_ORCHESTRATOR] Fallback para Lótus devido a erro:', e);
+      console.error('[AGENT_ORCHESTRATOR] Erro no Groq local:', e);
+      // Não faz fallback para a nuvem. Mostra erro local e para.
+      const errorMsg: Message = {
+        id: `groq-error-${Date.now()}`,
+        sender: 'lotus',
+        text: 'Não consegui processar sua mensagem agora. Tente novamente.',
+        timestamp: new Date(),
+        contextId: activeContextNode.contextId
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      setContextTyping(sendingContextId, false);
+      return;
     }
     // ===================================
 
@@ -2399,7 +2410,22 @@ export default function LivePage() {
       voiceReplyRequestsRef.current.add(preGeneratedReqId);
     }
 
-    // Send the request in the background
+    // Só vai para a nuvem (OpenClaw) se forceOpenClaw estiver ativo explicitamente
+    if (!forceOpenClaw) {
+      // Groq não retornou nada util mas também não deu erro. Exibe mensagem de fallback local.
+      const fallbackMsg: Message = {
+        id: `groq-fallback-${Date.now()}`,
+        sender: 'lotus',
+        text: 'Não obtive resposta. Tente novamente.',
+        timestamp: new Date(),
+        contextId: activeContextNode.contextId
+      };
+      setMessages(prev => [...prev, fallbackMsg]);
+      setContextTyping(sendingContextId, false);
+      return;
+    }
+
+    // Send the request in the background (OpenClaw - apenas quando forceOpenClaw ativo)
     createPulsoConversationRequest(messageText, {
       mode: sendMode,
       areaId: activeContextNode.areaId,
