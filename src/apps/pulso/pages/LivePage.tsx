@@ -2906,8 +2906,15 @@ export default function LivePage() {
 
       voiceSessionControllerRef.current = controller;
 
-      // Primeiro trigger síncrono com a interação física
-      await controller.start();
+      // Primeiro trigger síncrono com a interação física: criamos o AudioContext na raiz do clique
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      const syncAudioCtx = new AudioContextCtor();
+      audioContextRef.current = syncAudioCtx;
+      if (syncAudioCtx.state === 'suspended') {
+        syncAudioCtx.resume().catch(console.warn);
+      }
+
+      await controller.start(syncAudioCtx);
 
       const hour = new Date().getHours();
       let greeting = 'Boa noite, Fê. Como posso ajudar?';
