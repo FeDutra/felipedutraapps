@@ -364,7 +364,17 @@ export class AgentOrchestrator {
           i--; // não conta essa iteração
           continue;
         }
-        throw err; // outro erro, propaga
+        if (msg.includes('400') || msg.includes('tool_use_failed') || msg.includes('failed_generation') || msg.includes('invalid_request_error')) {
+          // Modelo falhou ao gerar tool call — retry sem ferramentas (chat puro)
+          console.warn(`[AgentOrchestrator] 400 tool_use_failed em ${model}, retentando sem ferramentas...`);
+          try {
+            response = await llm.chat(messages, 0.7);
+          } catch (err2: any) {
+            throw err2;
+          }
+        } else {
+          throw err; // outro erro, propaga
+        }
       }
       
       messages.push({
