@@ -1,4 +1,5 @@
 'use client';
+import { listen } from '@tauri-apps/api/event';
 
 import {
   DndContext,
@@ -86,6 +87,8 @@ import { candidateAreas } from '../scripts/seedAreas';
 import { TTSAdapter, TTSPreferences } from '../../../lib/pulso/TTSAdapter';
 import { actionLedgerClient } from '../../../lib/pulso/ledger/ActionLedgerClient';
 import { SummaryCards } from '../../../components/pulso/SummaryCards';
+import { intentRouter } from '../../../lib/pulso/llm/IntentRouter';
+import { localActions } from '../../../lib/pulso/actions/localActions';
 
 
 import { 
@@ -118,7 +121,8 @@ import {
   Edit2,
   Archive,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Globe
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -443,6 +447,9 @@ export default function LivePage() {
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
+  const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
+  const [engineeringLogs, setEngineeringLogs] = React.useState<string[]>([]);
+  const [engineeringInput, setEngineeringInput] = React.useState('');
   const [showAtelieChatHistory, setShowAtelieChatHistory] = React.useState(false);
   
   const sessionsRef = React.useRef(sessions);
@@ -454,6 +461,19 @@ export default function LivePage() {
    * On first run (empty collection), seeds the DEFAULT_SESSIONS list.
    * Falls back to DEFAULT_SESSIONS locally if not in Firestore mode.
    */
+  React.useEffect(() => {
+    let unlisten: any;
+    const setupListener = async () => {
+      unlisten = await listen('cmd_output', (event) => {
+        setEngineeringLogs((prev) => [...prev, event.payload as string]);
+      });
+    };
+    setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   React.useEffect(() => {
     const isFirestore = pulsoService.getDataMode() === 'firestore';
 
@@ -1577,7 +1597,7 @@ export default function LivePage() {
             const hasRealResponse = responseText && responseText.trim() !== '';
 
             // Check if auto TTS needs to be triggered in presence mode
-            const requestOriginMode = req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
+            const requestOriginMode = req.mode || req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
             const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
             
             if (status === 'success' && hasRealResponse && requestOriginMode === 'presence') {
@@ -2264,6 +2284,63 @@ export default function LivePage() {
     };
     setMessages(prev => [...prev, userMsg]);
 
+    // === AGENT ORCHESTRATOR (ReAct Loop) ===
+    try {
+      if (originMode === 'text' || originMode === 'presence' || originMode === 'recording_once') {
+        const { agentOrchestrator } = await import('../../../lib/pulso/llm/AgentOrchestrator');
+        
+        // Passamos um callback para o Agente poder "falar" o que está pensando/fazendo no meio do caminho
+        const onStatusUpdate = (status: string) => {
+          if (originMode === 'presence' || originMode === 'recording_once') {
+            setVoiceState('speaking');
+            ttsAdapter.speak(status); // Fala o status (ex: "Buscando no Notion")
+          }
+          // Pode também jogar no log visual se quisermos no futuro
+        };
+
+        const result = await agentOrchestrator.run(messageText, onStatusUpdate);
+        console.log('[AGENT_ORCHESTRATOR]', result);
+
+        // Se o Agente NÃO repassou pra Lótus, significa que ele resolveu localmente
+        if (!result.isLotusHandoff && result.responseText) {
+          const pulsoMsg: Message = {
+            id: `pulso-local-${Date.now()}`,
+            sender: 'lotus', // Usando UI da Lótus para a fala do sistema
+            text: result.responseText,
+            timestamp: new Date(),
+            contextId: activeContextNode.contextId
+          };
+          setMessages(prev => [...prev, pulsoMsg]);
+          setContextTyping(sendingContextId, false);
+          
+          if (originMode === 'presence' || originMode === 'recording_once') {
+            setVoiceState('speaking');
+            ttsAdapter.speak(
+              result.responseText,
+              undefined,
+              () => {
+                if (originMode === 'presence' && startSpeechRecognitionRef.current && voiceModeRef.current === 'presence') {
+                  setVoiceState('presence_listening');
+                  startSpeechRecognitionRef.current('presence');
+                } else {
+                  setVoiceState('idle');
+                }
+              }
+            );
+          }
+          
+          return; // PULA o envio para a Lótus na nuvem
+        }
+      }
+    } catch (e) {
+      console.warn('[AGENT_ORCHESTRATOR] Fallback para Lótus devido a erro:', e);
+    }
+    // ===================================
+
+    if (originMode === 'presence' || originMode === 'recording_once') {
+      voiceReplyRequestsRef.current.add(preGeneratedReqId);
+    }
+
     // Send the request in the background
     createPulsoConversationRequest(messageText, {
       mode: sendMode,
@@ -2625,7 +2702,7 @@ export default function LivePage() {
          if (mode === 'recording_once') {
            const baseText = inputMessageRef.current.trim();
            baseTextBeforeRecordingRef.current = baseText ? baseText + ' ' : '';
-           setInputMessage(baseText ? baseText + ' [gravando...]' : '[gravando...]');
+           setInputMessage(inputMessageRef.current);
          } else if (mode === 'presence') {
            baseTextBeforeRecordingRef.current = '';
            setInputMessage('Ouvindo atentamente...');
@@ -2683,6 +2760,7 @@ export default function LivePage() {
       startSpeechRecognition('recording_once');
     }
   }, [startSpeechRecognition, stopVoiceRecognition, requestMicrophonePermission, isSpeechRecognitionSupported]);
+
 
   const togglePresenceMode = React.useCallback(async (e?: React.MouseEvent) => {
     if (e) {
@@ -3043,10 +3121,15 @@ export default function LivePage() {
             [ ⏀ ]
           </button>
           <button 
-            onClick={(e) => { e.stopPropagation(); setPresenceMode(true); }}
-            className="hidden md:flex text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer"
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setIsEngineeringActive(!isEngineeringActive); 
+            }}
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+              isEngineeringActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
+            }`}
           >
-            <span>[ presença ]</span>
+            <span>[ engenharia ]</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -3102,10 +3185,17 @@ export default function LivePage() {
                   </button>
                   <button 
                     onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/eventos'); }}
-                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
                   >
                     <Database size={12} strokeWidth={1.5} />
                     <span>logs técnicos</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/conexoes'); }}
+                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/10 transition-colors text-left bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <Globe size={12} strokeWidth={1.5} />
+                    <span>conexões</span>
                   </button>
                 </div>
               </div>
@@ -3739,6 +3829,56 @@ export default function LivePage() {
         </div>
       </main>
 
+      {isEngineeringActive && (
+        <div className="absolute inset-0 z-50 bg-[#0a0a0a]/90 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
+          <button 
+            onClick={() => setIsEngineeringActive(false)}
+            className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors text-xs font-mono tracking-widest cursor-pointer bg-transparent border-none outline-none"
+          >
+            [ fechar ]
+          </button>
+          
+          <div className="w-full max-w-2xl flex flex-col h-[70vh] border border-white/10 bg-black/50 rounded-2xl overflow-hidden shadow-2xl relative">
+            <div className="flex-1 overflow-y-auto p-6 font-mono text-[10px] sm:text-[11px] text-[#00ffcc]/80 space-y-2 leading-relaxed">
+              {engineeringLogs.length === 0 ? (
+                <div className="text-white/30 text-center mt-20 animate-pulse">
+                  [ antigravity terminal aguardando instruções ]
+                </div>
+              ) : (
+                engineeringLogs.map((log, i) => (
+                  <div key={i} className="break-words">{log}</div>
+                ))
+              )}
+            </div>
+            
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!engineeringInput.trim()) return;
+                const cmd = engineeringInput;
+                setEngineeringInput('');
+                setEngineeringLogs(prev => [...prev, `> agy ${cmd}`]);
+                await localActions.runAntigravityStream(cmd);
+              }}
+              className="p-4 border-t border-white/10 bg-black/80 flex items-center gap-3"
+            >
+              <span className="text-[#00ffcc] font-mono text-sm">~</span>
+              <input 
+                type="text" 
+                value={engineeringInput}
+                onChange={(e) => setEngineeringInput(e.target.value)}
+                placeholder="Ex: run --task 'mude a cor do botão'"
+                className="flex-1 bg-transparent border-none outline-none text-white font-mono text-xs placeholder:text-white/30"
+                autoFocus
+              />
+              <button type="submit" className="text-[#00ffcc]/50 hover:text-[#00ffcc] transition-colors text-xs font-mono uppercase cursor-pointer bg-transparent border-none">
+                [ enviar ]
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <footer className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
@@ -3868,6 +4008,19 @@ export default function LivePage() {
         )}
 
         <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+          {(voiceState === 'recording_once' || voiceState === 'transcribing') && (
+            <div 
+              className="absolute inset-0 blur-md pointer-events-none"
+              style={{
+                background: voiceState === 'transcribing'
+                  ? 'radial-gradient(ellipse at center, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.03) 65%, transparent 100%)'
+                  : 'radial-gradient(ellipse at center, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 65%, transparent 100%)',
+                animation: voiceState === 'transcribing'
+                  ? 'pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                  : 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+              }}
+            />
+          )}
 
           <div className="relative" ref={attachmentMenuRef}>
             <input
@@ -3980,9 +4133,7 @@ export default function LivePage() {
                 }
               }
             }}
-            placeholder={
-              voiceState === 'transcribing' ? 'transcrevendo...' : ''
-            }
+            placeholder=""
             disabled={voiceState === 'transcribing'}
             rows={1}
             autoCapitalize="none"

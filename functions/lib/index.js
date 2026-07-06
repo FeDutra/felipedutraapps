@@ -37,6 +37,7 @@ exports.pulsoActiveMessageTrigger = exports.pulsoTranscribe = exports.onPulsoReq
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-admin/firestore");
+const pulsoLedgerEmitter_1 = require("./lib/pulsoLedgerEmitter");
 admin.initializeApp();
 const db = (0, firestore_1.getFirestore)();
 exports.pulsoIngest = (0, https_1.onRequest)({ region: "us-central1", secrets: ["PULSO_INGEST_TOKEN"] }, async (req, res) => {
@@ -128,6 +129,28 @@ exports.pulsoIngest = (0, https_1.onRequest)({ region: "us-central1", secrets: [
                 createdAt: ts,
                 updatedAt: ts,
             });
+        }
+        // ── 4. Intercept pulsoEvents for UI Cards ──────────────────────────────
+        let rawEvents = event.pulsoEvents || p.pulsoEvents || event.meta?.pulsoEvents || p.meta?.pulsoEvents;
+        let events = rawEvents;
+        if (typeof rawEvents === "string") {
+            try {
+                events = JSON.parse(rawEvents);
+            }
+            catch (e) {
+                console.error(`[pulsoIngest] Erro ao fazer parse de pulsoEvents:`, rawEvents);
+                events = null;
+            }
+        }
+        if (events && Array.isArray(events) && events.length > 0) {
+            console.log(`[pulsoIngest] Encontrados ${events.length} pulsoEvents no ingest event ${event.event_id}`);
+            const enrichedEvents = events.map((evt) => ({
+                source: "lotus_openclaw",
+                surface: "openclaw",
+                status: "success",
+                ...evt
+            }));
+            await (0, pulsoLedgerEmitter_1.emitPulsoLedgerEvents)(enrichedEvents, db);
         }
         res.status(201).json({ status: "success", event_id: event.event_id });
     }

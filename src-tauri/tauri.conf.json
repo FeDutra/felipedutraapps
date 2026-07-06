@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3001/pulso/live?pulso_tauri_dev=1",
-    "beforeDevCommand": "echo Next externo em 3001",
+    "beforeDevCommand": "npm run pulso:web",
     "beforeBuildCommand": "npm run build"
   },
   "app": {

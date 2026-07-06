@@ -13,6 +13,7 @@ export const PULSO_NAV_ITEMS = [
   { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
   { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
   { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
+  { href: '/pulso/conexoes', label: 'Conexões', icon: Globe },
   { href: '/pulso/inbox', label: 'Registro da Lótus', icon: Inbox },
   { href: '/pulso/metabolismo', label: 'Agentes', icon: Zap },
   { href: '/pulso/health', label: 'Saúde / Riscos', icon: HeartPulse },

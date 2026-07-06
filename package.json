@@ -9,6 +9,7 @@
     "lint": "eslint",
     "pulso:web": "next dev -p 3001",
     "pulso:desktop": "tauri dev",
+    "pulso:whatsapp": "node src-tauri/whatsapp-service/index.js",
     "pulso:desktop:dev": "concurrently \"npm run pulso:web\" \"npm run pulso:desktop\"",
     "pulso:app:dev": "npm run pulso:desktop:dev",
     "pulso:app:build": "tauri build"
@@ -18,7 +19,9 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@google/generative-ai": "^0.24.1",
+    "@notionhq/client": "^5.22.0",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "clsx": "^2.1.1",
     "firebase": "^12.12.1",
     "firebase-admin": "^14.0.0",

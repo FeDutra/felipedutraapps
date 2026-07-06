@@ -57,3 +57,4 @@ src-tauri/bin/
 src-tauri/sidecar/build/
 src-tauri/sidecar/dist/
 
+src-tauri/whatsapp-service/wwebjs_auth/
