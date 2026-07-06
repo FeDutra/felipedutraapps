@@ -1718,7 +1718,6 @@ export default function LivePage() {
               }
             }
 
-            const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
             if (status === 'success' && hasRealResponse && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
