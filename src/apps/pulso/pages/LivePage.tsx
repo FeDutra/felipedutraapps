@@ -2624,7 +2624,7 @@ export default function LivePage() {
          } else {
             // Restart presence if nothing was heard
             if (voiceModeRef.current === 'presence') {
-              startSpeechRecognition('presence');
+              startSpeechRecognitionRef.current?.('presence');
             }
          }
       }
@@ -2645,11 +2645,11 @@ export default function LivePage() {
       }
       if (mode === 'presence' && voiceModeRef.current === 'presence') {
         setTimeout(() => {
-          startSpeechRecognition('presence');
+          startSpeechRecognitionRef.current?.('presence');
         }, 2000);
       }
     }
-  }, [handleSendMessage, startSpeechRecognition]);
+  }, [handleSendMessage]);
 
   const startSpeechRecognition = React.useCallback(async (mode: VoiceMode) => {
     ttsAdapter.cancel();
