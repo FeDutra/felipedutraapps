@@ -2299,6 +2299,25 @@ export default function LivePage() {
     };
     setMessages(prev => [...prev, userMsg]);
 
+    if (originMode === 'presence') {
+      const transitions = [
+        "Estou processando...",
+        "Só um segundo.",
+        "Deixe-me ver...",
+        "Entendi, um instante.",
+        "Ok, pensando..."
+      ];
+      const transition = transitions[Math.floor(Math.random() * transitions.length)];
+      voiceStateRef.current = 'speaking';
+      setVoiceState('speaking');
+      ttsAdapter.speak(transition, undefined, () => {
+         if (voiceStateRef.current === 'speaking') {
+            voiceStateRef.current = 'transcribing';
+            setVoiceState('transcribing');
+         }
+      });
+    }
+
     // === AGENT ORCHESTRATOR (ReAct Loop) ===
     try {
       if (forceOpenClaw) {
@@ -2686,7 +2705,7 @@ export default function LivePage() {
           }
           const average = sum / bufferLength;
 
-          if (average > 15) {
+          if (average > 8) {
             silenceStartRef.current = Date.now();
             if (voiceStateRef.current === 'speaking') {
               console.log('[PULSO_PRESENCE_VOICE_INTERRUPTION]');
@@ -2852,6 +2871,32 @@ export default function LivePage() {
       if (hour < 12) greeting = 'Bom dia, Fê. Como posso ajudar?';
       else if (hour < 18) greeting = 'Boa tarde, Fê. Como posso ajudar?';
       
+      const pulsoMsg = {
+        id: `pulso-local-${Date.now()}`,
+        sender: 'lotus' as const,
+        text: greeting,
+        timestamp: new Date(),
+        contextId: activeContextNode.contextId
+      };
+      setMessages(prev => [...prev, pulsoMsg]);
+      
+      if (db) {
+        import('firebase/firestore').then(({ collection, addDoc, serverTimestamp }) => {
+          addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
+            requestType: 'conversation_command',
+            status: 'success',
+            input: 'Ativou modo presença',
+            openclawResult: { responseText: greeting },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            mode: 'presence',
+            areaId: activeContextNode.areaId,
+            contextId: activeContextNode.contextId,
+            chatId: activeContextNode.chatId
+          }).catch(e => console.warn('Falha ao salvar saudação', e));
+        });
+      }
+
       voiceStateRef.current = 'speaking';
       setVoiceState('speaking');
       ttsAdapter.speak(
