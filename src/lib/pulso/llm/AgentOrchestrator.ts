@@ -241,7 +241,7 @@ export class AgentOrchestrator {
   constructor() {
     this.llm = new PulsoLLMClient({
       provider: 'groq',
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || '',
     });
   }

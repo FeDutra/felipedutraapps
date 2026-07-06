@@ -40,7 +40,7 @@ export class IntentRouter {
     // Usamos Groq pela latência ultrabaixa (< 0.5s) necessária para o roteamento em tempo real
     this.llm = new PulsoLLMClient({
       provider: 'groq',
-      model: 'llama-3.1-8b-instant',
+      model: 'llama-3.3-70b-versatile',
       apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || '', // A ser configurado pelo usuário
     });
   }
