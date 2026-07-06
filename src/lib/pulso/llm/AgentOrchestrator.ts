@@ -277,10 +277,11 @@ export class AgentOrchestrator {
   private maxIterations = 5;
 
   constructor() {
+    const key = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
     this.llm = new PulsoLLMClient({
       provider: 'groq',
       model: 'llama-3.3-70b-versatile',
-      apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || '',
+      apiKey: key,
     });
   }
 
@@ -289,7 +290,8 @@ export class AgentOrchestrator {
     onStatusUpdate?: (status: string) => void,
     injectedSystemPrompt?: string
   ): Promise<{ responseText: string; isLotusHandoff?: boolean }> {
-    if (!process.env.NEXT_PUBLIC_GROQ_API_KEY) {
+    const key = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
+    if (!key) {
       return { responseText: '', isLotusHandoff: true };
     }
 
