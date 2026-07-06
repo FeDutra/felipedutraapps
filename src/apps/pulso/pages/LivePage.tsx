@@ -2736,7 +2736,7 @@ export default function LivePage() {
           }
           const average = sum / bufferLength;
 
-          if (average > 10) {
+          if (average > 25) {
             silenceStartRef.current = Date.now();
             if (voiceStateRef.current === 'speaking') {
               console.log('[PULSO_PRESENCE_VOICE_INTERRUPTION]');
