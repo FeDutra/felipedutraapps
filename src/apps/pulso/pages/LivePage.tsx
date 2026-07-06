@@ -2693,7 +2693,7 @@ export default function LivePage() {
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         
-        silenceStartRef.current = Date.now();
+        silenceStartRef.current = 0;
 
         const checkSilence = () => {
           if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
@@ -2705,7 +2705,7 @@ export default function LivePage() {
           }
           const average = sum / bufferLength;
 
-          if (average > 8) {
+          if (average > 5) {
             silenceStartRef.current = Date.now();
             if (voiceStateRef.current === 'speaking') {
               console.log('[PULSO_PRESENCE_VOICE_INTERRUPTION]');
@@ -2715,8 +2715,8 @@ export default function LivePage() {
               playPresenceSoundCue('start_listening');
             }
           } else {
-            // Trigger auto-stop on 2.5s of silence
-            if (Date.now() - silenceStartRef.current > 2500 && voiceStateRef.current !== 'speaking') {
+            // Trigger auto-stop on 2.5s of silence, ONLY if user has spoken first
+            if (silenceStartRef.current > 0 && Date.now() - silenceStartRef.current > 2500 && voiceStateRef.current !== 'speaking') {
                console.log('[PULSO_PRESENCE_SILENCE_DETECTED]');
                stopVoiceRecognition();
                voiceStateRef.current = 'transcribing';
