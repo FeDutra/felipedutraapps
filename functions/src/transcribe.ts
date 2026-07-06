@@ -1,7 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 
 export const pulsoTranscribe = onRequest(
-  { region: "us-central1", secrets: ["GEMINI_API_KEY"] },
+  { region: "us-central1" },
   async (req, res) => {
     // Enable CORS
     res.set("Access-Control-Allow-Origin", "*");
@@ -27,54 +27,38 @@ export const pulsoTranscribe = onRequest(
         return;
       }
 
-      const base64Audio = buffer.toString("base64");
-      const rawKey = process.env.GEMINI_API_KEY;
+      const rawKey = process.env.GROQ_API_KEY || "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";
       const apiKey = rawKey ? rawKey.trim() : "";
       
       if (!apiKey) {
-        res.status(500).send("GEMINI_API_KEY is not defined");
+        res.status(500).send("GROQ_API_KEY is not defined");
         return;
       }
 
-      const prompt = `Você é o transcritor e redator oficial de áudio do PULSO. Sua tarefa é transcrever o áudio fornecido em português brasileiro com perfeição profissional.
-
-Siga rigorosamente as diretrizes abaixo:
-1. **Pontuação Impecável:** Adicione vírgulas, pontos finais, pontos de interrogação, exclamação e travessões de forma gramaticalmente correta e fluida, de acordo com o sentido e entonação da fala.
-2. **Correção Gramatical:** Ajuste discretamente desvios gramaticais ou erros de concordância típicos de linguagem falada informal, convertendo-os em um português claro, correto e profissional, mantendo o sentido original.
-3. **Remover Disfluências e Hesitações:** Remova gagueiras, vícios de linguagem ("né", "tipo", "hã", "ééé", "então", "tá") e repetições de palavras decorrentes de hesitação.
-4. **Formatação Apropriada:** Escreva números, valores monetários (ex: "R$ 50", "cento e cento e cinquenta") e datas de forma limpa e padronizada. Capitalize nomes próprios e siglas.
-5. **Saída Limpa:** Retorne EXCLUSIVAMENTE o texto transcrito. Não adicione introduções, aspas, notas de rodapé, explicações ou qualquer outro caractere adicional.`;
-
-      // Call the Gemini REST API directly, avoiding SDK-auth conflicts
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      // Convert buffer to Blob for standard FormData
+      const blob = new Blob([buffer], { type: mimeType });
+      const formData = new FormData();
       
-      const payload = {
-        contents: [
-          {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType.split(";")[0],
-                  data: base64Audio
-                }
-              },
-              {
-                text: prompt
-              }
-            ]
-          }
-        ]
-      };
+      // We must pass a file name. Groq uses it to detect the format
+      const extension = mimeType.includes("mp4") ? "m4a" : "webm";
+      formData.append("file", blob, `audio.${extension}`);
+      
+      formData.append("model", "whisper-large-v3-turbo");
+      formData.append("language", "pt");
+      formData.append("response_format", "json");
+      formData.append("temperature", "0.2");
 
-      console.log(`[PULSO_TRANSCRIBE] Fetching Gemini API directly. Key length: ${apiKey.length}`);
+      const url = "https://api.groq.com/openai/v1/audio/transcriptions";
+
+      console.log(`[PULSO_TRANSCRIBE] Fetching Groq API directly. Key length: ${apiKey.length}`);
       const startTime = Date.now();
       
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Authorization": `Bearer ${apiKey}`
         },
-        body: JSON.stringify(payload)
+        body: formData as any
       });
 
       const duration = Date.now() - startTime;
@@ -82,11 +66,11 @@ Siga rigorosamente as diretrizes abaixo:
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Google API responded with status ${response.status}: ${errorText}`);
+        throw new Error(`Groq API responded with status ${response.status}: ${errorText}`);
       }
 
       const json = (await response.json()) as any;
-      const transcription = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const transcription = json.text || "";
 
       res.status(200).json({ text: transcription.trim() });
     } catch (err: any) {
