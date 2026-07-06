@@ -1446,7 +1446,7 @@ export default function LivePage() {
                 executionError: req.executionError || undefined,
                 contextId: req.contextId || null
               });
-            } else if (status === 'error' || status === 'timeout') {
+            } else if ((status === 'error' || status === 'timeout') && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
@@ -1735,7 +1735,7 @@ export default function LivePage() {
                 executionError: req.executionError || undefined,
                 contextId: req.contextId || null
               });
-            } else if (status === 'error' || status === 'timeout') {
+            } else if ((status === 'error' || status === 'timeout') && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
               chatHistory.push({
                 id: `lotus-${req.id}`,
