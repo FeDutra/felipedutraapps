@@ -124,7 +124,9 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  Globe
+  Globe,
+  Activity,
+  Settings
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -2649,13 +2651,7 @@ export default function LivePage() {
     setVoiceError(null);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { 
-          echoCancellation: true, 
-          noiseSuppression: true, 
-          autoGainControl: true 
-        } 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       microphoneStreamRef.current = stream;
 
       const mediaRecorder = new MediaRecorder(stream);
