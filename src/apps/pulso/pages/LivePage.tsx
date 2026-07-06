@@ -89,6 +89,7 @@ import { actionLedgerClient } from '../../../lib/pulso/ledger/ActionLedgerClient
 import { SummaryCards } from '../../../components/pulso/SummaryCards';
 import { intentRouter } from '../../../lib/pulso/llm/IntentRouter';
 import { localActions } from '../../../lib/pulso/actions/localActions';
+import { VoiceSessionController, VoiceSessionState } from '../../../lib/pulso/audio/VoiceSessionController';
 
 
 import { 
@@ -1052,6 +1053,7 @@ export default function LivePage() {
   const animationFrameRef = React.useRef<number>(0);
   const startSpeechRecognitionRef = React.useRef<any>(null);
   const baseTextBeforeRecordingRef = React.useRef<string>('');
+  const voiceSessionControllerRef = React.useRef<VoiceSessionController | null>(null);
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -2355,21 +2357,20 @@ export default function LivePage() {
             }).catch(e => console.warn('Falha ao salvar interação local', e));
           }
 
-          setContextTyping(sendingContextId, false);
-          
-          if (originMode === 'presence' || originMode === 'recording_once') {
+          if (originMode === 'presence') {
+            // O controlador de sessão de voz VoiceSessionController vai cuidar da reprodução
+            // e de reabrir o microfone de forma unificada.
+            return result;
+          }
+
+          if (originMode === 'recording_once') {
             voiceStateRef.current = 'speaking';
             setVoiceState('speaking');
             ttsAdapter.speak(
               result.responseText,
               undefined,
               () => {
-                if (originMode === 'presence' && voiceModeRef.current === 'presence') {
-                  setVoiceState('presence_listening');
-                  startSpeechRecognitionRef.current?.('presence');
-                } else {
-                  setVoiceState('idle');
-                }
+                setVoiceState('idle');
               }
             );
           }
@@ -2563,6 +2564,10 @@ export default function LivePage() {
 
   const exitPresenceMode = React.useCallback(() => {
     console.log('[PULSO_PRESENCE_EXIT_CLEAN]');
+    if (voiceSessionControllerRef.current) {
+      voiceSessionControllerRef.current.stop();
+      voiceSessionControllerRef.current = null;
+    }
     setPresenceMode(false);
     setVoiceMode('off');
     voiceModeRef.current = 'off';
@@ -2871,9 +2876,6 @@ export default function LivePage() {
     if (presenceMode) {
       exitPresenceMode();
     } else {
-      console.log('[PULSO_PRESENCE_ENTER]');
-      presenceSessionStartTimeRef.current = Date.now();
-      
       if (!isSpeechRecognitionSupported()) {
         setPresenceMode(true);
         setVoiceState('error');
@@ -2882,28 +2884,30 @@ export default function LivePage() {
       }
       
       setPresenceMode(true);
-      setVoiceState('presence_listening');
-      
-      const granted = await requestMicrophonePermission();
-      if (!granted) {
-        setVoiceState('error');
-        setVoiceError('Permissão de microfone negada ou indisponível.');
-        return;
-      }
-      
-      console.log('[PULSO_PRESENCE_MIC_READY]');
-      console.log('[PULSO_PRESENCE_STT_READY]');
-      
       setVoiceMode('presence');
       voiceModeRef.current = 'presence';
 
-      // Inicializa e força o AudioContext a rodar imediatamente na interação física do usuário
-      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioContextCtor();
-      audioContextRef.current = audioCtx;
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(console.warn);
-      }
+      const controller = new VoiceSessionController({
+        activeContextNode,
+        onStateChange: (newState) => {
+          setVoiceState(newState);
+          voiceStateRef.current = newState;
+        },
+        onError: (err) => {
+          setVoiceError(err);
+        },
+        onTextReceived: (userText, assistantText) => {
+          // Apenas adiciona ao log do chat se necessário (geralmente handleSendMessage já cria as mensagens)
+        },
+        handleSendMessage: async (text, options) => {
+          return handleSendMessage(text, options);
+        }
+      });
+
+      voiceSessionControllerRef.current = controller;
+
+      // Primeiro trigger síncrono com a interação física
+      await controller.start();
 
       const hour = new Date().getHours();
       let greeting = 'Boa noite, Fê. Como posso ajudar?';
@@ -2919,20 +2923,10 @@ export default function LivePage() {
       };
       setMessages(prev => [...prev, pulsoMsg]);
 
-      voiceStateRef.current = 'speaking';
-      setVoiceState('speaking');
-      ttsAdapter.speak(
-        greeting,
-        undefined,
-        () => {
-          if (voiceModeRef.current === 'presence') {
-            setVoiceState('presence_listening');
-            startSpeechRecognition('presence');
-          }
-        }
-      );
+      // Toca a saudação inicial de forma controlada pela sessão
+      await controller.generateAndPlayTTS(greeting);
     }
-  }, [presenceMode, startSpeechRecognition, exitPresenceMode, requestMicrophonePermission, isSpeechRecognitionSupported]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage]);
 
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
