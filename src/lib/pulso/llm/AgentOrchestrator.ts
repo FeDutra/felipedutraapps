@@ -248,14 +248,17 @@ export class AgentOrchestrator {
 
   public async run(
     userMessage: string, 
-    onStatusUpdate?: (status: string) => void
+    onStatusUpdate?: (status: string) => void,
+    injectedSystemPrompt?: string
   ): Promise<{ responseText: string; isLotusHandoff?: boolean }> {
     if (!process.env.NEXT_PUBLIC_GROQ_API_KEY) {
       return { responseText: '', isLotusHandoff: true };
     }
 
+    const finalSystemPrompt = injectedSystemPrompt || AGENT_SYSTEM_PROMPT;
+
     const messages: ChatMessage[] = [
-      { role: 'system', content: AGENT_SYSTEM_PROMPT },
+      { role: 'system', content: finalSystemPrompt },
       { role: 'user', content: userMessage }
     ];
 

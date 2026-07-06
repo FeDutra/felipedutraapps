@@ -400,6 +400,18 @@ export default function LivePage() {
   const [forceOpenClaw, setForceOpenClaw] = React.useState(false);
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
+  const [lotusIdentity, setLotusIdentity] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      Promise.all([
+        fetch('/identity/SOUL.md').then(r => r.text()),
+        fetch('/identity/USER.md').then(r => r.text())
+      ]).then(([soul, user]) => {
+        setLotusIdentity(`${soul}\n\n${user}`);
+      }).catch(console.error);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -2289,6 +2301,11 @@ export default function LivePage() {
 
     // === AGENT ORCHESTRATOR (ReAct Loop) ===
     try {
+      if (forceOpenClaw) {
+        console.log('[ROUTER] Forçando OpenClaw pelo botão (Pulando Groq)');
+        throw new Error('Forced OpenClaw');
+      }
+
       if (originMode === 'text' || originMode === 'presence' || originMode === 'recording_once') {
         const { agentOrchestrator } = await import('../../../lib/pulso/llm/AgentOrchestrator');
         
@@ -2301,11 +2318,11 @@ export default function LivePage() {
           // Pode também jogar no log visual se quisermos no futuro
         };
 
-        const result = await agentOrchestrator.run(messageText, onStatusUpdate);
+        const result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity);
         console.log('[AGENT_ORCHESTRATOR]', result);
 
         // Se o Agente NÃO repassou pra Lótus, significa que ele resolveu localmente
-        if (!result.isLotusHandoff && result.responseText) {
+        if (result.responseText) {
           const pulsoMsg: Message = {
             id: `pulso-local-${Date.now()}`,
             sender: 'lotus', // Usando UI da Lótus para a fala do sistema
