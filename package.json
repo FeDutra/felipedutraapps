@@ -10,7 +10,7 @@
     "pulso:web": "next dev -p 3001",
     "pulso:desktop": "tauri dev",
     "pulso:whatsapp": "node src-tauri/whatsapp-service/index.js",
-    "pulso:desktop:dev": "concurrently \"npm run pulso:web\" \"npm run pulso:desktop\"",
+    "pulso:desktop:dev": "npm run pulso:desktop",
     "pulso:app:dev": "npm run pulso:desktop:dev",
     "pulso:app:build": "tauri build"
   },
