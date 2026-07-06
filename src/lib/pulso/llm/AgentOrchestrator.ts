@@ -293,7 +293,9 @@ export class AgentOrchestrator {
       return { responseText: '', isLotusHandoff: true };
     }
 
-    const finalSystemPrompt = injectedSystemPrompt || AGENT_SYSTEM_PROMPT;
+    const finalSystemPrompt = injectedSystemPrompt 
+      ? `${injectedSystemPrompt}\n\n${AGENT_SYSTEM_PROMPT}` 
+      : AGENT_SYSTEM_PROMPT;
 
     const messages: ChatMessage[] = [
       { role: 'system', content: finalSystemPrompt },
@@ -302,6 +304,11 @@ export class AgentOrchestrator {
 
     for (let i = 0; i < this.maxIterations; i++) {
       console.log(`[AgentOrchestrator] Iteração ${i + 1}`);
+      
+      // Delay to avoid hitting Groq's burst limits (RPM/TPM) on free tier
+      if (i > 0) {
+        await new Promise(r => setTimeout(r, 600));
+      }
       
       const response = await this.llm.chat(messages, 0.2, agentTools);
       
