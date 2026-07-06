@@ -2301,22 +2301,9 @@ export default function LivePage() {
     setMessages(prev => [...prev, userMsg]);
 
     if (originMode === 'presence') {
-      const transitions = [
-        "Estou processando...",
-        "Só um segundo.",
-        "Deixe-me ver...",
-        "Entendi, um instante.",
-        "Ok, pensando..."
-      ];
-      const transition = transitions[Math.floor(Math.random() * transitions.length)];
-      voiceStateRef.current = 'speaking';
-      setVoiceState('speaking');
-      ttsAdapter.speak(transition, undefined, () => {
-         if (voiceStateRef.current === 'speaking') {
-            voiceStateRef.current = 'transcribing';
-            setVoiceState('transcribing');
-         }
-      });
+      // Não fala transição, apenas atualiza estado interno para esperar
+      voiceStateRef.current = 'transcribing';
+      setVoiceState('transcribing');
     }
 
     // === AGENT ORCHESTRATOR (ReAct Loop) ===
