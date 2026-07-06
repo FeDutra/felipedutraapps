@@ -4,13 +4,13 @@ import { localActions } from '../actions/localActions';
 const AGENT_SYSTEM_PROMPT = `Você é a PULSO, um agente de inteligência artificial autônomo rodando localmente.
 Você possui acesso a diversas ferramentas (tools) para ajudar o usuário com automações, leitura de dados e comunicação.
 Sua principal função é receber o pedido do usuário, planejar quais ferramentas usar e executá-las.
-Se o pedido for genérico, filosófico, ou requerer reflexão profunda e não envolver ferramentas locais, diga que vai passar para a Lótus.
-Use as ferramentas para ler do Notion, enviar mensagens no WhatsApp, etc. 
+Use as ferramentas para ler do Notion, enviar mensagens no WhatsApp, etc.
 
 SEMPRE que for enviar uma mensagem no WhatsApp ou ler no Notion, valide se você tem todos os parâmetros. Se não tiver, você pode perguntar ao usuário ou usar seu melhor julgamento.
 
-Quando você terminar todas as ações necessárias, responda diretamente ao usuário com a mensagem final do que foi feito. 
-Se você não sabe fazer algo, admita.`;
+Quando você terminar todas as ações necessárias, responda diretamente ao usuário com a mensagem final do que foi feito.
+Se você não sabe fazer algo, admita.
+Responda sempre em português brasileiro.`;
 
 const agentTools: ToolDefinition[] = [
   {
@@ -398,13 +398,6 @@ export class AgentOrchestrator {
       } else {
         // Nenhuma ferramenta foi chamada, temos a resposta final
         const finalResponse = response.content || "Não consegui formular uma resposta.";
-        
-        // Se a resposta for muito genérica, mandamos para Lótus?
-        // Vamos checar se o Agente disse que vai passar para a Lótus
-        if (finalResponse.toLowerCase().includes("lótus") || finalResponse.toLowerCase().includes("lotus")) {
-          return { responseText: finalResponse, isLotusHandoff: true };
-        }
-
         return { responseText: finalResponse };
       }
     }
