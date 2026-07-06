@@ -1654,10 +1654,6 @@ export default function LivePage() {
                 // Play response arrived sound cue
                 playPresenceSoundCue('response_arrived');
                 
-                // Block new recording & mute
-                stopVoiceRecognition();
-                console.log('[PULSO_PRESENCE_MIC_PAUSED_DURING_TTS]');
-                
                 voiceStateRef.current = 'speaking';
                 setVoiceState('speaking');
                 setPlayingMsgId(msgId);
@@ -2339,7 +2335,7 @@ export default function LivePage() {
           if (db) {
             const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
             addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
-              requestType: 'local_interaction',
+              requestType: 'conversation_command',
               status: 'success',
               input: messageText,
               openclawResult: { responseText: result.responseText },
@@ -2355,6 +2351,7 @@ export default function LivePage() {
           setContextTyping(sendingContextId, false);
           
           if (originMode === 'presence' || originMode === 'recording_once') {
+            voiceStateRef.current = 'speaking';
             setVoiceState('speaking');
             ttsAdapter.speak(
               result.responseText,
@@ -2633,7 +2630,13 @@ export default function LivePage() {
     setVoiceError(null);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true, 
+          noiseSuppression: true, 
+          autoGainControl: true 
+        } 
+      });
       microphoneStreamRef.current = stream;
 
       const mediaRecorder = new MediaRecorder(stream);
@@ -2683,11 +2686,18 @@ export default function LivePage() {
           }
           const average = sum / bufferLength;
 
-          if (average > 10) {
+          if (average > 15) {
             silenceStartRef.current = Date.now();
+            if (voiceStateRef.current === 'speaking') {
+              console.log('[PULSO_PRESENCE_VOICE_INTERRUPTION]');
+              ttsAdapter.cancel();
+              voiceStateRef.current = 'presence_listening';
+              setVoiceState('presence_listening');
+              playPresenceSoundCue('start_listening');
+            }
           } else {
             // Trigger auto-stop on 2.5s of silence
-            if (Date.now() - silenceStartRef.current > 2500) {
+            if (Date.now() - silenceStartRef.current > 2500 && voiceStateRef.current !== 'speaking') {
                console.log('[PULSO_PRESENCE_SILENCE_DETECTED]');
                stopVoiceRecognition();
                voiceStateRef.current = 'transcribing';
@@ -2834,11 +2844,15 @@ export default function LivePage() {
       console.log('[PULSO_PRESENCE_MIC_READY]');
       console.log('[PULSO_PRESENCE_STT_READY]');
       
+      setVoiceMode('presence');
+      voiceModeRef.current = 'presence';
+
       const hour = new Date().getHours();
       let greeting = 'Boa noite, Fê. Como posso ajudar?';
       if (hour < 12) greeting = 'Bom dia, Fê. Como posso ajudar?';
       else if (hour < 18) greeting = 'Boa tarde, Fê. Como posso ajudar?';
       
+      voiceStateRef.current = 'speaking';
       setVoiceState('speaking');
       ttsAdapter.speak(
         greeting,
