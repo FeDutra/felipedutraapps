@@ -2379,7 +2379,7 @@ export default function LivePage() {
               () => {
                 if (originMode === 'presence' && voiceModeRef.current === 'presence') {
                   setVoiceState('presence_listening');
-                  startSpeechRecognition('presence');
+                  startSpeechRecognitionRef.current?.('presence');
                 } else {
                   setVoiceState('idle');
                 }
