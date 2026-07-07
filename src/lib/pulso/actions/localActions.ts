@@ -1,6 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { notionActions } from './notionActions';
 import { whatsappActions } from './whatsappActions';
+import { googleActions } from './googleActions';
+import { slackActions } from './slackActions';
+import { canvaActions } from './canvaActions';
 
 export const localActions = {
   openApp: async (appName: string): Promise<string> => {
@@ -83,5 +86,26 @@ export const localActions = {
     } catch (e: any) {
       console.error('Failed to run stream command:', e);
     }
+  },
+
+  // Integração com Google (Fê Pessoal e Despertar)
+  listGoogleEvents: async (calendarAlias: string, timeMin?: string, timeMax?: string): Promise<string> => {
+    return googleActions.listEvents(calendarAlias, timeMin, timeMax);
+  },
+  createGoogleEvent: async (calendarAlias: string, title: string, start: string, end: string, description?: string): Promise<string> => {
+    return googleActions.createEvent(calendarAlias, title, start, end, description);
+  },
+  sendGoogleEmail: async (emailAlias: string, to: string, subject: string, body: string): Promise<string> => {
+    return googleActions.sendEmail(emailAlias, to, subject, body);
+  },
+
+  // Integração com Slack
+  sendSlackMessage: async (slackAlias: string, channel: string, message: string): Promise<string> => {
+    return slackActions.sendMessage(slackAlias, channel, message);
+  },
+
+  // Integração com Canva
+  createCanvaDesign: async (designType: string, title: string): Promise<string> => {
+    return canvaActions.createDesign(designType, title);
   }
 };

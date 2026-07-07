@@ -244,14 +244,15 @@ const agentTools: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'send_slack_message',
-      description: 'Preparo futuro: Envia uma mensagem no Slack.',
+      description: 'Envia uma mensagem no Slack.',
       parameters: {
         type: 'object',
         properties: {
-          channel: { type: 'string', description: 'O canal do Slack.' },
-          message: { type: 'string', description: 'A mensagem.' }
+          slackAlias: { type: 'string', description: 'O alias do Slack a ser usado (ex: "Despertar" ou "Pessoal").' },
+          channel: { type: 'string', description: 'O canal do Slack (ex: "#geral" ou ID do canal).' },
+          message: { type: 'string', description: 'A mensagem a ser enviada.' }
         },
-        required: ['channel', 'message']
+        required: ['slackAlias', 'channel', 'message']
       }
     }
   },
@@ -259,14 +260,65 @@ const agentTools: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_canva_design',
-      description: 'Preparo futuro: Inicia um design no Canva.',
+      description: 'Cria um design/rascunho no Canva.',
       parameters: {
         type: 'object',
         properties: {
-          designType: { type: 'string', description: 'O tipo do design.' },
+          designType: { type: 'string', description: 'O tipo do design (ex: "presentation", "instagram_post", "flyer").' },
           title: { type: 'string', description: 'Título do design.' }
         },
         required: ['designType', 'title']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_google_events',
+      description: 'Lista eventos da agenda do Google Calendar de uma conta específica.',
+      parameters: {
+        type: 'object',
+        properties: {
+          calendarAlias: { type: 'string', description: 'Alias do Google da conta (ex: "Fê Pessoal" ou "Despertar").' },
+          timeMin: { type: 'string', description: 'Opcional. Data/hora de início em formato ISO (ex: "2026-07-07T00:00:00Z"). Padrão é agora.' },
+          timeMax: { type: 'string', description: 'Opcional. Data/hora de término em formato ISO.' }
+        },
+        required: ['calendarAlias']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_google_event',
+      description: 'Cria um novo evento no Google Calendar na conta especificada.',
+      parameters: {
+        type: 'object',
+        properties: {
+          calendarAlias: { type: 'string', description: 'Alias do Google da conta (ex: "Fê Pessoal" ou "Despertar").' },
+          title: { type: 'string', description: 'Título do evento.' },
+          start: { type: 'string', description: 'Data e hora de início no formato ISO (ex: "2026-07-07T14:30:00Z").' },
+          end: { type: 'string', description: 'Data e hora de término no formato ISO (ex: "2026-07-07T15:30:00Z").' },
+          description: { type: 'string', description: 'Opcional. Descrição detalhada do evento.' }
+        },
+        required: ['calendarAlias', 'title', 'start', 'end']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_google_email',
+      description: 'Envia um e-mail através da API do Gmail a partir da conta associada ao alias.',
+      parameters: {
+        type: 'object',
+        properties: {
+          emailAlias: { type: 'string', description: 'Alias do Google da conta a ser usada (ex: "Fê Pessoal" ou "Despertar").' },
+          to: { type: 'string', description: 'E-mail do destinatário.' },
+          subject: { type: 'string', description: 'Assunto do e-mail.' },
+          body: { type: 'string', description: 'Conteúdo textual do e-mail.' }
+        },
+        required: ['emailAlias', 'to', 'subject', 'body']
       }
     }
   }
@@ -440,10 +492,19 @@ export class AgentOrchestrator {
               toolResult = await localActions.runAntigravityCli(args.commandArgs);
             } else if (functionName === 'send_slack_message') {
               if (onStatusUpdate) onStatusUpdate("Preparando mensagem para o Slack...");
-              toolResult = "Slack integration will be implemented soon.";
+              toolResult = await localActions.sendSlackMessage(args.slackAlias, args.channel, args.message);
             } else if (functionName === 'create_canva_design') {
               if (onStatusUpdate) onStatusUpdate("Preparando design no Canva...");
-              toolResult = "Canva integration will be implemented soon.";
+              toolResult = await localActions.createCanvaDesign(args.designType, args.title);
+            } else if (functionName === 'list_google_events') {
+              if (onStatusUpdate) onStatusUpdate(`Consultando agenda "${args.calendarAlias}"...`);
+              toolResult = await localActions.listGoogleEvents(args.calendarAlias, args.timeMin, args.timeMax);
+            } else if (functionName === 'create_google_event') {
+              if (onStatusUpdate) onStatusUpdate(`Agendando compromisso em "${args.calendarAlias}"...`);
+              toolResult = await localActions.createGoogleEvent(args.calendarAlias, args.title, args.start, args.end, args.description);
+            } else if (functionName === 'send_google_email') {
+              if (onStatusUpdate) onStatusUpdate(`Enviando e-mail pela conta "${args.emailAlias}"...`);
+              toolResult = await localActions.sendGoogleEmail(args.emailAlias, args.to, args.subject, args.body);
             } else {
               toolResult = `Ferramenta desconhecida: ${functionName}`;
             }
