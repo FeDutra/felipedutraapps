@@ -8,14 +8,18 @@ import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore'
 interface UserConnection {
   id: string;      // ex: "notion_despertar"
   alias: string;   // ex: "Notion Despertar"
-  type: 'notion' | 'whatsapp' | 'macos' | 'arc';
+  type: 'notion' | 'whatsapp' | 'macos' | 'arc' | 'google' | 'slack' | 'canva';
   token?: string;
+  auth?: any;
   status: 'connected' | 'disconnected';
 }
 
 const PROVIDERS = [
   { type: 'notion', name: 'Notion', icon: Box, description: 'Leitura de páginas e databases' },
   { type: 'whatsapp', name: 'WhatsApp', icon: MessageSquare, description: 'Envio e leitura de mensagens via QR Code' },
+  { type: 'google', name: 'Google (Calendar/Gmail/Drive)', icon: Globe, description: 'Modo Deus para agendas, e-mails e arquivos' },
+  { type: 'slack', name: 'Slack', icon: MessageSquare, description: 'Comunicação multicanais em workspaces' },
+  { type: 'canva', name: 'Canva', icon: Plug, description: 'Criação e edição de artes e designs' }
 ];
 
 function WhatsAppConnector({ connId, alias }: { connId: string, alias: string }) {
@@ -107,9 +111,15 @@ export default function ConexoesPage() {
   const [loading, setLoading] = useState(true);
 
   // Formulário de Adicionar
-  const [newType, setNewType] = useState<'notion' | 'whatsapp' | null>(null);
+  const [newType, setNewType] = useState<'notion' | 'whatsapp' | 'google' | 'slack' | 'canva' | null>(null);
   const [newAlias, setNewAlias] = useState('');
   const [newToken, setNewToken] = useState('');
+  
+  // Google Auth params
+  const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleRefreshToken, setGoogleRefreshToken] = useState('');
+
   const [isSaving, setIsSaving] = useState(false);
 
   const loadConnections = async () => {
@@ -126,12 +136,14 @@ export default function ConexoesPage() {
       snap.forEach(doc => {
         const data = doc.data();
         if (doc.id !== 'macos' && doc.id !== 'arc') { // just in case
+          const isGoogleConnected = data.type === 'google' && data.auth?.access_token;
           loaded.push({
             id: doc.id,
             alias: data.alias || doc.id,
             type: data.type || 'notion',
             token: data.token,
-            status: (data.type === 'whatsapp' || data.token) ? 'connected' : 'disconnected',
+            auth: data.auth,
+            status: (data.type === 'whatsapp' || data.token || isGoogleConnected) ? 'connected' : 'disconnected',
           });
         }
       });
@@ -151,21 +163,36 @@ export default function ConexoesPage() {
     if (!newType || !newAlias) return;
     setIsSaving(true);
     try {
-      // Cria ID seguro para o firebase
       const id = `${newType}_${newAlias.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`;
-      
       const connRef = doc(db, 'workspaces/felipe_dutra/connections', id);
-      await setDoc(connRef, { 
-        alias: newAlias, 
-        type: newType, 
-        token: newToken || null,
-        updatedAt: new Date().toISOString() 
-      }, { merge: true });
+      
+      let payload: any = {
+        alias: newAlias,
+        type: newType,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (newType === 'google') {
+        payload.auth = {
+          access_token: newToken || "",
+          refresh_token: googleRefreshToken || "",
+          client_id: googleClientId || "",
+          client_secret: googleClientSecret || "",
+          expiry_date: Date.now() + 3500 * 1000 // default 1h
+        };
+      } else {
+        payload.token = newToken || null;
+      }
+
+      await setDoc(connRef, payload, { merge: true });
       
       setIsAdding(false);
       setNewType(null);
       setNewAlias('');
       setNewToken('');
+      setGoogleClientSecret('');
+      setGoogleClientId('');
+      setGoogleRefreshToken('');
       await loadConnections();
     } catch (e) {
       console.error("Erro ao salvar", e);
@@ -188,6 +215,9 @@ export default function ConexoesPage() {
       case 'arc': return Globe;
       case 'notion': return Box;
       case 'whatsapp': return MessageSquare;
+      case 'google': return Globe;
+      case 'slack': return MessageSquare;
+      case 'canva': return Plug;
       default: return Plug;
     }
   };
@@ -280,6 +310,77 @@ export default function ConexoesPage() {
                 {newType === 'whatsapp' && (
                   <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs leading-relaxed">
                     A autenticação do WhatsApp é feita via QR Code. O código será exibido na lista após você salvar esta conexão.
+                  </div>
+                )}
+
+                {newType === 'slack' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Slack Bot/User OAuth Token</label>
+                    <input 
+                      type="password" 
+                      placeholder="xoxb-XXXXXXXXX..."
+                      value={newToken}
+                      onChange={(e) => setNewToken(e.target.value)}
+                      className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                    />
+                  </div>
+                )}
+
+                {newType === 'canva' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Canva Connect Token</label>
+                    <input 
+                      type="password" 
+                      placeholder="canva_token_XXXXXXXXX..."
+                      value={newToken}
+                      onChange={(e) => setNewToken(e.target.value)}
+                      className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                    />
+                  </div>
+                )}
+
+                {newType === 'google' && (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Access Token (Temporário)</label>
+                      <input 
+                        type="password" 
+                        placeholder="ya29.a0AfB_..."
+                        value={newToken}
+                        onChange={(e) => setNewToken(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Refresh Token (Persistente)</label>
+                      <input 
+                        type="password" 
+                        placeholder="1//0XXXXXXXXX..."
+                        value={googleRefreshToken}
+                        onChange={(e) => setGoogleRefreshToken(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Client ID</label>
+                      <input 
+                        type="text" 
+                        placeholder="XXXXXX-XXXX.apps.googleusercontent.com"
+                        value={googleClientId}
+                        onChange={(e) => setGoogleClientId(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Client Secret</label>
+                      <input 
+                        type="password" 
+                        placeholder="GOCSPX-XXXXXXXXX"
+                        value={googleClientSecret}
+                        onChange={(e) => setGoogleClientSecret(e.target.value)}
+                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                      />
+                    </div>
                   </div>
                 )}
 
