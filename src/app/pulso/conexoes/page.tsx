@@ -135,8 +135,10 @@ export default function ConexoesPage() {
 
       snap.forEach(doc => {
         const data = doc.data();
-        if (doc.id !== 'macos' && doc.id !== 'arc') { // just in case
-          const isGoogleConnected = data.type === 'google' && data.auth?.access_token;
+        if (doc.id !== 'macos' && doc.id !== 'arc') {
+          const isGoogleConnected = data.type === 'google' && (
+            data.serviceAccount?.client_email || data.auth?.access_token
+          );
           loaded.push({
             id: doc.id,
             alias: data.alias || doc.id,
@@ -173,12 +175,23 @@ export default function ConexoesPage() {
       };
 
       if (newType === 'google') {
-        payload.auth = {
-          access_token: newToken || "",
-          refresh_token: googleRefreshToken || "",
-          client_id: googleClientId || "",
-          client_secret: googleClientSecret || "",
-          expiry_date: Date.now() + 3500 * 1000 // default 1h
+        let saJson: any = null;
+        try {
+          saJson = JSON.parse(newToken);
+        } catch {
+          alert('JSON inválido. Cole o conteúdo completo do arquivo Service Account.');
+          setIsSaving(false);
+          return;
+        }
+        if (!saJson.client_email || !saJson.private_key) {
+          alert('JSON incompleto. Certifique-se de que contém "client_email" e "private_key".');
+          setIsSaving(false);
+          return;
+        }
+        payload.serviceAccount = {
+          client_email: saJson.client_email,
+          private_key: saJson.private_key,
+          project_id: saJson.project_id || '',
         };
       } else {
         payload.token = newToken || null;
@@ -341,45 +354,23 @@ export default function ConexoesPage() {
 
                 {newType === 'google' && (
                   <div className="flex flex-col gap-4">
+                    <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs rounded-xl leading-relaxed">
+                      <p className="font-bold mb-1">🔐 Conexão Permanente via Service Account</p>
+                      <p>1. Acesse o <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer" className="underline font-bold">Google Cloud Console</a></p>
+                      <p>2. Crie uma Service Account e gere uma chave JSON</p>
+                      <p>3. Cole o conteúdo do arquivo JSON abaixo</p>
+                      <p className="mt-1 text-indigo-400">✓ Nunca expira · Não precisa de senha · Funciona para sempre</p>
+                    </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Access Token (Temporário)</label>
-                      <input 
-                        type="password" 
-                        placeholder="ya29.a0AfB_..."
+                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Service Account JSON</label>
+                      <textarea
+                        rows={6}
+                        placeholder={'{\n  "type": "service_account",\n  "client_email": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----\\n..."\n}'}
                         value={newToken}
                         onChange={(e) => setNewToken(e.target.value)}
-                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
+                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all font-mono resize-none"
                       />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Refresh Token (Persistente)</label>
-                      <input 
-                        type="password" 
-                        placeholder="1//0XXXXXXXXX..."
-                        value={googleRefreshToken}
-                        onChange={(e) => setGoogleRefreshToken(e.target.value)}
-                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Client ID</label>
-                      <input 
-                        type="text" 
-                        placeholder="XXXXXX-XXXX.apps.googleusercontent.com"
-                        value={googleClientId}
-                        onChange={(e) => setGoogleClientId(e.target.value)}
-                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Client Secret</label>
-                      <input 
-                        type="password" 
-                        placeholder="GOCSPX-XXXXXXXXX"
-                        value={googleClientSecret}
-                        onChange={(e) => setGoogleClientSecret(e.target.value)}
-                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-all"
-                      />
+                      <p className="text-xs text-white/30">Cole o arquivo JSON completo baixado do Google Cloud Console</p>
                     </div>
                   </div>
                 )}

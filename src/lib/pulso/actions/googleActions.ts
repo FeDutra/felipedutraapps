@@ -4,17 +4,16 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 interface GoogleConnection {
   alias: string;
-  accessToken: string;
-  refreshToken?: string;
-  clientId?: string;
-  clientSecret?: string;
-  expiryDate?: number;
+  serviceAccountEmail: string;
+  privateKey: string; // chave privada RSA da service account
+  cachedToken?: string;
+  tokenExpiry?: number;
 }
 
 let cachedConnections: GoogleConnection[] = [];
 
 /**
- * Carrega credenciais do Google salvas no Firestore.
+ * Carrega credenciais do Google (Service Account) salvas no Firestore.
  */
 const loadGoogleConnections = async (): Promise<GoogleConnection[]> => {
   try {
@@ -27,15 +26,12 @@ const loadGoogleConnections = async (): Promise<GoogleConnection[]> => {
     const connections: GoogleConnection[] = [];
     snap.forEach(doc => {
       const data = doc.data();
-      const auth = data.auth || {};
-      if (auth.access_token) {
+      const sa = data.serviceAccount || {};
+      if (sa.client_email && sa.private_key) {
         connections.push({
           alias: data.alias || 'Google',
-          accessToken: auth.access_token,
-          refreshToken: auth.refresh_token,
-          clientId: auth.client_id,
-          clientSecret: auth.client_secret,
-          expiryDate: auth.expiry_date
+          serviceAccountEmail: sa.client_email,
+          privateKey: sa.private_key,
         });
       }
     });
@@ -49,43 +45,91 @@ const loadGoogleConnections = async (): Promise<GoogleConnection[]> => {
 };
 
 /**
- * Garante que o access_token esteja ativo. Lida com refresh caso tenha expirado.
+ * Gera um JWT assinado para a Service Account usando SubtleCrypto (Web Crypto API).
+ * Funciona em browser/Tauri sem dependência de node:crypto.
+ */
+const signJwt = async (email: string, privateKeyPem: string, scope: string): Promise<string> => {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: email,
+    scope,
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const toB64 = (obj: object) =>
+    btoa(JSON.stringify(obj)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  const signingInput = `${toB64(header)}.${toB64(payload)}`;
+
+  // Importa a chave PEM RSA privada via WebCrypto
+  const pemBody = privateKeyPem
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\s+/g, "");
+  const keyBuffer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8",
+    keyBuffer.buffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    cryptoKey,
+    new TextEncoder().encode(signingInput)
+  );
+
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  return `${signingInput}.${sigB64}`;
+};
+
+/**
+ * Retorna um access_token válido para a Service Account.
+ * Renova automaticamente se estiver expirado.
  */
 const getValidAccessToken = async (connection: GoogleConnection): Promise<string> => {
-  const isExpired = connection.expiryDate && Date.now() >= connection.expiryDate;
-  if (!isExpired) {
-    return connection.accessToken;
-  }
+  const scope = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/spreadsheets",
+  ].join(" ");
 
-  if (!connection.refreshToken || !connection.clientId || !connection.clientSecret) {
-    console.warn(`[GoogleActions] Token expirado para "${connection.alias}" e sem credenciais de refresh.`);
-    return connection.accessToken;
-  }
+  const isExpired = !connection.cachedToken || !connection.tokenExpiry || Date.now() >= connection.tokenExpiry;
+  if (!isExpired && connection.cachedToken) return connection.cachedToken;
 
   try {
-    console.log(`[GoogleActions] Renovando access_token expirado para "${connection.alias}"...`);
+    const jwt = await signJwt(connection.serviceAccountEmail, connection.privateKey, scope);
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: connection.clientId,
-        client_secret: connection.clientSecret,
-        refresh_token: connection.refreshToken,
-        grant_type: "refresh_token"
-      })
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
     });
 
-    if (!res.ok) throw new Error("Falha na chamada de refresh token");
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`Falha ao obter token da Service Account: ${errBody}`);
+    }
 
     const data = await res.json();
-    connection.accessToken = data.access_token;
-    if (data.expires_in) {
-      connection.expiryDate = Date.now() + data.expires_in * 1000;
-    }
+    connection.cachedToken = data.access_token;
+    connection.tokenExpiry = Date.now() + (data.expires_in || 3600) * 1000 - 60000;
     return data.access_token;
-  } catch (err) {
-    console.error(`[GoogleActions] Erro ao renovar token da conta "${connection.alias}":`, err);
-    return connection.accessToken;
+  } catch (err: any) {
+    console.error(`[GoogleActions] Erro ao obter token para "${connection.alias}":`, err);
+    throw err;
   }
 };
 
