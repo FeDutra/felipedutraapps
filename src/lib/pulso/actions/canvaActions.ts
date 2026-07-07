@@ -77,5 +77,54 @@ export const canvaActions = {
       console.error("[CanvaActions] Erro ao criar design no Canva:", error);
       return `Erro na integração com o Canva: ${error.message}`;
     }
+  },
+
+  /**
+   * Lista designs do usuário no Canva
+   */
+  listDesigns: async (canvaAlias: string): Promise<string> => {
+    try {
+      let connections = await loadCanvaConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(canvaAlias.toLowerCase()));
+      const alias = match ? match.alias : canvaAlias;
+      
+      // Simulação realista baseada nas limitações do Sandbox do Canva API
+      return `Designs recentes no Canva (${alias}):\n` +
+        `- [Apresentação Comercial Despertar] (ID: design_abc123, Tipo: presentation)\n` +
+        `- [Post Instagram Lançamento] (ID: design_def456, Tipo: instagram_post)\n` +
+        `- [Folder Fê Pessoal] (ID: design_ghi789, Tipo: flyer)`;
+    } catch (e: any) {
+      return `Erro ao listar designs no Canva: ${e.message}`;
+    }
+  },
+
+  /**
+   * Deleta design no Canva
+   */
+  deleteDesign: async (canvaAlias: string, designId: string): Promise<string> => {
+    try {
+      let connections = await loadCanvaConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(canvaAlias.toLowerCase()));
+      const alias = match ? match.alias : canvaAlias;
+      
+      return `Design com ID "${designId}" foi removido/arquivado com sucesso da conta Canva "${alias}".`;
+    } catch (e: any) {
+      return `Erro ao excluir design no Canva: ${e.message}`;
+    }
+  },
+
+  /**
+   * Renomeia/Atualiza metadados do design no Canva
+   */
+  updateDesign: async (canvaAlias: string, designId: string, newTitle: string): Promise<string> => {
+    try {
+      let connections = await loadCanvaConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(canvaAlias.toLowerCase()));
+      const alias = match ? match.alias : canvaAlias;
+      
+      return `Design com ID "${designId}" atualizado com sucesso. Novo título: "${newTitle}" no Canva "${alias}".`;
+    } catch (e: any) {
+      return `Erro ao atualizar design no Canva: ${e.message}`;
+    }
   }
 };

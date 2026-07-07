@@ -248,5 +248,208 @@ export const googleActions = {
       console.error("[GoogleActions] Erro ao enviar e-mail:", error);
       return `Erro ao enviar e-mail pelo Gmail: ${error.message}`;
     }
+  },
+
+  /**
+   * Lista arquivos do Google Drive
+   */
+  listDriveFiles: async (googleAlias: string, queryText?: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const q = queryText ? `name contains '${queryText}' and trashed = false` : "trashed = false";
+      const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&pageSize=15&fields=files(id,name,mimeType)`;
+      
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, { headers: { "Authorization": `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`Drive API: ${res.status}`);
+      
+      const data = await res.json();
+      const files = data.files || [];
+      if (files.length === 0) return `Nenhum arquivo encontrado no Drive de "${match.alias}".`;
+      
+      return `Arquivos no Drive (${match.alias}):\n` + files.map((f: any) => `- [${f.name}] (ID: ${f.id}, Tipo: ${f.mimeType})`).join("\n");
+    } catch (e: any) {
+      return `Erro no Drive: ${e.message}`;
+    }
+  },
+
+  /**
+   * Deleta arquivo no Google Drive
+   */
+  deleteDriveFile: async (googleAlias: string, fileId: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`Drive API: ${res.status}`);
+      return `Arquivo com ID ${fileId} deletado com sucesso do Drive de "${match.alias}".`;
+    } catch (e: any) {
+      return `Erro ao deletar arquivo: ${e.message}`;
+    }
+  },
+
+  /**
+   * Renomeia arquivo no Google Drive
+   */
+  renameDriveFile: async (googleAlias: string, fileId: string, newName: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName })
+      });
+      if (!res.ok) throw new Error(`Drive API: ${res.status}`);
+      return `Arquivo renomeado com sucesso para "${newName}" no Drive de "${match.alias}".`;
+    } catch (e: any) {
+      return `Erro ao renomear arquivo: ${e.message}`;
+    }
+  },
+
+  /**
+   * Copia (Duplica) arquivo no Google Drive
+   */
+  copyDriveFile: async (googleAlias: string, fileId: string, copyName: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = `https://www.googleapis.com/drive/v3/files/${fileId}/copy`;
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: copyName })
+      });
+      if (!res.ok) throw new Error(`Drive API: ${res.status}`);
+      const data = await res.json();
+      return `Arquivo duplicado com sucesso com o nome "${copyName}". Novo ID: ${data.id}.`;
+    } catch (e: any) {
+      return `Erro ao duplicar arquivo: ${e.message}`;
+    }
+  },
+
+  /**
+   * Cria Documento no Google Docs
+   */
+  createGoogleDocument: async (googleAlias: string, title: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = "https://docs.googleapis.com/v1/documents";
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title })
+      });
+      if (!res.ok) throw new Error(`Docs API: ${res.status}`);
+      const data = await res.json();
+      return `Documento "${title}" criado com sucesso no Google Docs! ID: ${data.documentId}`;
+    } catch (e: any) {
+      return `Erro ao criar documento: ${e.message}`;
+    }
+  },
+
+  /**
+   * Escreve/Anexa texto a um Google Document
+   */
+  updateGoogleDocument: async (googleAlias: string, documentId: string, text: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = `https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`;
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: [
+            {
+              insertText: {
+                text: text,
+                endOfSegmentLocation: {}
+              }
+            }
+          ]
+        })
+      });
+      if (!res.ok) throw new Error(`Docs API: ${res.status}`);
+      return `Conteúdo anexado com sucesso ao documento (ID: ${documentId}).`;
+    } catch (e: any) {
+      return `Erro ao atualizar documento: ${e.message}`;
+    }
+  },
+
+  /**
+   * Cria Planilha no Google Sheets
+   */
+  createGoogleSpreadsheet: async (googleAlias: string, title: string): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = "https://sheets.googleapis.com/v4/spreadsheets";
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ properties: { title } })
+      });
+      if (!res.ok) throw new Error(`Sheets API: ${res.status}`);
+      const data = await res.json();
+      return `Planilha "${title}" criada com sucesso no Google Sheets! ID: ${data.spreadsheetId}`;
+    } catch (e: any) {
+      return `Erro ao criar planilha: ${e.message}`;
+    }
+  },
+
+  /**
+   * Adiciona/Atualiza valores de linha em uma Planilha
+   */
+  updateGoogleSpreadsheet: async (googleAlias: string, spreadsheetId: string, range: string, values: any[][]): Promise<string> => {
+    try {
+      let connections = await loadGoogleConnections();
+      const match = connections.find(c => c.alias.toLowerCase().includes(googleAlias.toLowerCase()));
+      if (!match) return `Conta "${googleAlias}" não encontrada.`;
+      
+      const token = await getValidAccessToken(match);
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+      const fetchFn = typeof tauriFetch !== 'undefined' ? tauriFetch : fetch;
+      const res = await fetchFn(url, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values })
+      });
+      if (!res.ok) throw new Error(`Sheets API: ${res.status}`);
+      return `Planilha (ID: ${spreadsheetId}) atualizada com sucesso no intervalo "${range}".`;
+    } catch (e: any) {
+      return `Erro ao atualizar planilha: ${e.message}`;
+    }
   }
 };

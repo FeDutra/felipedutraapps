@@ -321,6 +321,239 @@ const agentTools: ToolDefinition[] = [
         required: ['emailAlias', 'to', 'subject', 'body']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_google_drive_files',
+      description: 'Lista ou pesquisa arquivos no Google Drive de uma conta.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google (ex: "Fê Pessoal" ou "Despertar").' },
+          queryText: { type: 'string', description: 'Opcional. Texto para filtrar pelo nome do arquivo.' }
+        },
+        required: ['googleAlias']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_google_drive_file',
+      description: 'Deleta ou envia para a lixeira um arquivo do Google Drive.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google (ex: "Fê Pessoal" ou "Despertar").' },
+          fileId: { type: 'string', description: 'ID exclusivo do arquivo no Drive.' }
+        },
+        required: ['googleAlias', 'fileId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rename_google_drive_file',
+      description: 'Altera o nome de um arquivo no Google Drive.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google.' },
+          fileId: { type: 'string', description: 'ID do arquivo.' },
+          newName: { type: 'string', description: 'Novo nome do arquivo.' }
+        },
+        required: ['googleAlias', 'fileId', 'newName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'copy_google_drive_file',
+      description: 'Duplica um arquivo no Google Drive.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google.' },
+          fileId: { type: 'string', description: 'ID do arquivo a copiar.' },
+          copyName: { type: 'string', description: 'Nome da nova cópia.' }
+        },
+        required: ['googleAlias', 'fileId', 'copyName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_google_document',
+      description: 'Cria um novo arquivo de texto no Google Docs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google.' },
+          title: { type: 'string', description: 'Título do documento.' }
+        },
+        required: ['googleAlias', 'title']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_google_document',
+      description: 'Adiciona ou anexa texto no final de um documento no Google Docs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google.' },
+          documentId: { type: 'string', description: 'ID do documento.' },
+          text: { type: 'string', description: 'Conteúdo textual a ser inserido.' }
+        },
+        required: ['googleAlias', 'documentId', 'text']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_google_spreadsheet',
+      description: 'Cria uma nova planilha no Google Sheets.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google.' },
+          title: { type: 'string', description: 'Título da planilha.' }
+        },
+        required: ['googleAlias', 'title']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_google_spreadsheet',
+      description: 'Atualiza ou adiciona linhas de valores em células de uma planilha no Google Sheets.',
+      parameters: {
+        type: 'object',
+        properties: {
+          googleAlias: { type: 'string', description: 'Alias da conta Google.' },
+          spreadsheetId: { type: 'string', description: 'ID da planilha.' },
+          range: { type: 'string', description: 'Intervalo em formato A1 (ex: "Página1!A1:B2" ou "A1").' },
+          values: { type: 'array', items: { type: 'array', items: { type: 'string' } }, description: 'Matriz bidimensional de valores (ex: [["Nome", "Idade"], ["Felipe", "30"]]).' }
+        },
+        required: ['googleAlias', 'spreadsheetId', 'range', 'values']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_slack_history',
+      description: 'Lê o histórico recente de mensagens de um canal do Slack.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slackAlias: { type: 'string', description: 'Alias da conta do Slack.' },
+          channel: { type: 'string', description: 'ID do canal ou nome (ex: "C123456").' },
+          limit: { type: 'number', description: 'Opcional. Quantidade de mensagens para ler. Padrão 10.' }
+        },
+        required: ['slackAlias', 'channel']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_slack_message',
+      description: 'Edita uma mensagem enviada anteriormente pelo bot no Slack.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slackAlias: { type: 'string', description: 'Alias da conta do Slack.' },
+          channel: { type: 'string', description: 'ID do canal.' },
+          ts: { type: 'string', description: 'O timestamp exclusivo da mensagem no formato Slack (ex: "17833000.0002").' },
+          text: { type: 'string', description: 'Novo texto para a mensagem.' }
+        },
+        required: ['slackAlias', 'channel', 'ts', 'text']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_slack_message',
+      description: 'Exclui uma mensagem enviada anteriormente no Slack.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slackAlias: { type: 'string', description: 'Alias do Slack.' },
+          channel: { type: 'string', description: 'ID do canal.' },
+          ts: { type: 'string', description: 'Timestamp da mensagem a deletar.' }
+        },
+        required: ['slackAlias', 'channel', 'ts']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_slack_channels',
+      description: 'Lista canais públicos e privados disponíveis no workspace do Slack.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slackAlias: { type: 'string', description: 'Alias da conta do Slack.' }
+        },
+        required: ['slackAlias']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_canva_designs',
+      description: 'Lista designs recentes criados na conta Canva.',
+      parameters: {
+        type: 'object',
+        properties: {
+          canvaAlias: { type: 'string', description: 'Alias da conta Canva.' }
+        },
+        required: ['canvaAlias']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_canva_design',
+      description: 'Apaga ou arquiva um design específico no Canva.',
+      parameters: {
+        type: 'object',
+        properties: {
+          canvaAlias: { type: 'string', description: 'Alias do Canva.' },
+          designId: { type: 'string', description: 'ID exclusivo do design.' }
+        },
+        required: ['canvaAlias', 'designId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_canva_design',
+      description: 'Atualiza o título ou metadados de um design no Canva.',
+      parameters: {
+        type: 'object',
+        properties: {
+          canvaAlias: { type: 'string', description: 'Alias do Canva.' },
+          designId: { type: 'string', description: 'ID exclusivo do design.' },
+          newTitle: { type: 'string', description: 'Novo título para o design.' }
+        },
+        required: ['canvaAlias', 'designId', 'newTitle']
+      }
+    }
   }
 ];
 
@@ -505,6 +738,51 @@ export class AgentOrchestrator {
             } else if (functionName === 'send_google_email') {
               if (onStatusUpdate) onStatusUpdate(`Enviando e-mail pela conta "${args.emailAlias}"...`);
               toolResult = await localActions.sendGoogleEmail(args.emailAlias, args.to, args.subject, args.body);
+            } else if (functionName === 'list_google_drive_files') {
+              if (onStatusUpdate) onStatusUpdate(`Listando arquivos no Drive de "${args.googleAlias}"...`);
+              toolResult = await localActions.listGoogleDriveFiles(args.googleAlias, args.queryText);
+            } else if (functionName === 'delete_google_drive_file') {
+              if (onStatusUpdate) onStatusUpdate("Deletando arquivo no Drive...");
+              toolResult = await localActions.deleteGoogleDriveFile(args.googleAlias, args.fileId);
+            } else if (functionName === 'rename_google_drive_file') {
+              if (onStatusUpdate) onStatusUpdate("Renomeando arquivo no Drive...");
+              toolResult = await localActions.renameGoogleDriveFile(args.googleAlias, args.fileId, args.newName);
+            } else if (functionName === 'copy_google_drive_file') {
+              if (onStatusUpdate) onStatusUpdate("Duplicando arquivo no Drive...");
+              toolResult = await localActions.copyGoogleDriveFile(args.googleAlias, args.fileId, args.copyName);
+            } else if (functionName === 'create_google_document') {
+              if (onStatusUpdate) onStatusUpdate("Criando documento no Google Docs...");
+              toolResult = await localActions.createGoogleDocument(args.googleAlias, args.title);
+            } else if (functionName === 'update_google_document') {
+              if (onStatusUpdate) onStatusUpdate("Atualizando documento no Google Docs...");
+              toolResult = await localActions.updateGoogleDocument(args.googleAlias, args.documentId, args.text);
+            } else if (functionName === 'create_google_spreadsheet') {
+              if (onStatusUpdate) onStatusUpdate("Criando planilha no Google Sheets...");
+              toolResult = await localActions.createGoogleSpreadsheet(args.googleAlias, args.title);
+            } else if (functionName === 'update_google_spreadsheet') {
+              if (onStatusUpdate) onStatusUpdate("Atualizando planilha no Google Sheets...");
+              toolResult = await localActions.updateGoogleSpreadsheet(args.googleAlias, args.spreadsheetId, args.range, args.values);
+            } else if (functionName === 'read_slack_history') {
+              if (onStatusUpdate) onStatusUpdate("Lendo histórico do Slack...");
+              toolResult = await localActions.readSlackHistory(args.slackAlias, args.channel, args.limit);
+            } else if (functionName === 'update_slack_message') {
+              if (onStatusUpdate) onStatusUpdate("Editando mensagem no Slack...");
+              toolResult = await localActions.updateSlackMessage(args.slackAlias, args.channel, args.ts, args.text);
+            } else if (functionName === 'delete_slack_message') {
+              if (onStatusUpdate) onStatusUpdate("Apagando mensagem no Slack...");
+              toolResult = await localActions.deleteSlackMessage(args.slackAlias, args.channel, args.ts);
+            } else if (functionName === 'list_slack_channels') {
+              if (onStatusUpdate) onStatusUpdate("Listando canais do Slack...");
+              toolResult = await localActions.listSlackChannels(args.slackAlias);
+            } else if (functionName === 'list_canva_designs') {
+              if (onStatusUpdate) onStatusUpdate("Listando designs no Canva...");
+              toolResult = await localActions.listCanvaDesigns(args.canvaAlias);
+            } else if (functionName === 'delete_canva_design') {
+              if (onStatusUpdate) onStatusUpdate("Deletando design no Canva...");
+              toolResult = await localActions.deleteCanvaDesign(args.canvaAlias, args.designId);
+            } else if (functionName === 'update_canva_design') {
+              if (onStatusUpdate) onStatusUpdate("Renomeando design no Canva...");
+              toolResult = await localActions.updateCanvaDesign(args.canvaAlias, args.designId, args.newTitle);
             } else {
               toolResult = `Ferramenta desconhecida: ${functionName}`;
             }

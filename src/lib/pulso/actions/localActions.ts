@@ -98,14 +98,59 @@ export const localActions = {
   sendGoogleEmail: async (emailAlias: string, to: string, subject: string, body: string): Promise<string> => {
     return googleActions.sendEmail(emailAlias, to, subject, body);
   },
+  listGoogleDriveFiles: async (googleAlias: string, queryText?: string): Promise<string> => {
+    return googleActions.listDriveFiles(googleAlias, queryText);
+  },
+  deleteGoogleDriveFile: async (googleAlias: string, fileId: string): Promise<string> => {
+    return googleActions.deleteDriveFile(googleAlias, fileId);
+  },
+  renameGoogleDriveFile: async (googleAlias: string, fileId: string, newName: string): Promise<string> => {
+    return googleActions.renameDriveFile(googleAlias, fileId, newName);
+  },
+  copyGoogleDriveFile: async (googleAlias: string, fileId: string, copyName: string): Promise<string> => {
+    return googleActions.copyDriveFile(googleAlias, fileId, copyName);
+  },
+  createGoogleDocument: async (googleAlias: string, title: string): Promise<string> => {
+    return googleActions.createGoogleDocument(googleAlias, title);
+  },
+  updateGoogleDocument: async (googleAlias: string, documentId: string, text: string): Promise<string> => {
+    return googleActions.updateGoogleDocument(googleAlias, documentId, text);
+  },
+  createGoogleSpreadsheet: async (googleAlias: string, title: string): Promise<string> => {
+    return googleActions.createGoogleSpreadsheet(googleAlias, title);
+  },
+  updateGoogleSpreadsheet: async (googleAlias: string, spreadsheetId: string, range: string, values: any[][]): Promise<string> => {
+    return googleActions.updateGoogleSpreadsheet(googleAlias, spreadsheetId, range, values);
+  },
 
   // Integração com Slack
   sendSlackMessage: async (slackAlias: string, channel: string, message: string): Promise<string> => {
     return slackActions.sendMessage(slackAlias, channel, message);
   },
+  readSlackHistory: async (slackAlias: string, channel: string, limit?: number): Promise<string> => {
+    return slackActions.readHistory(slackAlias, channel, limit);
+  },
+  updateSlackMessage: async (slackAlias: string, channel: string, ts: string, text: string): Promise<string> => {
+    return slackActions.updateMessage(slackAlias, channel, ts, text);
+  },
+  deleteSlackMessage: async (slackAlias: string, channel: string, ts: string): Promise<string> => {
+    return slackActions.deleteMessage(slackAlias, channel, ts);
+  },
+  listSlackChannels: async (slackAlias: string): Promise<string> => {
+    return slackActions.listChannels(slackAlias);
+  },
 
   // Integração com Canva
   createCanvaDesign: async (designType: string, title: string): Promise<string> => {
     return canvaActions.createDesign(designType, title);
+  },
+  listCanvaDesigns: async (canvaAlias: string): Promise<string> => {
+    return canvaActions.listDesigns(canvaAlias);
+  },
+  deleteCanvaDesign: async (canvaAlias: string, designId: string): Promise<string> => {
+    return canvaActions.deleteDesign(canvaAlias, designId);
+  },
+  updateCanvaDesign: async (canvaAlias: string, designId: string, newTitle: string): Promise<string> => {
+    return canvaActions.updateDesign(canvaAlias, designId, newTitle);
   }
 };
