@@ -1755,6 +1755,17 @@ export default function LivePage() {
             } else {
               console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
               console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
+              
+              // Se a requisição está em andamento, renderiza o balão de digitando / processando
+              if (['queued_for_openclaw', 'processing_by_openclaw', 'proposal_ready'].includes(status) && req.contextId === activeContextNode.contextId) {
+                chatHistory.push({
+                  id: `lotus-pending-${req.id}`,
+                  sender: 'lotus',
+                  text: 'pensando...',
+                  timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                  contextId: req.contextId || null
+                });
+              }
             }
           } else if (isActiveMessage) {
             console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
@@ -2378,19 +2389,16 @@ export default function LivePage() {
           return; // PULA o envio para a Lótus na nuvem
         }
       }
-    } catch (e) {
-      console.error('[AGENT_ORCHESTRATOR] Erro no Groq local:', e);
-      // Não faz fallback para a nuvem. Mostra erro local e para.
-      const errorMsg: Message = {
-        id: `groq-error-${Date.now()}`,
-        sender: 'lotus',
-        text: 'Não consegui processar sua mensagem agora. Tente novamente.',
-        timestamp: new Date(),
-        contextId: activeContextNode.contextId
-      };
-      setMessages(prev => [...prev, errorMsg]);
-      setContextTyping(sendingContextId, false);
-      return;
+      // Se o Groq local retornou desejo de handoff cognitivo
+      if (result.isLotusHandoff) {
+        console.log('[AGENT_ORCHESTRATOR] Handoff cognitivo para OpenClaw solicitado.');
+      }
+    } catch (e: any) {
+      if (e?.message === 'Forced OpenClaw') {
+        console.log('[ROUTER] Redirecionando requisição para OpenClaw (Nuvem) pelo clique no botão.');
+      } else {
+        console.warn('[AGENT_ORCHESTRATOR] Erro no Groq local, redirecionando para OpenClaw:', e);
+      }
     }
     // ===================================
 
@@ -2398,20 +2406,7 @@ export default function LivePage() {
       voiceReplyRequestsRef.current.add(preGeneratedReqId);
     }
 
-    // Só vai para a nuvem (OpenClaw) se forceOpenClaw estiver ativo explicitamente
-    if (!forceOpenClaw) {
-      // Groq não retornou nada util mas também não deu erro. Exibe mensagem de fallback local.
-      const fallbackMsg: Message = {
-        id: `groq-fallback-${Date.now()}`,
-        sender: 'lotus',
-        text: 'Não obtive resposta. Tente novamente.',
-        timestamp: new Date(),
-        contextId: activeContextNode.contextId
-      };
-      setMessages(prev => [...prev, fallbackMsg]);
-      setContextTyping(sendingContextId, false);
-      return;
-    }
+    // Posta a requisição para a OpenClaw responder se o Groq local falhar ou se forceOpenClaw estiver ativo
 
     // Send the request in the background (OpenClaw - apenas quando forceOpenClaw ativo)
     createPulsoConversationRequest(messageText, {
