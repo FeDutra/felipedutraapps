@@ -3743,7 +3743,7 @@ export default function LivePage() {
                                       <FileText size={16} className="text-white/70" />
                                     </div>
                                     <div className="flex flex-col">
-                                      <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Documento Gerado</span>
+                                      <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Abrir Mesa</span>
                                       <span className="text-sm font-medium text-white">{artifactData.title}</span>
                                     </div>
                                   </button>
@@ -4044,8 +4044,8 @@ export default function LivePage() {
           {/* Mesa Panel (Split Screen) */}
           {isMesaOpen && activeMesaArtifact && (
             <div 
-              className={`block w-1/2 relative transition-all duration-300 bg-black/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl overflow-hidden`}
-              style={{ height: chatHeight }}
+              className={`flex flex-col w-1/2 relative transition-all duration-300 bg-black/60 backdrop-blur-xl border border-white/5 rounded-2xl shadow-2xl overflow-hidden`}
+              style={{ height: chatHeight === 'auto' ? '100%' : chatHeight }}
             >
               <MesaPanel
                 isOpen={isMesaOpen}
