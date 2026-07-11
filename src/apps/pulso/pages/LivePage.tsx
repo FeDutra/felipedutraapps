@@ -4314,21 +4314,23 @@ export default function LivePage() {
           {/* Mapeamento de status físico do canal cognitivo ativo */}
           {(() => {
             const activeSession = sessions.find(s => s.contextId === activeContextNode.contextId);
-            const runtimeStatus = activeSession?.runtimeStatus || 'pending';
+            // Fallback 'ready': se a sessão não está no array local ainda, não bloqueia o input
+            const runtimeStatus = activeSession?.runtimeStatus || 'ready';
             const errorMessage = activeSession?.errorMessage || '';
             
             let placeholderText = "";
             let isBlocked = false;
 
-            if (runtimeStatus === 'pending' || runtimeStatus === 'bootstrapping') {
+            if (runtimeStatus === 'bootstrapping') {
               placeholderText = "Lótus ativando canal cognitivo...";
               isBlocked = true;
             } else if (runtimeStatus === 'migrating') {
               placeholderText = "Importando histórico do canal cognitivo...";
               isBlocked = true;
             } else if (runtimeStatus === 'error') {
-              placeholderText = `Falha operacional: ${errorMessage || 'Sessão física corrompida.'}`;
-              isBlocked = true;
+              // Em caso de erro, avisa mas não bloqueia — permite reenviar
+              placeholderText = `canal com instabilidade — pode tentar enviar`;
+              isBlocked = false;
             } else if (runtimeStatus === 'disabled') {
               placeholderText = "Canal cognitivo desativado.";
               isBlocked = true;
