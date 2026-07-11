@@ -1,5 +1,3 @@
-2026/07/05-12:32:08.250 fde7c Creating DB /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/Local Storage/leveldb since it was missing.
-2026/07/05-12:32:08.324 fde7c Reusing MANIFEST /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2026/07/05-13:10:02.333 fde7c Level-0 table #5: started
-2026/07/05-13:10:02.348 fde7c Level-0 table #5: 23813 bytes OK
-2026/07/05-13:10:02.374 fde7c Delete type=0 #3
+2026/07/09-10:22:05.817 f38a9 Reusing MANIFEST /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
+2026/07/09-10:22:05.833 f38a9 Recovering log #4
+2026/07/09-10:22:05.834 f38a9 Reusing old log /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/Local Storage/leveldb/000004.log 

@@ -1,2 +1,3 @@
-2026/07/05-12:32:07.116 fdde3 Creating DB /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/shared_proto_db/metadata since it was missing.
-2026/07/05-12:32:07.178 fdde3 Reusing MANIFEST /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/shared_proto_db/metadata/MANIFEST-000001
+2026/07/09-10:22:05.355 f3852 Reusing MANIFEST /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/shared_proto_db/metadata/MANIFEST-000001
+2026/07/09-10:22:05.356 f3852 Recovering log #3
+2026/07/09-10:22:05.361 f3852 Reusing old log /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/shared_proto_db/metadata/000003.log 

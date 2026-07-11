@@ -1,2 +1,3 @@
-2026/07/05-12:32:22.671 fddbb Creating DB /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/GCM Store since it was missing.
-2026/07/05-12:32:23.126 fddbb Reusing MANIFEST /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/GCM Store/MANIFEST-000001
+2026/07/09-10:22:17.450 f384c Reusing MANIFEST /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/GCM Store/MANIFEST-000001
+2026/07/09-10:22:17.451 f384c Recovering log #3
+2026/07/09-10:22:17.467 f384c Reusing old log /Users/felipedutra/Projetos/eden-terra/wwebjs_auth/session/Default/GCM Store/000003.log 

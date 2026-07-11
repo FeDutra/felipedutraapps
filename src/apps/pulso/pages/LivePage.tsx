@@ -1462,12 +1462,6 @@ export default function LivePage() {
             return timeA - timeB;
           });
 
-        const activeMessageOrigins = new Set(
-          commandRequests
-            .filter((r: any) => r.requestType === 'active_message' && r.meta?.originRequestId)
-            .map((r: any) => r.meta.originRequestId)
-        );
-
         commandRequests.forEach((req: any) => {
           const reqTime = safeConvertToDate(req.requestedAt) || new Date();
           
@@ -1482,18 +1476,14 @@ export default function LivePage() {
           }
           
           const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction';
-          const isActiveMessage = req.requestType === "active_message";
           
           if (isConvCommand) {
             const status = req.status;
             const responseText = req.openclawResult?.responseText ?? null;
             const hasRealResponse = responseText && responseText.trim() !== '';
             
-            const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
-            if (isAcceptedStatus && hasRealResponse && !hasActiveMessageDelivery) {
-              console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
-              console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+            if (isAcceptedStatus && hasRealResponse) {
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
@@ -1511,7 +1501,7 @@ export default function LivePage() {
                 executionError: req.executionError || undefined,
                 contextId: req.contextId || null
               });
-            } else if ((status === 'error' || status === 'timeout') && !hasActiveMessageDelivery) {
+            } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
               const errorText = req.openclawResult?.responseText || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
@@ -1523,32 +1513,6 @@ export default function LivePage() {
                 openclawResult: req.openclawResult || undefined,
                 handoffStatus: req.status,
                 requestId: req.id || undefined,
-                originalCommand: req.summary || req.title || undefined,
-                contextId: req.contextId || null
-              });
-            } else {
-              console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
-              console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
-            }
-          } else if (isActiveMessage) {
-            console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
-            const replyText = req.message || req.text || '';
-            // Não renderiza placeholders de loading como mensagem real
-            const isPlaceholder = !replyText.trim() || replyText.trim().toLowerCase() === 'pensando...';
-            if (isPlaceholder) {
-              console.log('[PULSO_ACTIVE_MESSAGE_SUPPRESSED_PLACEHOLDER]', { requestId: req.id, text: replyText });
-            } else {
-              console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
-              const originId = req.meta?.originRequestId || req.id;
-              chatHistory.push({
-                id: `lotus-${originId}`,
-                sender: 'lotus',
-                text: replyText,
-                timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-                interpretation: req.interpretation,
-                openclawResult: req.openclawResult || undefined,
-                handoffStatus: req.status,
-                requestId: originId,
                 originalCommand: req.summary || req.title || undefined,
                 contextId: req.contextId || null
               });
@@ -1614,12 +1578,6 @@ export default function LivePage() {
           return timeA - timeB;
         });
 
-        const activeMessageOrigins = new Set(
-          sortedRequests
-            .filter((r: any) => r.requestType === 'active_message' && r.meta?.originRequestId)
-            .map((r: any) => r.meta.originRequestId)
-        );
-
         const chatHistory: Message[] = [];
         sortedRequests.forEach((req: any) => {
           const reqTime = safeConvertToDate(req.requestedAt) || safeConvertToDate(req.createdAt) || safeConvertToDate(req.updatedAt) || new Date(0);          
@@ -1682,7 +1640,6 @@ export default function LivePage() {
           }
 
           const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction';
-          const isActiveMessage = req.requestType === "active_message";
 
           if (isConvCommand) {
             const status = req.status;
@@ -1693,8 +1650,7 @@ export default function LivePage() {
             const requestOriginMode = req.mode || req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
             const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
             
-            const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
-            const isErrorState = (status === 'error' || status === 'timeout') && !hasActiveMessageDelivery;
+            const isErrorState = (status === 'error' || status === 'timeout');
             const ttsText = isErrorState ? 'Falha operacional. Nuvem indisponível ou sem cota.' : responseText;
             const hasSpeakableResponse = (status === 'success' && hasRealResponse) || isErrorState;
 
@@ -1793,10 +1749,7 @@ export default function LivePage() {
             }
 
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
-            if (isAcceptedStatus && hasRealResponse && !hasActiveMessageDelivery) {
-              console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
-              console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
-              console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
+            if (isAcceptedStatus && hasRealResponse) {
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
               chatHistory.push({
                 id: `lotus-${req.id}`,
@@ -1814,7 +1767,7 @@ export default function LivePage() {
                 executionError: req.executionError || undefined,
                 contextId: req.contextId || null
               });
-            } else if ((status === 'error' || status === 'timeout') && !hasActiveMessageDelivery) {
+            } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
               const errorText = req.openclawResult?.responseText || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
@@ -1829,33 +1782,7 @@ export default function LivePage() {
                 originalCommand: req.summary || req.title || undefined,
                 contextId: req.contextId || null
               });
-            } else {
-              console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
-              console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
-              // Se a requisição está em andamento na nuvem da OpenClaw, o indicador cinza nativo de digitação cuidará do status
             }
-          } else if (isActiveMessage) {
-            console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
-            const replyText = req.message || req.text || '';
-            const isPlaceholder2 = !replyText.trim() || replyText.trim().toLowerCase() === 'pensando...';
-            if (isPlaceholder2) {
-              console.log('[PULSO_ACTIVE_MESSAGE_SUPPRESSED_PLACEHOLDER]', { requestId: req.id });
-              return; // skip placeholder
-            }
-            console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
-            const originId = req.meta?.originRequestId || req.id;
-            chatHistory.push({
-              id: `lotus-${originId}`, // Same logical ID as the command response
-              sender: 'lotus',
-              text: replyText,
-              timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-              interpretation: req.interpretation,
-              openclawResult: req.openclawResult || undefined,
-              handoffStatus: req.status,
-              requestId: originId,
-              originalCommand: req.summary || req.title || undefined,
-              contextId: req.contextId || null
-            });
           }
         });
         // ── New-message sound / notification detection ───────────────────────
@@ -3075,12 +3002,13 @@ export default function LivePage() {
 
   // Check if the most recent request is queued or processing (pending)
   const isLatestRequestPending = React.useMemo(() => {
+    if (isTyping) return true;
     const lastSentIdForActive = lastSentRequestsByContext[activeContextNode.contextId];
     if (!lastSentIdForActive) return false;
     const req = allRequests.find((r: any) => r.id === lastSentIdForActive);
     if (!req) return false;
     return req.status !== 'success' && req.status !== 'error' && req.status !== 'timeout';
-  }, [allRequests, lastSentRequestsByContext, activeContextNode.contextId]);
+  }, [allRequests, lastSentRequestsByContext, activeContextNode.contextId, isTyping]);
 
 
   if (loading) {
