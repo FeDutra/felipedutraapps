@@ -1,4 +1,6 @@
 'use client';
+import ArcaDrawer from '../components/ArcaDrawer';
+import { MesaPanel } from '../components/MesaPanel';
 import { listen } from '@tauri-apps/api/event';
 
 import {
@@ -508,6 +510,7 @@ export default function LivePage() {
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
+  const [isArcaOpen, setIsArcaOpen] = React.useState(false);
   const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
   const [engineeringLogs, setEngineeringLogs] = React.useState<string[]>([]);
   const [engineeringInput, setEngineeringInput] = React.useState('');
@@ -3314,6 +3317,17 @@ export default function LivePage() {
           >
             <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
           </button>
+          <button 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setIsArcaOpen(!isArcaOpen); 
+            }}
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+              isArcaOpen ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
+            }`}
+          >
+            <span>[ arca ]</span>
+          </button>
           
           <div className="relative" ref={headerMenuRef}>
             <button 
@@ -3701,7 +3715,39 @@ export default function LivePage() {
                       {/* Text body & blocks renderer */}
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
                         <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
-                          <MessageRenderer text={msg.text} sender={msg.sender} />
+                          {(() => {
+                            const docRegex = /<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i;
+                            const docMatch = msg.text.match(docRegex);
+                            let displayText = msg.text;
+                            let artifactData = null;
+                            if (docMatch) {
+                              artifactData = { id: docMatch[1], title: docMatch[2], content: docMatch[3].trim(), contextId: msg.contextId };
+                              displayText = msg.text.replace(docRegex, '').trim();
+                            }
+                            
+                            return (
+                              <div className="flex flex-col gap-3">
+                                {displayText && <MessageRenderer text={displayText} sender={msg.sender} />}
+                                {artifactData && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveMesaArtifact(artifactData);
+                                      setIsMesaOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all w-fit cursor-pointer outline-none group text-left"
+                                  >
+                                    <div className="p-2 bg-black/40 rounded-lg group-hover:bg-black/60 transition-colors">
+                                      <FileText size={16} className="text-white/70" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Documento Gerado</span>
+                                      <span className="text-sm font-medium text-white">{artifactData.title}</span>
+                                    </div>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 
@@ -4000,6 +4046,8 @@ export default function LivePage() {
           <span className="text-xs font-semibold tracking-widest uppercase">função em desenvolvimento</span>
         </div>
       </main>
+      <ArcaDrawer isOpen={isArcaOpen} onClose={() => setIsArcaOpen(false)} contextId={activeContextNode?.contextId} />
+
 
       {isEngineeringActive && (
         <div className="absolute inset-0 z-50 bg-[#0a0a0a]/90 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
@@ -4346,27 +4394,32 @@ export default function LivePage() {
             );
           })()}
 
-          {voiceState !== 'error' && (
-            <button
-              onClick={toggleRecordingOnce}
-              disabled={false}
-              className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
-                voiceMode === 'recording_once' 
-                  ? 'text-[#b8283e] bg-white scale-105 shadow-md' 
-                  : 'text-[#fbf9f5]/60 hover:text-white'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={voiceMode === 'recording_once' ? 'gravando... clique para parar' : 'capturar áudio'}
-            >
-              {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
-            </button>
-          )}
+          <button
+            onClick={toggleRecordingOnce}
+            disabled={false}
+            className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
+              voiceMode === 'recording_once' 
+                ? 'text-[#b8283e] bg-white scale-105 shadow-md' 
+                : 'text-[#fbf9f5]/60 hover:text-white'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={voiceMode === 'recording_once' ? 'gravando... clique para parar' : 'capturar áudio'}
+          >
+            {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
+          </button>
 
           <button
+            onClick={toggleRecordingOnce}
+            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 ${voiceMode === 'recording_once' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
+            title="Gravar Reunião"
+          >
+            <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_once' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_once' ? "currentColor" : "none"} />
+          </button>
+          <button
             onClick={() => setForceOpenClaw(!forceOpenClaw)}
-            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 ${forceOpenClaw ? 'opacity-100' : 'opacity-30 hover:opacity-100'}`}
+            className={`font-mono text-xs transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 tracking-[0.2em] flex items-center justify-center h-8 ${forceOpenClaw ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] animate-pulse' : 'text-[#fbf9f5]/30 hover:text-white/60'}`}
             title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
           >
-            <Circle size={10} strokeWidth={3} className="text-white" fill={forceOpenClaw ? "currentColor" : "none"} />
+            {forceOpenClaw ? '( • )' : '(   )'}
           </button>
 
           <button
