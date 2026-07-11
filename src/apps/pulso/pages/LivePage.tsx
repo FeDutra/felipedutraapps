@@ -1903,6 +1903,23 @@ export default function LivePage() {
                     console.warn('Failed to fire desktop notification:', err);
                   }
                 }
+
+                // Voice Presence Proativo: Se a mensagem veio de fora (não gerada nesta aba), fala em voz alta
+                const isRemoteMessage = !msg.requestId || !latencyMapRef.current[msg.requestId];
+                if (isRemoteMessage && msg.text) {
+                  console.log('[PULSO_PRESENCE_PROACTIVE_TTS]', { msgId: msg.id, text: msg.text });
+                  playPresenceSoundCue('speak_start');
+                  voiceStateRef.current = 'speaking';
+                  setVoiceState('speaking');
+                  ttsAdapter.speak(
+                    msg.text,
+                    () => {},
+                    () => {
+                      voiceStateRef.current = 'idle';
+                      setVoiceState('idle');
+                    }
+                  );
+                }
               }
             }
           });

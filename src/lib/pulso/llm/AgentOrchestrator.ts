@@ -644,6 +644,74 @@ const agentTools: ToolDefinition[] = [
         required: ['query']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delegate_to_openclaw',
+      description: 'Acione esta ferramenta para transferir a requisição inteira para a OpenClaw (motor pesado na nuvem). Use quando o usuário pedir pesquisas na web longas, raciocínio profundo, código, ou tarefas que demoram muito para responder. Uma vez acionada, você não precisa fazer mais nada.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'open_app',
+      description: 'Abre um aplicativo no Mac pelo nome (ex: "Safari", "Notion", "Apple Music", "Notes").',
+      parameters: {
+        type: 'object',
+        properties: {
+          appName: { type: 'string', description: 'Nome do aplicativo' }
+        },
+        required: ['appName']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'open_browser_url',
+      description: 'Abre uma URL específica no navegador padrão do Mac.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'URL completa a ser aberta (ex: https://youtube.com)' }
+        },
+        required: ['url']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'run_applescript',
+      description: 'Executa um script AppleScript arbitrário no Mac para controlar o sistema ou aplicativos nativos.',
+      parameters: {
+        type: 'object',
+        properties: {
+          script: { type: 'string', description: 'Código AppleScript' }
+        },
+        required: ['script']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'run_shell_command',
+      description: 'Executa um comando no terminal (sh) do Mac. Útil para scripts de sistema, listar arquivos, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: { type: 'string', description: 'Comando bash/sh' }
+        },
+        required: ['command']
+      }
+    }
   }
 ];
 
@@ -948,6 +1016,61 @@ class AgentOrchestrator {
                     : `Nenhum resultado encontrado para "${args.query}" na memória histórica.`;
                 } catch (e: any) {
                   toolResult = `Erro ao buscar na memória: ${e.message}`;
+                }
+              }
+            } else if (functionName === 'delegate_to_openclaw') {
+              if (onStatusUpdate) onStatusUpdate("Transferindo raciocínio para OpenClaw (motor profundo)...");
+              return { responseText: '', isLotusHandoff: true };
+            } else if (functionName === 'open_app') {
+              if (!isTauri) {
+                toolResult = "Comandos locais só funcionam no app desktop.";
+              } else {
+                if (onStatusUpdate) onStatusUpdate(`Abrindo ${args.appName}...`);
+                const { invoke } = await import('@tauri-apps/api/core');
+                try {
+                  await invoke('execute_applescript', { script: `tell application "${args.appName}" to activate` });
+                  toolResult = `Aplicativo ${args.appName} aberto/ativado com sucesso.`;
+                } catch (e: any) {
+                  toolResult = `Erro ao abrir aplicativo: ${e}`;
+                }
+              }
+            } else if (functionName === 'open_browser_url') {
+              if (!isTauri) {
+                toolResult = "Comandos locais só funcionam no app desktop.";
+              } else {
+                if (onStatusUpdate) onStatusUpdate(`Abrindo URL no navegador...`);
+                const { invoke } = await import('@tauri-apps/api/core');
+                try {
+                  await invoke('local_open_url', { url: args.url });
+                  toolResult = `URL ${args.url} aberta com sucesso.`;
+                } catch (e: any) {
+                  toolResult = `Erro ao abrir URL: ${e}`;
+                }
+              }
+            } else if (functionName === 'run_applescript') {
+              if (!isTauri) {
+                toolResult = "Comandos locais só funcionam no app desktop.";
+              } else {
+                if (onStatusUpdate) onStatusUpdate(`Executando script AppleScript...`);
+                const { invoke } = await import('@tauri-apps/api/core');
+                try {
+                  const out = await invoke('execute_applescript', { script: args.script });
+                  toolResult = `AppleScript executado. Saída: ${out}`;
+                } catch (e: any) {
+                  toolResult = `Erro no AppleScript: ${e}`;
+                }
+              }
+            } else if (functionName === 'run_shell_command') {
+              if (!isTauri) {
+                toolResult = "Comandos locais só funcionam no app desktop.";
+              } else {
+                if (onStatusUpdate) onStatusUpdate(`Executando shell...`);
+                const { invoke } = await import('@tauri-apps/api/core');
+                try {
+                  const out = await invoke('execute_shell_command', { command: args.command });
+                  toolResult = `Comando executado. Saída: ${out}`;
+                } catch (e: any) {
+                  toolResult = `Erro no shell: ${e}`;
                 }
               }
             } else {
