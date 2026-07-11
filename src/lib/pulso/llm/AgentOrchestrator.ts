@@ -733,7 +733,11 @@ class AgentOrchestrator {
   }
 
   private createClient(model: string) {
-    return new PulsoLLMClient(this.apiKey, model);
+    return new PulsoLLMClient({
+      provider: 'groq',
+      apiKey: this.apiKey,
+      model: model
+    });
   }
 
   public async run(
