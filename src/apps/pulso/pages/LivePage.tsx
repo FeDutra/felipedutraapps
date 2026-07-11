@@ -3618,7 +3618,7 @@ export default function LivePage() {
       </div>
 
         <main className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative transition-all duration-1000 ease-in-out pointer-events-auto z-10 ${
-          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : `overflow-hidden ${isMesaOpen ? 'max-w-[50vw] w-full pl-16 md:pl-28 pr-4' : 'max-w-5xl w-full mx-auto'} mt-6 mb-4 pb-28`
+          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : `overflow-hidden ${isMesaOpen ? 'max-w-[50vw] w-full !ml-0 !mr-auto pl-16 md:pl-28 pr-4' : 'max-w-5xl w-full mx-auto'} mt-6 mb-4 pb-28`
         }`}>
           
           {/* Atelie Workspace Container nested within main */}
@@ -4121,7 +4121,7 @@ export default function LivePage() {
             </div>
           )}
 
-<footer className={`absolute bottom-0 ${isMesaOpen ? 'left-[25vw] -translate-x-1/2 w-[calc(50vw-2rem)]' : 'left-1/2 -translate-x-1/2 w-full max-w-xl'} flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
+<footer className={`absolute bottom-0 ${isMesaOpen ? 'left-0 w-[50vw] pl-16 md:pl-28 pr-4' : 'left-1/2 -translate-x-1/2 w-full max-w-xl'} flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
