@@ -510,6 +510,9 @@ export default function LivePage() {
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
+  const [isMesaOpen, setIsMesaOpen] = React.useState(false);
+  const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
+
   const [isArcaOpen, setIsArcaOpen] = React.useState(false);
   const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
   const [engineeringLogs, setEngineeringLogs] = React.useState<string[]>([]);
