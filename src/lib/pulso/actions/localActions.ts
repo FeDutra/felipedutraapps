@@ -4,6 +4,7 @@ import { whatsappActions } from './whatsappActions';
 import { googleActions } from './googleActions';
 import { slackActions } from './slackActions';
 import { canvaActions } from './canvaActions';
+import { vaultActions } from './vaultActions';
 
 export const localActions = {
   openApp: async (appName: string): Promise<string> => {
@@ -152,5 +153,16 @@ export const localActions = {
   },
   updateCanvaDesign: async (canvaAlias: string, designId: string, newTitle: string): Promise<string> => {
     return canvaActions.updateDesign(canvaAlias, designId, newTitle);
+  },
+
+  // Integração com o Cérebro local no iCloud (LotusVault)
+  writeNote: async (title: string, content: string): Promise<string> => {
+    return vaultActions.writeNote(title, content);
+  },
+  readNote: async (title: string): Promise<string> => {
+    return vaultActions.readNote(title);
+  },
+  searchVault: async (queryText: string): Promise<string> => {
+    return vaultActions.searchVault(queryText);
   }
 };

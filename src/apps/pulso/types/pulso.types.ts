@@ -264,6 +264,12 @@ export interface Session {
   updatedAt: Date;
   archived?: boolean;
   archivedAt?: Date;
+
+  // Modelo A: Estado físico de sessão no runtime
+  runtimeStatus?: 'pending' | 'bootstrapping' | 'ready' | 'error' | 'disabled' | 'migrating';
+  errorMessage?: string | null;
+  fallbackAllowed?: boolean;
+  bootstrapVersion?: string;
 }
 
 export interface PulsoRequest {
@@ -277,6 +283,13 @@ export interface PulsoRequest {
   contextId?: string;
   chatId?: string;
   openclawSessionKey?: string;
+  
+  // Modelo A: Roteamento físico de sessão
+  runtimeSessionKey?: string;
+  sessionBootstrapStatus?: 'pending' | 'bootstrapping' | 'ready' | 'error' | 'disabled' | 'migrating';
+  deliveryMode?: 'firestore_sync' | string;
+  originType?: 'user_ui' | string;
+
   areaRef?: string | null;
   projectRef?: string | null;
   sourceRef?: string | null;

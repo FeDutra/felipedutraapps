@@ -191,21 +191,23 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
  */
 const DEFAULT_SESSIONS: Omit<Session, 'createdAt' | 'updatedAt'>[] = [
   // Sistema
-  { id: 'sistema_pulso',            areaId: 'area_sistema',  subareaId: 'pulso',               label: 'pulso',               openclawSessionKey: 'agent:main:pulso:sistema_pulso',            isDefault: true },
-  { id: 'sistema_infraestrutura',   areaId: 'area_sistema',  subareaId: 'infraestrutura',       label: 'infraestrutura',      openclawSessionKey: 'agent:main:pulso:sistema_infraestrutura',   isDefault: true },
-  { id: 'sistema_openclaw_agentes', areaId: 'area_sistema',  subareaId: 'openclaw_agentes',     label: 'openclaw e agentes',  openclawSessionKey: 'agent:main:pulso:sistema_openclaw_agentes', isDefault: true },
+  { id: 'sistema_pulso',            areaId: 'area_sistema',  subareaId: 'pulso',               label: 'pulso',               openclawSessionKey: 'agent:main:pulso:sistema_pulso',            isDefault: true, runtimeStatus: 'pending' },
+  { id: 'sistema_infraestrutura',   areaId: 'area_sistema',  subareaId: 'infraestrutura',       label: 'infraestrutura',      openclawSessionKey: 'agent:main:pulso:sistema_infraestrutura',   isDefault: true, runtimeStatus: 'pending' },
+  { id: 'sistema_openclaw_agentes', areaId: 'area_sistema',  subareaId: 'openclaw_agentes',     label: 'openclaw e agentes',  openclawSessionKey: 'agent:main:pulso:sistema_openclaw_agentes', isDefault: true, runtimeStatus: 'pending' },
+  { id: 'sistema_teste_groq',       areaId: 'area_sistema',  subareaId: 'teste_groq',           label: 'teste groq vps',      openclawSessionKey: 'agent:groq_test:pulso:sistema_teste_groq',  isDefault: true, runtimeStatus: 'pending' },
   // Trabalho
-  { id: 'trabalho_modu',            areaId: 'area_trabalho', subareaId: 'modu',                 label: 'modú',                openclawSessionKey: 'agent:main:pulso:trabalho_modu',            isDefault: true },
-  { id: 'trabalho_despertar',       areaId: 'area_trabalho', subareaId: 'despertar',            label: 'despertar',           openclawSessionKey: 'agent:main:pulso:trabalho_despertar',       isDefault: true },
+  { id: 'trabalho_modu',            areaId: 'area_trabalho', subareaId: 'modu',                 label: 'modú',                openclawSessionKey: 'agent:main:pulso:trabalho_modu',            isDefault: true, runtimeStatus: 'pending' },
+  { id: 'trabalho_despertar',       areaId: 'area_trabalho', subareaId: 'despertar',            label: 'despertar',           openclawSessionKey: 'agent:main:pulso:trabalho_despertar',       isDefault: true, runtimeStatus: 'pending' },
   // Casa
-  { id: 'casa_construcao',          areaId: 'area_casa',     subareaId: 'construcao',           label: 'construção',          openclawSessionKey: 'agent:main:pulso:casa_construcao',          isDefault: true },
-  { id: 'casa_horta',               areaId: 'area_casa',     subareaId: 'horta',                label: 'horta',               openclawSessionKey: 'agent:main:pulso:casa_horta',               isDefault: true },
+  { id: 'casa_construcao',          areaId: 'area_casa',     subareaId: 'construcao',           label: 'construção',          openclawSessionKey: 'agent:main:pulso:casa_construcao',          isDefault: true, runtimeStatus: 'pending' },
+  { id: 'casa_horta',               areaId: 'area_casa',     subareaId: 'horta',                label: 'horta',               openclawSessionKey: 'agent:main:pulso:casa_horta',               isDefault: true, runtimeStatus: 'pending' },
   // Família
-  { id: 'familia_escola_guayi',     areaId: 'area_familia',  subareaId: 'escola_guayi',         label: 'escola guayi',        openclawSessionKey: 'agent:main:pulso:familia_escola_guayi',     isDefault: true },
+  { id: 'familia_escola_guayi',     areaId: 'area_familia',  subareaId: 'escola_guayi',         label: 'escola guayi',        openclawSessionKey: 'agent:main:pulso:familia_escola_guayi',     isDefault: true, runtimeStatus: 'pending' },
   // Criação
-  { id: 'criacao_producao_autoral', areaId: 'area_criacao',  subareaId: 'producao_autoral',     label: 'produção autoral',    openclawSessionKey: 'agent:main:pulso:criacao_producao_autoral', isDefault: true },
+  { id: 'criacao_producao_autoral', areaId: 'area_criacao',  subareaId: 'producao_autoral',     label: 'produção autoral',    openclawSessionKey: 'agent:main:pulso:criacao_producao_autoral', isDefault: true, runtimeStatus: 'pending' },
   // Livre
-  { id: 'livre_geral',              areaId: 'area_livre',    subareaId: 'geral',                label: 'geral',               openclawSessionKey: 'agent:main:pulso:livre_geral',              isDefault: true },
+  { id: 'livre_geral',              areaId: 'area_livre',    subareaId: 'geral',                label: 'geral',               openclawSessionKey: 'agent:main:pulso:livre_geral',              isDefault: true, runtimeStatus: 'pending' },
+  { id: 'global_estrada',           areaId: 'area_livre',    subareaId: 'global_estrada',       label: 'global estrada',      openclawSessionKey: 'agent:main:pulso:global_estrada',           isDefault: true, runtimeStatus: 'pending' },
 ];
 
 /** Placeholder used before sessions load from Firestore */
@@ -406,11 +408,53 @@ export default function LivePage() {
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      Promise.all([
-        fetch('/identity/SOUL.md').then(r => r.text()),
-        fetch('/identity/USER.md').then(r => r.text())
-      ]).then(([soul, user]) => {
-        setLotusIdentity(`${soul}\n\n${user}`);
+      // Carrega identidade estática + memória do LotusVault (iCloud)
+      const loadStaticIdentity = Promise.all([
+        fetch('/identity/SOUL.md').then(r => r.text()).catch((e) => { console.warn('Static SOUL fetch failed:', e); return ''; }),
+        fetch('/identity/USER.md').then(r => r.text()).catch((e) => { console.warn('Static USER fetch failed:', e); return ''; })
+      ]);
+
+      const loadVaultMemory = (async () => {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          // Resolve o HOME real via shell (process.env.HOME não existe no browser)
+          const home = (await invoke<string>('execute_shell_command', { command: 'echo $HOME' })).trim();
+          const LOTUS_VAULT = `${home}/Library/Mobile Documents/com~apple~CloudDocs/LotusVault`;
+          const vaultFiles = [
+            `${LOTUS_VAULT}/cerebro/MEMORY_HOT.md`,
+            `${LOTUS_VAULT}/cerebro/SOUL.md`,
+            `${LOTUS_VAULT}/cerebro/CEREBRO.md`,
+            `${LOTUS_VAULT}/coracao/CORACAO.md`,
+            `${LOTUS_VAULT}/sangue/SANGUE.md`,
+          ];
+          const results = await Promise.allSettled(
+            vaultFiles.map(path =>
+              invoke<string>('execute_shell_command', { command: `cat "${path}"` }).catch((e) => {
+                console.warn(`Cat failed for ${path}:`, e);
+                return null;
+              })
+            )
+          );
+          const vaultContent = results
+            .filter((r): r is PromiseFulfilledResult<string | null> => r.status === 'fulfilled' && r.value !== null)
+            .map(r => r.value as string)
+            .join('\n\n---\n\n');
+          return vaultContent;
+        } catch (err) {
+          console.error('[LotusVault] Failed to load memory from vault:', err);
+          return '';
+        }
+      })();
+
+      Promise.all([loadStaticIdentity, loadVaultMemory]).then(([[soul, user], vaultMemory]) => {
+        const parts = [soul, user, vaultMemory].filter(Boolean);
+        console.log('[LÓTUS_BOOT] Identidade carregada:', {
+          hasStaticSoul: !!soul,
+          hasStaticUser: !!user,
+          vaultMemoryLength: vaultMemory.length,
+          memorySource: vaultMemory.length > 0 ? 'localVault' : 'firestoreMirror_or_unavailable'
+        });
+        setLotusIdentity(parts.join('\n\n'));
       }).catch(console.error);
     }
   }, []);
@@ -633,7 +677,24 @@ export default function LivePage() {
     }
   }, []);
 
-  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
+  const getInitialContextNode = (): PulsoContextNode => {
+    if (typeof window !== 'undefined') {
+      const savedId = localStorage.getItem('pulso_active_session_id');
+      if (savedId) {
+        return {
+          contextId: savedId,
+          areaId: 'area_agenda',
+          chatId: `chat_${savedId}`,
+          label: 'agenda',
+          type: 'chat',
+          status: 'active'
+        };
+      }
+    }
+    return LOADING_PLACEHOLDER_NODE;
+  };
+
+  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(getInitialContextNode);
   const activeContextNodeRef = React.useRef(activeContextNode);
 
   // ── Session Restore (runs once when sessions finish loading) ──────────────
@@ -1377,7 +1438,7 @@ export default function LivePage() {
         const allAgents = await agentsService.getAll().catch(e => { console.error(e); return []; });
         const allLogs = await healthService.getLogs(15).catch(e => { console.error(e); return []; });
         const allAreas = await areasService.getAll().catch(e => { console.error(e); return []; });
-        const allRequests = await requestsService.getRequests(25, true).catch(e => { console.error(e); return []; });
+        const allRequests = await requestsService.getRequests(200, true).catch(e => { console.error(e); return []; });
         const allSources = await sourcesService.getAll().catch(e => { console.error(e); return []; });
         const allTasks = await tasksService.getAll().catch(e => { console.error(e); return []; });
         
@@ -1394,7 +1455,7 @@ export default function LivePage() {
 
         const chatHistory: Message[] = [];
         const commandRequests = safeArray(allRequests)
-          .filter((req: any) => req && (req.requestType === 'conversation_command' || req.requestType === 'active_message') && req.archived !== true)
+          .filter((req: any) => req && (req.requestType === 'conversation_command' || req.requestType === 'active_message' || req.requestType === 'local_interaction') && req.archived !== true && req.contextId === activeContextNode.contextId)
           .sort((a, b) => {
             const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
             const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
@@ -1429,7 +1490,8 @@ export default function LivePage() {
             const hasRealResponse = responseText && responseText.trim() !== '';
             
             const hasActiveMessageDelivery = activeMessageOrigins.has(req.id);
-            if (status === 'success' && hasRealResponse && !hasActiveMessageDelivery) {
+            const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
+            if (isAcceptedStatus && hasRealResponse && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
@@ -1451,10 +1513,11 @@ export default function LivePage() {
               });
             } else if ((status === 'error' || status === 'timeout') && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
+              const errorText = req.openclawResult?.responseText || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
                 sender: 'lotus',
-                text: '[OpenClaw] Falha operacional (Nuvem indisponível / Sem quota).',
+                text: `[Lótus] ${errorText}`,
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -1470,20 +1533,26 @@ export default function LivePage() {
           } else if (isActiveMessage) {
             console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
             const replyText = req.message || req.text || '';
-            console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
-            const originId = req.meta?.originRequestId || req.id;
-            chatHistory.push({
-              id: `lotus-${originId}`,
-              sender: 'lotus',
-              text: replyText,
-              timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-              interpretation: req.interpretation,
-              openclawResult: req.openclawResult || undefined,
-              handoffStatus: req.status,
-              requestId: originId,
-              originalCommand: req.summary || req.title || undefined,
-              contextId: req.contextId || null
-            });
+            // Não renderiza placeholders de loading como mensagem real
+            const isPlaceholder = !replyText.trim() || replyText.trim().toLowerCase() === 'pensando...';
+            if (isPlaceholder) {
+              console.log('[PULSO_ACTIVE_MESSAGE_SUPPRESSED_PLACEHOLDER]', { requestId: req.id, text: replyText });
+            } else {
+              console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
+              const originId = req.meta?.originRequestId || req.id;
+              chatHistory.push({
+                id: `lotus-${originId}`,
+                sender: 'lotus',
+                text: replyText,
+                timestamp: safeConvertToDate(req.updatedAt) || reqTime,
+                interpretation: req.interpretation,
+                openclawResult: req.openclawResult || undefined,
+                handoffStatus: req.status,
+                requestId: originId,
+                originalCommand: req.summary || req.title || undefined,
+                contextId: req.contextId || null
+              });
+            }
           }
         });
 
@@ -1510,13 +1579,19 @@ export default function LivePage() {
   React.useEffect(() => {
     const isFirestore = pulsoService.getDataMode() === 'firestore';
     if (!isFirestore) return;
-    if (loading || !db) return;
+    if (!db) return;
+    if (!activeContextNode.contextId || activeContextNode.contextId === 'loading' || activeContextNode.contextId === LOADING_PLACEHOLDER_NODE.contextId) {
+      console.log('[PULSO_ONSNAPSHOT] Ignorando snapshot: contexto em loading.');
+      return;
+    }
 
     let unsubscribe: any = null;
     try {
+      console.log('[PULSO_ONSNAPSHOT] Iniciando escuta real-time do Firestore para contexto:', activeContextNode.contextId);
       const q = query(
         collection(db, firestorePaths.requests()),
-        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"])
+        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"]),
+        where("contextId", "==", activeContextNode.contextId)
       );
 
       unsubscribe = onSnapshot(q, (snapshot: any) => {
@@ -1717,7 +1792,8 @@ export default function LivePage() {
               }
             }
 
-            if (status === 'success' && hasRealResponse && !hasActiveMessageDelivery) {
+            const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
+            if (isAcceptedStatus && hasRealResponse && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
               console.log('[PULSO_WEB_RESPONSE_RECEIVED]', { requestId: req.id });
               console.log('[PULSO_WEB_RENDER_OPENCLAW_RESPONSE]', { requestId: req.id });
@@ -1740,10 +1816,11 @@ export default function LivePage() {
               });
             } else if ((status === 'error' || status === 'timeout') && !hasActiveMessageDelivery) {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
+              const errorText = req.openclawResult?.responseText || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
-                text: '[OpenClaw] Falha operacional (Nuvem indisponível / Sem quota).',
+                text: `[Lótus] ${errorText}`,
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -1755,21 +1832,16 @@ export default function LivePage() {
             } else {
               console.log('[PULSO_RENDER_PENDING_REQUEST]', { requestId: req.id, status });
               console.log('[PULSO_RENDER_SUPPRESSED_FALLBACK_RESPONSE]', { requestId: req.id });
-              
-              // Se a requisição está em andamento, renderiza o balão de digitando / processando
-              if (['queued_for_openclaw', 'processing_by_openclaw', 'proposal_ready'].includes(status) && req.contextId === activeContextNode.contextId) {
-                chatHistory.push({
-                  id: `lotus-pending-${req.id}`,
-                  sender: 'lotus',
-                  text: 'pensando...',
-                  timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-                  contextId: req.contextId || null
-                });
-              }
+              // Se a requisição está em andamento na nuvem da OpenClaw, o indicador cinza nativo de digitação cuidará do status
             }
           } else if (isActiveMessage) {
             console.log('[PULSO_RENDER_ACTIVE_MESSAGE]', { requestId: req.id });
             const replyText = req.message || req.text || '';
+            const isPlaceholder2 = !replyText.trim() || replyText.trim().toLowerCase() === 'pensando...';
+            if (isPlaceholder2) {
+              console.log('[PULSO_ACTIVE_MESSAGE_SUPPRESSED_PLACEHOLDER]', { requestId: req.id });
+              return; // skip placeholder
+            }
             console.log('[PULSO_ACTIVE_MESSAGE_RENDERED]', { requestId: req.id, text: replyText });
             const originId = req.meta?.originRequestId || req.id;
             chatHistory.push({
@@ -1841,7 +1913,15 @@ export default function LivePage() {
           return { ...prev, allRequests: sortedRequests };
         });
 
-        setMessages([
+        console.log('[PULSO_ONSNAPSHOT] Mensagens carregadas do Firestore:', {
+          activeSessionId: typeof window !== 'undefined' ? localStorage.getItem('pulso_active_session_id') : null,
+          contextId: activeContextNode.contextId,
+          snapshotMessagesCount: chatHistory.length,
+          sourceOfMessages: 'firestore_snapshot',
+          reasonForSetMessages: 'realtime_update'
+        });
+
+         setMessages([
           {
             id: 'welcome',
             sender: 'lotus',
@@ -1902,7 +1982,7 @@ export default function LivePage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [db, loading]);
+  }, [db, loading, activeContextNode]);
 
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
@@ -1942,6 +2022,10 @@ export default function LivePage() {
       !!(window as any).__TAURI_INTERNALS__
     );
 
+    const activeSession = sessions.find(s => s.contextId === (options?.contextId || activeContextNode.contextId));
+    const bootstrapStatus = activeSession?.runtimeStatus || 'pending';
+    const runtimeKey = options?.openclawSessionKey || activeContextNode.openclawSessionKey || `agent:main:pulso:${options?.contextId || activeContextNode.contextId}`;
+
     const lotusPayload: any = {
       requestId: reqId,
       userId: userRef,
@@ -1970,7 +2054,13 @@ export default function LivePage() {
       areaId: options?.areaId || activeContextNode.areaId,
       contextId: options?.contextId || activeContextNode.contextId,
       chatId: options?.chatId || activeContextNode.chatId,
-      openclawSessionKey: options?.openclawSessionKey || activeContextNode.openclawSessionKey
+      openclawSessionKey: runtimeKey,
+      
+      // Modelo A: Campos físicos de roteamento cognitivo
+      runtimeSessionKey: runtimeKey,
+      sessionBootstrapStatus: bootstrapStatus,
+      deliveryMode: "firestore_sync",
+      originType: "user_ui"
     };
 
     if (routeResult.areaRef) lotusPayload.areaRef = routeResult.areaRef;
@@ -2320,6 +2410,7 @@ export default function LivePage() {
     }
 
     // === AGENT ORCHESTRATOR (ReAct Loop) ===
+    let result: any = null;
     try {
       if (forceOpenClaw) {
         console.log('[ROUTER] Forçando OpenClaw pelo botão (Pulando Groq)');
@@ -2338,7 +2429,15 @@ export default function LivePage() {
           // Pode também jogar no log visual se quisermos no futuro
         };
 
-        const result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity);
+        // Formata o histórico de mensagens do chat ativo para o LLM
+        const chatHistory = currentMessages
+          .filter(m => m.id !== 'welcome')
+          .map(m => ({
+            role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
+            content: m.text
+          }));
+
+        result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity, chatHistory);
         console.log('[AGENT_ORCHESTRATOR]', result);
 
         // Se o Agente NÃO repassou pra Lótus e retornou uma resposta definitiva
@@ -2386,6 +2485,7 @@ export default function LivePage() {
             );
           }
           
+          setContextTyping(sendingContextId, false);
           return; // PULA o envio para a Lótus na nuvem
         }
       }
@@ -2394,10 +2494,20 @@ export default function LivePage() {
         console.log('[AGENT_ORCHESTRATOR] Handoff cognitivo para OpenClaw solicitado.');
       }
     } catch (e: any) {
-      if (e?.message === 'Forced OpenClaw') {
-        console.log('[ROUTER] Redirecionando requisição para OpenClaw (Nuvem) pelo clique no botão.');
+      if (e.message === 'Forced OpenClaw') {
+        console.log('[ROUTER] Redirecionando requisição para a OpenClaw na nuvem...');
       } else {
-        console.warn('[AGENT_ORCHESTRATOR] Erro no Groq local, redirecionando para OpenClaw:', e);
+        console.error('[AGENT_ORCHESTRATOR] Erro crítico no Groq local (Lótus):', e);
+        const pulsoErrorMsg: Message = {
+          id: `pulso-error-${Date.now()}`,
+          sender: 'lotus',
+          text: `Erro de execução local: ${e?.message || 'Falha na Lótus local'}. Detalhes no console.`,
+          timestamp: new Date(),
+          contextId: activeContextNode.contextId
+        };
+        setMessages(prev => [...prev, pulsoErrorMsg]);
+        setContextTyping(sendingContextId, false);
+        return; // Trava apenas em erros reais de execução do Groq local
       }
     }
     // ===================================
@@ -4201,63 +4311,93 @@ export default function LivePage() {
 
         {/* Quote preview bar was moved above the input row — removed from here */}
 
-          <textarea
-            ref={textareaRef}
-            value={inputMessage}
-            onChange={handleInputChange}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const isMobileDevice = typeof window !== 'undefined' && (
-                  window.matchMedia('(max-width: 768px)').matches || 
-                  window.matchMedia('(pointer: coarse)').matches
-                );
-                
-                if (isMobileDevice) {
-                  // Let Enter insert newline/paragraph on mobile
-                  return;
-                }
-                
-                if (!e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }
-            }}
-            onPaste={(e) => {
-              const cd = e.clipboardData;
-              // 1. Try files (drag-drop style paste, works in some browsers)
-              if (cd.files && cd.files.length > 0) {
-                e.preventDefault();
-                handleAttachFiles(cd.files);
-                return;
-              }
-              // 2. Try items (covers macOS screenshots via Cmd+Shift+4 → clipboard)
-              if (cd.items) {
-                const imageItems: File[] = [];
-                for (let i = 0; i < cd.items.length; i++) {
-                  const item = cd.items[i];
-                  if (item.kind === 'file' && item.type.startsWith('image/')) {
-                    const file = item.getAsFile();
-                    if (file) imageItems.push(file);
+          {/* Mapeamento de status físico do canal cognitivo ativo */}
+          {(() => {
+            const activeSession = sessions.find(s => s.contextId === activeContextNode.contextId);
+            const runtimeStatus = activeSession?.runtimeStatus || 'pending';
+            const errorMessage = activeSession?.errorMessage || '';
+            
+            let placeholderText = "";
+            let isBlocked = false;
+
+            if (runtimeStatus === 'pending' || runtimeStatus === 'bootstrapping') {
+              placeholderText = "Lótus ativando canal cognitivo...";
+              isBlocked = true;
+            } else if (runtimeStatus === 'migrating') {
+              placeholderText = "Importando histórico do canal cognitivo...";
+              isBlocked = true;
+            } else if (runtimeStatus === 'error') {
+              placeholderText = `Falha operacional: ${errorMessage || 'Sessão física corrompida.'}`;
+              isBlocked = true;
+            } else if (runtimeStatus === 'disabled') {
+              placeholderText = "Canal cognitivo desativado.";
+              isBlocked = true;
+            }
+
+            return (
+              <textarea
+                ref={textareaRef}
+                value={inputMessage}
+                onChange={handleInputChange}
+                onKeyDown={(e) => {
+                  if (isBlocked) {
+                    e.preventDefault();
+                    return;
                   }
-                }
-                if (imageItems.length > 0) {
-                  e.preventDefault();
-                  // Build a synthetic FileList-like iterable for handleAttachFiles
-                  const dt = new DataTransfer();
-                  imageItems.forEach(f => dt.items.add(f));
-                  handleAttachFiles(dt.files);
-                }
-              }
-            }}
-            placeholder=""
-            disabled={voiceState === 'transcribing'}
-            rows={1}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-50 resize-none min-h-[36px] max-h-[212px] py-1.5 overflow-y-auto no-scrollbar"
-          />
+                  if (e.key === 'Enter') {
+                    const isMobileDevice = typeof window !== 'undefined' && (
+                      window.matchMedia('(max-width: 768px)').matches || 
+                      window.matchMedia('(pointer: coarse)').matches
+                    );
+                    
+                    if (isMobileDevice) {
+                      return;
+                    }
+                    
+                    if (!e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }
+                }}
+                onPaste={(e) => {
+                  if (isBlocked) {
+                    e.preventDefault();
+                    return;
+                  }
+                  const cd = e.clipboardData;
+                  if (cd.files && cd.files.length > 0) {
+                    e.preventDefault();
+                    handleAttachFiles(cd.files);
+                    return;
+                  }
+                  if (cd.items) {
+                    const imageItems: File[] = [];
+                    for (let i = 0; i < cd.items.length; i++) {
+                      const item = cd.items[i];
+                      if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        const file = item.getAsFile();
+                        if (file) imageItems.push(file);
+                      }
+                    }
+                    if (imageItems.length > 0) {
+                      e.preventDefault();
+                      const dt = new DataTransfer();
+                      imageItems.forEach(f => dt.items.add(f));
+                      handleAttachFiles(dt.files);
+                    }
+                  }
+                }}
+                placeholder={placeholderText}
+                disabled={isBlocked || voiceState === 'transcribing'}
+                rows={1}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-40 resize-none min-h-[36px] max-h-[212px] py-1.5 overflow-y-auto no-scrollbar"
+              />
+            );
+          })()}
 
           {voiceState !== 'error' && (
             <button

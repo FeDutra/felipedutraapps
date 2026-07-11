@@ -26,6 +26,7 @@ export const sessionsService = {
     subareaId?: string;
     id?: string;
     isDefault?: boolean;
+    runtimeStatus?: 'pending' | 'bootstrapping' | 'ready' | 'error' | 'disabled' | 'migrating';
   }): Promise<Session> => {
     const id = data.id || `sess_${Date.now()}`;
     const openclawSessionKey = `agent:main:pulso:${id}`;
@@ -36,6 +37,10 @@ export const sessionsService = {
       subareaId: data.subareaId,
       openclawSessionKey,
       isDefault: data.isDefault ?? false,
+      runtimeStatus: data.runtimeStatus ?? 'pending',
+      errorMessage: null,
+      fallbackAllowed: false,
+      bootstrapVersion: '1.0.0',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
