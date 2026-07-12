@@ -112,7 +112,7 @@ export default function ArcaDrawer({ isOpen, onClose, contextId }: ArcaDrawerPro
           background: 'rgba(5, 5, 5, 0.45)',
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-          borderLeft: '1px solid rgba(255, 255, 255, 0.05)',
+          borderLeft: 'none',
         }}
       >
         <div className="flex items-center justify-between p-8 pb-4">
@@ -144,18 +144,18 @@ export default function ArcaDrawer({ isOpen, onClose, contextId }: ArcaDrawerPro
               <p className="text-[#fbf9f5]/20 text-[10px] font-mono tracking-wide mt-2">Nenhum arquivo gravado nesta sessão ainda.</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {files.map((file, idx) => (
                 <div 
                   key={idx}
-                  className="group relative w-full flex items-center justify-between p-4 rounded-xl transition-all duration-300 hover:bg-white/[0.03]"
+                  className="group relative w-full flex items-center justify-between py-3 border-b border-white/5 transition-all duration-300"
                 >
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.02] border border-white/[0.05] group-hover:bg-white/[0.05] transition-colors shrink-0">
+                    <div className="w-8 h-8 flex items-center justify-center transition-colors shrink-0">
                       {file.type === 'audio' ? (
-                        <Headphones size={16} strokeWidth={1.5} className="text-[#fbf9f5]/50 group-hover:text-[#fbf9f5]/80" />
+                        <Headphones size={14} strokeWidth={1.2} className="text-[#fbf9f5]/50 group-hover:text-[#fbf9f5]/80" />
                       ) : (
-                        <FileText size={16} strokeWidth={1.5} className="text-[#fbf9f5]/50 group-hover:text-[#fbf9f5]/80" />
+                        <FileText size={14} strokeWidth={1.2} className="text-[#fbf9f5]/50 group-hover:text-[#fbf9f5]/80" />
                       )}
                     </div>
                     <div className="flex flex-col min-w-0 pr-4">
@@ -174,7 +174,7 @@ export default function ArcaDrawer({ isOpen, onClose, contextId }: ArcaDrawerPro
                     href={file.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[#fbf9f5]/40 hover:text-[#fbf9f5] flex items-center justify-center bg-white/[0.02] hover:bg-white/[0.08] rounded-full"
+                    className="p-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[#fbf9f5]/40 hover:text-[#fbf9f5] flex items-center justify-center"
                     title="Baixar Arquivo"
                   >
                     <Download size={14} strokeWidth={1.5} />

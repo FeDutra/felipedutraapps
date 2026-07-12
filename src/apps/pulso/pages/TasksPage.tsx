@@ -308,13 +308,13 @@ export default function TasksPage() {
       </div>
 
       {/* Stunning Interactive Dashboard Indicator Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-10">
         {[
-          { id: 'all', count: openCount, label: 'Abertas', desc: 'Tarefas ativas', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
-          { id: 'depende_fe', count: dependsFeCount, label: 'Depende do Fê', desc: 'Atribuídas a Felipe', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
-          { id: 'vencidas', count: overdueCount, label: 'Vencidas', desc: 'Passaram do prazo', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
-          { id: 'sem_responsavel', count: noOwnerCount, label: 'Sem Responsável', desc: 'Nenhum ownerRef', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' },
-          { id: 'sem_projeto', count: noProjectCount, label: 'Sem Projeto', desc: 'Órfãs de projeto', color: 'text-white/80 border-white/10 bg-white/5', activeColor: 'ring-1 ring-white/30' }
+          { id: 'all', count: openCount, label: 'Abertas', desc: 'Tarefas ativas', color: 'text-white/80', activeColor: 'border-white/40' },
+          { id: 'depende_fe', count: dependsFeCount, label: 'Depende do Fê', desc: 'Atribuídas a Felipe', color: 'text-white/80', activeColor: 'border-white/40' },
+          { id: 'vencidas', count: overdueCount, label: 'Vencidas', desc: 'Passaram do prazo', color: 'text-white/80', activeColor: 'border-white/40' },
+          { id: 'sem_responsavel', count: noOwnerCount, label: 'Sem Responsável', desc: 'Nenhum ownerRef', color: 'text-white/80', activeColor: 'border-white/40' },
+          { id: 'sem_projeto', count: noProjectCount, label: 'Sem Projeto', desc: 'Órfãs de projeto', color: 'text-white/80', activeColor: 'border-white/40' }
         ].map(card => {
           const isActive = (card.id === 'all' && customFilter === 'all') || (card.id !== 'all' && customFilter === card.id);
           return (
@@ -324,13 +324,13 @@ export default function TasksPage() {
                 setStatusFilter('open');
                 setCustomFilter(card.id as any);
               }}
-              className={`p-4 bg-white/2 border border-white/5 rounded-2xl cursor-pointer hover:bg-white/5 hover:border-white/10 transition-all group flex flex-col justify-between ${card.color} ${isActive ? card.activeColor : ''}`}
+              className={`py-4 px-2 border-b cursor-pointer transition-all flex flex-col justify-between ${card.color} ${isActive ? 'border-white/40' : 'border-white/5 hover:border-white/20'}`}
             >
               <div>
-                <span className="block text-[8px] font-black uppercase tracking-widest text-white/20 group-hover:text-white/40 transition-colors">{card.label}</span>
-                <span className="block text-[10px] text-white/40 mt-0.5 leading-snug group-hover:text-white/60 transition-colors font-medium">{card.desc}</span>
+                <span className="block text-[8px] font-mono tracking-[0.2em] text-white/20 uppercase">{card.label}</span>
+                <span className="block text-[10px] text-white/40 mt-1 leading-snug font-light">{card.desc}</span>
               </div>
-              <span className="text-xl font-black font-mono mt-4 self-end group-hover:scale-110 transition-transform">{card.count}</span>
+              <span className="text-xl font-light font-mono mt-4 self-end">{card.count}</span>
             </div>
           );
         })}
@@ -338,14 +338,14 @@ export default function TasksPage() {
 
       {/* Advanced Filters Panel */}
       <div className="space-y-4 mb-8 w-full max-w-full min-w-0">
-        <div className="flex flex-col gap-4 bg-white/2 p-4 rounded-3xl border border-white/5 w-full">
+        <div className="flex flex-col gap-4 py-4 w-full border-b border-white/10">
           
           {/* First row: Status, Priority and Search */}
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 w-full">
             
             {/* Status chips bar */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0">
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/20 mr-1 hidden sm:inline shrink-0">Status:</span>
+              <span className="text-[9px] font-mono tracking-[0.2em] text-white/20 mr-2 uppercase shrink-0">Status:</span>
               {[
                 { id: 'open', label: 'Abertas' },
                 { id: 'completed', label: 'Concluídas' },
@@ -358,10 +358,10 @@ export default function TasksPage() {
                     setStatusFilter(tab.id as any);
                     if (tab.id !== 'open') setCustomFilter('all');
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 ${
+                  className={`px-3 py-1.5 text-[9px] font-mono tracking-[0.1em] uppercase whitespace-nowrap transition-all shrink-0 bg-transparent border-none cursor-pointer ${
                     statusFilter === tab.id 
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 font-bold' 
-                      : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'
+                      ? 'text-white' 
+                      : 'text-white/30 hover:text-white/60'
                   }`}
                 >
                   {tab.label}
@@ -370,15 +370,15 @@ export default function TasksPage() {
             </div>
 
             {/* Priority chips bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0 border-t lg:border-t-0 lg:border-l border-white/5 pt-2 lg:pt-0 lg:pl-3">
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/20 mr-1 shrink-0">Prioridade:</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0 border-t lg:border-t-0 lg:border-l border-white/5 pt-2 lg:pt-0 lg:pl-4">
+              <span className="text-[9px] font-mono tracking-[0.2em] text-white/20 mr-2 uppercase shrink-0">Prioridade:</span>
               {priorities.map(p => (
                 <button
                   key={p}
                   onClick={() => setPriorityFilter(p)}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all shrink-0 ${
+                  className={`px-2.5 py-1 text-[9px] font-mono tracking-[0.1em] uppercase whitespace-nowrap transition-all shrink-0 bg-transparent border-none cursor-pointer ${
                     priorityFilter === p 
-                      ? 'bg-white/10 text-white border border-white/20' 
+                      ? 'text-white' 
                       : 'text-white/30 hover:text-white/60'
                   }`}
                 >
@@ -389,27 +389,27 @@ export default function TasksPage() {
 
             {/* Input Search Box */}
             <div className="relative flex-1 max-w-lg min-w-0">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+              <Search size={12} strokeWidth={1} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/20" />
               <input 
                 type="text"
                 placeholder="Buscar por título, descrição, área ou projeto..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/40 transition-all truncate"
+                className="w-full bg-transparent border-none pl-8 pr-4 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none transition-all truncate font-light"
               />
             </div>
           </div>
 
           {/* Second row: Dropdowns for Area and Project */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-white/5 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-3 border-t border-white/5 w-full">
             
             {/* Area Filter Dropdown */}
-            <div className="flex items-center gap-2 bg-white/2 border border-white/5 rounded-xl px-3 py-1.5">
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/25 shrink-0">Filtrar Área:</span>
+            <div className="flex items-center gap-3 py-1.5 pl-1.5">
+              <span className="text-[9px] font-mono tracking-[0.2em] text-white/25 shrink-0 uppercase">Filtrar Área:</span>
               <select
                 value={areaFilter}
                 onChange={(e) => setAreaFilter(e.target.value)}
-                className="bg-transparent text-xs text-white/80 focus:outline-none w-full cursor-pointer font-semibold"
+                className="bg-transparent border-none text-xs text-white/60 hover:text-white focus:outline-none w-full cursor-pointer font-light"
               >
                 <option value="all" className="bg-[#b8283e] text-white">Todas as Áreas</option>
                 {areas.map(a => (
@@ -419,12 +419,12 @@ export default function TasksPage() {
             </div>
 
             {/* Project Filter Dropdown */}
-            <div className="flex items-center gap-2 bg-white/2 border border-white/5 rounded-xl px-3 py-1.5">
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/25 shrink-0">Filtrar Projeto:</span>
+            <div className="flex items-center gap-3 py-1.5 pl-1.5">
+              <span className="text-[9px] font-mono tracking-[0.2em] text-white/25 shrink-0 uppercase">Filtrar Projeto:</span>
               <select
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
-                className="bg-transparent text-xs text-white/80 focus:outline-none w-full cursor-pointer font-semibold"
+                className="bg-transparent border-none text-xs text-white/60 hover:text-white focus:outline-none w-full cursor-pointer font-light"
               >
                 <option value="all" className="bg-[#b8283e] text-white">Todos os Projetos</option>
                 {projects.map(p => (
@@ -483,7 +483,7 @@ export default function TasksPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-full min-w-0">
+        <div className="flex flex-col gap-1 w-full max-w-full min-w-0">
           {filteredTasks.map(task => {
             const isCompleted = task.status === 'completed';
             const isArchived = !!task.archived;
@@ -492,12 +492,6 @@ export default function TasksPage() {
             const hasNoOwner = !task.ownerRefs || task.ownerRefs.length === 0;
             const hasNoProj = !task.projectRef;
             
-            const pColor = task.priority === 'high' || task.priority === 'critical' 
-              ? 'text-white border-white/30 bg-white/10' 
-              : task.priority === 'low' 
-              ? 'text-white/30 bg-white/5 border-white/5' 
-              : 'text-white/70 bg-white/5 border-white/10';
-
             const resolvedProj = projects.find(p => p.id === task.projectRef);
             const resolvedArea = areas.find(a => a.id === task.areaRef);
 
@@ -505,144 +499,103 @@ export default function TasksPage() {
               <motion.div 
                 key={task.id}
                 layout
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={`group relative bg-white/2 border ${
-                  isCompleted 
-                    ? 'border-white/20 bg-white/5 opacity-70' 
-                    : isArchived 
-                    ? 'border-white/5 opacity-60' 
-                    : overdue
-                    ? 'border-white/20 bg-white/5'
-                    : 'border-white/5 hover:border-white/10'
-                } rounded-3xl p-6 flex flex-col justify-between transition-all w-full min-w-0`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                whileHover={{ x: 2 }}
+                className={`group relative py-4 border-b border-white/5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 transition-all w-full min-w-0 ${
+                  isCompleted ? 'opacity-50' : isArchived ? 'opacity-40' : ''
+                }`}
               >
-                <div>
-                  {/* Card top banner */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${pColor} shrink-0`}>
+                {/* Left side: Info, Title, Tags */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <span className="text-[8px] font-mono tracking-widest text-white/30 uppercase">
                       {task.priority || 'medium'}
                     </span>
-                    
-                    <span className={`text-[9px] font-black uppercase tracking-widest shrink-0 ${
-                      isCompleted ? 'text-white/60' : isArchived ? 'text-white/30' : overdue ? 'text-white underline decoration-white/40' : 'text-white/80'
+                    <span className="text-white/20 text-[8px] font-mono">•</span>
+                    <span className={`text-[8px] font-mono tracking-widest uppercase ${
+                      isCompleted ? 'text-white/30' : isArchived ? 'text-white/20' : overdue ? 'text-red-400/80 font-bold' : 'text-white/50'
                     }`}>
                       {isCompleted ? 'Concluída' : isArchived ? 'Arquivada' : overdue ? 'Vencida' : 'Aberta'}
                     </span>
+                    {(resolvedArea || resolvedProj) && (
+                      <>
+                        <span className="text-white/20 text-[8px] font-mono">•</span>
+                        <span className="text-[8px] font-mono tracking-wider text-white/30 truncate max-w-[200px] lowercase">
+                          {resolvedArea?.name || resolvedProj?.name || ''}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <h3 
                     onClick={() => setSelectedTask(task)}
-                    className={`text-sm font-black text-white group-hover:underline transition-all cursor-pointer line-clamp-2 break-words leading-snug mb-2 ${isCompleted ? 'line-through text-white/60' : ''}`}
+                    className={`text-sm font-light text-white group-hover:text-blue-400 transition-colors cursor-pointer break-words leading-snug ${isCompleted ? 'line-through text-white/40' : ''}`}
                   >
                     {task.title || task.name || 'Sem Título'}
                   </h3>
 
-                  {/* Description snippet */}
                   {(task.description || task.notes) && (
-                    <p className="text-xs text-white/40 line-clamp-2 break-words leading-relaxed mb-4 font-sans font-semibold">
+                    <p className="text-[11px] text-white/40 break-words leading-relaxed mt-1 font-light max-w-2xl">
                       {task.description || task.notes}
                     </p>
                   )}
                 </div>
 
-                {/* Card footer layer */}
-                <div className="pt-4 border-t border-white/5 space-y-3 mt-auto">
-                  
-                  <div className="flex flex-wrap gap-1">
-                    {overdue && (
-                      <span className="px-2 py-0.5 bg-white/10 text-white border border-white/20 rounded-md text-[8px] font-black uppercase tracking-widest">
-                        ⚠️ Vencida
-                      </span>
-                    )}
-                    {dependsFe && (
-                      <span className="px-2 py-0.5 bg-white/10 text-white border border-white/20 rounded-md text-[8px] font-black uppercase tracking-widest">
-                        👤 Depende do Fê
-                      </span>
-                    )}
-                    {hasNoOwner && (
-                      <span className="px-2 py-0.5 bg-white/5 text-white/60 border border-white/10 rounded-md text-[8px] font-black uppercase tracking-widest">
-                        🔍 Sem Responsável
-                      </span>
-                    )}
-                    {hasNoProj && (
-                      <span className="px-2 py-0.5 bg-white/5 text-white/60 border border-white/10 rounded-md text-[8px] font-black uppercase tracking-widest">
-                        📦 Sem Projeto
+                {/* Right side: Metadata (date, owner, actions) */}
+                <div className="flex items-center justify-between md:justify-end gap-6 shrink-0">
+                  <div className="flex items-center gap-4 text-right">
+                    <div className="text-[9px] font-mono tracking-wider text-white/30 flex items-center gap-1.5 justify-end">
+                      <User size={10} strokeWidth={1} className="text-white/20" />
+                      <span>{getOwnerLabel(task.ownerRefs)}</span>
+                    </div>
+
+                    {(task.dueDate || task.dueAt) && (
+                      <span className={`text-[9px] font-mono tracking-wider ${overdue ? 'text-red-400/80' : 'text-white/30'}`}>
+                        {safeDate(task.dueDate || task.dueAt)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) || 'N/A'}
                       </span>
                     )}
                   </div>
 
-                  {/* Context Links */}
-                  {(task.areaRef || task.projectRef) && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-[9px]">
-                      {task.areaRef && (
-                        <span className="px-2 py-0.5 bg-white/5 text-white/80 border border-white/10 rounded font-bold truncate max-w-[130px]">
-                          Área: {resolvedArea?.name || task.areaRef}
-                        </span>
-                      )}
-                      {task.projectRef && (
-                        <span className="px-2 py-0.5 bg-white/5 text-white/80 border border-white/10 rounded font-bold truncate max-w-[130px]">
-                          Proj: {resolvedProj?.name || task.projectRef}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  {/* Compact actions button row */}
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    {!isCompleted && !isArchived && (
+                      <button 
+                        onClick={() => handleComplete(task.id)}
+                        className="p-1 text-white/50 hover:text-white bg-transparent border-none outline-none cursor-pointer transition-colors"
+                        title="Concluir Tarefa"
+                      >
+                        <CheckCircle2 size={12} strokeWidth={1.5} />
+                      </button>
+                    )}
+                    
+                    {(isCompleted || isArchived) && (
+                      <button 
+                        onClick={() => handleReopen(task.id)}
+                        className="p-1 text-white/50 hover:text-white bg-transparent border-none outline-none cursor-pointer transition-colors"
+                        title="Reabrir Tarefa"
+                      >
+                        <RotateCcw size={12} strokeWidth={1.5} />
+                      </button>
+                    )}
 
-                  {/* Owners, dueDate & Triggers */}
-                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-white/2">
-                    <div className="text-[9px] font-bold text-white/30 truncate max-w-[140px] flex items-center gap-1">
-                      <User size={10} className="text-white/20" />
-                      <span>{getOwnerLabel(task.ownerRefs)}</span>
-                    </div>
+                    {!isArchived && (
+                      <button 
+                        onClick={() => handleArchive(task.id)}
+                        className="p-1 text-white/30 hover:text-white/70 bg-transparent border-none outline-none cursor-pointer transition-colors"
+                        title="Arquivar Tarefa"
+                      >
+                        <Archive size={12} strokeWidth={1.5} />
+                      </button>
+                    )}
 
-                    <div className="flex items-center gap-2">
-                      {(task.dueDate || task.dueAt) && (
-                        <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${overdue ? 'text-white bg-white/10 border border-white/20' : 'text-white/30'}`}>
-                          {safeDate(task.dueDate || task.dueAt)?.toLocaleDateString() || 'N/A'}
-                        </span>
-                      )}
-
-                      {/* Compact actions button row */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        {!isCompleted && !isArchived && (
-                          <button 
-                            onClick={() => handleComplete(task.id)}
-                            className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 transition-all"
-                            title="Concluir Tarefa"
-                          >
-                            <CheckCircle2 size={12} />
-                          </button>
-                        )}
-                        
-                        {(isCompleted || isArchived) && (
-                          <button 
-                            onClick={() => handleReopen(task.id)}
-                            className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 transition-all"
-                            title="Reabrir Tarefa"
-                          >
-                            <RotateCcw size={12} />
-                          </button>
-                        )}
-
-                        {!isArchived && (
-                          <button 
-                            onClick={() => handleArchive(task.id)}
-                            className="p-1.5 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-lg border border-white/5 transition-all"
-                            title="Arquivar Tarefa"
-                          >
-                            <Archive size={12} />
-                          </button>
-                        )}
-
-                        <button 
-                          onClick={() => setSelectedTask(task)}
-                          className="p-1.5 bg-white/5 hover:bg-white/10 text-white/60 rounded-lg border border-white/5 transition-all ml-1"
-                          title="Ver Detalhes"
-                        >
-                          <ChevronRight size={12} />
-                        </button>
-                      </div>
-                    </div>
+                    <button 
+                      onClick={() => setSelectedTask(task)}
+                      className="p-1 text-white/50 hover:text-white bg-transparent border-none outline-none cursor-pointer transition-colors"
+                      title="Ver Detalhes"
+                    >
+                      <ChevronRight size={12} strokeWidth={1.5} />
+                    </button>
                   </div>
                 </div>
               </motion.div>

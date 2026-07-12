@@ -64,10 +64,10 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 20 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="h-full w-full bg-black/60 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl relative overflow-hidden"
+        className="h-full w-full bg-black/85 backdrop-blur-xl flex flex-col relative overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-gradient-to-b from-white/5 to-transparent">
+        <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-light tracking-widest text-white/50 lowercase">
               [ mesa ]
@@ -81,7 +81,7 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
             {!isEditing ? (
               <button 
                 onClick={() => setIsEditing(true)}
-                className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
+                className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
                 title="Editar"
               >
                 <Edit3 size={14} />
@@ -89,7 +89,7 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
             ) : (
               <button 
                 onClick={handleSave}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white rounded transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-wider text-white transition-colors bg-transparent border-none outline-none cursor-pointer font-mono"
               >
                 <Save size={12} /> Salvar
               </button>
@@ -97,7 +97,7 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
 
             <button 
               onClick={handleCopy}
-              className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
+              className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
               title="Copiar Markdown"
             >
               <Copy size={14} className={isCopied ? 'text-green-400' : ''} />
@@ -105,7 +105,7 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
             
             <button 
               onClick={handleDownload}
-              className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
+              className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
               title="Baixar .md"
             >
               <Download size={14} />
@@ -115,7 +115,7 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
             
             <button 
               onClick={onClose}
-              className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
+              className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
             >
               <X size={16} />
             </button>
