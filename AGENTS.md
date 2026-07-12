@@ -5,33 +5,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 <!-- BEGIN:pulso-visual-guideline -->
-## Regra Visual e de UI (Aplica-se a toda a PULSO)
+## Manifesto Visual e de Presença (Aplica-se a toda a PULSO)
 
-A PULSO não deve usar boxes pesados como linguagem padrão.
+A PULSO não é um software tradicional de dashboard; ela é um **organismo vivo, fluido e integrado** ao usuário. Qualquer atualização deve seguir este manifesto à risca:
 
-Evitar:
-- cards com borda pesada
-- caixas cinzas sólidas
-- painéis blocados
-- UI com cara de dashboard tradicional
-- blocos duros
-- container visual excessivo
-
-Preferir:
-- blur atrás do conteúdo (backdrop-blur)
-- glass/vidro/transparência
-- camadas etéreas
-- texto leve sobre campo
-- pouca borda ou nenhuma borda (ring leve)
-- divisões por espaço, escala, luz e movimento
-- hierarquia tipográfica limpa
-- presença visual suave
-
-Quando houver conteúdo flutuante, usar:
-- camada com backdrop-blur
-- fundo translúcido
-- sem box pesado e sólido
-- menos contorno e mais respiro
-
-A lógica é: não queremos caixas dentro da PULSO; queremos camadas de presença.
+*   **Zero Caixas ou Bordas**: Não use contêineres rígidos, cards delimitados, tabelas com contornos ou mesmo efeitos de "vidro" (glassmorphism da Apple) que criem molduras e limites artificiais.
+*   **Camadas Etéreas e Luz**: Prefira textos e ícones flutuantes que interagem com focos sutis de luz, transparências totais e `backdrop-blur` sem fronteiras físicas. As separações são feitas por espaço vazio, escala tipográfica e pulsações.
+*   **Minimalismo Extremo**: Apenas o essencial extremo deve ser impresso na tela. Elementos de menor importância visual devem possuir opacidade baixíssima (ex: `opacity-10` ou `text-white/10`) e só ganhar vida sob interação direta ou pulso de contexto.
+*   **Estética e Linguagem Ocultista**: A interface deve soar analítica, ritualística e enigmática. Utilize fontes monoespaçadas com espaçamentos amplos (`tracking-[0.2em]`), ícones monolineares finos (`strokeWidth={1.5}` ou `{1}`) e tamanhos diminutos (`10px` a `14px`).
+*   **Movimento e Vida**: Elementos não aparecem; eles emergem ou se dissipam como luz/fumaça. Ações ativas devem ter pulsações lentas de brilho e sombras difusas (`drop-shadow` de luz) em vez de contornos ativos ou mudanças de tamanho.
+*   **Quebra de Padrão**: Se uma solução de design for parecida com a que o mercado corporativo/tech normalmente adota, ela está errada para a PULSO. Faça de outro jeito.
 <!-- END:pulso-visual-guideline -->
