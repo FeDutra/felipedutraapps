@@ -87,15 +87,15 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                   <ArrowLeft size={16} className="text-[#fbf9f5]/55 hover:text-white" />
                 </Link>
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 bg-white/10 rounded-lg flex items-center justify-center border border-white/20 shrink-0">
-                    <Activity size={14} className="text-white" />
+                  <div className="w-7 h-7 flex items-center justify-center text-white shrink-0">
+                    <Activity size={14} />
                   </div>
                   <div className="min-w-0">
                     <h1 className="text-xs font-black tracking-tight leading-none truncate">PULSO</h1>
                     <p className="text-[8px] text-[#fbf9f5]/55 font-medium mt-0.5 truncate">Central Viva</p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 bg-white/10 border border-white/20 rounded-full text-[8px] font-black uppercase tracking-widest text-[#fbf9f5] shrink-0 ml-1">
+                <span className="text-[8px] font-mono tracking-widest text-[#fbf9f5]/40 uppercase shrink-0 ml-1">
                   v0.1
                 </span>
               </div>
@@ -110,7 +110,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                     </div>
                     <button 
                       onClick={() => authService.logout()}
-                      className="p-2 bg-white/5 border border-white/10 rounded-xl text-[#fbf9f5]/55 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all group shrink-0"
+                      className="p-2 bg-transparent text-[#fbf9f5]/55 hover:text-white transition-all group shrink-0 border-none cursor-pointer outline-none"
                       title="Sair"
                     >
                       <LogOut size={12} className="group-hover:scale-110 transition-transform" />
@@ -121,7 +121,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
             </div>
 
             {/* Center Section: Navigation pill container */}
-            <div className="flex items-center justify-start sm:justify-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10 w-full max-w-full overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
+            <div className="flex items-center justify-start sm:justify-center gap-2 border-b border-white/5 w-full max-w-full overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
               {PULSO_NAV_ITEMS.map((item) => {
                 const isActive = cleanPathname === item.href || cleanPathname.startsWith(item.href + '/');
                 return (
@@ -129,9 +129,9 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                     key={item.href}
                     href={item.href}
                     prefetch={false}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
+                    className={`flex items-center gap-1.5 px-2 py-2 text-[9px] font-mono uppercase tracking-widest transition-all shrink-0 whitespace-nowrap ${
                       isActive 
-                        ? 'bg-white/15 text-white border border-white/20' 
+                        ? 'text-white font-bold' 
                         : 'text-[#fbf9f5]/55 hover:text-white'
                     }`}
                   >
@@ -153,22 +153,22 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                   <Link href="/" prefetch={false} className="p-1.5 hover:bg-white/5 rounded-xl transition-colors shrink-0 -ml-1.5" title="Voltar para Home">
                     <ArrowLeft size={16} className="text-[#fbf9f5]/55 hover:text-white" />
                   </Link>
-                  <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center border border-white/20 shrink-0">
-                    <Activity size={16} className="text-white" />
+                  <div className="w-8 h-8 flex items-center justify-center text-white shrink-0">
+                    <Activity size={16} />
                   </div>
                   <div className="min-w-0">
-                    <h1 className="text-sm font-black tracking-tight leading-none truncate">PULSO</h1>
+                    <h1 className="text-sm font-light tracking-wide leading-none truncate">PULSO</h1>
                     <p className="text-[9px] text-[#fbf9f5]/55 font-medium mt-0.5 truncate">Central Viva</p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 bg-white/10 border border-white/20 rounded-full text-[8px] font-black uppercase tracking-widest text-[#fbf9f5] shrink-0">
+                <span className="text-[8px] font-mono tracking-widest text-[#fbf9f5]/40 uppercase shrink-0">
                   v0.1
                 </span>
               </div>
 
               {/* Vertical Navigation items */}
               <div className="flex flex-col gap-1.5 mt-2">
-                <p className="text-[8px] font-black uppercase tracking-widest text-[#fbf9f5]/40 px-3 mb-1">Navegação</p>
+                <p className="text-[8px] font-mono tracking-[0.2em] uppercase text-[#fbf9f5]/30 px-3.5 mb-2">Navegação</p>
                 {PULSO_NAV_ITEMS.map((item) => {
                   const isActive = cleanPathname === item.href || cleanPathname.startsWith(item.href + '/');
                   return (
@@ -176,13 +176,13 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                       key={item.href}
                       href={item.href}
                       prefetch={false}
-                      className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold tracking-wide transition-all ${
+                      className={`flex items-center gap-3 px-3.5 py-3 text-xs tracking-wide transition-all bg-transparent border-none ${
                         isActive 
-                          ? 'bg-white/15 text-white border border-white/20' 
-                          : 'text-[#fbf9f5]/60 hover:text-white hover:bg-white/5'
+                          ? 'text-white font-medium font-mono' 
+                          : 'text-[#fbf9f5]/60 hover:text-white'
                       }`}
                     >
-                      <item.icon size={16} className={isActive ? 'text-white' : 'text-[#fbf9f5]/40'} />
+                      <item.icon size={14} className={isActive ? 'text-white' : 'text-[#fbf9f5]/40'} strokeWidth={isActive ? 2 : 1.5} />
                       <span className="block truncate">{item.label}</span>
                     </Link>
                   );
@@ -192,19 +192,19 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
 
             {/* Bottom Section: Profile & Logout */}
             {user ? (
-              <div className="flex items-center justify-between gap-3 p-2.5 bg-white/5 border border-white/10 rounded-2xl mt-4">
+              <div className="flex items-center justify-between gap-3 p-2.5 mt-4 border-t border-white/5 pt-4">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center font-bold text-xs text-white shrink-0">
-                    {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                  <div className="w-8 h-8 flex items-center justify-center font-mono text-xs text-white/50 shrink-0">
+                    [{user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}]
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-white leading-tight truncate">{user.displayName || 'Usuário'}</p>
-                    <p className="text-[9px] font-medium text-[#fbf9f5]/45 leading-tight truncate">{user.email}</p>
+                    <p className="text-xs font-light text-white leading-tight truncate">{user.displayName || 'Usuário'}</p>
+                    <p className="text-[9px] font-mono text-[#fbf9f5]/45 leading-tight truncate">{user.email}</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => authService.logout()}
-                  className="p-2 bg-white/5 border border-white/10 rounded-xl text-[#fbf9f5]/55 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all group shrink-0"
+                  className="p-2 bg-transparent border-none text-[#fbf9f5]/55 hover:text-white transition-all group shrink-0 cursor-pointer outline-none"
                   title="Sair"
                 >
                   <LogOut size={14} className="group-hover:scale-110 transition-transform" />
@@ -226,5 +226,3 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
-
-
