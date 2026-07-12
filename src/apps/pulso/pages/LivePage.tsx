@@ -4318,7 +4318,7 @@ ${data.transcription}`, {
           </div>
         )}
 
-        <div className="w-full flex items-end gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+        <div className="w-full flex items-center gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
           {(voiceState === 'recording_once' || voiceState === 'transcribing') && (
             <div 
               className="absolute inset-0 blur-md pointer-events-none"
@@ -4351,7 +4351,7 @@ ${data.transcription}`, {
             />
             <button
               onClick={() => setIsAttachmentMenuOpen(!isAttachmentMenuOpen)}
-              className="p-1.5 text-[#fbf9f5]/60 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
+              className="p-1.5 text-[#fbf9f5]/60 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
               title="Anexar arquivos"
             >
               <Paperclip size={14} strokeWidth={1.5} />
@@ -4488,7 +4488,7 @@ ${data.transcription}`, {
           <button
             onClick={toggleRecordingOnce}
             disabled={false}
-            className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent mb-0.5 ${
+            className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent ${
               voiceMode === 'recording_once' 
                 ? 'text-[#b8283e] bg-white scale-105 shadow-md' 
                 : 'text-[#fbf9f5]/60 hover:text-white'
@@ -4500,14 +4500,14 @@ ${data.transcription}`, {
 
           <button
             onClick={toggleMeetingRecording}
-            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 ${voiceMode === 'recording_meeting' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
+            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none ${voiceMode === 'recording_meeting' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
             title="Gravar Reunião"
           >
             <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
           </button>
           <button
             onClick={() => setForceOpenClaw(!forceOpenClaw)}
-            className={`font-mono text-xs transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 tracking-[0.2em] flex items-center justify-center h-8 ${forceOpenClaw ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] animate-pulse' : 'text-[#fbf9f5]/30 hover:text-white/60'}`}
+            className={`font-mono text-xs transition-all duration-300 bg-transparent border-none cursor-pointer outline-none tracking-[0.2em] flex items-center justify-center h-8 ${forceOpenClaw ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] animate-pulse' : 'text-[#fbf9f5]/30 hover:text-white/60'}`}
             title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
           >
             {forceOpenClaw ? '( • )' : '(   )'}
@@ -4516,7 +4516,7 @@ ${data.transcription}`, {
           <button
             onClick={() => handleSendMessage()}
             disabled={!inputMessage.trim()}
-            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none mb-0.5"
+            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
           >
             <Send size={14} strokeWidth={1.5} />
           </button>
