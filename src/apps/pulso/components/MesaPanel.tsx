@@ -64,7 +64,7 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 20 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="h-full w-full bg-black/85 backdrop-blur-xl flex flex-col relative overflow-hidden"
+        className="h-full w-full bg-transparent backdrop-blur-xl flex flex-col relative overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4">

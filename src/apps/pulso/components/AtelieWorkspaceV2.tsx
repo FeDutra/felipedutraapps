@@ -4542,14 +4542,14 @@ export default function AtelieWorkspaceV2({ activeContextNode, isActive = true }
       {/* Summoning Popover */}
       {summonPosition && (
         <div 
-          className="summon-popover fixed bg-black/90 backdrop-blur-xl border border-[#fbf9f5]/10 p-4 rounded-xl shadow-2xl z-50 w-64 max-h-[350px] overflow-y-auto no-scrollbar font-mono text-[9.5px] lowercase animate-fade-in"
+          className="summon-popover fixed bg-transparent backdrop-blur-xl p-4 z-50 w-64 max-h-[350px] overflow-y-auto no-scrollbar font-mono text-[9.5px] lowercase animate-fade-in"
           style={{
             left: summonPosition.clientX,
             top: summonPosition.clientY,
           }}
           onMouseLeave={() => setSummonPosition(null)}
         >
-          <div className="flex justify-between items-center mb-3 border-b border-[#fbf9f5]/10 pb-1.5">
+          <div className="flex justify-between items-center mb-3 pb-1.5">
             <span className="text-[#fbf9f5]/40 font-bold uppercase text-[7.5px] tracking-wider">
               {summonPosition.category === 'todos' ? '[invocar módulo]' : `[${summonPosition.category}]`}
             </span>

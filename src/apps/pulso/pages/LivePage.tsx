@@ -3412,7 +3412,7 @@ ${data.transcription}`, {
             </button>
             
             {isHeaderMenuOpen && !contextSurfaceVariant && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-black/85 backdrop-blur-xl border-b border-white/10 z-50 text-left transition-all duration-300">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-transparent backdrop-blur-xl z-50 text-left transition-all duration-300">
                 <div className="flex flex-col text-[10px] font-light tracking-widest text-[#fbf9f5] lowercase">
                   <button 
                     onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
@@ -4176,7 +4176,7 @@ ${data.transcription}`, {
           {/* Mesa Panel (Split Screen) - Global Right Half */}
           {isMesaOpen && activeMesaArtifact && (
             <div className="fixed top-24 right-4 md:right-8 bottom-4 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] z-[60] animate-slide-in-right pointer-events-auto flex flex-col">
-              <div className="w-full h-full rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="w-full h-full overflow-hidden">
                 <MesaPanel
                   isOpen={isMesaOpen}
                   onClose={() => setIsMesaOpen(false)}
@@ -4356,7 +4356,7 @@ ${data.transcription}`, {
               <Paperclip size={14} strokeWidth={1.5} />
             </button>
             
-            <div className={`absolute bottom-full left-0 mb-2 w-36 bg-black/85 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden pulso-transition shadow-2xl ${
+            <div className={`absolute bottom-full left-0 mb-2 w-36 bg-transparent backdrop-blur-xl pulso-transition ${
               isAttachmentMenuOpen ? 'opacity-100 transform translate-y-0 pointer-events-auto scale-100' : 'opacity-0 transform translate-y-2 pointer-events-none scale-95'
             }`}>
               <div className="flex flex-col text-xs font-light tracking-wide text-[#fbf9f5]">

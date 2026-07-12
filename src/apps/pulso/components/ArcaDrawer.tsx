@@ -109,7 +109,7 @@ export default function ArcaDrawer({ isOpen, onClose, contextId }: ArcaDrawerPro
       <div 
         className="fixed top-0 right-0 h-full w-[90%] md:w-[400px] z-[60] flex flex-col pointer-events-auto transform transition-transform duration-700 ease-out translate-x-0"
         style={{
-          background: 'rgba(5, 5, 5, 0.45)',
+          background: 'transparent',
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
           borderLeft: 'none',
