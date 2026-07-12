@@ -82,21 +82,45 @@ export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: 
   }, [contextId, onChunkUploaded]);
 
   const stopRecording = useCallback(() => {
-    isStoppingRef.current = true;
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setIsRecording(false);
-    return sessionIdRef.current;
-  }, []);
+    return new Promise<{sessionId: string, finalChunkUrl?: string}>((resolve) => {
+      isStoppingRef.current = true;
+      let finalChunkUrl: string | undefined = undefined;
+      
+      const originalOnChunk = onChunkUploaded;
+      
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        const recorder = mediaRecorderRef.current;
+        const originalOnStop = recorder.onstop;
+        
+        recorder.onstop = async (e) => {
+          if (originalOnStop) {
+            // We need to wait for the original onstop to finish uploading
+            // Actually, originalOnStop is an async function in our implementation.
+            await (originalOnStop as Function)(e);
+          }
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          setIsRecording(false);
+          resolve({ sessionId: sessionIdRef.current });
+        };
+        recorder.stop();
+      } else {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+        setIsRecording(false);
+        resolve({ sessionId: sessionIdRef.current });
+      }
+    });
+  }, [onChunkUploaded]);
 
   return { isRecording, startRecording, stopRecording, sessionId: sessionIdRef.current };
 }

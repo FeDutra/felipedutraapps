@@ -383,7 +383,7 @@ interface Message {
   replyTo?: { id: string; sender: string; text: string } | null;
 }
 
-export type VoiceMode = 'off' | 'recording_once' | 'presence';
+export type VoiceMode = 'off' | 'recording_once' | 'presence' | 'recording_meeting';
 
 export type UnifiedVoiceState =
   | 'idle'
@@ -970,6 +970,13 @@ export default function LivePage() {
 
   // Voice State Machine additions
   const [voiceMode, setVoiceMode] = React.useState<VoiceMode>('off');
+  
+  // Meeting Recorder Hook
+  const meetingChunksUrlsRef = React.useRef<string[]>([]);
+  const { isRecording: isMeetingRecording, startRecording: startMeetingRec, stopRecording: stopMeetingRec, sessionId: meetingSessionId } = useMeetingRecorder(activeContextNode?.contextId || 'general', (chunk, isFinal) => {
+    meetingChunksUrlsRef.current.push(chunk.url);
+  });
+
   const [voiceState, setVoiceState] = React.useState<UnifiedVoiceState>('idle');
 
   const voiceModeRef = React.useRef<VoiceMode>('off');
@@ -2267,7 +2274,7 @@ export default function LivePage() {
 
   const isSubmittingRef = React.useRef(false);
 
-  const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' }) => {
+  const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting' }) => {
     if (isTyping || isSubmittingRef.current) {
       console.warn('Blocked duplicate send: message already processing or submitting.');
       return;
@@ -2367,12 +2374,12 @@ export default function LivePage() {
         throw new Error('Forced OpenClaw');
       }
 
-      if (originMode === 'text' || originMode === 'presence' || originMode === 'recording_once') {
+      if (originMode === 'text' || originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
         const { agentOrchestrator } = await import('../../../lib/pulso/llm/AgentOrchestrator');
         
         // Passamos um callback para o Agente poder "falar" o que está pensando/fazendo no meio do caminho
         const onStatusUpdate = (status: string) => {
-          if (originMode === 'presence' || originMode === 'recording_once') {
+          if (originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
             setVoiceState('speaking');
             ttsAdapter.speak(status); // Fala o status (ex: "Buscando no Notion")
           }
@@ -2462,7 +2469,7 @@ export default function LivePage() {
     }
     // ===================================
 
-    if (originMode === 'presence' || originMode === 'recording_once') {
+    if (originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
       voiceReplyRequestsRef.current.add(preGeneratedReqId);
     }
 
@@ -2896,6 +2903,59 @@ export default function LivePage() {
   React.useEffect(() => {
     startSpeechRecognitionRef.current = startSpeechRecognition;
   }, [startSpeechRecognition]);
+
+  const toggleMeetingRecording = React.useCallback(async () => {
+    if (voiceModeRef.current === 'recording_meeting') {
+      const { sessionId: sId } = await stopMeetingRec();
+      const finalUrls = [...meetingChunksUrlsRef.current];
+      setVoiceMode('off');
+      voiceModeRef.current = 'off';
+      
+      console.log('[MEETING] Parando gravação da reunião. Enviando chunks para processamento...', meetingChunksUrls);
+      
+      if (finalUrls.length > 0) {
+        try {
+          // Exibir Toast de processamento
+          const reqRes = await fetch('/api/pulso/process-meeting', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contextId: activeContextNode?.contextId || 'general',
+              sessionId: sId || Date.now().toString(),
+              chunkUrls: finalUrls
+            })
+          });
+          
+          if (!reqRes.ok) throw new Error('Falha ao processar reunião.');
+          const data = await reqRes.json();
+          
+          if (data.transcription && data.summary) {
+            console.log('[MEETING] Transcrição e resumo recebidos:', data);
+            
+            // Enviar para o Chat forçando o Deep Mode (OpenClaw)
+            await handleSendMessage(`Reunião gravada e transcrita com sucesso. Aqui está o resumo e a transcrição. Por favor, crie um Plano de Ação detalhado com base nisso:
+
+**Resumo:**
+${data.summary}
+
+**Transcrição:**
+${data.transcription}`, {
+              originMode: 'recording_meeting'
+            });
+          }
+        } catch (error) {
+          console.error('[MEETING] Erro no processamento:', error);
+        }
+      }
+      meetingChunksUrlsRef.current = []; // Resetar
+      
+    } else {
+      meetingChunksUrlsRef.current = [];
+      await startMeetingRec();
+      setVoiceMode('recording_meeting');
+      voiceModeRef.current = 'recording_meeting';
+    }
+  }, [voiceMode, startMeetingRec, stopMeetingRec, meetingChunksUrls, activeContextNode, handleSendMessage]);
 
   const toggleRecordingOnce = React.useCallback(async () => {
     hasRetriedSpeechRecognitionRef.current = false;
@@ -4430,11 +4490,11 @@ export default function LivePage() {
           </button>
 
           <button
-            onClick={toggleRecordingOnce}
-            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 ${voiceMode === 'recording_once' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
+            onClick={toggleMeetingRecording}
+            className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none mb-0.5 ${voiceMode === 'recording_meeting' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
             title="Gravar Reunião"
           >
-            <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_once' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_once' ? "currentColor" : "none"} />
+            <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
           </button>
           <button
             onClick={() => setForceOpenClaw(!forceOpenClaw)}
