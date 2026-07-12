@@ -2911,7 +2911,7 @@ export default function LivePage() {
       setVoiceMode('off');
       voiceModeRef.current = 'off';
       
-      console.log('[MEETING] Parando gravação da reunião. Enviando chunks para processamento...', meetingChunksUrls);
+      console.log('[MEETING] Parando gravação da reunião. Enviando chunks para processamento...', finalUrls);
       
       if (finalUrls.length > 0) {
         try {
@@ -2955,7 +2955,7 @@ ${data.transcription}`, {
       setVoiceMode('recording_meeting');
       voiceModeRef.current = 'recording_meeting';
     }
-  }, [voiceMode, startMeetingRec, stopMeetingRec, meetingChunksUrls, activeContextNode, handleSendMessage]);
+  }, [voiceMode, startMeetingRec, stopMeetingRec, activeContextNode, handleSendMessage]);
 
   const toggleRecordingOnce = React.useCallback(async () => {
     hasRetriedSpeechRecognitionRef.current = false;
