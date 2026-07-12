@@ -3710,9 +3710,8 @@ ${data.transcription}`, {
                 aria-label={`Modo Presença: ${voiceState}`}
               />
               {voiceMode === 'recording_meeting' && (
-                <div className="absolute -bottom-16 flex flex-col items-center gap-2 pointer-events-none">
-                  <div className="w-4 h-4 bg-[#b8283e] rounded-full animate-pulse shadow-[0_0_15px_rgba(184,40,62,1)]" />
-                  <span className="text-[12px] text-[#b8283e] font-mono tracking-widest animate-pulse font-bold">GRAVANDO</span>
+                <div className="absolute -bottom-20 flex flex-col items-center pointer-events-none">
+                  <div className="w-[10px] h-[10px] bg-[#b8283e] rounded-full animate-pulse shadow-[0_0_12px_rgba(184,40,62,1)]" />
                 </div>
               )}
             </div>
