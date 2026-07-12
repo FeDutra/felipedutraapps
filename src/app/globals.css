@@ -557,3 +557,57 @@ body.pulso-theme-black .pulso-unread {
 .animate-scale-in {
   animation: scale-in 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Lótus Orbe Liquid & Concentric Animations */
+@keyframes orb-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orb-spin-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes ripple-ring {
+  0% {
+    transform: scale(0.9) rotate(0deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6) rotate(180deg);
+    opacity: 0;
+  }
+}
+
+.orb-ripple-active {
+  animation: ripple-ring 2s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.orb-spin-slow {
+  animation: orb-spin-slow 20s linear infinite;
+}
+
+.orb-spin-reverse {
+  animation: orb-spin-reverse 15s linear infinite;
+}
+
+/* Custom styling for inputs in Orbe Playground to match PULSO aesthetics */
+.orb-input-minimalist {
+  background: rgba(251, 249, 245, 0.03);
+  border: 1px solid rgba(251, 249, 245, 0.1);
+  backdrop-filter: blur(10px);
+  color: #fbf9f5;
+  font-family: monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  transition: all 300ms ease;
+}
+
+.orb-input-minimalist:focus {
+  background: rgba(251, 249, 245, 0.07);
+  border: 1px solid rgba(251, 249, 245, 0.3);
+  box-shadow: 0 0 15px rgba(251, 249, 245, 0.05);
+  outline: none;
+}
+

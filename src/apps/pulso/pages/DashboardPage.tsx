@@ -122,11 +122,11 @@ export default function DashboardPage() {
       <PulsoHeader />
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         
         {/* Left Column: Stats & Radar */}
         <div className="lg:col-span-4 space-y-8">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <StateCard 
               title="Inbox Pendente" 
               value={state.pendingInbox.length} 
@@ -157,10 +157,10 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col items-center justify-center min-h-[400px]">
-             <div className="text-center mb-8">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30">Estado Radial</h3>
-                <p className="text-xs text-white/50 mt-1">Visão sistêmica do ecossistema</p>
+          <div className="py-6 flex flex-col items-center justify-center min-h-[380px]">
+             <div className="text-center mb-6">
+                <h3 className="text-[9px] font-mono tracking-[0.2em] text-white/30 uppercase">Estado Radial</h3>
+                <p className="text-xs text-white/40 mt-1">Visão sistêmica do ecossistema</p>
              </div>
              <PulseRadar blips={radarBlips} />
           </div>
@@ -173,12 +173,12 @@ export default function DashboardPage() {
             brokenRoutines={ontologyHelpers.getBrokenRoutines(state.allRoutines)} 
           />
 
-          <div className="bg-white/2 border border-white/5 rounded-3xl p-6">
+          <div className="py-4">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-white/30">Áreas em Pulso</h3>
-              <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Total 10</span>
+              <h3 className="text-xs font-mono tracking-[0.2em] text-white/30 uppercase">Áreas em Pulso</h3>
+              <span className="text-[9px] font-mono tracking-widest text-white/20 uppercase">Total {state.allAreas.length}</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="grid grid-cols-1 gap-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
               {state.allAreas.map((area: any) => (
                 <AreaPulseCard 
                   key={area.id} 
@@ -202,20 +202,20 @@ export default function DashboardPage() {
             logs={state.allLogs} 
           />
 
-          <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/10">
-               <Activity size={20} className="text-white/40" />
+          <div className="py-6 flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 flex items-center justify-center mb-3">
+               <Activity size={16} strokeWidth={1} className="text-white/30" />
             </div>
-            <h4 className="text-sm font-bold text-white mb-2">Novo Registro</h4>
+            <h4 className="text-xs font-light text-white mb-1 uppercase tracking-wider">Novo Registro</h4>
             <p className="text-[10px] text-white/40 mb-4 px-4 leading-relaxed">
               Capture uma tarefa, semente ou decisão instantaneamente.
             </p>
             <button 
               onClick={() => router.push('/pulso/inbox')}
-              className="w-full py-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-500/20 transition-all backdrop-blur-sm flex items-center justify-center gap-2 group"
+              className="w-full py-2.5 text-blue-400/80 hover:text-white text-xs font-mono tracking-[0.2em] uppercase transition-colors flex items-center justify-center gap-2 group cursor-pointer"
             >
               Abrir Inbox
-              <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+              <ArrowRight size={12} strokeWidth={1} className="transition-transform group-hover:translate-x-1" />
             </button>
           </div>
         </div>
