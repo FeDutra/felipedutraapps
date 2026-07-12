@@ -98,46 +98,44 @@ export default function HealthPage() {
   const handleRefreshState = async () => {
     try {
       await requestsService.createRequest({
-        requestType: 'refresh_state',
-        title: 'Solicitação: Atualizar Estado do Workspace',
-        summary: 'Sincronização completa do estado atual solicitada via Health Center.',
-        status: 'requested',
+        title: 'Verificação Manual de Integridade',
+        requestType: 'system_health_check',
         priority: 'high',
-        requestedBy: 'user_felipe',
         payload: {
-          scope: 'workspace',
-          requestedFrom: 'health_center',
-          force: false
+          timestamp: new Date().toISOString(),
+          requestedBy: 'user'
         }
       });
-      alert("Solicitação de atualização registrada com sucesso.");
+      loadData();
     } catch (err) {
-      console.error('Refresh request error:', err);
+      console.error(err);
     }
   };
 
-  if (loading) {
+  if (loading && itemsLengthCheck()) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-        <p className="text-white/30 font-black uppercase tracking-widest text-[10px]">Sintonizando Integridade</p>
+        <div className="w-8 h-8 border border-white/20 border-t-white rounded-full animate-spin mb-4" />
+        <p className="text-white/30 font-mono uppercase tracking-widest text-[9px]">Sintonizando Integridade</p>
       </div>
     );
+  }
+
+  function itemsLengthCheck() {
+    return alerts.length === 0 && syncJobs.length === 0;
   }
 
   if (error) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-3xl flex items-center justify-center mb-6">
-          <AlertCircleIcon size={32} className="text-red-400" />
-        </div>
-        <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">Falha na Sintonização</h2>
-        <p className="text-sm text-white/40 max-w-sm mb-8 leading-relaxed">{error}</p>
+        <AlertCircleIcon size={24} className="text-red-400 mb-4" />
+        <h2 className="text-lg font-light text-white mb-2 uppercase tracking-wide">Falha na Sintonização</h2>
+        <p className="text-xs text-white/40 max-w-sm mb-8 leading-relaxed font-light">{error}</p>
         <button 
           onClick={() => loadData()}
-          className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
+          className="text-white/50 hover:text-white transition-colors text-xs font-mono tracking-widest uppercase bg-transparent border-none cursor-pointer outline-none"
         >
-          Tentar Novamente
+          [ Tentar Novamente ]
         </button>
       </div>
     );
@@ -149,30 +147,30 @@ export default function HealthPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
           <div className="flex items-center gap-4 mb-2">
-            <h1 className="text-3xl font-black text-white">Saúde / Riscos</h1>
-            <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
-              stats.systemStatus === 'healthy' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-              stats.systemStatus === 'attention' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-              'bg-red-500/10 border-red-500/20 text-red-500'
+            <h1 className="text-2xl font-light text-[#fbf9f5] tracking-wide">Saúde / Riscos</h1>
+            <span className={`text-[8px] font-mono tracking-widest uppercase ${
+              stats.systemStatus === 'healthy' ? 'text-emerald-400' :
+              stats.systemStatus === 'attention' ? 'text-amber-400' :
+              'text-red-500'
             }`}>
-              {stats.systemStatus === 'healthy' ? 'SISTEMA SAUDÁVEL' : stats.systemStatus === 'attention' ? 'ATENÇÃO REQUERIDA' : 'ESTADO CRÍTICO'}
-            </div>
+              {stats.systemStatus === 'healthy' ? '[ SISTEMA SAUDÁVEL ]' : stats.systemStatus === 'attention' ? '[ ATENÇÃO REQUERIDA ]' : '[ ESTADO CRÍTICO ]'}
+            </span>
           </div>
-          <p className="text-sm text-white/40 max-w-lg">
+          <p className="text-xs text-white/40 max-w-lg font-light">
             Monitoramento em tempo real da integridade técnica e operacional do ecossistema PULSO.
           </p>
         </div>
         <button 
           onClick={handleRefreshState}
-          className="p-4 bg-white/2 border border-white/5 rounded-2xl text-white/40 hover:bg-white/5 transition-all flex items-center gap-2 text-xs font-bold"
+          className="bg-transparent border-none text-white/40 hover:text-white transition-colors flex items-center gap-2 text-xs font-mono tracking-widest uppercase cursor-pointer"
         >
-          <Activity size={16} />
+          <Activity size={14} strokeWidth={1} />
           Atualizar Estado
         </button>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 border-b border-white/5 pb-8">
         <HealthStatusCard 
           title="Alertas Abertos" 
           value={stats.openAlerts} 
@@ -205,19 +203,19 @@ export default function HealthPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Alerts & Syncs (Left) */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className="lg:col-span-8 space-y-12">
           
           {/* Active Alerts */}
           <section>
             <div className="flex items-center justify-between mb-6 px-2">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-                <AlertCircle size={12} /> Alertas de Operação
+              <h3 className="text-[10px] font-mono tracking-widest uppercase text-white/30 flex items-center gap-2">
+                <AlertCircle size={12} strokeWidth={1} /> Alertas de Operação
               </h3>
-              <span className="text-[10px] font-bold text-white/10 uppercase">{alerts.length} Total</span>
+              <span className="text-[9px] font-mono text-white/15 uppercase">{alerts.length} Total</span>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {alerts.length === 0 ? (
-                <div className="py-20 text-center border border-dashed border-white/5 rounded-3xl">
+                <div className="py-12 text-center border-b border-dashed border-white/5">
                   <p className="text-white/20 text-xs italic">Nenhum alerta ativo no momento.</p>
                 </div>
               ) : (
@@ -231,11 +229,11 @@ export default function HealthPage() {
           {/* Sync Jobs */}
           <section>
             <div className="flex items-center justify-between mb-6 px-2">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-                <Wifi size={12} /> Sincronização de Fontes
+              <h3 className="text-[10px] font-mono tracking-widest uppercase text-white/30 flex items-center gap-2">
+                <Wifi size={12} strokeWidth={1} /> Sincronização de Fontes
               </h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
               {syncJobs.map(job => (
                 <SyncJobCard key={job.id} job={job} />
               ))}
@@ -243,33 +241,33 @@ export default function HealthPage() {
           </section>
 
           {/* Outbox Integrity */}
-          <section className="bg-white/2 border border-white/5 rounded-3xl p-8">
+          <section className="py-8">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-                <Zap size={14} /> Integridade do Outbox
+              <h3 className="text-[10px] font-mono tracking-widest uppercase text-white/30 flex items-center gap-2">
+                <Zap size={14} strokeWidth={1} /> Integridade do Outbox
               </h3>
-              <span className="text-[10px] font-bold text-white/20 uppercase">Sincronia com OpenClaw</span>
+              <span className="text-[9px] font-mono text-white/20 uppercase">Sincronia com OpenClaw</span>
             </div>
             
             <div className="flex flex-col md:flex-row gap-8 items-center justify-between">
               <div className="flex-1 space-y-4 w-full">
                 <div className="flex items-center justify-between px-2">
-                  <span className="text-[10px] font-black text-white/20 uppercase">Fila de Eventos</span>
-                  <span className="text-xs font-bold text-white/60">{stats.pendingEvents} Pendentes</span>
+                  <span className="text-[9px] font-mono text-white/20 uppercase">Fila de Eventos</span>
+                  <span className="text-xs font-light text-white/60">{stats.pendingEvents} Pendentes</span>
                 </div>
-                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, stats.pendingEvents * 10)}%` }} />
+                <div className="w-full h-[1px] bg-white/5 overflow-hidden">
+                  <div className="h-full bg-blue-500/50" style={{ width: `${Math.min(100, stats.pendingEvents * 10)}%` }} />
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
                 <div className="text-center px-6 border-r border-white/5">
-                  <p className="text-[9px] font-black text-white/20 uppercase mb-1">Taxa de Sucesso</p>
-                  <p className="text-xl font-black text-emerald-400">99.2%</p>
+                  <p className="text-[8px] font-mono tracking-wider text-white/20 uppercase mb-1">Taxa de Sucesso</p>
+                  <p className="text-xl font-light text-emerald-400">99.2%</p>
                 </div>
                 <div className="text-center px-6">
-                  <p className="text-[9px] font-black text-white/20 uppercase mb-1">Latência Média</p>
-                  <p className="text-xl font-black text-white">450ms</p>
+                  <p className="text-[8px] font-mono tracking-wider text-white/20 uppercase mb-1">Latência Média</p>
+                  <p className="text-xl font-light text-white">450ms</p>
                 </div>
               </div>
             </div>
@@ -279,33 +277,33 @@ export default function HealthPage() {
 
         {/* System Logs (Right) */}
         <div className="lg:col-span-4">
-          <section className="bg-white/2 border border-white/5 rounded-3xl p-8 sticky top-8">
+          <section className="py-4 sticky top-8">
             <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2">
-                <Terminal size={12} /> Logs do Sistema
+              <h3 className="text-[10px] font-mono tracking-widest uppercase text-white/30 flex items-center gap-2">
+                <Terminal size={12} strokeWidth={1} /> Logs do Sistema
               </h3>
-              <Clock size={14} className="text-white/10" />
+              <Clock size={14} strokeWidth={1} className="text-white/10" />
             </div>
             
             <div className="space-y-6">
               {logs.map((log, idx) => (
                 <div key={log.id} className="relative pl-6 pb-6 border-l border-white/5 last:pb-0">
-                  <div className={`absolute left-[-5px] top-0 w-2 h-2 rounded-full ${
+                  <div className={`absolute left-[-3px] top-1.5 w-1.5 h-1.5 rounded-full ${
                     log.severity === 'critical' ? 'bg-red-500' : 
                     log.severity === 'high' ? 'bg-amber-500' : 
                     'bg-blue-500/40'
                   }`} />
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] font-black text-white/20 uppercase tracking-tighter">{log.type}</span>
-                    <span className="text-[8px] text-white/10">{new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-[9px] font-mono tracking-wider text-white/20 uppercase">{log.type}</span>
+                    <span className="text-[8px] font-mono text-white/10">{new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
-                  <p className="text-xs text-white/60 font-medium line-clamp-2">{log.event}</p>
+                  <p className="text-xs text-white/60 font-light line-clamp-2 leading-relaxed">{log.event}</p>
                 </div>
               ))}
             </div>
 
-            <button className="w-full mt-8 py-3 bg-white/2 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/20 hover:bg-white/5 transition-all">
-              Ver Logs Completos
+            <button className="w-full mt-8 py-3 bg-transparent border-none text-[10px] font-mono tracking-widest uppercase text-white/20 hover:text-white/60 transition-all cursor-pointer">
+              [ Ver Logs Completos ]
             </button>
           </section>
         </div>

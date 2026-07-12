@@ -49,15 +49,15 @@ export const InboxFilters = ({
   return (
     <div className="flex flex-col gap-4 mb-8 w-full max-w-full">
       {/* 1. Primary Row: Search & Domain Tabs */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 w-full">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 w-full border-b border-white/5 pb-2">
         {/* Search Bar */}
         <div className="relative flex-1 group min-w-0">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-blue-400 transition-colors" />
+          <Search size={14} strokeWidth={1} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-blue-400 transition-colors" />
           <input 
             type="text"
             placeholder={filters.status === 'requests' ? "Buscar por título, sumário ou chaves na bridge..." : "Buscar no inbox ou intenções..."}
             onChange={(e) => onSearch(e.target.value)}
-            className="w-full bg-white/2 border border-white/5 rounded-xl py-3 pl-12 pr-4 text-xs text-white placeholder:text-white/20 focus:border-blue-500/30 focus:bg-white/5 transition-all outline-none"
+            className="w-full bg-transparent border-none py-3 pl-10 pr-4 text-xs text-white placeholder:text-white/20 transition-all outline-none font-light"
           />
         </div>
 
@@ -67,10 +67,10 @@ export const InboxFilters = ({
             <button
               key={status}
               onClick={() => setFilters({ ...filters, status, requestStatus: status === 'requests' ? (filters.requestStatus || 'active') : undefined })}
-              className={`px-3.5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shrink-0 ${
+              className={`px-3 py-2 text-[9px] font-mono tracking-widest uppercase transition-all whitespace-nowrap shrink-0 bg-transparent border-none cursor-pointer ${
                 filters.status === status 
-                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
-                  : 'bg-white/2 border-white/5 text-white/30 hover:border-white/10'
+                  ? 'text-white font-bold' 
+                  : 'text-white/30 hover:text-white/60'
               }`}
             >
               {getStatusLabel(status)}
@@ -82,8 +82,8 @@ export const InboxFilters = ({
       {/* 2. Secondary Row: Dedicated Cockpit Request Status Sub-Filters */}
       {filters.status === 'requests' && (
         <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1.5 border-t border-white/5 custom-scrollbar flex-nowrap w-full">
-          <span className="text-[8px] font-black uppercase tracking-widest text-purple-400/60 mr-2 shrink-0 flex items-center gap-1">
-            <Filter size={10} />
+          <span className="text-[8px] font-mono tracking-wider text-purple-400/60 mr-2 shrink-0 flex items-center gap-1">
+            <Filter size={10} strokeWidth={1} />
             Filtro de Intenções:
           </span>
           {requestStatuses.map(reqSt => {
@@ -92,10 +92,10 @@ export const InboxFilters = ({
               <button
                 key={reqSt.id}
                 onClick={() => setFilters({ ...filters, requestStatus: reqSt.id })}
-                className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold tracking-tight transition-all whitespace-nowrap shrink-0 border ${
+                className={`px-2 py-1 text-[9px] font-mono tracking-wider transition-all whitespace-nowrap shrink-0 bg-transparent border-none cursor-pointer ${
                   isActive
-                    ? 'bg-purple-500/15 border-purple-500/30 text-purple-300 font-black uppercase text-[8px] tracking-widest'
-                    : 'bg-white/1 border-white/5 text-white/40 hover:text-white/80'
+                    ? 'text-purple-300 font-bold uppercase'
+                    : 'text-white/40 hover:text-white/80'
                 }`}
               >
                 {reqSt.label}
