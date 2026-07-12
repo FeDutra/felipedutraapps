@@ -2911,6 +2911,7 @@ export default function LivePage() {
       const finalUrls = [...meetingChunksUrlsRef.current];
       setVoiceMode('off');
       voiceModeRef.current = 'off';
+      setPresenceMode(false);
       
       console.log('[MEETING] Parando gravação da reunião. Enviando chunks para processamento...', finalUrls);
       
@@ -2955,6 +2956,7 @@ ${data.transcription}`, {
       await startMeetingRec();
       setVoiceMode('recording_meeting');
       voiceModeRef.current = 'recording_meeting';
+      setPresenceMode(true);
     }
   }, [voiceMode, startMeetingRec, stopMeetingRec, activeContextNode, handleSendMessage]);
 
@@ -3707,6 +3709,12 @@ ${data.transcription}`, {
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
                 aria-label={`Modo Presença: ${voiceState}`}
               />
+              {voiceMode === 'recording_meeting' && (
+                <div className="absolute -bottom-16 flex flex-col items-center gap-2 pointer-events-none">
+                  <div className="w-4 h-4 bg-[#b8283e] rounded-full animate-pulse shadow-[0_0_15px_rgba(184,40,62,1)]" />
+                  <span className="text-[12px] text-[#b8283e] font-mono tracking-widest animate-pulse font-bold">GRAVANDO</span>
+                </div>
+              )}
             </div>
           </div>
 
