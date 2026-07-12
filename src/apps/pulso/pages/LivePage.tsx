@@ -139,6 +139,7 @@ import { firestorePaths } from '../services/firestorePaths';
 import { PulsoContextNode, Session } from '../types/pulso.types';
 import { sessionsService } from '../services/sessionsService';
 import dynamic from 'next/dynamic';
+import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
 const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
   ssr: false,
   loading: () => <div className="p-8 text-white/50 text-xs font-mono">Carregando ateliê...</div>
