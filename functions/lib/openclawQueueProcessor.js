@@ -16,6 +16,10 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
     schedule: "every 1 minutes", // adjust after approval if needed
     timeoutSeconds: 300,
 }, async () => {
+    // DESATIVADO: O OpenClaw real (bot Python/Telegram) agora processa as requisições.
+    // Este mock no Cloud Functions não deve mais interferir ou roubar a fila.
+    v2_1.logger.info("⚡ processOpenClawQueue DESATIVADO para dar lugar ao OpenClaw real.");
+    return;
     const db = (0, firestore_1.getFirestore)();
     const WORKSPACE_ID = "felipe_dutra";
     const BASE = `workspaces/${WORKSPACE_ID}/pulso_requests`;
@@ -44,8 +48,8 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
                 updatedAt: firestore_1.FieldValue.serverTimestamp(),
             });
             v2_1.logger.info(`🛠️ Claimed request ${requestId}`);
-            // 3️⃣ Mock OpenClaw adapter (replace with real call when available)
-            let simulatedText = "SIMULATED_RESPONSE";
+            // 3️⃣ OpenClaw adapter (using Groq for Deep Reasoning)
+            let simulatedText = "Não foi possível gerar um plano de ação estruturado.";
             let detectedEvents = [];
             if (data.input) {
                 const inputLower = data.input.toLowerCase();
@@ -83,6 +87,40 @@ exports.processOpenClawQueue = (0, scheduler_1.onSchedule)({
                 }
                 else if (data.input.includes("PULSO_DIRECT_TEST_001")) {
                     simulatedText = "DIRECT_OK_001";
+                }
+                else {
+                    // Real LLM Processing
+                    try {
+                        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+                            },
+                            body: JSON.stringify({
+                                model: "llama-3.3-70b-versatile",
+                                messages: [
+                                    { role: "user", content: data.input }
+                                ],
+                                temperature: 0.1
+                            })
+                        });
+                        if (response.ok) {
+                            const result = await response.json();
+                            if (result.choices && result.choices.length > 0) {
+                                simulatedText = result.choices[0].message.content;
+                            }
+                        }
+                        else {
+                            const errorText = await response.text();
+                            v2_1.logger.error(`[OpenClaw] Groq API Error: ${errorText}`);
+                            simulatedText = `Falha analítica profunda. A conexão com o núcleo cognitivo retornou anomalia. (Error: ${response.status})`;
+                        }
+                    }
+                    catch (apiErr) {
+                        v2_1.logger.error(`[OpenClaw] Groq Fetch Error:`, apiErr);
+                        simulatedText = `Interrupção crítica no Raciocínio Profundo.`;
+                    }
                 }
             }
             if (detectedEvents.length > 0) {
