@@ -431,8 +431,13 @@ export class TTSAdapter {
     }
 
     let endpoint = getKokoroEndpoint();
+    let actualVoice = voice || 'pf_dora';
+    
     if (provider === 'local_kokoro_sidecar') {
       endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+      if (actualVoice === 'pf_dora') {
+        actualVoice = 'af_bella'; // Hack mantido a pedido do usuário
+      }
     }
 
     const response = await fetch(endpoint, {
@@ -441,7 +446,7 @@ export class TTSAdapter {
       body: JSON.stringify({
         model: 'kokoro',
         input: chunkText,
-        voice: voice || 'pf_dora',
+        voice: actualVoice,
         response_format: 'mp3',
         speed: rate
       }),
