@@ -430,14 +430,23 @@ export class TTSAdapter {
       return blob;
     }
 
-    const endpoint = getKokoroEndpoint();
+    let endpoint = getKokoroEndpoint();
+    let actualVoice = voice || 'pf_dora';
+    
+    if (provider === 'local_kokoro_sidecar') {
+      endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+      if (actualVoice === 'pf_dora') {
+        actualVoice = 'af_bella'; // Temporário: O arquivo voices.bin atual só tem vozes em inglês
+      }
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'kokoro',
         input: chunkText,
-        voice: voice || 'pf_dora',
+        voice: actualVoice,
         response_format: 'mp3',
         speed: rate
       }),
@@ -486,7 +495,10 @@ export class TTSAdapter {
       window.location.hostname !== 'localhost' && 
       window.location.hostname !== '127.0.0.1';
     
-    const endpoint = getKokoroEndpoint();
+    let endpoint = getKokoroEndpoint();
+    if (this.preferences.ttsProvider === 'local_kokoro_sidecar') {
+      endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+    }
     const isEndpointLocalhost = endpoint.includes('127.0.0.1') || endpoint.includes('localhost');
 
     console.log('[PULSO_WEB_TTS_PROVIDER_DETECTED]', { 
