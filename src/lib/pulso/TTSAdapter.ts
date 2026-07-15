@@ -34,6 +34,15 @@ const DEFAULT_PREFERENCES: TTSPreferences = {
 
 const getKokoroEndpoint = () => {
   if (typeof window !== 'undefined') {
+    // Detect if we are running in a remote web browser (not local desktop/app)
+    const isRemoteWeb = window.location.hostname !== 'localhost' && 
+                        window.location.hostname !== '127.0.0.1' && 
+                        !window.location.protocol.startsWith('tauri');
+    
+    if (isRemoteWeb) {
+      return 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
+    }
+
     const custom = localStorage.getItem('pulso_tts_kokoro_endpoint');
     if (custom) return custom;
   }
@@ -94,13 +103,17 @@ export class TTSAdapter {
     console.log('[PULSO_TTS_KOKORO_WARMUP_START]');
     try {
       const payloadText = this.normalizeTextForSpeech('ok');
+      const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
+      let voice = this.preferences.voiceName || defaultVoice;
+      const rate = this.preferences.rate === 1.0 ? 0.95 : this.preferences.rate;
 
-      let endpoint = 'http://191.101.70.136:14321/v1/audio/speech'; // Default Kokoro VPS
+      let endpoint = getKokoroEndpoint();
       if (this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'local_kokoro_sidecar') {
         endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+        if (voice === 'pf_dora') {
+          voice = 'af_bella';
+        }
       }
-
-      const voice = this.preferences.voiceName || 'pf_dora';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,7 +122,7 @@ export class TTSAdapter {
           input: payloadText,
           voice: voice,
           response_format: 'mp3',
-          speed: 1.0
+          speed: rate
         })
       });
 
@@ -255,11 +268,80 @@ export class TTSAdapter {
     s = s.replace(/\[\s*\]/g, ' ');
     s = s.replace(/\(\s*\)/g, ' ');
 
-    // 11. Reduce multiple newlines and spaces to keep simple punctuation pauses
-    s = s.replace(/\n+/g, ' ');
-    s = s.replace(/\s+/g, ' ');
+    // 11. Add pauses (...) for paragraph breaks, semicolons, and dashes
+    s = s.replace(/\n\s*\n/g, '... ');
+    s = s.replace(/\n+/g, '... ');
+    s = s.replace(/\s*;\s*/g, '... ');
+    s = s.replace(/\s*[-—–]{2,}\s*/g, '... ');
 
-    // 12. Trim whitespace
+    // 12. Apply phonetic replacements for common English tech terms to improve PT-BR TTS pronunciation
+    const phoneticReplacements: Record<string, string> = {
+      'next\\.js': 'nékst dji és',
+      'nextjs': 'nékst dji és',
+      'tauri': 'táuri',
+      'firebase': 'fáier-beise',
+      'vps': 'vê-pê-ésse',
+      'gcp': 'jê-cê-pê',
+      'tts': 'tê-tê-ésse',
+      'macbook': 'méqui-búqui',
+      'mac': 'méqui',
+      'setup': 'sétap',
+      'deploys': 'deplóis',
+      'deploy': 'deplói',
+      'feedback': 'fídebéqui',
+      'online': 'on-láine',
+      'localhost': 'lôcal-rôust',
+      'apis': 'á-pê-ís',
+      'api': 'á-pê-í',
+      'github': 'guíter-râbi',
+      'git': 'guíti',
+      'cors': 'córse',
+      'tokens': 'tóquiens',
+      'token': 'tóquien',
+      'hosting': 'rrôsting',
+      'serverless': 'sérver-lésse',
+      'database': 'dêita-bêise',
+      'chatgpt': 'tchat-jê-pê-tê',
+      'gpt': 'jê-pê-tê',
+      'gemini': 'djêmini',
+      'groq': 'gróqui',
+      'ollama': 'oláma',
+      'open-source': 'ôupen-sórse',
+      'opensource': 'ôupen-sórse',
+      'fastapi': 'fést-á-pê-í',
+      'uvicorn': 'iúvicórn',
+      'nginx': 'en-djin-équis',
+      'ssl': 'ésse-ésse-éle',
+      'https': 'áca-tê-tê-pê-ésse',
+      'http': 'áca-tê-tê-pê',
+      'options': 'ópchons',
+      'post': 'pôuste',
+      'get': 'guéti',
+      'blob': 'blóbi',
+      'mp3': 'eme-pê-três',
+      'wav': 'uávi',
+      'autoplay': 'autoplei',
+      'hard refresh': 'rárd rifréch',
+      'refresh': 'rifréch',
+      'cache': 'cáche',
+      'safari': 'safári',
+      'chrome': 'crôme',
+      'ios': 'i-ó-ésse',
+      'ip': 'í-pê',
+      'cloud': 'cláudi',
+      'web': 'uébi'
+    };
+
+    for (const [term, phonetic] of Object.entries(phoneticReplacements)) {
+      const regex = new RegExp(`\\b${term}\\b`, 'gi');
+      s = s.replace(regex, phonetic);
+    }
+
+    // 13. Reduce multiple spaces/pauses
+    s = s.replace(/\s+/g, ' ');
+    s = s.replace(/(?:\.\.\.\s*){2,}/g, '... ');
+
+    // 13. Trim whitespace
     return s.trim();
   }
 
@@ -272,8 +354,12 @@ export class TTSAdapter {
     const normalized = this.normalizeTextForSpeech(text);
     if (!normalized) return [];
 
-    // Split by common sentence terminators and pauses (., ?, !, ,, :) while keeping the delimiter
-    const sentences = normalized.match(/[^.!?,\:]+[.!?,\:]*\s*/g) || [normalized];
+    // Temporarily replace ... with a placeholder so sentence splitter doesn't break it
+    const pausePlaceholder = '__LOTUS_PAUSE__';
+    const protectedText = normalized.replace(/\.\.\./g, pausePlaceholder);
+
+    // Split by common sentence terminators (., ?, !, \n) while keeping the delimiter
+    const sentences = protectedText.match(/[^.!?]+[.!?]*\s*/g) || [protectedText];
     
     const chunks: string[] = [];
     let firstChunk = '';
@@ -386,11 +472,15 @@ export class TTSAdapter {
       chunks.push(currentChunk.trim());
     }
 
-    return chunks.filter(c => c.length > 0);
+    return chunks.map(c => c.replace(/__LOTUS_PAUSE__/g, '...')).filter(c => c.length > 0);
   }
 
   private async getChunkAudio(chunkText: string, provider: TTSProvider, voice: string, rate: number, signal?: AbortSignal): Promise<Blob> {
-    const cacheKey = `${provider}:${voice}:${rate}:${chunkText}`;
+    const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
+    const actualVoice = voice || defaultVoice;
+    const actualRate = rate === 1.0 ? 0.95 : rate;
+    
+    const cacheKey = `${provider}:${actualVoice}:${actualRate}:${chunkText}`;
     if (this.audioCache.has(cacheKey)) {
       console.log('[PULSO_TTS_CACHE_HIT]', { cacheKey });
       return this.audioCache.get(cacheKey)!;
@@ -402,8 +492,8 @@ export class TTSAdapter {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: chunkText,
-          voice: voice || 'pf_dora',
-          speed: rate,
+          voice: actualVoice,
+          speed: actualRate,
           lang: 'pt-br'
         }),
         signal
@@ -448,7 +538,7 @@ export class TTSAdapter {
         input: chunkText,
         voice: actualVoice,
         response_format: 'mp3',
-        speed: rate
+        speed: actualRate
       }),
       signal
     });
@@ -482,6 +572,19 @@ export class TTSAdapter {
       return;
     }
 
+    // [SAFARI/IOS AUTOPLAY UNLOCK] - Play silent audio synchronously inside the click handler!
+    if (typeof window !== 'undefined') {
+      if (!this.currentAudio) {
+        this.currentAudio = new Audio();
+      }
+      try {
+        this.currentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        this.currentAudio.play().catch(() => {});
+      } catch (e) {
+        console.warn('[PULSO_TTS_SILENT_UNLOCK_ERR]', e);
+      }
+    }
+
     const playSessionId = ++this.globalPlaySessionId;
     this.currentPlaySessionId = playSessionId;
     this.sessionStartTime = startTime;
@@ -493,7 +596,8 @@ export class TTSAdapter {
     const isTauri = isTauriApp();
     const isRemoteWeb = typeof window !== 'undefined' && 
       window.location.hostname !== 'localhost' && 
-      window.location.hostname !== '127.0.0.1';
+      window.location.hostname !== '127.0.0.1' &&
+      !window.location.protocol.startsWith('tauri');
     
     let endpoint = getKokoroEndpoint();
     if (this.preferences.ttsProvider === 'local_kokoro_sidecar') {
@@ -513,12 +617,13 @@ export class TTSAdapter {
     let skipKokoro = false;
     if (this.preferences.ttsProvider === 'local_kokoro_sidecar') {
       if (isRemoteWeb) {
-        console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_REMOTE_WEB]');
-        skipKokoro = true;
+        console.log('[PULSO_WEB_TTS_KOKORO_FALLBACK_TO_VPS]');
+        // Switch provider on the fly to hit the VPS instead of local sidecar port
+        this.preferences.ttsProvider = 'kokoro_http';
       }
     } else if (isKokoro && isRemoteWeb && isEndpointLocalhost) {
-      console.log('[PULSO_WEB_TTS_KOKORO_SKIPPED_NOT_LOCAL]', { endpoint });
-      skipKokoro = true;
+      console.log('[PULSO_WEB_TTS_KOKORO_FALLBACK_TO_VPS]', { endpoint });
+      // Endpoint is handled automatically by getKokoroEndpoint returning the VPS IP
     }
 
     if (!isKokoro || skipKokoro) {
@@ -539,7 +644,8 @@ export class TTSAdapter {
       return;
     }
 
-    const voice = this.preferences.voiceName || 'pf_dora';
+    const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
+    const voice = this.preferences.voiceName || defaultVoice;
     const rate = this.preferences.rate;
     const provider = this.preferences.ttsProvider;
 
@@ -638,7 +744,8 @@ export class TTSAdapter {
         }
 
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
+        const audio = this.currentAudio || new Audio();
+        audio.src = url;
         audio.volume = this.preferences.volume;
         this.currentAudio = audio;
 
