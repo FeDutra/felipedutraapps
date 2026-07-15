@@ -477,7 +477,7 @@ export class TTSAdapter {
 
   private async getChunkAudio(chunkText: string, provider: TTSProvider, voice: string, rate: number, signal?: AbortSignal): Promise<Blob> {
     const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
-    const actualVoice = voice || defaultVoice;
+    let actualVoice = voice || defaultVoice;
     const actualRate = rate === 1.0 ? 0.95 : rate;
     
     const cacheKey = `${provider}:${actualVoice}:${actualRate}:${chunkText}`;
@@ -492,7 +492,7 @@ export class TTSAdapter {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: chunkText,
-          voice: actualVoice,
+          voice: actualVoice === 'pf_dora' ? 'af_bella' : actualVoice, // Hack mantido a pedido do usuário
           speed: actualRate,
           lang: 'pt-br'
         }),
@@ -521,7 +521,6 @@ export class TTSAdapter {
     }
 
     let endpoint = getKokoroEndpoint();
-    let actualVoice = voice || 'pf_dora';
     
     if (provider === 'local_kokoro_sidecar') {
       endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
