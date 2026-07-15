@@ -514,6 +514,13 @@ export default function LivePage() {
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
   const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
 
+  const [preferredModel, setPreferredModel] = React.useState<'405b' | 'deepseek'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('pulso-preferred-model') as '405b' | 'deepseek') || '405b';
+    }
+    return '405b';
+  });
+
   const [isArcaOpen, setIsArcaOpen] = React.useState(false);
   const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
   const [engineeringLogs, setEngineeringLogs] = React.useState<string[]>([]);
@@ -2395,7 +2402,8 @@ export default function LivePage() {
             content: m.text
           }));
 
-        result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity, chatHistory);
+        const modelId = preferredModel === 'deepseek' ? 'qwen/qwen3-32b' : 'openai/gpt-oss-120b';
+        result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity, chatHistory, modelId);
         console.log('[AGENT_ORCHESTRATOR]', result);
 
         // Se o Agente NÃO repassou pra Lótus e retornou uma resposta definitiva
@@ -4510,6 +4518,22 @@ ${data.transcription}`, {
             title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
           >
             {forceOpenClaw ? '( • )' : '(   )'}
+          </button>
+          
+          <button
+            onClick={() => {
+              const next = preferredModel === '405b' ? 'deepseek' : '405b';
+              setPreferredModel(next);
+              localStorage.setItem('pulso-preferred-model', next);
+            }}
+            className={`transition-all duration-300 bg-transparent border-none cursor-pointer outline-none flex items-center justify-center h-8 w-6 font-mono text-xs tracking-widest ${
+              preferredModel === 'deepseek'
+                ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] opacity-100 animate-pulse'
+                : 'text-[#fbf9f5]/30 hover:text-white/60 opacity-60'
+            }`}
+            title={preferredModel === 'deepseek' ? "Lótus: Qwen3 32B (Raciocínio)" : "Lótus: GPT-OSS 120B (Geral)"}
+          >
+            &gt;
           </button>
 
           <button
