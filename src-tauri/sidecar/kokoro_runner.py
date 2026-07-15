@@ -3,9 +3,17 @@ import json
 import io
 import traceback
 import soundfile as sf
+import numpy as np
+# Patch numpy.load to always allow pickle (required for Kokoro with Numpy 2)
+_original_load = np.load
+def patched_load(*args, **kwargs):
+    kwargs['allow_pickle'] = True
+    return _original_load(*args, **kwargs)
+np.load = patched_load
+
 from kokoro_onnx import Kokoro
 import base64
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import urllib.parse
 
 # Global model instance
@@ -72,7 +80,7 @@ def main():
     print("Model loaded successfully.")
 
     server_address = ('127.0.0.1', 14321)
-    httpd = HTTPServer(server_address, TTSHandler)
+    httpd = ThreadingHTTPServer(server_address, TTSHandler)
     print(f"Kokoro sidecar HTTP server running on http://127.0.0.1:14321")
     httpd.serve_forever()
 

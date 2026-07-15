@@ -79,8 +79,8 @@ export class TTSAdapter {
       }
     }
 
-    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http';
-    const wasKokoro = oldProvider === 'local_kokoro' || oldProvider === 'kokoro_http';
+    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http' || this.preferences.ttsProvider === 'local_kokoro_sidecar';
+    const wasKokoro = oldProvider === 'local_kokoro' || oldProvider === 'kokoro_http' || oldProvider === 'local_kokoro_sidecar';
     
     if (isKokoro && (!wasKokoro || oldVoice !== this.preferences.voiceName)) {
       this.warmup();
@@ -88,19 +88,25 @@ export class TTSAdapter {
   }
 
   public async warmup() {
-    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http';
+    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http' || this.preferences.ttsProvider === 'local_kokoro_sidecar';
     if (!isKokoro) return;
 
     console.log('[PULSO_TTS_KOKORO_WARMUP_START]');
     try {
-      const endpoint = getKokoroEndpoint();
+      const payloadText = this.normalizeTextForSpeech('ok');
+
+      let endpoint = 'http://191.101.70.136:14321/v1/audio/speech'; // Default Kokoro VPS
+      if (this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'local_kokoro_sidecar') {
+        endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+      }
+
       const voice = this.preferences.voiceName || 'pf_dora';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'kokoro',
-          input: 'ok',
+          input: payloadText,
           voice: voice,
           response_format: 'mp3',
           speed: 1.0
@@ -266,8 +272,8 @@ export class TTSAdapter {
     const normalized = this.normalizeTextForSpeech(text);
     if (!normalized) return [];
 
-    // Split by common sentence terminators (., ?, !, \n) while keeping the delimiter
-    const sentences = normalized.match(/[^.!?]+[.!?]*\s*/g) || [normalized];
+    // Split by common sentence terminators and pauses (., ?, !, ,, :) while keeping the delimiter
+    const sentences = normalized.match(/[^.!?,\:]+[.!?,\:]*\s*/g) || [normalized];
     
     const chunks: string[] = [];
     let firstChunk = '';
