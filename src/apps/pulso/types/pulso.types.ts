@@ -234,6 +234,8 @@ export interface PulsoContextNode {
   isDefault?: boolean;
   lastMessageAt?: Date;
   updatedAt?: Date;
+  runtimeStatus?: string;
+  errorMessage?: string | null;
 }
 
 /**

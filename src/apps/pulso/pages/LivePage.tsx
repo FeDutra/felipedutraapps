@@ -1489,7 +1489,7 @@ export default function LivePage() {
             });
           }
           
-          const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction';
+          const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction' || req.requestType === 'active_message';
           
           if (isConvCommand) {
             const status = req.status;
@@ -1653,7 +1653,7 @@ export default function LivePage() {
             });
           }
 
-          const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction';
+          const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction' || req.requestType === 'active_message';
 
           if (isConvCommand) {
             const status = req.status;

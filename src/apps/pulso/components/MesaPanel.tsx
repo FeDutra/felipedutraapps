@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { X, Copy, Download, Edit3, Save, Share2 } from 'lucide-react';
+import { X, Copy, Download, Edit3, Save, Share2, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export interface MesaArtifact {
@@ -16,9 +16,11 @@ interface MesaPanelProps {
   onClose: () => void;
   artifact: MesaArtifact | null;
   onSave?: (id: string, content: string) => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps) {
+export function MesaPanel({ isOpen, onClose, artifact, onSave, isCollapsed, onToggleCollapse }: MesaPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [isCopied, setIsCopied] = useState(false);
@@ -110,6 +112,16 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave }: MesaPanelProps)
             >
               <Download size={14} />
             </button>
+
+            {onToggleCollapse && (
+              <button 
+                onClick={onToggleCollapse}
+                className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
+                title="Recolher painel"
+              >
+                <ChevronRight size={16} />
+              </button>
+            )}
 
             <div className="w-px h-4 bg-white/10 mx-1"></div>
             

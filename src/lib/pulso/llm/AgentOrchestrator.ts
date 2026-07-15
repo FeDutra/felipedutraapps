@@ -738,9 +738,9 @@ class AgentOrchestrator {
 
   private getAvailableModel(): string | null {
     const models = [
+      'openai/gpt-oss-120b',
       'llama-3.3-70b-versatile',
-      'llama-3.1-70b-versatile',
-      'mixtral-8x7b-32768'
+      'llama-3.1-8b-instant'
     ];
     return models[0];
   }
@@ -757,7 +757,8 @@ class AgentOrchestrator {
     userMessage: string,
     onStatusUpdate?: (status: string) => void,
     injectedSystemPrompt?: string,
-    history?: ChatMessage[]
+    history?: ChatMessage[],
+    preferredModel?: string
   ): Promise<{ responseText: string; isLotusHandoff?: boolean }> {
     if (!this.apiKey) {
       return { responseText: '', isLotusHandoff: true };
@@ -828,7 +829,7 @@ class AgentOrchestrator {
       dataMode: process.env.NEXT_PUBLIC_PULSO_DATA_MODE || 'mock'
     });
 
-    const model = this.getAvailableModel() || 'llama-3.3-70b-versatile';
+    const model = preferredModel || this.getAvailableModel() || 'openai/gpt-oss-120b';
     const llm = this.createClient(model);
     console.log(`[AgentOrchestrator] Inicializado usando modelo: ${model}`);
 

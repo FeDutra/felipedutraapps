@@ -1,0 +1,300 @@
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={`flex flex-wrap gap-2 mt-2 ${!isLotus ? 'justify-end' : 'justify-start'}`}>
+                          {msg.attachments.map((att) => {
+                            if (att.type === 'image') {
+                              return (
+                                <div key={att.id} className="flex flex-col gap-1 w-full max-w-[200px]">
+                                  <div 
+                                    onClick={() => setPreviewImage(att)}
+                                    className="relative group cursor-pointer overflow-hidden rounded-lg border border-white/10 max-h-24"
+                                  >
+                                    <img 
+                                      src={att.url} 
+                                      alt={att.name} 
+                                      className="object-cover h-24 w-full transition-transform group-hover:scale-105"
+                                    />
+                                  </div>
+                                  <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                    {att.name}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            if (att.type === 'audio') {
+                              return (
+                                <div key={att.id} className="flex flex-col gap-1 w-full max-w-xs mt-1">
+                                  <audio 
+                                    controls 
+                                    src={att.url} 
+                                    className="w-full h-8 opacity-80 hover:opacity-100 transition-opacity" 
+                                  />
+                                  <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                    {att.name}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            if (att.type === 'pdf') {
+                              return (
+                                <div 
+                                  key={att.id}
+                                  onClick={() => setPreviewPdf(att)}
+                                  className="flex flex-col gap-1 w-full max-w-xs mt-1"
+                                >
+                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none transition-all text-left">
+                                    <FileText size={14} className="text-[#b8283e] shrink-0" />
+                                    <span className="text-[9px] text-[#fbf9f5]/40 uppercase tracking-widest font-medium">
+                                      pdf {att.sizeBytes ? `• ${(att.sizeBytes/1024).toFixed(1)}kb` : ''}
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                    {att.name}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            // Generic
+                            return (
+                              <a 
+                                key={att.id}
+                                href={att.url}
+                                download={att.name}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex flex-col gap-1 w-full max-w-xs mt-1"
+                              >
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer select-none transition-all text-left">
+                                  <Paperclip size={14} className="text-white/40 shrink-0" />
+                                  <span className="text-[9px] text-[#fbf9f5]/40 uppercase tracking-widest font-medium">
+                                    arquivo {att.sizeBytes ? `• ${(att.sizeBytes/1024).toFixed(1)}kb` : ''}
+                                  </span>
+                                </div>
+                                <span className="text-[9px] text-[#fbf9f5]/40 font-light truncate px-1 text-left" title={att.name}>
+                                  {att.name}
+                                </span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* User Message Timestamp + Reply button */}
+                      {!isLotus && msg.sender !== 'system' && (
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => setReplyTo({ id: msg.id, sender: msg.sender, text: msg.text })}
+                            className="text-[#fbf9f5]/30 hover:text-white/70 transition-colors bg-transparent border-none cursor-pointer outline-none"
+                            title="Responder"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="9 17 4 12 9 7" />
+                              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                            </svg>
+                          </button>
+                          <span className="text-[9px] text-[#fbf9f5]/40 select-none lowercase">
+                            {formatMessageTimestamp(msg.timestamp)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Lótus Handoff Proposals Forms / Actions if applicable */}
+                      {isLotus && msg.openclawResult && (
+                        <div className="flex flex-col gap-2 mt-2">
+                          {msg.openclawResult.actions && msg.openclawResult.actions.length > 0 && (
+                            <div className="flex flex-wrap gap-2 justify-start">
+                              {msg.openclawResult.actions.map((action: any, idx: number) => {
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      if (action.type === 'trigger_mutation' && action.payload) {
+                                        handleExecuteProposal({
+                                          ...msg,
+                                          openclawResult: {
+                                            ...msg.openclawResult,
+                                            proposedMutation: action.payload
+                                          }
+                                        } as any);
+                                      } else {
+                                        alert(`Ação acionada: ${action.label}`);
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
+                                  >
+                                    {action.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {msg.openclawResult.sourcesConsulted && msg.openclawResult.sourcesConsulted.length > 0 && (
+                            <div className="text-[9px] text-[#fbf9f5]/40 font-light mt-1 lowercase select-none">
+                              fontes consultadas: {msg.openclawResult.sourcesConsulted.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Lótus Message Action Bar */}
+                      {isLotus && (
+                        <MessageActions
+                          msg={msg}
+                          playingMsgId={playingMsgId}
+                          playingState={playingState}
+                          onHearClick={handleHearClick}
+                          onCopyText={handleCopyText}
+                          onCopyPackage={handleCopyPackage}
+                          onReply={(m) => setReplyTo({ id: m.id, sender: m.sender, text: m.text })}
+                        />
+                      )}
+
+                      {isLotus && msg.openclawResult && (
+                        <>
+                          {msg.handoffStatus === 'executed' && msg.createdEntityRef && (
+                            <p className="text-[10px] font-mono text-white bg-white/10 p-2 rounded-lg select-all border border-white/10 mt-2">
+                              tarefa criada: {msg.createdEntityRef}
+                            </p>
+                          )}
+
+                          {msg.handoffStatus === 'execution_blocked' && (
+                            <div className="p-3 bg-[#fbf9f5] border border-[#b8283e]/20 rounded-xl space-y-1.5 text-[#3d2f2f] mt-2">
+                              <p className="text-[9px] text-[#b8283e] font-bold lowercase">execução bloqueada</p>
+                              <p className="text-[10px] text-[#3d2f2f]/80 font-light leading-relaxed">{msg.executionError || 'responsável não designado.'}</p>
+                              
+                              {(msg.executionError || '').includes("ownerRefs") && (
+                                <button
+                                  onClick={() => handleExecuteProposal(msg, true)}
+                                  disabled={submittingExecutionId === msg.id}
+                                  className="text-[9px] font-bold text-[#b8283e] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none block mt-1"
+                                >
+                                  {submittingExecutionId === msg.id ? '[ executando... ]' : '[ confirmar como triagem & executar ]'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {msg.openclawResult.requiresHumanApproval && msg.handoffStatus === 'waiting_user_approval' && (
+                            <div className="p-3 bg-[#fbf9f5] border border-[#b8283e]/25 rounded-xl space-y-3 text-[#3d2f2f] mt-2">
+                              <span className="block text-[9px] font-bold text-[#b8283e] tracking-widest lowercase">decisão pendente</span>
+                              
+                              <input
+                                type="text"
+                                value={approvalNotes[msg.id] || ''}
+                                onChange={e => setApprovalNotes(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                                placeholder="nota (opcional)..."
+                                className="w-full text-xs text-[#3d2f2f] bg-transparent border-b border-[#3d2f2f]/20 focus:border-[#b8283e] py-1 px-0.5 outline-none placeholder-[#3d2f2f]/45 lowercase"
+                                disabled={submittingApprovalId === msg.id}
+                              />
+
+                              <div className="flex gap-4">
+                                <button
+                                  onClick={() => handleApproveProposal(msg)}
+                                  disabled={submittingApprovalId === msg.id}
+                                  className="text-[10px] font-bold text-[#b8283e] hover:text-[#9b4138] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                                >
+                                  {submittingApprovalId === msg.id ? '[ registrando... ]' : '[ aprovar proposta ]'}
+                                </button>
+                                <button
+                                  onClick={() => handleRejectProposal(msg)}
+                                  disabled={submittingApprovalId === msg.id}
+                                  className="text-[10px] font-light text-[#3d2f2f]/60 hover:text-[#3d2f2f] transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                                >
+                                  [ rejeitar ]
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {msg.handoffStatus === 'approved_by_user' && msg.openclawResult.proposedMutation?.type === 'create_task' && (
+                            <button
+                              onClick={() => handleExecuteProposal(msg, false)}
+                              disabled={submittingExecutionId === msg.id}
+                              className="w-full text-center py-2 bg-white/10 hover:bg-white/20 text-[10px] font-bold text-[#fbf9f5] border border-white/25 rounded-full transition-all lowercase cursor-pointer outline-none mt-2"
+                            >
+                              {submittingExecutionId === msg.id ? '[ executando... ]' : '[ executar criação de tarefa ]'}
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                    {isLotus && msg.interpretation?.handoff && !msg.openclawResult && (msg.handoffStatus === 'requested' || msg.handoffStatus === 'queued_for_openclaw') && (
+                      <div className="mt-2.5 pt-2 border-t border-white/10 text-left">
+                        {registeringForId === msg.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={openclawDraft}
+                              onChange={e => setOpenclawDraft(e.target.value)}
+                              placeholder="cole a resposta do openclaw (responseText)..."
+                              className="w-full text-xs text-[#fbf9f5] bg-white/10 border border-white/20 focus:border-white rounded-xl px-3 py-2 outline-none resize-none font-mono placeholder-white/30 lowercase"
+                              rows={3}
+                              disabled={submittingResponse}
+                            />
+                            <div className="flex justify-end gap-3">
+                              <button
+                                onClick={() => { setRegisteringForId(null); setOpenclawDraft(''); }}
+                                className="text-[9px] text-[#fbf9f5]/50 hover:text-white lowercase bg-transparent border-none cursor-pointer outline-none"
+                              >
+                                cancelar
+                              </button>
+                              <button
+                                onClick={() => handleRegisterOpenClawResponse(msg)}
+                                disabled={!openclawDraft.trim() || submittingResponse}
+                                className="text-[9px] font-bold text-white disabled:opacity-35 lowercase bg-transparent border-none cursor-pointer outline-none"
+                              >
+                                [ registrar ]
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setRegisteringForId(msg.id)}
+                            className="text-[9px] font-light text-[#fbf9f5]/60 hover:text-white transition-colors lowercase bg-transparent border-none cursor-pointer outline-none"
+                          >
+                            [ registrar retorno da lótus manualmente ]
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {isLatestRequestPending && (
+              <div className="flex justify-start w-full animate-pulse select-none text-left">
+                <div className="space-y-1">
+                  <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
+                  <span className="text-xs font-light text-[#fbf9f5]/40">pensando...</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Floating button to return to bottom */}
+          {showScrollButton && (
+            <button
+              onClick={() => scrollToBottom(true)}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 p-2 bg-[#fbf9f5]/15 hover:bg-[#fbf9f5]/25 border border-[#fbf9f5]/20 backdrop-blur-md rounded-full text-white/80 hover:text-white transition-all duration-300 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 animate-fade-in"
+              title="Voltar para a mensagem mais recente"
+            >
+              <ArrowDown size={14} className="animate-bounce" />
+            </button>
+          )}
+        </div>
+
+      )}
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#b8283e] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 pulso-transition ${
+          showAttachmentToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4 pointer-events-none'
+        }`}>
+          <Activity size={16} className="animate-pulse" />
+          <span className="text-xs font-semibold tracking-widest uppercase">função em desenvolvimento</span>
+        </div>
+      </main>

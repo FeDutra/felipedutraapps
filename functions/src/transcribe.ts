@@ -27,7 +27,7 @@ export const pulsoTranscribe = onRequest(
         return;
       }
 
-      const rawKey = process.env.GROQ_API_KEY || "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";
+      const rawKey = process.env.GROQ_API_KEY || "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";
       const apiKey = rawKey ? rawKey.trim() : "";
       
       if (!apiKey) {
@@ -43,10 +43,11 @@ export const pulsoTranscribe = onRequest(
       const extension = mimeType.includes("mp4") ? "m4a" : "webm";
       formData.append("file", blob, `audio.${extension}`);
       
-      formData.append("model", "whisper-large-v3-turbo");
+      formData.append("model", "whisper-large-v3");
       formData.append("language", "pt");
       formData.append("response_format", "json");
-      formData.append("temperature", "0.2");
+      formData.append("temperature", "0.0");
+      formData.append("prompt", "Gravação de áudio do usuário para o sistema Pulso. Transcrição precisa em português com pontuação correta.");
 
       const url = "https://api.groq.com/openai/v1/audio/transcriptions";
 

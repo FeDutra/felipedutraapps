@@ -212,6 +212,11 @@ async function main() {
   const now = new Date().toISOString();
   const newStatus = calculateStatus(parsed);
 
+  const canonicalAttachments =
+    parsed.attachments ||
+    parsed.responseAttachments ||
+    [];
+
   const openclawResult = {
     processedBy: "openclaw",
     processedAt: now,
@@ -228,6 +233,7 @@ async function main() {
     ...(parsed.proposedMutation && { proposedMutation: parsed.proposedMutation }),
     ...(parsed.errors && parsed.errors.length > 0 && { errors: parsed.errors }),
     ...(parsed.auditLog && { auditLog: parsed.auditLog }),
+    attachments: canonicalAttachments,
     statusTransition: newStatus,
   };
 

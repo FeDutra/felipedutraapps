@@ -42,8 +42,18 @@ async function main() {
     source: "pulso_active_simulator",
     sender: "lotus",
     status: "success",
-    message: "PULSO_ATIVO_UI_002 — mensagem ativa textual da Lótus para a PULSO.",
-    text: "PULSO_ATIVO_UI_002 — mensagem ativa textual da Lótus para a PULSO.",
+    message: "PULSO_ATIVO_UI_002 — mensagem ativa textual da Lótus para a PULSO, com anexo.",
+    text: "PULSO_ATIVO_UI_002 — mensagem ativa textual da Lótus para a PULSO, com anexo.",
+    attachments: [
+      {
+        id: "att-simulated-123",
+        name: "relatorio_teste.pdf",
+        mimeType: "application/pdf",
+        url: "https://example.com/relatorio_teste.pdf",
+        sizeBytes: 1048576,
+        createdAt: new Date().toISOString()
+      }
+    ],
     createdAt: new Date(),
     updatedAt: new Date()
   });

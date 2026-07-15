@@ -32,6 +32,10 @@
         "function": "pulsoTranscribe"
       },
       {
+        "source": "/api/pulso/process-meeting",
+        "function": "pulsoProcessMeeting"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

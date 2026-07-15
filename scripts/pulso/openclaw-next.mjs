@@ -129,8 +129,15 @@ function buildPackage(doc) {
       availableToLotus: a.availableToLotus ?? false,
       includedInline: a.includedInline ?? false,
       fullTextDeferred: a.fullTextDeferred ?? false,
-      extractionMode: a.extractionMode || "none"
+      extractionMode: a.extractionMode || "none",
+      url: a.url || "",
+      downloadUrl: a.downloadUrl || a.url || "",
+      publicUrl: a.publicUrl || a.url || "",
+      storagePath: a.storagePath || ""
     })),
+    mediaPath: d.mediaPath || "",
+    mediaType: d.mediaType || "",
+    mediaFileName: d.mediaFileName || "",
     sourcesNeeded: interpretation?.sourcesNeeded || [],
     entitiesMentioned: handoff?.entitiesMentioned || [],
     riskLevel: handoff?.riskLevel || interpretation?.riskLevel || "low",

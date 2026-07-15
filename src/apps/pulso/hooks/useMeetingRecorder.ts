@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { storage } from '../../../shared/lib/firebase/client';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -17,10 +17,15 @@ export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: 
   const sessionIdRef = useRef<string>('');
   const isStoppingRef = useRef(false);
 
+  const onChunkUploadedRef = useRef(onChunkUploaded);
+  useEffect(() => {
+    onChunkUploadedRef.current = onChunkUploaded;
+  }, [onChunkUploaded]);
+
   // Fatiar a cada 15 minutos para evitar o limite de 25MB do Groq e perdas de memória
   const CHUNK_DURATION_MS = 15 * 60 * 1000;
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (): Promise<boolean> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -52,8 +57,8 @@ export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: 
               const sRef = storageRef(storage, `pulso/chats/${contextId}/arca/recordings/${sessionIdRef.current}/${filename}`);
               await uploadBytes(sRef, blob);
               const url = await getDownloadURL(sRef);
-              if (onChunkUploaded) {
-                onChunkUploaded({ url, index: currentIndex, sessionId: sessionIdRef.current }, isFinal);
+              if (onChunkUploadedRef.current) {
+                onChunkUploadedRef.current({ url, index: currentIndex, sessionId: sessionIdRef.current }, isFinal);
               }
             } catch (err) {
               console.error("[MeetingRecorder] Erro no upload do chunk da reunião:", err);
@@ -75,18 +80,17 @@ export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: 
         }
       }, CHUNK_DURATION_MS);
 
+      return true;
     } catch (err) {
       console.error("[MeetingRecorder] Erro ao acessar microfone:", err);
       setIsRecording(false);
+      throw err;
     }
-  }, [contextId, onChunkUploaded]);
+  }, [contextId]);
 
   const stopRecording = useCallback(() => {
     return new Promise<{sessionId: string, finalChunkUrl?: string}>((resolve) => {
       isStoppingRef.current = true;
-      let finalChunkUrl: string | undefined = undefined;
-      
-      const originalOnChunk = onChunkUploaded;
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -120,7 +124,7 @@ export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: 
         resolve({ sessionId: sessionIdRef.current });
       }
     });
-  }, [onChunkUploaded]);
+  }, []);
 
   return { isRecording, startRecording, stopRecording, sessionId: sessionIdRef.current };
 }

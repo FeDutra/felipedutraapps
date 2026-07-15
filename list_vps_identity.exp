@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 60
+set password "N@tiL@uraFlor@Sofi@2208"
+spawn ssh -o StrictHostKeyChecking=no root@72.62.105.195 "ls -la /root/.openclaw/identity || ls -la /root/.openclaw"
+expect {
+    "password:" {
+        send "$password\r"
+        exp_continue
+    }
+    eof
+}

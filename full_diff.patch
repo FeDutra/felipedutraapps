@@ -1,0 +1,51 @@
+diff --git a/src/apps/pulso/pages/LivePage.tsx b/src/apps/pulso/pages/LivePage.tsx
+index 8dbb9554..1a30fb92 100644
+--- a/src/apps/pulso/pages/LivePage.tsx
++++ b/src/apps/pulso/pages/LivePage.tsx
+@@ -1,4 +1,5 @@
+ 'use client';
++import { MesaPanel } from '../components/MesaPanel';
+ import { listen } from '@tauri-apps/api/event';
+ 
+ import {
+@@ -3701,7 +3702,39 @@ export default function LivePage() {
+                       {/* Text body & blocks renderer */}
+                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
+                         <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
+-                          <MessageRenderer text={msg.text} sender={msg.sender} />
++                          {(() => {
++                            const docRegex = /<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i;
++                            const docMatch = msg.text.match(docRegex);
++                            let displayText = msg.text;
++                            let artifactData = null;
++                            if (docMatch) {
++                              artifactData = { id: docMatch[1], title: docMatch[2], content: docMatch[3].trim(), contextId: msg.contextId };
++                              displayText = msg.text.replace(docRegex, '').trim();
++                            }
++                            
++                            return (
++                              <div className="flex flex-col gap-3">
++                                {displayText && <MessageRenderer text={displayText} sender={msg.sender} />}
++                                {artifactData && (
++                                  <button
++                                    onClick={() => {
++                                      setActiveMesaArtifact(artifactData);
++                                      setIsMesaOpen(true);
++                                    }}
++                                    className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all w-fit cursor-pointer outline-none group text-left"
++                                  >
++                                    <div className="p-2 bg-black/40 rounded-lg group-hover:bg-black/60 transition-colors">
++                                      <FileText size={16} className="text-white/70" />
++                                    </div>
++                                    <div className="flex flex-col">
++                                      <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Documento Gerado</span>
++                                      <span className="text-sm font-medium text-white">{artifactData.title}</span>
++                                    </div>
++                                  </button>
++                                )}
++                              </div>
++                            );
++                          })()}
+                         </div>
+                       )}
+ 

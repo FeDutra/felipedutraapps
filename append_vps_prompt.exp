@@ -1,0 +1,12 @@
+#!/usr/bin/expect -f
+set timeout 60
+set password "N@tiL@uraFlor@Sofi@2208"
+set command "echo '\n## A MESA (CRIANDO ARTEFATOS E DOCUMENTOS)\n- Se você for gerar um documento estruturado, longo, com markdown (ex: Resumo Executivo, Mapa Mestre, Relatório, Código-fonte), NÃO jogue o texto solto no chat.\n- Sempre envolva a totalidade do documento em tags XML \`<pulso-doc id=\"identificador-unico\" title=\"Título Elegante\">\` e \`</pulso-doc>\`.\n- A interface da PULSO irá renderizar esse documento em um painel visual dividido (\"A Mesa\") para o Fê poder interagir com ele.\n- Exemplo:\n\`\`\`xml\n<pulso-doc id=\"mapa-mestre\" title=\"Mapa Mestre: Faixa x Conto\">\n# Estrutura do Álbum\n- Faixa 1 -> Conto A -> Rito Y\n...\n</pulso-doc>\n\`\`\`\n' >> /root/.openclaw/workspace/BOOT.md"
+spawn ssh -o StrictHostKeyChecking=no root@72.62.105.195 $command
+expect {
+    "password:" {
+        send "$password\r"
+        exp_continue
+    }
+    eof
+}

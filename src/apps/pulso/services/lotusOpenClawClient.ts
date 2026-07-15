@@ -37,6 +37,10 @@ export interface LotusSendPayload {
   contextId?: string;
   chatId?: string;
   openclawSessionKey?: string;
+  attachments?: any[];
+  mediaPath?: string;
+  mediaType?: string;
+  mediaFileName?: string;
 }
 
 const cleanUndefined = (obj: any): any => {
@@ -85,7 +89,11 @@ export const lotusOpenClawClient = {
       handoff: {
         target: "openclaw",
         mode: "proposal_only"
-      }
+      },
+      attachments: payload.attachments || null,
+      mediaPath: payload.mediaPath || null,
+      mediaType: payload.mediaType || null,
+      mediaFileName: payload.mediaFileName || null
     };
 
     const cleanPayload = cleanUndefined(reqPayload);

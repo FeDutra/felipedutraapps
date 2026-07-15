@@ -1,0 +1,14 @@
+[Unit]
+Description=F5-TTS FastAPI Server
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root
+Environment=PATH=/root/f5-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/root/f5-venv/bin/python /root/f5_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
