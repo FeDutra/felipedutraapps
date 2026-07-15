@@ -110,9 +110,6 @@ export class TTSAdapter {
       let endpoint = getKokoroEndpoint();
       if (this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'local_kokoro_sidecar') {
         endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
-        if (voice === 'pf_dora') {
-          voice = 'af_bella';
-        }
       }
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -492,7 +489,7 @@ export class TTSAdapter {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: chunkText,
-          voice: actualVoice === 'pf_dora' ? 'af_bella' : actualVoice, // Hack mantido a pedido do usuário
+          voice: actualVoice,
           speed: actualRate,
           lang: 'pt-br'
         }),
@@ -524,9 +521,6 @@ export class TTSAdapter {
     
     if (provider === 'local_kokoro_sidecar') {
       endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
-      if (actualVoice === 'pf_dora') {
-        actualVoice = 'af_bella'; // Hack mantido a pedido do usuário
-      }
     }
 
     const response = await fetch(endpoint, {

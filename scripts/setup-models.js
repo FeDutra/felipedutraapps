@@ -10,11 +10,11 @@ const FILES = [
   },
   {
     name: 'voices.bin',
-    url: 'https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/voices.bin'
+    url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin'
   },
   {
     name: 'voices.json',
-    url: 'https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/voices.json'
+    url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices.json'
   }
 ];
 
