@@ -82,8 +82,8 @@ pub fn run() {
 
       // Start Kokoro HTTP server Sidecar
       let resource_dir = app.path().resource_dir().expect("Failed to get resource dir");
-      let model_path = resource_dir.join("kokoro-v1.0.onnx");
-      let voices_path = resource_dir.join("voices-v1.0.bin");
+      let model_path = resource_dir.join("kokoro-v0_19.onnx");
+      let voices_path = resource_dir.join("voices.bin");
 
       println!("Starting Kokoro sidecar with model: {:?}", model_path);
 
