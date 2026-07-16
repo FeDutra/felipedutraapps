@@ -518,10 +518,6 @@ export class TTSAdapter {
     }
 
     let endpoint = getKokoroEndpoint();
-    
-    if (provider === 'local_kokoro_sidecar') {
-      endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
-    }
 
     const response = await fetch(endpoint, {
       method: 'POST',

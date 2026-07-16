@@ -617,6 +617,8 @@ interface Message {
   contextId?: string | null;
   attachments?: Attachment[];
   replyTo?: { id: string; sender: string; text: string } | null;
+  isProgressUpdate?: boolean;
+  phase?: string | null;
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence' | 'recording_meeting';
@@ -909,20 +911,6 @@ export default function LivePage() {
   const pageLoadTimeRef = React.useRef(new Date());
   const [lastReadTimes, setLastReadTimes] = React.useState<Record<string, string>>({});
   
-  const unreadContexts = React.useMemo(() => {
-    const unreads: Record<string, boolean> = {};
-    messages.forEach(msg => {
-      if (msg.sender === 'lotus' && msg.contextId && msg.id !== 'welcome') {
-        const lastRead = lastReadTimes[msg.contextId] || pageLoadTimeRef.current.toISOString();
-        const msgTime = new Date(msg.timestamp).getTime();
-        if (msgTime > new Date(lastRead).getTime()) {
-          unreads[msg.contextId] = true;
-        }
-      }
-    });
-    return unreads;
-  }, [messages, lastReadTimes]);
-
   const markContextAsRead = React.useCallback((contextId: string) => {
     const nowStr = new Date().toISOString();
     setLastReadTimes(prev => {
@@ -960,6 +948,23 @@ export default function LivePage() {
 
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(getInitialContextNode);
   const activeContextNodeRef = React.useRef(activeContextNode);
+
+  const unreadContexts = React.useMemo(() => {
+    const unreads: Record<string, boolean> = {};
+    allContextNodes.forEach(node => {
+      if (node.contextId) {
+        const lastRead = lastReadTimes[node.contextId] || pageLoadTimeRef.current.toISOString();
+        const lastMsgAt = node.lastMessageAt || node.updatedAt;
+        if (lastMsgAt) {
+          const lastMsgTime = new Date(lastMsgAt).getTime();
+          if (node.contextId !== activeContextNode.contextId && lastMsgTime > new Date(lastRead).getTime()) {
+            unreads[node.contextId] = true;
+          }
+        }
+      }
+    });
+    return unreads;
+  }, [allContextNodes, lastReadTimes, activeContextNode.contextId]);
 
   // ── Session Restore (runs once when sessions finish loading) ──────────────
   // IMPORTANT: This ref tracks whether we already restored once, so the persist
@@ -1053,6 +1058,16 @@ export default function LivePage() {
       return msg.contextId === activeContextNode.contextId;
     });
   }, [messages, activeContextNode.contextId]);
+
+  const latestProgressUpdate = React.useMemo(() => {
+    const lotusMsgs = currentMessages.filter(m => m.sender === 'lotus');
+    if (lotusMsgs.length === 0) return null;
+    const lastMsg = lotusMsgs[lotusMsgs.length - 1];
+    if (lastMsg.isProgressUpdate) {
+      return lastMsg;
+    }
+    return null;
+  }, [currentMessages]);
 
   const setContextTyping = (contextId: string, typing: boolean) => {
     setContextTypingStates(prev => ({ ...prev, [contextId]: typing }));
@@ -1823,7 +1838,7 @@ export default function LivePage() {
 
         const chatHistory: Message[] = [];
         const commandRequests = safeArray(allRequests)
-          .filter((req: any) => req && (req.requestType === 'conversation_command' || req.requestType === 'active_message' || req.requestType === 'local_interaction') && req.archived !== true && req.contextId === activeContextNode.contextId)
+          .filter((req: any) => req && (req.requestType === 'conversation_command' || req.requestType === 'active_message' || req.requestType === 'local_interaction' || req.requestType === 'progress_update') && req.archived !== true && req.contextId === activeContextNode.contextId)
           .sort((a, b) => {
             const timeA = safeGetTime(a.requestedAt) || a.clientCreatedAtMs || safeGetTime(a.createdAt) || safeGetTime(a.updatedAt) || 0;
             const timeB = safeGetTime(b.requestedAt) || b.clientCreatedAtMs || safeGetTime(b.createdAt) || safeGetTime(b.updatedAt) || 0;
@@ -1833,13 +1848,25 @@ export default function LivePage() {
         commandRequests.forEach((req: any) => {
           const reqTime = safeConvertToDate(req.requestedAt) || new Date();
           
-          if (req.requestType !== "active_message") {
+          if (req.requestType !== "active_message" && req.requestType !== "progress_update") {
             chatHistory.push({
               id: `user-${req.id || Math.random()}`,
               sender: 'user',
               text: req.input || req.rawInput || req.summary || req.title || '',
               timestamp: reqTime,
               contextId: req.contextId || null
+            });
+          }
+
+          if (req.requestType === "progress_update") {
+            chatHistory.push({
+              id: `lotus-progress-${req.id || Math.random()}`,
+              sender: 'lotus',
+              text: req.text || req.message || '',
+              timestamp: reqTime,
+              contextId: req.contextId || null,
+              isProgressUpdate: true,
+              phase: req.meta?.phase || null
             });
           }
           
@@ -1922,7 +1949,7 @@ export default function LivePage() {
       console.log('[PULSO_ONSNAPSHOT] Iniciando escuta real-time do Firestore para contexto:', activeContextNode.contextId);
       const q = query(
         collection(db, firestorePaths.requests()),
-        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"]),
+        where("requestType", "in", ["conversation_command", "active_message", "local_interaction", "progress_update"]),
         where("contextId", "==", activeContextNode.contextId)
       );
 
@@ -1991,7 +2018,7 @@ export default function LivePage() {
             }
           }
 
-          if (req.requestType !== "active_message") {
+          if (req.requestType !== "active_message" && req.requestType !== "progress_update") {
             const atts = Array.isArray(req.attachments) ? req.attachments.map((a: any) => ({
               ...a,
               createdAt: a.createdAt ? new Date(a.createdAt) : new Date()
@@ -2004,6 +2031,18 @@ export default function LivePage() {
               timestamp: reqTime,
               contextId: req.contextId || null,
               attachments: atts
+            });
+          }
+
+          if (req.requestType === "progress_update") {
+            chatHistory.push({
+              id: `lotus-progress-${req.id}`,
+              sender: 'lotus',
+              text: req.text || req.message || '',
+              timestamp: reqTime,
+              contextId: req.contextId || null,
+              isProgressUpdate: true,
+              phase: req.meta?.phase || null
             });
           }
 
@@ -4070,6 +4109,19 @@ ${data.transcription}`, {
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
             >
               {currentMessages.map((msg) => {
+                if (msg.isProgressUpdate) {
+                  return (
+                    <div 
+                      key={msg.id} 
+                      className="flex w-full justify-start animate-fade-in pl-3 py-1"
+                    >
+                      <div className="flex items-center gap-2.5 text-xs text-[#fbf9f5]/40 font-light select-none italic tracking-wide">
+                        <span className="h-1 w-1 rounded-full bg-[#fbf9f5]/40 animate-pulse" />
+                        <span>lótus: {msg.text}</span>
+                      </div>
+                    </div>
+                  );
+                }
                 const isLotus = msg.sender === 'lotus';
                 if (isLotus && !msg.text) return null;
                 return (
@@ -4642,6 +4694,13 @@ ${data.transcription}`, {
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
+          </div>
+        )}
+
+        {latestProgressUpdate && (
+          <div className="w-full px-1 py-1.5 flex items-center gap-2 text-xs text-[#fbf9f5]/50 italic font-light animate-pulse select-none lowercase">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#fbf9f5]/55 shadow-[0_0_8px_rgba(251,249,245,0.7)]" />
+            <span>lótus está: {latestProgressUpdate.text}</span>
           </div>
         )}
 
