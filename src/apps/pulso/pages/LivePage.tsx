@@ -2253,6 +2253,16 @@ export default function LivePage() {
 
                 if (isSame) {
                   playNotificationSound(true);
+                  // Atualiza lastMessageAt na sessão para que o watchdog de inativos
+                  // possa detectar quando ESTA sessão receber mensagem enquanto inativa
+                  if (db && activeContext.contextId && msg.contextId) {
+                    const sessionDocRef = doc(db, firestorePaths.session(msg.contextId));
+                    updateDoc(sessionDocRef, {
+                      lastMessageAt: new Date().toISOString(),
+                    }).catch((err: any) => {
+                      console.warn('[PULSO_SESSION_TIMESTAMP] Failed to update lastMessageAt:', err);
+                    });
+                  }
                 } else {
                   playNotificationSound(false);
                 }
@@ -4223,9 +4233,19 @@ ${data.transcription}`, {
         </div>
       </div>
 
-        <main className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative transition-all duration-1000 ease-in-out pointer-events-auto z-10 ${
-          isAtelieActive || isEstudioActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : `overflow-hidden ${(isMesaOpen && !isMesaCollapsed) ? 'max-w-[50vw] w-full !ml-0 !mr-auto pl-16 md:pl-28 pr-4' : 'max-w-5xl w-full mx-auto'} mt-2 md:mt-6 mb-2 md:mb-4 pb-28`
-        }`}>
+        <main
+          className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative pointer-events-auto z-10 ${
+            isAtelieActive || isEstudioActive
+              ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0'
+              : 'overflow-hidden max-w-5xl w-full mt-2 md:mt-6 mb-2 md:mb-4 pb-28'
+          }`}
+          style={{
+            transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
+              ? 'translateX(calc(-25vw + 2rem))'
+              : 'translateX(0)',
+            transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
           
           {/* Atelie Workspace Container nested within main */}
           <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
@@ -4768,7 +4788,8 @@ ${data.transcription}`, {
             </button>
           )}
 
-<footer className={`absolute bottom-0 ${(isMesaOpen && !isMesaCollapsed && windowWidth >= 768) ? 'left-0 w-[50vw] pl-16 md:pl-28 pr-4' : 'left-1/2 -translate-x-1/2 w-full max-w-xl'} flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
+<footer
+        className={`absolute bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
