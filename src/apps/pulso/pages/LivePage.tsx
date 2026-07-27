@@ -380,6 +380,12 @@ const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
   loading: () => <div className="p-8 text-white/50 text-xs font-mono">Carregando ateliê...</div>
 });
 
+const EstudioWorkspace = dynamic(() => import('../components/EstudioWorkspace'), {
+  ssr: false,
+  loading: () => <div className="p-8 text-white/50 text-xs font-mono">Carregando estúdio...</div>
+});
+
+
 
 interface Attachment {
   id: string;
@@ -752,6 +758,7 @@ export default function LivePage() {
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
+  const [isEstudioActive, setIsEstudioActive] = React.useState(false);
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
   const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
   const [isMesaCollapsed, setIsMesaCollapsed] = React.useState(false);
@@ -1059,14 +1066,43 @@ export default function LivePage() {
     });
   }, [messages, activeContextNode.contextId]);
 
-  const latestProgressUpdate = React.useMemo(() => {
+  const [latestProgressUpdate, setLatestProgressUpdate] = React.useState<Message | null>(null);
+
+  React.useEffect(() => {
+    setLatestProgressUpdate(null);
+  }, [activeContextNode.contextId]);
+
+  React.useEffect(() => {
     const lotusMsgs = currentMessages.filter(m => m.sender === 'lotus');
-    if (lotusMsgs.length === 0) return null;
-    const lastMsg = lotusMsgs[lotusMsgs.length - 1];
-    if (lastMsg.isProgressUpdate) {
-      return lastMsg;
+    if (lotusMsgs.length === 0) {
+      setLatestProgressUpdate(null);
+      return;
     }
-    return null;
+    const lastMsg = lotusMsgs[lotusMsgs.length - 1];
+    
+    if (lastMsg.isProgressUpdate) {
+      const msgTime = lastMsg.timestamp instanceof Date 
+        ? lastMsg.timestamp.getTime() 
+        : new Date(lastMsg.timestamp).getTime();
+      const now = Date.now();
+      const age = now - msgTime;
+      const TTL = 90000; // 90 seconds
+      
+      if (age < TTL) {
+        setLatestProgressUpdate(lastMsg);
+        
+        const timeLeft = TTL - age;
+        const timer = setTimeout(() => {
+          setLatestProgressUpdate(null);
+        }, timeLeft);
+        
+        return () => clearTimeout(timer);
+      } else {
+        setLatestProgressUpdate(null);
+      }
+    } else {
+      setLatestProgressUpdate(null);
+    }
   }, [currentMessages]);
 
   const setContextTyping = (contextId: string, typing: boolean) => {
@@ -2335,6 +2371,96 @@ export default function LivePage() {
     };
   }, [db, loading, activeContextNode]);
 
+  // ── Global Session Watchdog: notificações para chats inativos ────────────
+  // O listener principal (acima) só escuta o contexto ativo. Portanto, quando
+  // a Lótus responde em outro chat, nenhuma notificação era disparada.
+  // Este listener paralelo observa lastMessageAt em TODAS as sessões e compara
+  // com o lastReadTimes local para detectar mensagens novas em chats fora do foco.
+  const inactiveNotifSeenRef = React.useRef<Record<string, string>>({});
+  React.useEffect(() => {
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (!isFirestore || !db || !sessionsLoaded) return;
+
+    let unsubSessions: (() => void) | null = null;
+
+    try {
+      unsubSessions = onSnapshot(
+        collection(db, firestorePaths.sessions()),
+        (snapshot) => {
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as Session;
+            const contextId = docSnap.id;
+
+            if (!contextId || data.archived) return;
+
+            // Ignora o contexto que o usuário está olhando agora
+            if (contextId === activeContextNodeRef.current.contextId) return;
+
+            const lastMsgAtRaw = data.lastMessageAt;
+            if (!lastMsgAtRaw) return;
+
+            const lastMsgAtStr = typeof lastMsgAtRaw === 'object' && typeof (lastMsgAtRaw as any).toDate === 'function'
+              ? (lastMsgAtRaw as any).toDate().toISOString()
+              : String(lastMsgAtRaw);
+
+            // Já vimos essa versão desta sessão? (evita re-disparar no mesmo lastMessageAt)
+            if (inactiveNotifSeenRef.current[contextId] === lastMsgAtStr) return;
+
+            const lastMsgTime = new Date(lastMsgAtStr).getTime();
+
+            // Apenas mensagens após o carregamento da página
+            if (lastMsgTime <= pageLoadTimeRef.current.getTime()) {
+              inactiveNotifSeenRef.current[contextId] = lastMsgAtStr;
+              return;
+            }
+
+            // Apenas se ainda não foi lido
+            const lastReadStr = lastReadTimes[contextId] || pageLoadTimeRef.current.toISOString();
+            const lastReadTime = new Date(lastReadStr).getTime();
+            if (lastMsgTime <= lastReadTime) {
+              inactiveNotifSeenRef.current[contextId] = lastMsgAtStr;
+              return;
+            }
+
+            // Marca como visto para não repetir
+            inactiveNotifSeenRef.current[contextId] = lastMsgAtStr;
+
+            // ── Disparo: Som de chat inativo ────────────────────────────
+            console.log('[PULSO_INACTIVE_NOTIF] Nova mensagem em chat inativo:', contextId);
+            playNotificationSound(false);
+
+            // ── Disparo: Notificação de Desktop ─────────────────────────
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              const sessionsList = sessionsRef.current;
+              const session = sessionsList.find(s => s.contextId === contextId);
+              const chatLabel = session?.label || contextId;
+              const areaLabel = session?.areaId
+                ? (AREA_NAMES[session.areaId] || session.areaId.replace('area_', ''))
+                : 'livre';
+              try {
+                new window.Notification(`Lótus — [${areaLabel}] ${chatLabel}`, {
+                  body: 'Nova mensagem recebida.',
+                  tag: `inactive_${contextId}_${lastMsgAtStr}`,
+                });
+              } catch (err) {
+                console.warn('[PULSO_INACTIVE_NOTIF] Desktop notification failed:', err);
+              }
+            }
+          });
+        },
+        (err) => {
+          console.error('[PULSO_INACTIVE_NOTIF] Sessions watchdog error:', err);
+        }
+      );
+    } catch (err) {
+      console.error('[PULSO_INACTIVE_NOTIF] Failed to start sessions watchdog:', err);
+    }
+
+    return () => {
+      if (unsubSessions) unsubSessions();
+    };
+  }, [db, sessionsLoaded, lastReadTimes, activeContextNode.contextId]);
+
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
     options?: {
@@ -2665,6 +2791,44 @@ export default function LivePage() {
     }
   };
 
+  const emitProgressUpdate = React.useCallback(async (
+    text: string,
+    options?: {
+      originRequestId?: string;
+      phase?: 'starting' | 'diagnosis' | 'execution' | 'blocked' | 'finalizing';
+    }
+  ) => {
+    if (!db || !activeContextNode.contextId || activeContextNode.contextId === 'loading') return;
+    
+    try {
+      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+      
+      const phase = options?.phase || 'execution';
+      const originRequestId = options?.originRequestId || `local_progress_${Date.now()}`;
+
+      await addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
+        requestType: "progress_update",
+        type: "progress_update",
+        status: "progress",
+        sender: "lotus",
+        contextId: activeContextNode.contextId,
+        archived: false,
+        source: "openclaw_progress_delivery",
+        text: text,
+        message: text,
+        meta: {
+          originRequestId,
+          phase,
+          final: false
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      console.log(`[PULSO_EMIT_PROGRESS] ${text} (phase: ${phase})`);
+    } catch (err) {
+      console.warn('Falha ao emitir progress_update local:', err);
+    }
+  }, [db, activeContextNode.contextId]);
 
   const isSubmittingRef = React.useRef(false);
 
@@ -2778,6 +2942,7 @@ export default function LivePage() {
             ttsAdapter.speak(status); // Fala o status (ex: "Buscando no Notion")
           }
           // Pode também jogar no log visual se quisermos no futuro
+          emitProgressUpdate(status, { originRequestId: preGeneratedReqId });
         };
 
         // Formata o histórico de mensagens do chat ativo para o LLM
@@ -3738,20 +3903,21 @@ ${data.transcription}`, {
       />
 
       {/* Botão sutil de saída do Modo Foco ou Ateliê */}
-      <div className={`fixed top-8 right-8 z-30 pulso-transition ${(presenceMode || isAtelieActive) ? 'pulso-visible' : 'pulso-hidden-up'}`}>
+      <div className={`fixed top-8 right-8 z-30 pulso-transition ${(presenceMode || isAtelieActive || isEstudioActive) ? 'pulso-visible' : 'pulso-hidden-up'}`}>
         <button
           onClick={(e) => { 
             e.stopPropagation(); 
             if (presenceMode) exitPresenceMode(); 
             if (isAtelieActive) setIsAtelieActive(false);
+            if (isEstudioActive) setIsEstudioActive(false);
           }}
           className="text-[10px] font-light tracking-widest text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80 transition-colors lowercase bg-transparent border-none outline-none cursor-pointer"
         >
-          {isAtelieActive ? '[ sair do ateliê ]' : '[ sair do foco ]'}
+          {isAtelieActive ? '[ sair do ateliê ]' : isEstudioActive ? '[ sair do estúdio ]' : '[ sair do foco ]'}
         </button>
       </div>
       
-      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto relative z-20 select-none pulso-transition ${presenceMode || isAtelieActive ? 'pulso-hidden-up' : 'pulso-visible'}`}>
+      <header className={`flex justify-between items-center w-full max-w-4xl mx-auto relative z-20 select-none pulso-transition ${presenceMode || isAtelieActive || isEstudioActive ? 'pulso-hidden-up' : 'pulso-visible'}`}>
         <div className="flex items-center gap-2 md:gap-3">
           {/* Hamburger button on mobile */}
           <button 
@@ -3800,7 +3966,12 @@ ${data.transcription}`, {
           <button 
             onClick={(e) => { 
               e.stopPropagation(); 
-              setIsEngineeringActive(!isEngineeringActive); 
+              const nextState = !isEngineeringActive;
+              setIsEngineeringActive(nextState); 
+              if (nextState) {
+                setIsAtelieActive(false);
+                setIsEstudioActive(false);
+              }
             }}
             className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isEngineeringActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
@@ -3811,13 +3982,34 @@ ${data.transcription}`, {
           <button 
             onClick={(e) => { 
               e.stopPropagation(); 
-              setIsAtelieActive(!isAtelieActive); 
+              const nextState = !isAtelieActive;
+              setIsAtelieActive(nextState); 
+              if (nextState) {
+                setIsEngineeringActive(false);
+                setIsEstudioActive(false);
+              }
             }}
             className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isAtelieActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
           >
             <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
+          </button>
+          <button 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              const nextState = !isEstudioActive;
+              setIsEstudioActive(nextState); 
+              if (nextState) {
+                setIsEngineeringActive(false);
+                setIsAtelieActive(false);
+              }
+            }}
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+              isEstudioActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
+            }`}
+          >
+            <span>[ estúdio ]</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -3848,7 +4040,7 @@ ${data.transcription}`, {
             </button>
             
             {isHeaderMenuOpen && !contextSurfaceVariant && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-transparent backdrop-blur-xl z-50 text-left transition-all duration-300">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-transparent backdrop-blur-xl z-[60] text-left transition-all duration-300">
                 <div className="flex flex-col text-[10px] font-light tracking-widest text-[#fbf9f5] lowercase">
                   <button 
                     onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
@@ -4032,7 +4224,7 @@ ${data.transcription}`, {
       </div>
 
         <main className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative transition-all duration-1000 ease-in-out pointer-events-auto z-10 ${
-          isAtelieActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : `overflow-hidden ${isMesaOpen ? 'max-w-[50vw] w-full !ml-0 !mr-auto pl-16 md:pl-28 pr-4' : 'max-w-5xl w-full mx-auto'} mt-2 md:mt-6 mb-2 md:mb-4 pb-28`
+          isAtelieActive || isEstudioActive ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0' : `overflow-hidden ${(isMesaOpen && !isMesaCollapsed) ? 'max-w-[50vw] w-full !ml-0 !mr-auto pl-16 md:pl-28 pr-4' : 'max-w-5xl w-full mx-auto'} mt-2 md:mt-6 mb-2 md:mb-4 pb-28`
         }`}>
           
           {/* Atelie Workspace Container nested within main */}
@@ -4041,10 +4233,17 @@ ${data.transcription}`, {
           }`}>
             <AtelieWorkspace activeContextNode={activeContextNode} isActive={isAtelieActive} />
           </div>
+
+          {/* Estudio Workspace Container nested within main */}
+          <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
+            isEstudioActive ? 'opacity-100 filter-none pointer-events-auto' : 'opacity-0 blur-md pointer-events-none'
+          }`}>
+            <EstudioWorkspace activeContextNode={activeContextNode} isActive={isEstudioActive} />
+          </div>
           
           <div 
             onClick={togglePresenceMode}
-            className={isAtelieActive
+            className={isAtelieActive || isEstudioActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
               : `relative w-14 h-14 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
@@ -4054,7 +4253,7 @@ ${data.transcription}`, {
             }
           >
             <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-              presenceMode && !isAtelieActive ? 'scale-[0.75] md:scale-100' : 'scale-[0.12] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
+              presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.12] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
             }`}>
               <div 
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
@@ -4068,8 +4267,8 @@ ${data.transcription}`, {
             </div>
           </div>
 
-          {(!isAtelieActive || showAtelieChatHistory) && (
-            <div className={`transition-all duration-500 ${isMesaOpen ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
+          {(!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory)) && (
+            <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
               
               <div 
                 className={`flex flex-col relative transition-all duration-300 ${
@@ -4539,7 +4738,7 @@ ${data.transcription}`, {
       
           {/* Mesa Panel (Split Screen) - Global Right Half */}
           {isMesaOpen && activeMesaArtifact && (
-            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[60] transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
+            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-50 transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
               windowWidth < 768 
                 ? `left-0 px-4 w-full ${isMesaCollapsed ? 'transform translate-x-full pointer-events-none' : ''}` 
                 : `w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] ${isMesaCollapsed ? 'transform translate-x-[calc(100%-12px)] md:translate-x-[calc(100%-16px)]' : ''}`
@@ -4569,7 +4768,7 @@ ${data.transcription}`, {
             </button>
           )}
 
-<footer className={`absolute bottom-0 ${(isMesaOpen && windowWidth >= 768) ? 'left-0 w-[50vw] pl-16 md:pl-28 pr-4' : 'left-1/2 -translate-x-1/2 w-full max-w-xl'} flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
+<footer className={`absolute bottom-0 ${(isMesaOpen && !isMesaCollapsed && windowWidth >= 768) ? 'left-0 w-[50vw] pl-16 md:pl-28 pr-4' : 'left-1/2 -translate-x-1/2 w-full max-w-xl'} flex flex-col items-center z-30 select-none pulso-transition max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}>
         
