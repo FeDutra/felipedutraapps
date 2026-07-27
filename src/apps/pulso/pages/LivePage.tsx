@@ -3987,13 +3987,11 @@ ${data.transcription}`, {
                 setIsEstudioActive(false);
               }
             }}
-            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isEngineeringActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
-            title="Engenharia"
           >
-            <span className="hidden md:inline">[ engenharia ]</span>
-            <span className="md:hidden font-mono">[ ⏣ ]</span>
+            <span>[ engenharia ]</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -4005,13 +4003,11 @@ ${data.transcription}`, {
                 setIsEstudioActive(false);
               }
             }}
-            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isAtelieActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
-            title="Ateliê"
           >
-            <span className="hidden md:inline">{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
-            <span className="md:hidden font-mono">{isAtelieActive ? '[ ⏃ ]' : '[ ⏃ ]'}</span>
+            <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -4023,26 +4019,22 @@ ${data.transcription}`, {
                 setIsAtelieActive(false);
               }
             }}
-            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isEstudioActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
-            title="Estúdio"
           >
-            <span className="hidden md:inline">[ estúdio ]</span>
-            <span className="md:hidden font-mono">[ ⎔ ]</span>
+            <span>[ estúdio ]</span>
           </button>
           <button 
             onClick={(e) => { 
               e.stopPropagation(); 
               setIsArcaOpen(!isArcaOpen); 
             }}
-            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isArcaOpen ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
-            title="Arca"
           >
-            <span className="hidden md:inline">[ arca ]</span>
-            <span className="md:hidden font-mono">[ ⬡ ]</span>
+            <span>[ arca ]</span>
           </button>
           
           <div className="relative" ref={headerMenuRef}>
@@ -4064,6 +4056,31 @@ ${data.transcription}`, {
             {isHeaderMenuOpen && !contextSurfaceVariant && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-transparent backdrop-blur-xl z-[60] text-left transition-all duration-300">
                 <div className="flex flex-col text-[10px] font-light tracking-widest text-[#fbf9f5] lowercase">
+                  {/* Mobile-only navigation items */}
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEngineeringActive(!isEngineeringActive); if (!isEngineeringActive) { setIsAtelieActive(false); setIsEstudioActive(false); } }}
+                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <span>[ engenharia ]</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsAtelieActive(!isAtelieActive); if (!isAtelieActive) { setIsEngineeringActive(false); setIsEstudioActive(false); } }}
+                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEstudioActive(!isEstudioActive); if (!isEstudioActive) { setIsEngineeringActive(false); setIsAtelieActive(false); } }}
+                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <span>[ estúdio ]</span>
+                  </button>
+                  <button 
+                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsArcaOpen(!isArcaOpen); }}
+                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
+                  >
+                    <span>[ arca ]</span>
+                  </button>
                   <button 
                     onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
                     className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
@@ -4277,15 +4294,15 @@ ${data.transcription}`, {
             onClick={togglePresenceMode}
             className={isAtelieActive || isEstudioActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
-              : `relative w-28 h-28 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
+              : `relative w-36 h-36 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
                     ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
-                    : 'mt-auto mb-2 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
+                    : 'mt-6 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
                 }`
             }
           >
             <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-              presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.28] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
+              presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
             }`}>
               <div 
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
@@ -5120,7 +5137,7 @@ ${data.transcription}`, {
             } disabled:opacity-50 disabled:cursor-not-allowed`}
             title={voiceMode === 'recording_once' ? 'gravando... clique para parar' : 'capturar áudio'}
           >
-            {voiceMode === 'recording_once' ? <Mic size={18} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={18} strokeWidth={1.5} />}
+            {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
           </button>
 
           <button
@@ -5128,7 +5145,7 @@ ${data.transcription}`, {
             className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none ${voiceMode === 'recording_meeting' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
             title="Gravar Reunião"
           >
-            <Circle size={14} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
+            <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
           </button>
           <button
             onClick={() => setForceOpenClaw(!forceOpenClaw)}
