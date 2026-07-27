@@ -3993,7 +3993,7 @@ ${data.transcription}`, {
             title="Engenharia"
           >
             <span className="hidden md:inline">[ engenharia ]</span>
-            <Cpu size={13} strokeWidth={1.5} className="md:hidden" />
+            <span className="md:hidden font-mono">[ ⏣ ]</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -4011,7 +4011,7 @@ ${data.transcription}`, {
             title="Ateliê"
           >
             <span className="hidden md:inline">{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
-            <Palette size={13} strokeWidth={1.5} className="md:hidden" />
+            <span className="md:hidden font-mono">{isAtelieActive ? '[ ⏃ ]' : '[ ⏃ ]'}</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -4029,7 +4029,7 @@ ${data.transcription}`, {
             title="Estúdio"
           >
             <span className="hidden md:inline">[ estúdio ]</span>
-            <Video size={13} strokeWidth={1.5} className="md:hidden" />
+            <span className="md:hidden font-mono">[ ⎔ ]</span>
           </button>
           <button 
             onClick={(e) => { 
@@ -4042,7 +4042,7 @@ ${data.transcription}`, {
             title="Arca"
           >
             <span className="hidden md:inline">[ arca ]</span>
-            <Archive size={13} strokeWidth={1.5} className="md:hidden" />
+            <span className="md:hidden font-mono">[ ⬡ ]</span>
           </button>
           
           <div className="relative" ref={headerMenuRef}>
@@ -4277,7 +4277,7 @@ ${data.transcription}`, {
             onClick={togglePresenceMode}
             className={isAtelieActive || isEstudioActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
-              : `relative w-14 h-14 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
+              : `relative w-28 h-28 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
                     ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
                     : 'mt-auto mb-2 md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
@@ -4285,7 +4285,7 @@ ${data.transcription}`, {
             }
           >
             <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-              presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.12] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
+              presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.28] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
             }`}>
               <div 
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
@@ -5120,7 +5120,7 @@ ${data.transcription}`, {
             } disabled:opacity-50 disabled:cursor-not-allowed`}
             title={voiceMode === 'recording_once' ? 'gravando... clique para parar' : 'capturar áudio'}
           >
-            {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
+            {voiceMode === 'recording_once' ? <Mic size={18} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={18} strokeWidth={1.5} />}
           </button>
 
           <button
@@ -5128,7 +5128,7 @@ ${data.transcription}`, {
             className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none ${voiceMode === 'recording_meeting' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
             title="Gravar Reunião"
           >
-            <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
+            <Circle size={14} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
           </button>
           <button
             onClick={() => setForceOpenClaw(!forceOpenClaw)}
@@ -5136,9 +5136,13 @@ ${data.transcription}`, {
             title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
           >
             {windowWidth < 768 ? (
-              <Zap size={14} className={forceOpenClaw ? 'text-white fill-white' : 'text-[#fbf9f5]/30'} />
+              <span className="text-[9px] font-mono tracking-widest uppercase">
+                [ {forceOpenClaw ? '⚡' : '⚡'} ]
+              </span>
             ) : (
-              <span className="font-mono text-xs tracking-[0.2em]">{forceOpenClaw ? '( • )' : '(   )'}</span>
+              <span className="text-[9px] font-mono tracking-widest uppercase">
+                [ {forceOpenClaw ? 'openclaw: on' : 'openclaw: off'} ]
+              </span>
             )}
           </button>
           

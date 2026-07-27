@@ -10,11 +10,13 @@ export async function POST(req: Request) {
       mimeType = mimeType.split(';')[0];
     }
 
-    const rawKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+    const headerKey = req.headers.get('x-groq-api-key') || req.headers.get('authorization')?.replace('Bearer ', '');
+    const rawKey = headerKey || process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : "";
+    
     if (!apiKey) {
-      console.error('[PULSO_TRANSCRIBE] GROQ_API_KEY missing in environment.');
-      return NextResponse.json({ error: 'GROQ_API_KEY is not set' }, { status: 500 });
+      console.error('[PULSO_TRANSCRIBE] Chave de API indisponível no servidor.');
+      return NextResponse.json({ error: 'Chave de API para transcrição não configurada.' }, { status: 500 });
     }
 
     const formData = new FormData();
@@ -35,8 +37,7 @@ export async function POST(req: Request) {
     }
     
     formData.append('file', blob, `audio.${extension}`);
-    
-    formData.append('model', 'whisper-large-v3');
+    formData.append('model', 'whisper-large-v3-turbo');
     formData.append('language', 'pt');
     formData.append('response_format', 'json');
     formData.append('temperature', '0.0');
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
 
     const url = 'https://api.groq.com/openai/v1/audio/transcriptions';
     
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`
@@ -53,8 +54,23 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
+      // Fallback para whisper-large-v3 se turbo falhar
+      const fallbackFormData = new FormData();
+      fallbackFormData.append('file', blob, `audio.${extension}`);
+      fallbackFormData.append('model', 'whisper-large-v3');
+      fallbackFormData.append('language', 'pt');
+      fallbackFormData.append('response_format', 'json');
+
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        body: fallbackFormData
+      });
+    }
+
+    if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Groq API responded with status ${response.status}: ${errorText}`);
+      throw new Error(`Groq API error (${response.status}): ${errorText}`);
     }
 
     const json = await response.json();
