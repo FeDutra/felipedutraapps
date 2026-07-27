@@ -4241,12 +4241,12 @@ ${data.transcription}`, {
           }`}
           style={{
             transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
-              ? 'translateX(calc(-25vw + 2rem))'
+              ? 'translateX(calc(-22vw + 1.5rem))'
               : 'translateX(0)',
             transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          
+
           {/* Atelie Workspace Container nested within main */}
           <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
             isAtelieActive ? 'opacity-100 filter-none pointer-events-auto' : 'opacity-0 blur-md pointer-events-none'
@@ -4288,7 +4288,7 @@ ${data.transcription}`, {
           </div>
 
           {(!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory)) && (
-            <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
+            <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8 max-w-lg' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
               
               <div 
                 className={`flex flex-col relative transition-all duration-300 ${
@@ -4789,9 +4789,16 @@ ${data.transcription}`, {
           )}
 
 <footer
-        className={`absolute bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
+        className={`fixed bottom-0 left-1/2 w-full ${(isMesaOpen && !isMesaCollapsed) ? 'max-w-lg' : 'max-w-xl'} flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
-      }`}>
+      }`}
+        style={{
+          transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
+            ? 'translate(calc(-50% - 22vw + 1.5rem), 0)'
+            : 'translate(-50%, 0)',
+          transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+      >
         
         {activeContextNode && (
           <div className="w-full flex items-center justify-center gap-3 mb-0.5 animate-fade-in select-none">
