@@ -363,7 +363,11 @@ import {
   ChevronDown,
   ChevronRight,
   Globe,
-  Layers
+  Layers,
+  Cpu,
+  Palette,
+  Video,
+  Terminal
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -719,7 +723,7 @@ export default function LivePage() {
   }, []);
 
   const chatHeight = React.useMemo(() => {
-    if (windowWidth < 768) return 'auto';
+    if (windowWidth < 768) return `calc(100dvh - ${180 + inputHeight}px)`;
     const baseHeight = windowWidth >= 1536 ? '45vh' : '60vh';
     return `calc(${baseHeight} - ${inputHeight - 36}px)`;
   }, [windowWidth, inputHeight]);
@@ -3983,11 +3987,13 @@ ${data.transcription}`, {
                 setIsEstudioActive(false);
               }
             }}
-            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isEngineeringActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
+            title="Engenharia"
           >
-            <span>[ engenharia ]</span>
+            <span className="hidden md:inline">[ engenharia ]</span>
+            <Cpu size={13} strokeWidth={1.5} className="md:hidden" />
           </button>
           <button 
             onClick={(e) => { 
@@ -3999,11 +4005,13 @@ ${data.transcription}`, {
                 setIsEstudioActive(false);
               }
             }}
-            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isAtelieActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
+            title="Ateliê"
           >
-            <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
+            <span className="hidden md:inline">{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
+            <Palette size={13} strokeWidth={1.5} className="md:hidden" />
           </button>
           <button 
             onClick={(e) => { 
@@ -4015,22 +4023,26 @@ ${data.transcription}`, {
                 setIsAtelieActive(false);
               }
             }}
-            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isEstudioActive ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
+            title="Estúdio"
           >
-            <span>[ estúdio ]</span>
+            <span className="hidden md:inline">[ estúdio ]</span>
+            <Video size={13} strokeWidth={1.5} className="md:hidden" />
           </button>
           <button 
             onClick={(e) => { 
               e.stopPropagation(); 
               setIsArcaOpen(!isArcaOpen); 
             }}
-            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+            className={`flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
               isArcaOpen ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
+            title="Arca"
           >
-            <span>[ arca ]</span>
+            <span className="hidden md:inline">[ arca ]</span>
+            <Archive size={13} strokeWidth={1.5} className="md:hidden" />
           </button>
           
           <div className="relative" ref={headerMenuRef}>
