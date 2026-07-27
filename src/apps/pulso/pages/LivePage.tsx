@@ -3404,7 +3404,7 @@ export default function LivePage() {
       mediaRecorder.start(250); // emit chunks regularly
 
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (false && SpeechRecognition) {
+      if (SpeechRecognition) {
          const recognition = new SpeechRecognition();
          recognition.lang = 'pt-BR';
          recognition.continuous = mode === 'presence';
@@ -5135,15 +5135,9 @@ ${data.transcription}`, {
             className={`transition-all duration-300 bg-transparent border-none cursor-pointer outline-none flex items-center justify-center h-8 ${forceOpenClaw ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] animate-pulse' : 'text-[#fbf9f5]/30 hover:text-white/60'}`}
             title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
           >
-            {windowWidth < 768 ? (
-              <span className="text-[9px] font-mono tracking-widest uppercase">
-                [ {forceOpenClaw ? '⚡' : '⚡'} ]
-              </span>
-            ) : (
-              <span className="text-[9px] font-mono tracking-widest uppercase">
-                [ {forceOpenClaw ? 'openclaw: on' : 'openclaw: off'} ]
-              </span>
-            )}
+            <span className="text-[9px] font-mono tracking-widest uppercase">
+              [ {forceOpenClaw ? 'openclaw: on' : 'openclaw: off'} ]
+            </span>
           </button>
           
           <button
@@ -5194,8 +5188,9 @@ ${data.transcription}`, {
 
             {/* Accordion list */}
             <div className="flex flex-col gap-5">
-              {AREA_ORDER.map((areaId) => {
-                const areaName = AREA_NAMES[areaId] || areaId;
+              {dynamicAreas.map((area) => {
+                const areaId = area.id;
+                const areaName = area.name || AREA_NAMES[areaId] || areaId.replace('area_', '');
                 const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
                 const isAreaActive = activeAreaId === areaId;
                 const isExpanded = activeMobileAreaId === areaId;
