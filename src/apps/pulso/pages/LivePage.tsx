@@ -5135,9 +5135,7 @@ ${data.transcription}`, {
             className={`transition-all duration-300 bg-transparent border-none cursor-pointer outline-none flex items-center justify-center h-8 ${forceOpenClaw ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] animate-pulse' : 'text-[#fbf9f5]/30 hover:text-white/60'}`}
             title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
           >
-            <span className="text-[9px] font-mono tracking-widest uppercase">
-              [ {forceOpenClaw ? 'openclaw: on' : 'openclaw: off'} ]
-            </span>
+            <span className="font-mono text-xs tracking-[0.2em]">{forceOpenClaw ? '( • )' : '(   )'}</span>
           </button>
           
           <button
@@ -5381,6 +5379,74 @@ ${data.transcription}`, {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Add Area Input/Button for Mobile */}
+            <div className="flex items-center gap-2.5 py-2 border-t border-white/10 mt-2 select-none">
+              {isAddingArea ? (
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="nova área..."
+                  value={newAreaName}
+                  onChange={(e) => setNewAreaName(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      const rawName = newAreaName.trim();
+                      if (rawName) {
+                        const slug = rawName
+                          .toLowerCase()
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .replace(/[^a-z0-9\s-]/g, '')
+                          .replace(/\s+/g, '-')
+                          .replace(/-+/g, '-');
+                        const areaId = `area_${slug}`;
+                        try {
+                          await areasService.saveArea({
+                            id: areaId,
+                            name: rawName,
+                            slug,
+                            status: 'active',
+                            order: dynamicAreas.length,
+                            type: 'personal',
+                          });
+                          setState((prev: any) => {
+                            if (!prev) return prev;
+                            const existing = prev.allAreas || [];
+                            if (existing.some((a: any) => a.id === areaId)) return prev;
+                            return {
+                              ...prev,
+                              allAreas: [...existing, { id: areaId, name: rawName, slug, status: 'active', order: dynamicAreas.length, type: 'personal' }]
+                            };
+                          });
+                        } catch (err) {
+                          console.error("Erro ao criar área:", err);
+                        }
+                      }
+                      setIsAddingArea(false);
+                      setNewAreaName('');
+                    } else if (e.key === 'Escape') {
+                      setIsAddingArea(false);
+                      setNewAreaName('');
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setIsAddingArea(false);
+                      setNewAreaName('');
+                    }, 200);
+                  }}
+                  className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[9px] tracking-widest uppercase w-full py-0.5 outline-none placeholder-[#fbf9f5]/25 font-sans font-light"
+                />
+              ) : (
+                <button
+                  onClick={() => setIsAddingArea(true)}
+                  className="text-[9px] font-light tracking-widest text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left w-full"
+                >
+                  + área
+                </button>
+              )}
             </div>
           </div>
         </div>
