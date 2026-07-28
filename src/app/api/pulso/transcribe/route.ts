@@ -74,9 +74,55 @@ export async function POST(req: Request) {
     }
 
     const json = await response.json();
-    const transcription = json.text || "";
+    const rawTranscription = (json.text || "").trim();
 
-    return NextResponse.json({ text: transcription.trim() });
+    if (!rawTranscription) {
+      return NextResponse.json({ text: "" });
+    }
+
+    // 2. Etapa de Refinamento Textual por IA (Redator Oficial do PULSO)
+    try {
+      const chatUrl = 'https://api.groq.com/openai/v1/chat/completions';
+      const systemPrompt = `Você é o redator e revisor de texto oficial do PULSO.
+Sua tarefa é receber a transcrição bruta de um áudio e transformá-la em um texto em português brasileiro impecável, profissional e fluido.
+
+Diretrizes obrigatórias:
+1. Pontuação e Gramática: Adicione pontuação gramaticalmente adequada (vírgulas, pontos finais, travessões, interrogações) e corrija pequenos deslizes de concordância típicos da linguagem falada.
+2. Remoção de Hesitações e Vícios: Remova gagueiras, palavras repetidas por dúvida e vícios de linguagem ("ééé", "tipo", "né", "tá", "então", "hã").
+3. Formatação: Padronize números, valores monetários e nomes próprios (ex: PULSO, Lótus, OpenClaw, Fê, Ateliê, Estúdio).
+4. Preservação Total do Sentido: Mantenha rigorosamente a ideia, intenção e mensagem do usuário sem inventar informações.
+5. Saída Limpa: Retorne EXCLUSIVAMENTE o texto final corrigido. Não inclua aspas, introduções, saudações ou explicações.`;
+
+      const chatRes = await fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: rawTranscription }
+          ],
+          temperature: 0.2,
+          max_tokens: 1000
+        })
+      });
+
+      if (chatRes.ok) {
+        const chatJson = await chatRes.json();
+        const refinedText = chatJson.choices?.[0]?.message?.content?.trim();
+        if (refinedText) {
+          console.log(`[PULSO_TRANSCRIBE_AI] Refined: "${rawTranscription}" -> "${refinedText}"`);
+          return NextResponse.json({ text: refinedText });
+        }
+      }
+    } catch (refineError) {
+      console.warn('[PULSO_TRANSCRIBE_AI] LLM refinement fallback to raw:', refineError);
+    }
+
+    return NextResponse.json({ text: rawTranscription });
   } catch (error: any) {
     console.error('[PULSO_TRANSCRIBE] Transcription error:', error);
     return NextResponse.json({ error: error.message || 'Unknown error during transcription' }, { status: 500 });
