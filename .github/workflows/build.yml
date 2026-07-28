@@ -1,0 +1,22 @@
+name: CI Build Check
+on:
+  push:
+    branches: [ main, "feature/*" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+      - name: Build Project
+        run: npm install --legacy-peer-deps && npm run build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+          CI: false
+          NEXT_TELEMETRY_DISABLED: 1
