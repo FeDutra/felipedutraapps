@@ -967,8 +967,11 @@ export default function LivePage() {
         const lastRead = lastReadTimes[node.contextId] || pageLoadTimeRef.current.toISOString();
         const lastMsgAt = node.lastMessageAt || node.updatedAt;
         if (lastMsgAt) {
-          const lastMsgTime = new Date(lastMsgAt).getTime();
-          if (node.contextId !== activeContextNode.contextId && lastMsgTime > new Date(lastRead).getTime()) {
+          const lastMsgDate = safeConvertToDate(lastMsgAt);
+          const lastMsgTime = lastMsgDate ? lastMsgDate.getTime() : 0;
+          const lastReadDate = safeConvertToDate(lastRead);
+          const lastReadTime = lastReadDate ? lastReadDate.getTime() : 0;
+          if (node.contextId !== activeContextNode.contextId && lastMsgTime > lastReadTime) {
             unreads[node.contextId] = true;
           }
         }
@@ -997,8 +1000,10 @@ export default function LivePage() {
     }
     // Fallback: most recently active session
     const sortedByLatest = [...sessions].sort((a, b) => {
-      const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
-      const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+      const dateA = safeConvertToDate(a.lastMessageAt) || safeConvertToDate(a.updatedAt);
+      const dateB = safeConvertToDate(b.lastMessageAt) || safeConvertToDate(b.updatedAt);
+      const timeA = dateA ? dateA.getTime() : 0;
+      const timeB = dateB ? dateB.getTime() : 0;
       return timeB - timeA;
     });
     setActiveContextNode(sortedByLatest[0] || sessions[0]);
@@ -4386,7 +4391,7 @@ ${data.transcription}`, {
 
                       {/* Reply quote block */}
                       {msg.replyTo && (
-                        <div className={`border-l-2 border-white/20 pl-2.5 py-1 mb-1 rounded-r-lg bg-white/5 ${isLotus ? 'text-left' : 'text-right border-l-0 border-r-2 pr-2.5 pl-0 rounded-r-none rounded-l-lg'}`}>
+                        <div className={`border-l-2 border-white/20 pl-2.5 py-1 mb-1 rounded-r-lg bg-white/5 ${isLotus ? 'text-left' : 'text-left border-l-0 border-r-2 pr-2.5 pl-0 rounded-r-none rounded-l-lg'}`}>
                           <span className="block text-[8px] tracking-widest uppercase text-white/35 font-medium mb-0.5 select-none">
                             {msg.replyTo.sender === 'lotus' ? 'lótus' : 'fê'}
                           </span>
@@ -4397,7 +4402,7 @@ ${data.transcription}`, {
                       )}
                       {/* Text body & blocks renderer */}
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
-                        <div className={`text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words ${!isLotus ? 'text-right' : 'text-left'}`} style={{ overflowWrap: 'anywhere' }}>
+                        <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
                           {(() => {
                             const docRegex = /<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i;
                             const docMatch = msg.text.match(docRegex);
@@ -5222,7 +5227,7 @@ ${data.transcription}`, {
                       className="flex items-center justify-between cursor-pointer py-1 group/mobile-area select-none"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className={`text-base font-mono ${isAreaActive ? 'text-white' : hasUnreadInArea ? 'pulso-unread font-bold' : 'text-[#fbf9f5]/35'}`}>
+                        <span className={`text-base font-mono ${isAreaActive ? 'text-white' : hasUnreadInArea ? 'pulso-unread font-bold animate-pulse' : 'text-[#fbf9f5]/35'}`}>
                           {getAreaIcon({ id: areaId, name: areaName })}
                         </span>
                         <span className={`text-[10px] tracking-wider uppercase font-sans ${isAreaActive ? 'text-white font-medium' : 'text-[#fbf9f5]/50'}`}>
