@@ -524,6 +524,50 @@ exports.pulsoRequests = (0, https_1.onRequest)({ region: "us-central1", secrets:
             });
             return;
         }
+        // ── POST /progress ─────────────────────────────────────────────────────
+        if (req.method === "POST" && path === "/progress") {
+            const { requestId, text, phase } = req.body;
+            if (!requestId) {
+                res.status(400).send("Missing requestId");
+                return;
+            }
+            if (!text) {
+                res.status(400).send("Missing text");
+                return;
+            }
+            const originSnap = await db.collection(BASE).doc(requestId).get();
+            if (!originSnap.exists) {
+                res.status(404).send("Original request not found");
+                return;
+            }
+            const originData = originSnap.data() || {};
+            const contextId = originData.contextId || null;
+            const areaId = originData.areaId || null;
+            const ts = firestore_1.FieldValue.serverTimestamp();
+            const progressId = `progress_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            await db.collection(BASE).doc(progressId).set(sanitize({
+                requestType: "progress_update",
+                type: "progress_update",
+                status: "progress",
+                sender: "lotus",
+                contextId,
+                areaId,
+                archived: false,
+                source: "openclaw_progress_delivery",
+                text,
+                message: text,
+                meta: {
+                    originRequestId: requestId,
+                    phase: phase || "execution",
+                    final: false
+                },
+                requestedAt: ts,
+                createdAt: ts,
+                updatedAt: ts
+            }));
+            res.status(201).json({ status: "created", progressId });
+            return;
+        }
         // ── POST /fail ─────────────────────────────────────────────────────────
         if (req.method === "POST" && path === "/fail") {
             const { requestId, error, recoverable, nextSuggestedAction } = req.body;
