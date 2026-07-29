@@ -22,10 +22,10 @@ exports.pulsoProcessMeeting = (0, https_1.onRequest)({ region: "us-central1" }, 
             res.status(400).send("chunkUrls is required and must be an array");
             return;
         }
-        const rawKey = process.env.GROQ_API_KEY || "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";
+        const rawKey = process.env.GROQ_API_KEY;
         const apiKey = rawKey ? rawKey.trim() : "";
         if (!apiKey) {
-            res.status(500).send("GROQ_API_KEY is not defined");
+            res.status(500).send("GROQ_API_KEY is not defined in Cloud Functions secrets.");
             return;
         }
         console.log(`[PROCESS_MEETING] Processing ${chunkUrls.length} chunks for session ${sessionId}`);

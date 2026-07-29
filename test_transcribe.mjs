@@ -1,26 +1,17 @@
 import fs from 'fs';
 
 async function test() {
-  const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
-  const url = 'https://api.groq.com/openai/v1/audio/transcriptions';
-  
-  const formData = new FormData();
+  const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
+  const url = 'https://pulsotranscribe-deuw6drnha-uc.a.run.app';
   const buffer = fs.readFileSync('test.mp3');
-  const blob = new Blob([buffer], { type: 'audio/mp3' });
-  formData.append('file', blob, 'audio.mp3');
-  // fallback to whisper-large-v3 if turbo doesn't work
-  formData.append('model', 'whisper-large-v3-turbo'); 
-  formData.append('language', 'pt');
-  formData.append('response_format', 'json');
-  formData.append('temperature', '0.2');
-
+  
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`
+        'Content-Type': 'audio/mp3'
       },
-      body: formData
+      body: buffer
     });
     
     if (!res.ok) {

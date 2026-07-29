@@ -26,11 +26,11 @@ export const pulsoProcessMeeting = onRequest(
         return;
       }
 
-      const rawKey = process.env.GROQ_API_KEY || "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";
+      const rawKey = process.env.GROQ_API_KEY;
       const apiKey = rawKey ? rawKey.trim() : "";
       
       if (!apiKey) {
-        res.status(500).send("GROQ_API_KEY is not defined");
+        res.status(500).send("GROQ_API_KEY is not defined in Cloud Functions secrets.");
         return;
       }
 
