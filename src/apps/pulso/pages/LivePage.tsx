@@ -5052,11 +5052,7 @@ ${data.transcription}`, {
             let placeholderText = "";
             let isBlocked = false;
 
-            if (voiceState === 'recording_once') {
-              placeholderText = "gravando áudio... clique no microfone novamente para finalizar.";
-            } else if (voiceState === 'transcribing') {
-              placeholderText = "processando áudio com qualidade excelente...";
-            } else if (runtimeStatus === 'bootstrapping') {
+            if (runtimeStatus === 'bootstrapping') {
               placeholderText = "Lótus ativando canal cognitivo...";
               isBlocked = true;
             } else if (runtimeStatus === 'migrating') {
