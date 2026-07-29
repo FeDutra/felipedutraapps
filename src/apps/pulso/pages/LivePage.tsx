@@ -3409,7 +3409,7 @@ export default function LivePage() {
       mediaRecorder.start(250); // emit chunks regularly
 
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
+      if (SpeechRecognition && mode !== 'recording_once') {
          const recognition = new SpeechRecognition();
          recognition.lang = 'pt-BR';
          recognition.continuous = mode === 'presence';
@@ -5052,7 +5052,11 @@ ${data.transcription}`, {
             let placeholderText = "";
             let isBlocked = false;
 
-            if (runtimeStatus === 'bootstrapping') {
+            if (voiceState === 'recording_once') {
+              placeholderText = "gravando áudio... clique no microfone novamente para finalizar.";
+            } else if (voiceState === 'transcribing') {
+              placeholderText = "processando áudio com qualidade excelente...";
+            } else if (runtimeStatus === 'bootstrapping') {
               placeholderText = "Lótus ativando canal cognitivo...";
               isBlocked = true;
             } else if (runtimeStatus === 'migrating') {
