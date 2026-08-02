@@ -27,6 +27,7 @@ export interface LotusSendPayload {
     timezone: string;
     interface: "pulso";
     currentRoute: string;
+    reusableContext?: any;
   };
   contextWindow: any[];
   areaRef?: string;
@@ -57,10 +58,15 @@ const cleanUndefined = (obj: any): any => {
 
 export const lotusOpenClawClient = {
   queueRequest: async (payload: LotusSendPayload) => {
+    const hasAttachments = payload.attachments && payload.attachments.length > 0;
+
     const reqPayload = {
       id: payload.requestId,
       requestType: "conversation_command" as any,
-      status: "queued_for_openclaw" as any,
+      // Se houver anexos: começa em processing_extraction para que o bot Python
+      // só consuma o request DEPOIS que a Cloud Function terminar a extração via Gemini.
+      // Sem anexos: vai direto para queued_for_openclaw.
+      status: (hasAttachments ? "processing_extraction" : "queued_for_openclaw") as any,
       source: payload.source,
       areaRef: payload.areaRef,
       secondaryAreaRefs: payload.secondaryAreaRefs,
@@ -70,6 +76,9 @@ export const lotusOpenClawClient = {
       originMode: payload.originMode || "text",
       input: payload.input,
       rawInput: payload.rawInput || payload.input,
+      // enrichedInput: campo derivado que a Cloud Function preencherá após extração.
+      // O bot Python deve preferir este campo a `input` quando disponível.
+      enrichedInput: null as string | null,
       requestedBy: payload.userId,
       createdAt: new Date(),
       requestedAt: new Date(payload.timestamp),

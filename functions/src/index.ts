@@ -148,3 +148,4 @@ export {
 export { pulsoTranscribe } from "./transcribe";
 export { pulsoActiveMessageTrigger } from "./pulsoActiveMessageTrigger";
 export { pulsoProcessMeeting } from "./processMeeting";
+export { pulsoDbInspect } from "./inspect";

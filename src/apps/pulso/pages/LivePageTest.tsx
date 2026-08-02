@@ -53,246 +53,27 @@ function SortableAreaItemWrapper({
   area,
   isAreaActive,
   hasUnreadInArea,
-  isHovered,
-  onMouseEnter,
-  onClickArea,
-  areaContexts,
-  editingContextId,
-  editingContextLabel,
-  setEditingContextLabel,
-  handleRenameChat,
-  setEditingContextId,
-  activeContextNode,
-  unreadContexts,
-  handleArchiveChat,
-  isAddingChatForThisArea,
-  newChatName,
-  setNewChatName,
-  setAddingChatAreaId,
-  setHoveredAreaId,
-  allContextNodes,
-  setSessions,
-  setActiveContextNode,
   getAreaIcon,
-  onDeleteArea
-}: SortableAreaItemWrapperProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.35 : 1,
-    zIndex: isDragging ? 50 : 'auto',
-    position: 'relative' as any,
-  };
-
+  onClickArea
+}: any) {
   return (
     <div 
-      ref={setNodeRef}
-      style={style}
-      onMouseEnter={onMouseEnter}
-      className="flex flex-col items-start transition-all duration-300 w-full"
+      onClick={onClickArea}
+      draggable={true}
+      onDragStart={(e: any) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', area.id);
+        e.dataTransfer.setData('source', 'area');
+      }}
+      className={`text-base text-center cursor-grab active:cursor-grabbing py-2 transition-all duration-300 select-none ${
+        isAreaActive
+          ? 'text-white opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.55)] scale-110'
+          : 'text-[#fbf9f5]/25 hover:text-[#fbf9f5]/75'
+      }`}
+      style={{ width: '32px' }}
+      title={area.name}
     >
-      {/* Area Trigger Container */}
-      <div 
-        onClick={onClickArea}
-        className="flex items-center justify-between group/item w-full"
-      >
-        <div 
-          {...attributes}
-          {...listeners}
-          className="flex items-center gap-2.5 cursor-grab active:cursor-grabbing py-1 flex-1 touch-none"
-        >
-          <span 
-            className={`text-lg text-center transition-all duration-200 font-mono ${
-              isAreaActive
-                ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
-                : hasUnreadInArea
-                ? 'pulso-unread scale-110 opacity-100 animate-pulse font-bold'
-                : 'text-[#fbf9f5]/35 group-hover/sidebar:text-[#fbf9f5]/65 group-hover/item:text-[#fbf9f5]/90'
-            }`}
-            style={{ width: '24px' }}
-          >
-            {getAreaIcon({ id: area.id, name: area.name })}
-          </span>
-
-          {/* Area Text Label */}
-          <span 
-            className={`text-[9px] tracking-widest uppercase font-sans font-light transition-all duration-200 opacity-0 max-w-0 overflow-hidden whitespace-nowrap group-hover/sidebar:opacity-40 group-hover/sidebar:max-w-[150px] group-hover/item:opacity-90 ${
-              isAreaActive ? 'text-white font-medium' : 'text-[#fbf9f5]'
-            }`}
-          >
-            {area.name}
-          </span>
-        </div>
-
-        {/* Delete Area Button (Visible on hover, except for default core system areas) */}
-        {!['area_eu', 'area_trabalho', 'area_casa', 'area_familia', 'area_criacao', 'area_estudo', 'area_habitos', 'area_saude', 'area_dinheiro', 'area_pessoas', 'area_viagens', 'area_lazer', 'area_sistema', 'area_futuro', 'area_livre', 'area_despertar'].includes(area.id) && (
-          <button
-            onClick={(e) => onDeleteArea(area.id, area.name, e)}
-            className="opacity-0 group-hover/item:opacity-100 transition-opacity p-1 text-[#fbf9f5]/25 hover:text-[#b8283e] bg-transparent border-none cursor-pointer outline-none shrink-0"
-            title="Excluir Área"
-          >
-            <X size={10} strokeWidth={2} />
-          </button>
-        )}
-      </div>
-
-      {/* Sub-contexts (Sanfona style) */}
-      <div 
-        className={`flex flex-col gap-1.5 pl-8 overflow-y-auto no-scrollbar transition-all duration-300 ease-in-out w-full ${
-          isHovered ? 'max-h-40 opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0 pointer-events-none'
-        }`}
-      >
-        {areaContexts.map((ctx) => {
-          const isContextActive = activeContextNode.contextId === ctx.contextId;
-          const isUnread = !!unreadContexts[ctx.contextId];
-          const isCustom = !ctx.isDefault;
-          
-          return (
-            <div
-              key={ctx.contextId}
-              onClick={() => {
-                setActiveContextNode(ctx);
-              }}
-              className="group/ctx flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer"
-            >
-              {editingContextId === ctx.contextId ? (
-                <input
-                  type="text"
-                  value={editingContextLabel}
-                  onChange={(e) => setEditingContextLabel(e.target.value)}
-                  onBlur={() => handleRenameChat(ctx.contextId)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleRenameChat(ctx.contextId);
-                    if (e.key === 'Escape') setEditingContextId(null);
-                  }}
-                  className="bg-white/15 text-white border border-white/20 rounded px-1 py-0.5 text-[8px] outline-none w-20"
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span
-                  className={`text-[8px] tracking-wider uppercase font-sans font-light cursor-pointer transition-all duration-200 select-none truncate flex-1 text-left ${
-                    isContextActive
-                      ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
-                      : isUnread
-                      ? 'pulso-unread font-bold animate-pulse'
-                      : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
-                  }`}
-                >
-                  {ctx.label}
-                </span>
-              )}
-              
-              {isCustom && editingContextId !== ctx.contextId && (
-                <div className="opacity-0 group-hover/ctx:opacity-100 transition-opacity flex items-center gap-1 shrink-0 select-none mr-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingContextId(ctx.contextId);
-                      setEditingContextLabel(ctx.label);
-                    }}
-                    className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-                    title="Renomear chat"
-                  >
-                    <Edit2 size={8} />
-                  </button>
-                  <button
-                    onClick={(e) => handleArchiveChat(ctx.contextId, e)}
-                    className="p-0.5 text-[#fbf9f5]/35 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
-                    title="Arquivar chat"
-                  >
-                    <Archive size={8} />
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Add Chat Input/Button */}
-        <div className="mt-0.5">
-          {isAddingChatForThisArea ? (
-            <input
-              autoFocus
-              type="text"
-              placeholder="novo chat..."
-              value={newChatName}
-              onChange={(e) => setNewChatName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const rawLabel = newChatName.trim();
-                  if (rawLabel) {
-                    const cleanAreaPrefix = area.id.replace('area_', '');
-                    const slug = rawLabel
-                      .toLowerCase()
-                      .normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .replace(/[^a-z0-9\s-]/g, '')
-                      .replace(/\s+/g, '-')
-                      .replace(/-+/g, '-');
-                    
-                    let baseContextId = `${cleanAreaPrefix}_${slug}`;
-                    let contextId = baseContextId;
-                    let counter = 1;
-                    
-                    while (allContextNodes.some(node => node.contextId === contextId)) {
-                      contextId = `${baseContextId}-${counter}`;
-                      counter++;
-                    }
-                    
-                    (async () => {
-                      const createdSession = await sessionsService.createSession({
-                        id: contextId,
-                        label: rawLabel,
-                        areaId: area.id,
-                      }).catch(err => {
-                        console.error("Failed to create session:", err);
-                        return null;
-                      });
-
-                      if (createdSession) {
-                        const newNode = sessionToContextNode(createdSession);
-                        if (pulsoService.getDataMode() !== 'firestore') {
-                          const list = await sessionsService.getAll();
-                          setSessions(list.map(s => sessionToContextNode(s)));
-                        }
-                        setActiveContextNode(newNode);
-                      }
-                    })();
-                    
-                    setNewChatName('');
-                    setAddingChatAreaId(null);
-                    setHoveredAreaId(null);
-                  }
-                } else if (e.key === 'Escape') {
-                  setAddingChatAreaId(null);
-                  setNewChatName('');
-                  setHoveredAreaId(null);
-                }
-              }}
-              onBlur={() => {
-                setTimeout(() => {
-                  setAddingChatAreaId(null);
-                  setNewChatName('');
-                  setHoveredAreaId(null);
-                }, 200);
-              }}
-              className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[8px] tracking-wider uppercase w-20 py-0.5 outline-none placeholder-[#fbf9f5]/25"
-            />
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setAddingChatAreaId(area.id);
-              }}
-              className="text-[8px] font-light text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left w-full"
-            >
-              + novo
-            </button>
-          )}
-        </div>
-      </div>
+      {getAreaIcon({ id: area.id, name: area.name })}
     </div>
   );
 }
@@ -688,7 +469,19 @@ export default function LivePage() {
   const [state, setState] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [inputMessage, setInputMessage] = React.useState('');
+
+  // Workspaces/Panes de Tela Inteira
+  const [panes, setPanes] = React.useState<Array<{
+    id: string;
+    contextNode: PulsoContextNode;
+    splitDirection?: 'row' | 'col';
+  }>>([]);
+  const [activePaneId, setActivePaneId] = React.useState<string>('pane-default');
+  const [inputMessages, setInputMessages] = React.useState<Record<string, string>>({});
+  const [paneAttachments, setPaneAttachments] = React.useState<Record<string, PendingAttachment[]>>({});
+  const [dragOverPaneId, setDragOverPaneId] = React.useState<string | null>(null);
+  const [dragOverDirection, setDragOverDirection] = React.useState<string | null>(null);
+  const [isDraggingOverMain, setIsDraggingOverMain] = React.useState(false);
   const [forceOpenClaw, setForceOpenClaw] = React.useState(false);
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
@@ -704,8 +497,11 @@ export default function LivePage() {
 
       const loadVaultMemory = (async () => {
         try {
+          if (typeof window === 'undefined' || !window.__TAURI_INTERNALS__) {
+            console.warn('[LotusVault] Tauri not available in browser. Skipping native vault load.');
+            return '';
+          }
           const { invoke } = await import('@tauri-apps/api/core');
-          // Resolve o HOME real via shell (process.env.HOME não existe no browser)
           const home = (await invoke<string>('execute_shell_command', { command: 'echo $HOME' })).trim();
           const LOTUS_VAULT = `${home}/Library/Mobile Documents/com~apple~CloudDocs/LotusVault`;
           const vaultFiles = [
@@ -790,8 +586,6 @@ export default function LivePage() {
   const [showAttachmentToast, setShowAttachmentToast] = React.useState(false);
   /** Reply-to (quoted message) state */
   const [replyTo, setReplyTo] = React.useState<{ id: string; sender: string; text: string } | null>(null);
-  /** Pending attachments staged for send (not yet sent) */
-  const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   /** v2: sessions loaded from Firestore pulso_sessions (replaces customContextNodes + INITIAL_CONTEXT_NODES) */
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
@@ -799,8 +593,8 @@ export default function LivePage() {
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
   const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
-  const [isMesaCollapsed, setIsMesaCollapsed] = React.useState(false);
   const [contextStatesMap, setContextStatesMap] = React.useState<Record<string, PulsoContextState>>({});
+  const [isMesaCollapsed, setIsMesaCollapsed] = React.useState(false);
 
   React.useEffect(() => {
     if (activeMesaArtifact) {
@@ -835,9 +629,15 @@ export default function LivePage() {
   React.useEffect(() => {
     let unlisten: any;
     const setupListener = async () => {
-      unlisten = await listen('cmd_output', (event) => {
-        setEngineeringLogs((prev) => [...prev, event.payload as string]);
-      });
+      if (typeof window === 'undefined' || !window.__TAURI_INTERNALS__) return;
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        unlisten = await listen('cmd_output', (event) => {
+          setEngineeringLogs((prev) => [...prev, event.payload as string]);
+        });
+      } catch (e) {
+        console.warn("Failed to setup Tauri listener in web:", e);
+      }
     };
     setupListener();
     return () => {
@@ -994,6 +794,94 @@ export default function LivePage() {
 
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(getInitialContextNode);
   const activeContextNodeRef = React.useRef(activeContextNode);
+
+  // Seletores dinâmicos baseados no Pane Ativo
+  const inputMessage = inputMessages[activePaneId] || '';
+  const setInputMessage = (val: string | ((prev: string) => string)) => {
+    setInputMessages(prev => {
+      const currentVal = prev[activePaneId] || '';
+      const nextVal = typeof val === 'function' ? val(currentVal) : val;
+      return { ...prev, [activePaneId]: nextVal };
+    });
+  };
+
+  const pendingAttachments = paneAttachments[activePaneId] || [];
+  const setPendingAttachments = (val: PendingAttachment[] | ((prev: PendingAttachment[]) => PendingAttachment[])) => {
+    setPaneAttachments(prev => {
+      const currentVal = prev[activePaneId] || [];
+      const nextVal = typeof val === 'function' ? val(currentVal) : val;
+      return { ...prev, [activePaneId]: nextVal };
+    });
+  };
+
+  // handleDropToSplit robusto com suporte a Grid Bidirecional (Mesa Operacional)
+  const handleDropToSplit = (droppedId: string, targetPaneId: string, direction: 'left' | 'right' | 'top' | 'bottom', source?: string) => {
+    let node: PulsoContextNode | undefined;
+
+    if (source === 'area') {
+      node = allContextNodes.find(n => n.areaId === droppedId && !n.archived);
+      if (!node) return;
+    } else {
+      node = allContextNodes.find(n => n.contextId === droppedId);
+      if (!node) return;
+    }
+
+    const newPaneId = `pane-${Date.now()}`;
+    const newPane = { 
+      id: newPaneId, 
+      contextNode: node,
+      splitDirection: (direction === 'top' || direction === 'bottom') ? 'row' : 'col'
+    };
+
+    setPanes(prev => {
+      const currentPanes = prev.length > 0 ? prev : [{ id: 'pane-default', contextNode: activeContextNode }];
+      const idx = currentPanes.findIndex(p => p.id === targetPaneId || p.id === 'pane-default');
+      const next = [...currentPanes];
+      
+      if (idx === -1) {
+        return [...next, newPane];
+      }
+      
+      if (direction === 'right' || direction === 'bottom') {
+        next.splice(idx + 1, 0, newPane);
+      } else {
+        next.splice(idx, 0, newPane);
+      }
+      return next;
+    });
+
+    setActivePaneId(newPaneId);
+    setActiveContextNode(node);
+  };
+
+  // Inicialização e sincronização dos painéis
+  React.useEffect(() => {
+    if (activeContextNode && panes.length === 0) {
+      setPanes([{ id: 'pane-default', contextNode: activeContextNode }]);
+      setActivePaneId('pane-default');
+    }
+  }, [activeContextNode, panes.length]);
+
+  React.useEffect(() => {
+    if (activeContextNode) {
+      setPanes(prev => {
+        const idx = prev.findIndex(p => p.id === activePaneId);
+        if (idx !== -1 && prev[idx].contextNode.contextId !== activeContextNode.contextId) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], contextNode: activeContextNode };
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [activeContextNode, activePaneId]);
+
+  React.useEffect(() => {
+    const currentPane = panes.find(p => p.id === activePaneId);
+    if (currentPane && currentPane.contextNode.contextId !== activeContextNode.contextId) {
+      setActiveContextNode(currentPane.contextNode);
+    }
+  }, [activePaneId, panes, activeContextNode.contextId]);
 
   const unreadContexts = React.useMemo(() => {
     const unreads: Record<string, boolean> = {};
@@ -2425,41 +2313,6 @@ export default function LivePage() {
     };
   }, [db, loading, activeContextNode]);
 
-  // ── Sincronização em Tempo Real Global de Estados Conversacionais e Compromissos ──
-  React.useEffect(() => {
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
-    if (!isFirestore || !db) return;
-
-    let unsubContextStates: (() => void) | null = null;
-    try {
-      console.log('[PULSO_CONTEXT_STATE] Iniciando escuta global da coleção pulso_context_states');
-      const colRef = collection(db, `workspaces/felipe_dutra/pulso_context_states`);
-
-      unsubContextStates = onSnapshot(colRef, (snapshot: any) => {
-        setContextStatesMap(prev => {
-          const nextMap = { ...prev };
-          snapshot.docChanges().forEach((change: any) => {
-            const docId = change.doc.id;
-            if (change.type === 'removed') {
-              delete nextMap[docId];
-            } else {
-              nextMap[docId] = change.doc.data() as PulsoContextState;
-            }
-          });
-          return nextMap;
-        });
-      }, (error: any) => {
-        console.error("Error onSnapshot global context states:", error);
-      });
-    } catch (err) {
-      console.error("Subscription failed for global context states:", err);
-    }
-
-    return () => {
-      if (unsubContextStates) unsubContextStates();
-    };
-  }, [db]);
-
   // ── Global Session Watchdog: notificações para chats inativos ────────────
   // O listener principal (acima) só escuta o contexto ativo. Portanto, quando
   // a Lótus responde em outro chat, nenhuma notificação era disparada.
@@ -2549,6 +2402,41 @@ export default function LivePage() {
       if (unsubSessions) unsubSessions();
     };
   }, [db, sessionsLoaded, lastReadTimes, activeContextNode.contextId]);
+
+  // ── Sincronização em Tempo Real Global de Estados Conversacionais e Compromissos ──
+  React.useEffect(() => {
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    if (!isFirestore || !db) return;
+
+    let unsubContextStates: (() => void) | null = null;
+    try {
+      console.log('[PULSO_CONTEXT_STATE] Iniciando escuta global da coleção pulso_context_states');
+      const colRef = collection(db, `workspaces/felipe_dutra/pulso_context_states`);
+
+      unsubContextStates = onSnapshot(colRef, (snapshot: any) => {
+        setContextStatesMap(prev => {
+          const nextMap = { ...prev };
+          snapshot.docChanges().forEach((change: any) => {
+            const docId = change.doc.id;
+            if (change.type === 'removed') {
+              delete nextMap[docId];
+            } else {
+              nextMap[docId] = change.doc.data() as PulsoContextState;
+            }
+          });
+          return nextMap;
+        });
+      }, (error: any) => {
+        console.error("Error onSnapshot global context states:", error);
+      });
+    } catch (err) {
+      console.error("Subscription failed for global context states:", err);
+    }
+
+    return () => {
+      if (unsubContextStates) unsubContextStates();
+    };
+  }, [db]);
 
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
@@ -4213,25 +4101,15 @@ ${data.transcription}`, {
           }
         }}
         className={`hidden md:flex fixed left-6 top-1/2 -translate-y-1/2 max-h-[85vh] overflow-y-auto no-scrollbar z-40 flex flex-col gap-4 group/sidebar select-none pulso-transition ${
-          presenceMode ? 'pulso-hidden-left' : 'pulso-visible'
+          panes.length > 1 ? 'opacity-0 pointer-events-none' : presenceMode ? 'pulso-hidden-left' : 'pulso-visible'
         }`}
       >
-        <DndContext 
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext 
-            items={dynamicAreas.map(a => a.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {dynamicAreas.map((area) => {
+        {dynamicAreas.map((area) => {
               const areaId = area.id;
               const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
               const isHovered = hoveredAreaId === areaId;
               const isAreaActive = activeAreaId === areaId;
               const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
-              const isAddingChatForThisArea = addingChatAreaId === areaId;
               
               return (
                 <SortableAreaItemWrapper
@@ -4239,41 +4117,15 @@ ${data.transcription}`, {
                   area={area}
                   isAreaActive={isAreaActive}
                   hasUnreadInArea={hasUnreadInArea}
-                  isHovered={isHovered}
-                  onMouseEnter={() => {
-                    if (!addingChatAreaId) {
-                      setHoveredAreaId(areaId);
-                    }
-                  }}
                   onClickArea={() => {
                     if (areaContexts.length > 0) {
                       setActiveContextNode(areaContexts[0]);
                     }
                   }}
-                  areaContexts={areaContexts}
-                  editingContextId={editingContextId}
-                  editingContextLabel={editingContextLabel}
-                  setEditingContextLabel={setEditingContextLabel}
-                  handleRenameChat={handleRenameChat}
-                  setEditingContextId={setEditingContextId}
-                  activeContextNode={activeContextNode}
-                  unreadContexts={unreadContexts}
-                  handleArchiveChat={handleArchiveChat}
-                  isAddingChatForThisArea={isAddingChatForThisArea}
-                  newChatName={newChatName}
-                  setNewChatName={setNewChatName}
-                  setAddingChatAreaId={setAddingChatAreaId}
-                  setHoveredAreaId={setHoveredAreaId}
-                  allContextNodes={allContextNodes}
-                  setSessions={setSessions}
-                  setActiveContextNode={setActiveContextNode}
                   getAreaIcon={getAreaIcon}
-                  onDeleteArea={handleDeleteArea}
                 />
               );
             })}
-          </SortableContext>
-        </DndContext>
 
         {/* Add Area Input/Button */}
         <div className="flex items-center gap-2.5 py-1">
@@ -4344,7 +4196,298 @@ ${data.transcription}`, {
         </div>
       </div>
 
-        <main
+{/* ====== SPLIT WORKSPACE: WORKSPACES GRANDES DE TELA INTEIRA ====== */}
+        {panes.length > 1 ? (
+          <div 
+            className="grid gap-2 w-full flex-1 min-h-0 overflow-hidden relative p-2" 
+            style={{ 
+              height: 'calc(100vh - 80px)',
+              gridTemplateColumns: panes.some(p => p.splitDirection === 'col') ? `repeat(${panes.filter(p => p.splitDirection !== 'row').length || 1}, 1fr)` : '1fr',
+              gridTemplateRows: panes.some(p => p.splitDirection === 'row') ? `repeat(${panes.filter(p => p.splitDirection === 'row').length + 1 || 1}, 1fr)` : '1fr'
+            }}
+          >
+            {panes.map((pane) => {
+              const isFocused = pane.id === activePaneId;
+              const paneContext = pane.contextNode;
+              const paneAreaSessions = allContextNodes.filter(n => n.areaId === paneContext.areaId && !n.archived);
+              const paneMessages = messages.filter(m => m.contextId === paneContext.contextId);
+              const isPaneTyping = contextTypingStates[paneContext.contextId] || false;
+              const showScrollBtn = showScrollButton || false;
+              const areaName = paneContext.areaId?.replace('area_', '') || '';
+
+              return (
+                <div
+                  key={pane.id}
+                  onClick={() => {
+                    if (activePaneId !== pane.id) {
+                      setActivePaneId(pane.id);
+                      setActiveContextNode(paneContext);
+                    }
+                  }}
+                  className={`relative flex flex-row min-w-0 h-full transition-all duration-500 border border-white/5 rounded-2xl bg-black/20 ${
+                    isFocused ? 'opacity-100 ring-1 ring-white/5 shadow-2xl' : 'opacity-45 hover:opacity-75'
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const w = rect.width;
+                    const h = rect.height;
+
+                    const pctX = x / w;
+                    const pctY = y / h;
+
+                    let dir: 'left' | 'right' | 'top' | 'bottom' = 'right';
+                    if (pctX < 0.25) dir = 'left';
+                    else if (pctX > 0.75) dir = 'right';
+                    else if (pctY < 0.25) dir = 'top';
+                    else if (pctY > 0.75) dir = 'bottom';
+                    else {
+                      const dists = { left: pctX, right: 1 - pctX, top: pctY, bottom: 1 - pctY };
+                      let minVal = 1;
+                      for (const [k, v] of Object.entries(dists)) {
+                        if (v < minVal) {
+                          minVal = v;
+                          dir = k as any;
+                        }
+                      }
+                    }
+                    setDragOverPaneId(pane.id);
+                    setDragOverDirection(dir);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setDragOverPaneId(null);
+                    setDragOverDirection(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const dir = (dragOverDirection as any) || 'right';
+                    setDragOverPaneId(null);
+                    setDragOverDirection(null);
+                    const droppedId = e.dataTransfer.getData('text/plain');
+                    const source = e.dataTransfer.getData('source');
+                    if (droppedId && (source === 'tab' || source === 'sidebar' || source === 'area')) {
+                      handleDropToSplit(droppedId, pane.id, dir, source);
+                    }
+                  }}
+                >
+                  {/* Feedback visual direcional de drop dentro do painel focado */}
+                  {dragOverPaneId === pane.id && dragOverDirection && (
+                    <div 
+                      className="absolute z-50 backdrop-blur-md bg-[#fbf9f5]/[0.02] transition-all duration-300 pointer-events-none flex items-center justify-center rounded-2xl"
+                      style={{
+                        inset: 
+                          dragOverDirection === 'left' ? '0 50% 0 0' :
+                          dragOverDirection === 'right' ? '0 0 0 50%' :
+                          dragOverDirection === 'top' ? '0 0 50% 0' :
+                          '50% 0 0 0',
+                        borderRight: dragOverDirection === 'left' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                        borderLeft: dragOverDirection === 'right' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                        borderBottom: dragOverDirection === 'top' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                        borderTop: dragOverDirection === 'bottom' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                      }}
+                    >
+                      <span className="font-mono text-[8px] tracking-[0.25em] uppercase text-white/50 animate-pulse">
+                        [ dividir {
+                          dragOverDirection === 'left' ? 'à esquerda' :
+                          dragOverDirection === 'right' ? 'à direita' :
+                          dragOverDirection === 'top' ? 'acima' :
+                          'abaixo'
+                        } ]
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ── Mini Sidebar: sessões daquela Área ── */}
+                  <div
+                    className="flex flex-col items-start gap-3 py-10 px-5 w-[140px] shrink-0 select-none overflow-y-auto no-scrollbar"
+                    style={{ borderRight: '1px solid rgba(251,249,245,0.04)' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="font-mono text-[8px] tracking-[0.25em] uppercase text-[#fbf9f5]/20 mb-2">{areaName}</span>
+
+                    {/* Lista das sessões da área */}
+                    {paneAreaSessions.map(session => {
+                      const isSessionActive = session.contextId === paneContext.contextId;
+                      return (
+                        <button
+                          key={session.contextId}
+                          onClick={() => {
+                            setActiveContextNode(session);
+                            setActivePaneId(pane.id);
+                          }}
+                          className={`text-left text-[8px] tracking-wider uppercase font-light transition-all duration-300 bg-transparent border-none cursor-pointer p-0 w-full ${
+                            isSessionActive
+                              ? 'text-[#fbf9f5]/90 drop-shadow-[0_0_4px_rgba(251,249,245,0.25)]'
+                              : 'text-[#fbf9f5]/25 hover:text-[#fbf9f5]/65'
+                          }`}
+                        >
+                          {isSessionActive && <span className="inline-block w-1 h-1 rounded-full bg-[#fbf9f5] mr-1.5 mb-0.5 animate-pulse" />}
+                          {session.label}
+                        </button>
+                      );
+                    })}
+
+                    {/* Fechar esse workspace */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPanes(prev => {
+                          const next = prev.filter(p => p.id !== pane.id);
+                          if (activePaneId === pane.id && next.length > 0) {
+                            setActivePaneId(next[0].id);
+                            setActiveContextNode(next[0].contextNode);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="mt-auto p-1 text-[#fbf9f5]/10 hover:text-[#fbf9f5]/60 bg-transparent border-none cursor-pointer outline-none transition-colors"
+                      title="Fechar Workspace"
+                    >
+                      <X size={10} strokeWidth={1.5} />
+                    </button>
+                  </div>
+
+                  {/* ── Conteúdo do Workspace: Orbe + Chat ── */}
+                  <div className="flex-1 flex flex-col items-center justify-end pb-32 relative overflow-hidden min-w-0">
+                    
+                    {/* Orbe */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isFocused) togglePresenceMode();
+                      }}
+                      className="relative flex items-center justify-center shrink-0 mb-4 mt-auto"
+                    >
+                      <div className="flex items-center justify-center" style={{ transform: 'scale(0.42)' }}>
+                        <div
+                          className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] flex items-center justify-center ${getLotusAnimClass()}`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Chat Feed */}
+                    <div className="relative w-[90%] max-w-xl flex flex-col min-h-[30vh] max-h-[45vh] flex-1">
+                      <div
+                        ref={(el) => { scrollContainerRef.current = el; }}
+                        onScroll={() => handleScroll}
+                        className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-2 py-4 space-y-6 animate-fade-in"
+                      >
+                        {paneMessages.length === 0 ? (
+                          <div className="h-full flex items-center justify-center text-center">
+                            <span className="font-mono text-[9px] tracking-widest text-[#fbf9f5]/10 uppercase">início da conversa</span>
+                          </div>
+                        ) : (
+                          paneMessages.map((msg) => {
+                            if (msg.isProgressUpdate) {
+                              return (
+                                <div key={msg.id} className="flex w-full justify-start animate-fade-in pl-1 py-1">
+                                  <div className="flex items-center gap-2 text-[10px] text-[#fbf9f5]/30 font-mono select-none italic tracking-wider">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[#fbf9f5]/30 animate-pulse" />
+                                    <span>lótus: {msg.text}</span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            const isLotus = msg.sender === 'lotus';
+                            if (isLotus && !msg.text) return null;
+                            return (
+                              <div key={msg.id} className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}>
+                                <div className="max-w-[85%] space-y-1">
+                                  <span className={`block text-[8px] tracking-widest lowercase select-none ${isLotus ? 'text-white font-bold opacity-80' : 'text-[#fbf9f5]/40 font-light'}`}>
+                                    {isLotus ? 'lótus' : 'fê'}
+                                  </span>
+                                  <div className={`text-xs font-light leading-relaxed select-text text-left break-words ${isLotus ? 'text-[#fbf9f5] font-sans' : 'text-[#fbf9f5]/75 font-sans'}`}>
+                                    {isLotus ? (
+                                      <div className="prose prose-invert prose-xs max-w-none text-[#fbf9f5]/90">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                                      </div>
+                                    ) : (
+                                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                        {isPaneTyping && isFocused && (
+                          <div className="flex justify-start w-full animate-pulse select-none">
+                            <div className="space-y-1">
+                              <span className="block text-[8px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
+                              <span className="text-[10px] font-mono text-[#fbf9f5]/30 tracking-wider">processando...</span>
+                            </div>
+                          </div>
+                        )}
+                        <div ref={(el) => { chatEndRef.current = el; }} />
+                      </div>
+                      {showScrollBtn && (
+                        <button
+                          onClick={() => scrollToBottom(true)}
+                          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 p-1.5 bg-[#fbf9f5]/15 hover:bg-[#fbf9f5]/25 border border-[#fbf9f5]/20 backdrop-blur-md rounded-full text-white/80 transition-all duration-300 flex items-center justify-center"
+                        >
+                          <ArrowDown size={12} className="animate-bounce" />
+                        </button>
+                      )}
+                    </div>
+
+                    {isFocused && (
+                      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 text-[7px] font-mono tracking-[0.3em] uppercase text-[#fbf9f5]/15 select-none">
+                        [ foco ]
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ====== SINGLE MODE: ORIGINAL WORKSPACE ====== */
+                  <main
+          onDragEnter={(e) => { e.preventDefault(); setIsDraggingOverMain(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const w = rect.width;
+            const h = rect.height;
+
+            const pctX = x / w;
+            const pctY = y / h;
+
+            let dir: 'left' | 'right' | 'top' | 'bottom' = 'right';
+            if (pctX < 0.25) dir = 'left';
+            else if (pctX > 0.75) dir = 'right';
+            else if (pctY < 0.25) dir = 'top';
+            else if (pctY > 0.75) dir = 'bottom';
+            else {
+              const dists = { left: pctX, right: 1 - pctX, top: pctY, bottom: 1 - pctY };
+              let minVal = 1;
+              for (const [k, v] of Object.entries(dists)) {
+                if (v < minVal) {
+                  minVal = v;
+                  dir = k as any;
+                }
+              }
+            }
+            setDragOverDirection(dir);
+          }}
+          onDragLeave={(e) => { e.preventDefault(); setIsDraggingOverMain(false); setDragOverDirection(null); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDraggingOverMain(false);
+            const dir = (dragOverDirection as any) || 'right';
+            setDragOverDirection(null);
+            const droppedId = e.dataTransfer.getData('text/plain');
+            const source = e.dataTransfer.getData('source');
+            if (droppedId && (source === 'tab' || source === 'sidebar' || source === 'area')) {
+              handleDropToSplit(droppedId, 'pane-default', dir, source);
+            }
+          }}
           className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative pointer-events-auto z-10 ${
             isAtelieActive || isEstudioActive
               ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0'
@@ -4357,6 +4500,44 @@ ${data.transcription}`, {
             transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
+
+          {/* Visual feedback overlay do Quadrante Ativo no Drag */}
+          {isDraggingOverMain && dragOverDirection && (
+            <div 
+              className="absolute inset-0 z-50 backdrop-blur-md bg-[#fbf9f5]/[0.01] transition-all duration-300 pointer-events-none flex items-center justify-center"
+              style={{
+                borderRight: dragOverDirection === 'left' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                borderLeft: dragOverDirection === 'right' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                borderBottom: dragOverDirection === 'top' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+                borderTop: dragOverDirection === 'bottom' ? '1px dashed rgba(251,249,245,0.15)' : 'none',
+              }}
+            >
+              <div 
+                className="absolute bg-white/5 backdrop-blur-md rounded-2xl flex items-center justify-center p-4 border border-white/10"
+                style={{
+                  width: '30%',
+                  height: '20%',
+                  left: 
+                    dragOverDirection === 'left' ? '10%' :
+                    dragOverDirection === 'right' ? '60%' :
+                    '35%',
+                  top: 
+                    dragOverDirection === 'top' ? '10%' :
+                    dragOverDirection === 'bottom' ? '70%' :
+                    '40%',
+                }}
+              >
+                <span className="font-mono text-[8px] tracking-[0.25em] uppercase text-white/80 animate-pulse">
+                  [ soltar para criar workspace {
+                    dragOverDirection === 'left' ? 'à esquerda' :
+                    dragOverDirection === 'right' ? 'à direita' :
+                    dragOverDirection === 'top' ? 'acima' :
+                    'abaixo'
+                  } ]
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Atelie Workspace Container nested within main */}
           <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
@@ -4395,7 +4576,7 @@ ${data.transcription}`, {
                   <div className="w-[10px] h-[10px] bg-[#b8283e] rounded-full animate-pulse shadow-[0_0_12px_rgba(184,40,62,1)]" />
                 </div>
               )}
-              
+
               {/* Presença Transitória Minimalista (Design Ocultista PULSO) */}
               {contextStatesMap[activeContextNode.contextId]?.lightState?.presence === 'busy' && !(isAtelieActive || isEstudioActive) && (
                 <div className="absolute top-[280px] flex flex-col items-center justify-center w-full text-center pointer-events-none select-none">
@@ -4832,6 +5013,7 @@ ${data.transcription}`, {
           <span className="text-xs font-semibold tracking-widest uppercase">função em desenvolvimento</span>
         </div>
       </main>
+        )}
       <ArcaDrawer isOpen={isArcaOpen} onClose={() => setIsArcaOpen(false)} contextId={activeContextNode?.contextId} />
 
 

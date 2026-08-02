@@ -283,6 +283,27 @@ body {
   }
 }
 
+@keyframes organic-busy {
+  0%, 100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+    transform: scale(0.85);
+    filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.15));
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    border-radius: 52% 48% 51% 49% / 49% 51% 49% 51%;
+    transform: scale(0.82);
+    filter: drop-shadow(0 0 35px rgba(245, 158, 11, 0.35));
+    border-color: rgba(245, 158, 11, 0.75);
+  }
+}
+
+.lotus-busy-anim {
+  animation: organic-busy 3.5s ease-in-out infinite;
+  transform-origin: center;
+  border-width: 19px !important;
+}
+
 .lotus-idle-anim {
   animation: organic-breathe 7s ease-in-out infinite;
   transform-origin: center;
