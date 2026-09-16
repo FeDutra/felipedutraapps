@@ -689,63 +689,8 @@ export default function LivePage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
-  const [forceOpenClaw, setForceOpenClaw] = React.useState(false);
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
-  const [lotusIdentity, setLotusIdentity] = React.useState<string>("");
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Carrega identidade estática + memória do LotusVault (iCloud)
-      const loadStaticIdentity = Promise.all([
-        fetch('/identity/SOUL.md').then(r => r.text()).catch((e) => { console.warn('Static SOUL fetch failed:', e); return ''; }),
-        fetch('/identity/USER.md').then(r => r.text()).catch((e) => { console.warn('Static USER fetch failed:', e); return ''; })
-      ]);
-
-      const loadVaultMemory = (async () => {
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          // Resolve o HOME real via shell (process.env.HOME não existe no browser)
-          const home = (await invoke<string>('execute_shell_command', { command: 'echo $HOME' })).trim();
-          const LOTUS_VAULT = `${home}/Library/Mobile Documents/com~apple~CloudDocs/LotusVault`;
-          const vaultFiles = [
-            `${LOTUS_VAULT}/cerebro/MEMORY_HOT.md`,
-            `${LOTUS_VAULT}/cerebro/SOUL.md`,
-            `${LOTUS_VAULT}/cerebro/CEREBRO.md`,
-            `${LOTUS_VAULT}/coracao/CORACAO.md`,
-            `${LOTUS_VAULT}/sangue/SANGUE.md`,
-          ];
-          const results = await Promise.allSettled(
-            vaultFiles.map(path =>
-              invoke<string>('execute_shell_command', { command: `cat "${path}"` }).catch((e) => {
-                console.warn(`Cat failed for ${path}:`, e);
-                return null;
-              })
-            )
-          );
-          const vaultContent = results
-            .filter((r): r is PromiseFulfilledResult<string | null> => r.status === 'fulfilled' && r.value !== null)
-            .map(r => r.value as string)
-            .join('\n\n---\n\n');
-          return vaultContent;
-        } catch (err) {
-          console.error('[LotusVault] Failed to load memory from vault:', err);
-          return '';
-        }
-      })();
-
-      Promise.all([loadStaticIdentity, loadVaultMemory]).then(([[soul, user], vaultMemory]) => {
-        const parts = [soul, user, vaultMemory].filter(Boolean);
-        console.log('[LÓTUS_BOOT] Identidade carregada:', {
-          hasStaticSoul: !!soul,
-          hasStaticUser: !!user,
-          vaultMemoryLength: vaultMemory.length,
-          memorySource: vaultMemory.length > 0 ? 'localVault' : 'firestoreMirror_or_unavailable'
-        });
-        setLotusIdentity(parts.join('\n\n'));
-      }).catch(console.error);
-    }
-  }, []);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -807,15 +752,6 @@ export default function LivePage() {
       setIsMesaCollapsed(false);
     }
   }, [activeMesaArtifact]);
-
-
-
-  const [preferredModel, setPreferredModel] = React.useState<'405b' | 'deepseek'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('pulso-preferred-model') as '405b' | 'deepseek') || '405b';
-    }
-    return '405b';
-  });
 
   const [isArcaOpen, setIsArcaOpen] = React.useState(false);
   const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
@@ -2880,45 +2816,6 @@ export default function LivePage() {
     }
   };
 
-  const emitProgressUpdate = React.useCallback(async (
-    text: string,
-    options?: {
-      originRequestId?: string;
-      phase?: 'starting' | 'diagnosis' | 'execution' | 'blocked' | 'finalizing';
-    }
-  ) => {
-    if (!db || !activeContextNode.contextId || activeContextNode.contextId === 'loading') return;
-    
-    try {
-      const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-      
-      const phase = options?.phase || 'execution';
-      const originRequestId = options?.originRequestId || `local_progress_${Date.now()}`;
-
-      await addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
-        requestType: "progress_update",
-        type: "progress_update",
-        status: "progress",
-        sender: "lotus",
-        contextId: activeContextNode.contextId,
-        archived: false,
-        source: "openclaw_progress_delivery",
-        text: text,
-        message: text,
-        meta: {
-          originRequestId,
-          phase,
-          final: false
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      console.log(`[PULSO_EMIT_PROGRESS] ${text} (phase: ${phase})`);
-    } catch (err) {
-      console.warn('Falha ao emitir progress_update local:', err);
-    }
-  }, [db, activeContextNode.contextId]);
-
   const isSubmittingRef = React.useRef(false);
 
   const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting' }) => {
@@ -3013,118 +2910,11 @@ export default function LivePage() {
       setVoiceState('transcribing');
     }
 
-    // === AGENT ORCHESTRATOR (ReAct Loop) ===
-    let result: any = null;
-    try {
-      if (forceOpenClaw) {
-        console.log('[ROUTER] Forçando OpenClaw pelo botão (Pulando Groq)');
-        throw new Error('Forced OpenClaw');
-      }
-
-      if (originMode === 'text' || originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
-        const { agentOrchestrator } = await import('../../../lib/pulso/llm/AgentOrchestrator');
-        
-        // Passamos um callback para o Agente poder "falar" o que está pensando/fazendo no meio do caminho
-        const onStatusUpdate = (status: string) => {
-          if (originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
-            setVoiceState('speaking');
-            ttsAdapter.speak(status); // Fala o status (ex: "Buscando no Notion")
-          }
-          // Pode também jogar no log visual se quisermos no futuro
-          emitProgressUpdate(status, { originRequestId: preGeneratedReqId });
-        };
-
-        // Formata o histórico de mensagens do chat ativo para o LLM
-        const chatHistory = currentMessages
-          .filter(m => m.id !== 'welcome')
-          .map(m => ({
-            role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
-            content: m.text
-          }));
-
-        const modelId = preferredModel === 'deepseek' ? 'qwen/qwen3-32b' : 'openai/gpt-oss-120b';
-        result = await agentOrchestrator.run(messageText, onStatusUpdate, lotusIdentity, chatHistory, modelId);
-        console.log('[AGENT_ORCHESTRATOR]', result);
-
-        // Se o Agente NÃO repassou pra Lótus e retornou uma resposta definitiva
-        if (result.responseText && !result.isLotusHandoff) {
-          const pulsoMsg: Message = {
-            id: `pulso-local-${Date.now()}`,
-            sender: 'lotus', // Usando UI da Lótus para a fala do sistema
-            text: result.responseText,
-            timestamp: new Date(),
-            contextId: activeContextNode.contextId
-          };
-          setMessages(prev => [...prev, pulsoMsg]);
-          
-          if (db) {
-            const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-            addDoc(collection(db, 'workspaces/felipe_dutra/pulso_requests'), {
-              requestType: 'local_interaction',
-              status: 'success',
-              input: messageText,
-              openclawResult: { responseText: result.responseText },
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              mode: sendMode,
-              areaId: activeContextNode.areaId,
-              contextId: activeContextNode.contextId,
-              chatId: activeContextNode.chatId
-            }).catch(e => console.warn('Falha ao salvar interação local', e));
-          }
-
-          if (originMode === 'presence') {
-            // O controlador de sessão de voz VoiceSessionController vai cuidar da reprodução
-            // e de reabrir o microfone de forma unificada.
-            return result;
-          }
-
-          if (originMode === 'recording_once') {
-            voiceStateRef.current = 'speaking';
-            setVoiceState('speaking');
-            ttsAdapter.speak(
-              result.responseText,
-              undefined,
-              () => {
-                setVoiceState('idle');
-              }
-            );
-          }
-          
-          setContextTyping(sendingContextId, false);
-          return; // PULA o envio para a Lótus na nuvem
-        }
-      }
-      // Se o Groq local retornou desejo de handoff cognitivo
-      if (result.isLotusHandoff) {
-        console.log('[AGENT_ORCHESTRATOR] Handoff cognitivo para OpenClaw solicitado.');
-      }
-    } catch (e: any) {
-      if (e.message === 'Forced OpenClaw') {
-        console.log('[ROUTER] Redirecionando requisição para a OpenClaw na nuvem...');
-      } else {
-        console.error('[AGENT_ORCHESTRATOR] Erro crítico no Groq local (Lótus):', e);
-        const pulsoErrorMsg: Message = {
-          id: `pulso-error-${Date.now()}`,
-          sender: 'lotus',
-          text: `Erro de execução local: ${e?.message || 'Falha na Lótus local'}. Detalhes no console.`,
-          timestamp: new Date(),
-          contextId: activeContextNode.contextId
-        };
-        setMessages(prev => [...prev, pulsoErrorMsg]);
-        setContextTyping(sendingContextId, false);
-        return; // Trava apenas em erros reais de execução do Groq local
-      }
-    }
-    // ===================================
-
     if (originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
       voiceReplyRequestsRef.current.add(preGeneratedReqId);
     }
 
-    // Posta a requisição para a OpenClaw responder se o Groq local falhar ou se forceOpenClaw estiver ativo
-
-    // Send the request in the background (OpenClaw - apenas quando forceOpenClaw ativo)
+    // Toda interação da /live segue diretamente para a Lótus/OpenClaw.
     createPulsoConversationRequest(messageText, {
       mode: sendMode,
       areaId: activeContextNode.areaId,
@@ -5258,29 +5048,6 @@ ${data.transcription}`, {
             title="Gravar Reunião"
           >
             <Circle size={10} strokeWidth={3} className={voiceMode === 'recording_meeting' ? "text-[#b8283e]" : "text-[#fbf9f5]"} fill={voiceMode === 'recording_meeting' ? "currentColor" : "none"} />
-          </button>
-          <button
-            onClick={() => setForceOpenClaw(!forceOpenClaw)}
-            className={`transition-all duration-300 bg-transparent border-none cursor-pointer outline-none flex items-center justify-center h-8 ${forceOpenClaw ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] animate-pulse' : 'text-[#fbf9f5]/30 hover:text-white/60'}`}
-            title="Forçar roteamento para OpenClaw (Raciocínio Profundo)"
-          >
-            <span className="font-mono text-xs tracking-[0.2em]">{forceOpenClaw ? '( • )' : '(   )'}</span>
-          </button>
-          
-          <button
-            onClick={() => {
-              const next = preferredModel === '405b' ? 'deepseek' : '405b';
-              setPreferredModel(next);
-              localStorage.setItem('pulso-preferred-model', next);
-            }}
-            className={`transition-all duration-300 bg-transparent border-none cursor-pointer outline-none flex items-center justify-center h-8 w-6 font-mono text-xs tracking-widest ${
-              preferredModel === 'deepseek'
-                ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] opacity-100 animate-pulse'
-                : 'text-[#fbf9f5]/30 hover:text-white/60 opacity-60'
-            }`}
-            title={preferredModel === 'deepseek' ? "Lótus: Qwen3 32B (Raciocínio)" : "Lótus: GPT-OSS 120B (Geral)"}
-          >
-            &gt;
           </button>
 
           <button
