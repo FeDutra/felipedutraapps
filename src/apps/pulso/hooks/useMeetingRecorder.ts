@@ -1,20 +1,36 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { storage } from '../../../shared/lib/firebase/client';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 export interface MeetingChunkInfo {
   url: string;
   index: number;
   sessionId: string;
+  sizeBytes: number;
+  mimeType: string;
 }
 
-export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: MeetingChunkInfo, isFinal: boolean) => void) {
+interface StopMeetingResult {
+  sessionId: string;
+  chunks: MeetingChunkInfo[];
+}
+
+// Five-minute chunks stay comfortably below provider and Storage limits.
+const MEETING_CHUNK_DURATION_MS = 5 * 60 * 1000;
+
+export function useMeetingRecorder(
+  contextId: string,
+  onChunkUploaded?: (chunk: MeetingChunkInfo, isFinal: boolean) => void,
+) {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunkIndexRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const sessionIdRef = useRef<string>('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionIdRef = useRef('');
+  const chunkIndexRef = useRef(0);
+  const uploadedChunksRef = useRef<MeetingChunkInfo[]>([]);
+  const pendingUploadsRef = useRef<Set<Promise<MeetingChunkInfo>>>(new Set());
+  const uploadErrorRef = useRef<Error | null>(null);
   const isStoppingRef = useRef(false);
 
   const onChunkUploadedRef = useRef(onChunkUploaded);
@@ -22,109 +38,139 @@ export function useMeetingRecorder(contextId: string, onChunkUploaded?: (chunk: 
     onChunkUploadedRef.current = onChunkUploaded;
   }, [onChunkUploaded]);
 
-  // Fatiar a cada 15 minutos para evitar o limite de 25MB do Groq e perdas de memória
-  const CHUNK_DURATION_MS = 15 * 60 * 1000;
+  const uploadChunk = useCallback((blob: Blob, index: number, isFinal: boolean) => {
+    if (!storage) return Promise.reject(new Error('Firebase Storage indisponível.'));
 
-  const startRecording = useCallback(async (): Promise<boolean> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      sessionIdRef.current = Date.now().toString();
-      chunkIndexRef.current = 0;
-      isStoppingRef.current = false;
-      setIsRecording(true);
+    const sessionId = sessionIdRef.current;
+    const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
+    const filename = `meeting_${sessionId}_chunk_${index}.${extension}`;
+    const target = storageRef(storage, `pulso/chats/${contextId}/arca/recordings/${sessionId}/${filename}`);
 
-      const recordChunk = () => {
-        if (!streamRef.current) return;
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
-        const recorder = new MediaRecorder(streamRef.current, { mimeType });
-        mediaRecorderRef.current = recorder;
-
-        let audioChunks: Blob[] = [];
-
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        recorder.onstop = async () => {
-          if (audioChunks.length > 0) {
-            const blob = new Blob(audioChunks, { type: mimeType });
-            const currentIndex = chunkIndexRef.current++;
-            const filename = `meeting_${sessionIdRef.current}_chunk_${currentIndex}.webm`;
-            const isFinal = isStoppingRef.current;
-            
-            try {
-              const sRef = storageRef(storage, `pulso/chats/${contextId}/arca/recordings/${sessionIdRef.current}/${filename}`);
-              await uploadBytes(sRef, blob);
-              const url = await getDownloadURL(sRef);
-              if (onChunkUploadedRef.current) {
-                onChunkUploadedRef.current({ url, index: currentIndex, sessionId: sessionIdRef.current }, isFinal);
-              }
-            } catch (err) {
-              console.error("[MeetingRecorder] Erro no upload do chunk da reunião:", err);
-            }
-          }
-        };
-
-        recorder.start();
-      };
-
-      recordChunk();
-
-      intervalRef.current = setInterval(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          mediaRecorderRef.current.stop(); 
-          if (!isStoppingRef.current) {
-            recordChunk(); 
-          }
+    const promise = new Promise<MeetingChunkInfo>((resolve, reject) => {
+      const task = uploadBytesResumable(target, blob, { contentType: blob.type });
+      task.on('state_changed', undefined, reject, async () => {
+        try {
+          const url = await getDownloadURL(target);
+          const info: MeetingChunkInfo = {
+            url,
+            index,
+            sessionId,
+            sizeBytes: blob.size,
+            mimeType: blob.type,
+          };
+          uploadedChunksRef.current.push(info);
+          uploadedChunksRef.current.sort((a, b) => a.index - b.index);
+          onChunkUploadedRef.current?.(info, isFinal);
+          resolve(info);
+        } catch (error) {
+          reject(error);
         }
-      }, CHUNK_DURATION_MS);
+      });
+    }).catch((error: unknown) => {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      uploadErrorRef.current = normalized;
+      throw normalized;
+    });
 
-      return true;
-    } catch (err) {
-      console.error("[MeetingRecorder] Erro ao acessar microfone:", err);
-      setIsRecording(false);
-      throw err;
-    }
+    pendingUploadsRef.current.add(promise);
+    promise.finally(() => pendingUploadsRef.current.delete(promise)).catch(() => undefined);
+    return promise;
   }, [contextId]);
 
-  const stopRecording = useCallback(() => {
-    return new Promise<{sessionId: string, finalChunkUrl?: string}>((resolve) => {
-      isStoppingRef.current = true;
-      
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        const recorder = mediaRecorderRef.current;
-        const originalOnStop = recorder.onstop;
-        
-        recorder.onstop = async (e) => {
-          if (originalOnStop) {
-            // We need to wait for the original onstop to finish uploading
-            // Actually, originalOnStop is an async function in our implementation.
-            await (originalOnStop as Function)(e);
-          }
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-          }
-          setIsRecording(false);
-          resolve({ sessionId: sessionIdRef.current });
+  const startRecording = useCallback(async (): Promise<{ sessionId: string }> => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      throw new Error('Gravação de reunião não é suportada neste navegador.');
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    streamRef.current = stream;
+    sessionIdRef.current = `meeting_${Date.now()}`;
+    chunkIndexRef.current = 0;
+    uploadedChunksRef.current = [];
+    pendingUploadsRef.current.clear();
+    uploadErrorRef.current = null;
+    isStoppingRef.current = false;
+    setIsRecording(true);
+
+    const recordChunk = () => {
+      if (!streamRef.current) return;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4';
+      const recorder = new MediaRecorder(streamRef.current, { mimeType });
+      mediaRecorderRef.current = recorder;
+      const audioParts: Blob[] = [];
+
+      recorder.ondataavailable = event => {
+        if (event.data.size > 0) audioParts.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        if (audioParts.length === 0) return;
+        const blob = new Blob(audioParts, { type: mimeType });
+        const index = chunkIndexRef.current++;
+        void uploadChunk(blob, index, isStoppingRef.current);
+      };
+
+      recorder.start(1000);
+    };
+
+    recordChunk();
+    intervalRef.current = setInterval(() => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder?.state !== 'recording') return;
+      recorder.stop();
+      if (!isStoppingRef.current) recordChunk();
+    }, MEETING_CHUNK_DURATION_MS);
+
+    return { sessionId: sessionIdRef.current };
+  }, [uploadChunk]);
+
+  const stopRecording = useCallback(async (): Promise<StopMeetingResult> => {
+    isStoppingRef.current = true;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === 'recording') {
+      await new Promise<void>(resolve => {
+        const previousOnStop = recorder.onstop;
+        recorder.onstop = event => {
+          previousOnStop?.call(recorder, event);
+          resolve();
         };
         recorder.stop();
-      } else {
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
-        setIsRecording(false);
-        resolve({ sessionId: sessionIdRef.current });
-      }
-    });
+      });
+    }
+
+    // onstop schedules the final upload synchronously; wait for every chunk,
+    // including uploads that were still running from previous rotations.
+    await Promise.allSettled([...pendingUploadsRef.current]);
+
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+
+    if (uploadErrorRef.current) throw uploadErrorRef.current;
+    if (uploadedChunksRef.current.length === 0) {
+      throw new Error('Nenhum áudio foi capturado ou enviado.');
+    }
+
+    return {
+      sessionId: sessionIdRef.current,
+      chunks: [...uploadedChunksRef.current],
+    };
   }, []);
 
-  return { isRecording, startRecording, stopRecording, sessionId: sessionIdRef.current };
+  useEffect(() => () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    streamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
+
+  return { isRecording, startRecording, stopRecording };
 }

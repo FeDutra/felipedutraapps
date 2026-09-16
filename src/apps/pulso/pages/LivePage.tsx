@@ -1325,10 +1325,11 @@ export default function LivePage() {
   }, [voiceMode]);
   
   // Meeting Recorder Hook
-  const meetingChunksUrlsRef = React.useRef<string[]>([]);
-  const { isRecording: isMeetingRecording, startRecording: startMeetingRec, stopRecording: stopMeetingRec, sessionId: meetingSessionId } = useMeetingRecorder(activeContextNode?.contextId || 'general', (chunk, isFinal) => {
-    meetingChunksUrlsRef.current.push(chunk.url);
-  });
+  const activeMeetingIdRef = React.useRef<string | null>(null);
+  const activeMeetingContextRef = React.useRef<PulsoContextNode | null>(null);
+  const { startRecording: startMeetingRec, stopRecording: stopMeetingRec } = useMeetingRecorder(
+    activeMeetingContextRef.current?.contextId || activeContextNode?.contextId || 'general'
+  );
 
   const [voiceState, setVoiceState] = React.useState<UnifiedVoiceState>('idle');
 
@@ -2734,7 +2735,11 @@ export default function LivePage() {
 
   const isSubmittingRef = React.useRef(false);
 
-  const handleSendMessage = async (textToSend?: string, options?: { originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting' }) => {
+  const handleSendMessage = async (textToSend?: string, options?: {
+    originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting';
+    displayText?: string;
+    targetContextNode?: PulsoContextNode;
+  }) => {
     if (isTyping || isSubmittingRef.current) {
       console.warn('Blocked duplicate send: message already processing or submitting.');
       return;
@@ -2748,9 +2753,12 @@ export default function LivePage() {
     if (!rawMsg.trim() && !hasPending) return;
 
     const originMode = options?.originMode || 'text';
-    const cleanMsg = originMode === 'text' ? rawMsg : normalizeTranscript(rawMsg);
+    const cleanMsg = originMode === 'recording_once' || originMode === 'presence'
+      ? normalizeTranscript(rawMsg)
+      : rawMsg.trim();
+    const sendingNode = options?.targetContextNode || activeContextNode;
 
-    const sendingContextId = activeContextNode.contextId;
+    const sendingContextId = sendingNode.contextId;
     setContextTyping(sendingContextId, true);
 
     // Capture and clear pending attachments before async work
@@ -2812,9 +2820,9 @@ export default function LivePage() {
     const userMsg: Message = {
       id: `user-msg-${preGeneratedReqId}`,
       sender: 'user',
-      text: cleanMsg,
+      text: options?.displayText || cleanMsg,
       timestamp: new Date(),
-      contextId: activeContextNode.contextId,
+      contextId: sendingNode.contextId,
       replyTo: capturedReplyTo || undefined,
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined
     };
@@ -2833,13 +2841,13 @@ export default function LivePage() {
     // Toda interação da /live segue diretamente para a Lótus/OpenClaw.
     createPulsoConversationRequest(messageText, {
       mode: sendMode,
-      areaId: activeContextNode.areaId,
-      contextId: activeContextNode.contextId,
-      chatId: activeContextNode.chatId,
+      areaId: sendingNode.areaId,
+      contextId: sendingNode.contextId,
+      chatId: sendingNode.chatId,
       attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
       requestId: preGeneratedReqId,
-      context: contextStatesMap[activeContextNode.contextId]?.strongState ? {
-        reusableContext: contextStatesMap[activeContextNode.contextId].strongState
+      context: contextStatesMap[sendingNode.contextId]?.strongState ? {
+        reusableContext: contextStatesMap[sendingNode.contextId].strongState
       } : undefined
     }).then(async (newRequest) => {
       // t2: Moment request vira queued_for_openclaw in Firestore
@@ -2880,7 +2888,7 @@ export default function LivePage() {
         sender: 'lotus',
         text: `falha ao enviar para a Lótus: ${err?.message || 'erro de persistência'}.`,
         timestamp: new Date(),
-        contextId: activeContextNode.contextId
+        contextId: sendingNode.contextId
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
     }).finally(() => {
@@ -3264,80 +3272,154 @@ export default function LivePage() {
 
   const toggleMeetingRecording = React.useCallback(async () => {
     if (voiceModeRef.current === 'recording_meeting') {
-      setToastMessage('processando resumo da reunião...');
-      const { sessionId: sId } = await stopMeetingRec();
-      const finalUrls = [...meetingChunksUrlsRef.current];
       setVoiceMode('off');
       voiceModeRef.current = 'off';
-      setPresenceMode(false);
-      
-      console.log('[MEETING] Parando gravação da reunião. Enviando chunks para processamento...', finalUrls);
-      
-      if (finalUrls.length > 0) {
-        try {
-          const isTauriEnv = typeof window !== 'undefined' && (
-            window.location.protocol === 'tauri:' ||
-            !!(window as any).__TAURI__ ||
-            !!(window as any).__TAURI_INTERNALS__
-          );
+      setToastMessage('salvando áudio da reunião...');
 
-          const endpointUrl = isTauriEnv 
-            ? 'https://felipedutraapps.web.app/api/pulso/process-meeting' 
-            : '/api/pulso/process-meeting';
+      try {
+        const { sessionId: sId, chunks } = await stopMeetingRec();
+        const meetingContext = activeMeetingContextRef.current || activeContextNode;
+        const meetingRef = db ? doc(db, firestorePaths.meeting(sId)) : null;
+        const recordingLinks = chunks.map(chunk => chunk.url);
+        if (meetingRef) await setDoc(meetingRef, {
+          id: sId,
+          contextId: meetingContext.contextId || 'general',
+          areaId: meetingContext.areaId || null,
+          sessionLabel: meetingContext.label || null,
+          status: 'transcribing',
+          recordingLinks,
+          chunks,
+          endedAt: new Date(),
+          updatedAt: new Date(),
+        }, { merge: true });
+
+        console.log('[MEETING] Áudio preservado. Enviando para transcrição...', { sessionId: sId, chunks: chunks.length });
+        setToastMessage('transcrevendo reunião...');
+
+          // Hosting closes long-running rewrites before longer meetings finish.
+          // The stable Cloud Function URL honors the function's 9-minute timeout.
+          const endpointUrl = 'https://us-central1-felipedutraapps.cloudfunctions.net/pulsoProcessMeeting';
+
+          const currentUser = authService.getCurrentUser();
+          const authToken = currentUser ? await currentUser.getIdToken() : null;
+          if (!authToken) throw new Error('Sessão de autenticação indisponível para processar a reunião.');
 
           const reqRes = await fetch(endpointUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
             body: JSON.stringify({
-              contextId: activeContextNode?.contextId || 'general',
+              contextId: meetingContext.contextId || 'general',
               sessionId: sId || Date.now().toString(),
-              chunkUrls: finalUrls
+              chunkUrls: chunks
             })
           });
-          
-          if (!reqRes.ok) throw new Error('Falha ao processar reunião.');
-          const data = await reqRes.json();
-          
-          if (data.transcription && data.summary) {
-            console.log('[MEETING] Transcrição e resumo recebidos:', data);
-            setToastMessage('resumo da reunião concluído!');
-            setTimeout(() => setToastMessage(null), 3000);
-            
-            // Enviar para o Chat forçando o Deep Mode (OpenClaw)
-            await handleSendMessage(`Reunião gravada e transcrita com sucesso. Aqui está o resumo e a transcrição. Por favor, crie um Plano de Ação detalhado com base nisso:
 
-**Resumo:**
-${data.summary}
-
-**Transcrição:**
-${data.transcription}`, {
-              originMode: 'recording_meeting'
-            });
-          } else {
-            setToastMessage('reunião processada, mas sem conteúdo.');
-            setTimeout(() => setToastMessage(null), 3000);
+          if (!reqRes.ok) {
+            const payload = await reqRes.json().catch(() => null);
+            throw new Error(payload?.error || `Falha ao processar reunião (${reqRes.status}).`);
           }
-        } catch (error) {
-          console.error('[MEETING] Erro no processamento:', error);
-          setToastMessage('falha ao processar reunião.');
-          setTimeout(() => setToastMessage(null), 4000);
+          const data = await reqRes.json();
+
+          if (data.transcription?.trim()) {
+            if (meetingRef) await setDoc(meetingRef, {
+              status: 'analysis_queued',
+              transcription: data.transcription,
+              transcriptionProvider: 'gemini-2.5-flash',
+              transcriptionPartial: !!data.partial,
+              failedChunks: data.failedChunks || [],
+              updatedAt: new Date(),
+            }, { merge: true });
+
+            console.log('[MEETING] Transcrição recebida. Encaminhando para análise contextual da Lótus.', data);
+            setToastMessage('analisando contexto e próximos passos...');
+
+            await handleSendMessage(`REUNIÃO ENCERRADA — PROCESSAMENTO CONTEXTUAL
+
+Esta reunião foi gravada pelo botão dedicado de reunião da PULSO.
+
+Referência: ${sId}
+Área: ${meetingContext.areaId || 'não informada'}
+Sessão: ${meetingContext.label || meetingContext.contextId || 'não informada'}
+Contexto da sessão: ${meetingContext.contextId || 'general'}
+Transcrição parcial: ${data.partial ? 'sim' : 'não'}
+
+Analise a transcrição à luz do contexto desta sessão, dos projetos, das pessoas e das fontes de verdade disponíveis. Produza:
+1. resumo executivo claro e fiel;
+2. pauta consolidada por assunto;
+3. decisões e acordos firmados;
+4. plano de ação com responsável, entrega, prazo citado e dependências;
+5. participantes identificados, distinguindo confirmação de hipótese;
+6. destino recomendado no Notion e vínculos com projetos existentes;
+7. pacote de distribuição: quem deve receber, por qual canal e qual mensagem/documento;
+8. dúvidas objetivas que impeçam atribuição ou envio.
+
+Registre a reunião no Notion no destino adequado quando houver segurança contextual suficiente. Não envie WhatsApp, e-mail ou mensagem a terceiros sem aprovação explícita do Fe. Ao final, apresente os envios propostos para aprovação.
+
+TRANSCRIÇÃO:
+${data.transcription}`, {
+              originMode: 'recording_meeting',
+              displayText: `Reunião encerrada em “${meetingContext.label || meetingContext.contextId}”. Processando registro, decisões e próximos passos.`,
+              targetContextNode: meetingContext,
+            });
+
+            setToastMessage('reunião entregue à Lótus');
+            setTimeout(() => setToastMessage(null), 3500);
+          } else {
+            throw new Error('A transcrição retornou vazia.');
+          }
+      } catch (error: any) {
+        console.error('[MEETING] Erro no processamento:', error);
+        if (db && activeMeetingIdRef.current) {
+          await setDoc(doc(db, firestorePaths.meeting(activeMeetingIdRef.current)), {
+            status: 'failed',
+            errorMessage: error?.message || String(error),
+            updatedAt: new Date(),
+          }, { merge: true }).catch(updateError => {
+            console.warn('[MEETING] Não foi possível persistir a falha:', updateError);
+          });
         }
-      } else {
-        setToastMessage('reunião vazia ou muito curta.');
-        setTimeout(() => setToastMessage(null), 3000);
+        setToastMessage(error?.message || 'falha ao processar reunião.');
+        setTimeout(() => setToastMessage(null), 5000);
       }
-      meetingChunksUrlsRef.current = []; // Resetar
+      activeMeetingContextRef.current = null;
       
     } else {
-      meetingChunksUrlsRef.current = [];
-      await startMeetingRec();
-      setVoiceMode('recording_meeting');
-      voiceModeRef.current = 'recording_meeting';
-      setPresenceMode(true);
-      setToastMessage('gravador de reunião iniciado');
-      setTimeout(() => setToastMessage(null), 3000);
+      try {
+        const meetingContext = { ...activeContextNode };
+        activeMeetingContextRef.current = meetingContext;
+        const { sessionId } = await startMeetingRec();
+        activeMeetingIdRef.current = sessionId;
+        setVoiceMode('recording_meeting');
+        voiceModeRef.current = 'recording_meeting';
+        setToastMessage('gravação de reunião iniciada');
+        setTimeout(() => setToastMessage(null), 3000);
+        if (db) {
+          await setDoc(doc(db, firestorePaths.meeting(sessionId)), {
+            id: sessionId,
+            date: new Date(),
+            startedAt: new Date(),
+            updatedAt: new Date(),
+            status: 'recording',
+            contextId: meetingContext.contextId || 'general',
+            areaId: meetingContext.areaId || null,
+            sessionLabel: meetingContext.label || null,
+            participantsRefs: [],
+            recordingLinks: [],
+          }, { merge: true }).catch(error => {
+            console.warn('[MEETING] Gravação iniciada, mas o registro inicial não foi persistido:', error);
+          });
+        }
+      } catch (error: any) {
+        console.error('[MEETING] Falha ao iniciar:', error);
+        activeMeetingContextRef.current = null;
+        setToastMessage(error?.message || 'não foi possível iniciar a gravação.');
+        setTimeout(() => setToastMessage(null), 5000);
+      }
     }
-  }, [voiceMode, startMeetingRec, stopMeetingRec, activeContextNode, handleSendMessage]);
+  }, [startMeetingRec, stopMeetingRec, activeContextNode, handleSendMessage, db]);
 
   const toggleRecordingOnce = React.useCallback(async () => {
     hasRetriedSpeechRecognitionRef.current = false;

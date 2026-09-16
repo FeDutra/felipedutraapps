@@ -112,71 +112,36 @@ async function runExtractionPipeline(requestId, data) {
     if (pendingExtraction.length === 0) {
         return;
     }
-    v2_1.logger.info(`🧪 Iniciando extração de ${pendingExtraction.length} artefato(s) para o request ${requestId}`);
+    v2_1.logger.info(`🧪 Liberando ${pendingExtraction.length} anexo(s) para o request ${requestId}`);
     const updatedAttachments = [...attachments];
     for (let i = 0; i < updatedAttachments.length; i++) {
         const att = updatedAttachments[i];
         if (att.status !== "processing_extraction")
             continue;
-        try {
-            // 1. Determina o caminho de download
-            let storagePath = att.storageRef;
-            if (!storagePath && att.url) {
-                // Tenta extrair o path caso o Storage URL seja direto
-                const decodedUrl = decodeURIComponent(att.url);
-                const match = decodedUrl.match(/\/o\/(.+)\?/);
-                if (match && match[1]) {
-                    storagePath = match[1];
-                }
+        // 1. Determina o caminho de download (storagePath)
+        let storagePath = att.storageRef;
+        if (!storagePath && att.url) {
+            const decodedUrl = decodeURIComponent(att.url);
+            const match = decodedUrl.match(/\/o\/(.+)\?/);
+            if (match && match[1]) {
+                storagePath = match[1];
             }
-            if (!storagePath) {
-                throw new Error("Nenhum storageRef ou URL válido encontrado para o download do arquivo.");
-            }
-            // 2. Baixa o arquivo do Storage
-            v2_1.logger.info(`📥 Baixando arquivo: ${att.name} (${storagePath})`);
-            const fileBuffer = await downloadFileFromStorage(storagePath);
-            // 3. Processa dependendo do tipo MIME
-            let resultText = { summary: "", textExtracted: "", keyExcerpts: [] };
-            if (att.mimeType.startsWith("image/")) {
-                v2_1.logger.info(`🧠 Processando imagem multimodal (Gemini): ${att.name}`);
-                resultText = await processImageArtifact(fileBuffer, att.mimeType, att.name);
-            }
-            else {
-                // Fallback básico para não-imagens (PDFs/Text) - OCR simples / Leitura de string
-                v2_1.logger.info(`📄 Processando arquivo como texto/documento: ${att.name}`);
-                const rawContent = fileBuffer.toString("utf-8");
-                resultText = {
-                    summary: `Arquivo de texto contendo ${att.name}`,
-                    textExtracted: rawContent.slice(0, 10000), // Protege estouro de contexto incial
-                    keyExcerpts: [rawContent.slice(0, 120)]
-                };
-            }
-            // 4. Atualiza os dados do artefato baseado na doutrina Text-First
-            att.summary = resultText.summary || `Anexo: ${att.name}`;
-            att.textExtracted = resultText.textExtracted || "";
-            att.keyExcerpts = resultText.keyExcerpts || [];
-            att.status = "ready";
-            att.availableToLotus = true;
-            att.includedInline = true;
-            att.fullTextDeferred = false;
-            v2_1.logger.info(`✅ Extração concluída com sucesso para o anexo ${att.name}`);
         }
-        catch (err) {
-            v2_1.logger.error(`❌ Falha ao extrair artefato ${att.name}:`, err.message);
-            att.status = "failed";
-            att.availableToLotus = false;
-            att.summary = `Falha na extração de texto: ${err.message}`;
-        }
+        // 2. Seta os metadados finais limpos de acordo com o contrato da Lótus
+        att.status = "ready";
+        att.availableToLotus = true;
+        att.includedInline = true;
+        att.storageRef = storagePath || `pulso/chats/${requestId}/attachments/${att.id}_${att.name}`;
+        att.summary = `Anexo: ${att.name}`;
     }
-    // 5. Verifica se todos os anexos já foram processados
-    const stillProcessing = updatedAttachments.some((a) => a.status === "processing_extraction");
-    const nextStatus = stillProcessing ? "processing_extraction" : "queued_for_openclaw";
-    await docRef.update({
+    // 3. Atualiza o status do request para queued_for_openclaw imediatamente
+    const updatePayload = {
         attachments: updatedAttachments,
-        status: nextStatus,
+        status: "queued_for_openclaw",
         updatedAt: firestore_2.FieldValue.serverTimestamp()
-    });
-    v2_1.logger.info(`🏁 Pipeline concluído para request ${requestId}. Novo status: ${nextStatus}`);
+    };
+    await docRef.update(updatePayload);
+    v2_1.logger.info(`🏁 Pipeline concluído para request ${requestId}. Status atualizado para queued_for_openclaw.`);
 }
 /**
  * Gatilhos de Firestore para o Request
