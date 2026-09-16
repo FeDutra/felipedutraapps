@@ -61,11 +61,11 @@ export const sessionsService = {
   },
 
   /**
-   * Updates lastMessageAt timestamp on the session — called whenever a message is sent.
+   * Records user activity without marking the session as having a new incoming
+   * message. Unread state is driven exclusively by real Lótus responses.
    */
   touchSession: async (id: string): Promise<void> => {
     await pulsoRepository.updateSession(id, {
-      lastMessageAt: new Date(),
       updatedAt: new Date(),
     }).catch(err => console.warn('[sessionsService] touchSession failed:', err));
   },

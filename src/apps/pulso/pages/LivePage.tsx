@@ -893,6 +893,7 @@ export default function LivePage() {
 
   const pageLoadTimeRef = React.useRef(new Date());
   const [lastReadTimes, setLastReadTimes] = React.useState<Record<string, string>>({});
+  const [latestIncomingTimes, setLatestIncomingTimes] = React.useState<Record<string, string>>({});
   
   const markContextAsRead = React.useCallback((contextId: string) => {
     const nowStr = new Date().toISOString();
@@ -937,7 +938,9 @@ export default function LivePage() {
     allContextNodes.forEach(node => {
       if (node.contextId) {
         const lastRead = lastReadTimes[node.contextId] || pageLoadTimeRef.current.toISOString();
-        const lastMsgAt = node.lastMessageAt || node.updatedAt;
+        // Only real Lótus responses create unread state. Session updatedAt also
+        // changes when the user sends, renames or otherwise touches a chat.
+        const lastMsgAt = latestIncomingTimes[node.contextId];
         if (lastMsgAt) {
           const lastMsgDate = safeConvertToDate(lastMsgAt);
           const lastMsgTime = lastMsgDate ? lastMsgDate.getTime() : 0;
@@ -950,7 +953,7 @@ export default function LivePage() {
       }
     });
     return unreads;
-  }, [allContextNodes, lastReadTimes, activeContextNode.contextId]);
+  }, [allContextNodes, lastReadTimes, latestIncomingTimes, activeContextNode.contextId]);
 
   // ── Session Restore (runs once when sessions finish loading) ──────────────
   // IMPORTANT: This ref tracks whether we already restored once, so the persist
@@ -1416,8 +1419,8 @@ export default function LivePage() {
   // ── Notification State & Programmatic Sound Cues ───────────────────────
   const [notificationSoundEnabled, setNotificationSoundEnabled] = React.useState(true);
   
-  const seenMessagesRef = React.useRef<Set<string>>(new Set());
-  const isHistoryLoadedRef = React.useRef<boolean>(false);
+  const globalIncomingSeenRef = React.useRef<Set<string>>(new Set());
+  const globalIncomingReadyRef = React.useRef(false);
 
   const playNotificationSound = React.useCallback((isSameSession: boolean) => {
     if (!notificationSoundEnabled) return;
@@ -2174,83 +2177,6 @@ export default function LivePage() {
             }
           }
         });
-        // ── New-message sound / notification detection ───────────────────────
-        // On the very first snapshot (isHistoryLoadedRef = false) we just seed
-        // seenMessagesRef so that historical messages are never treated as new.
-        if (!isHistoryLoadedRef.current) {
-          chatHistory.forEach(msg => {
-            if (msg.id) seenMessagesRef.current.add(msg.id);
-          });
-          isHistoryLoadedRef.current = true;
-        } else {
-          // All subsequent snapshots: only fire for messages we haven't seen yet
-          // AND whose timestamp is strictly AFTER the page load time.
-          chatHistory.forEach((msg) => {
-            if (msg.sender === 'lotus' && msg.id && !seenMessagesRef.current.has(msg.id)) {
-              seenMessagesRef.current.add(msg.id);
-
-              const msgTime = msg.timestamp ? new Date(msg.timestamp).getTime() : 0;
-              // Use strict > (no negative window) so historical messages never sneak through
-              const isAfterPageLoad = msgTime > pageLoadTimeRef.current.getTime();
-
-              if (isAfterPageLoad) {
-                const activeContext = activeContextNodeRef.current;
-                const isSame = !msg.contextId || msg.contextId === activeContext.contextId;
-
-                if (isSame) {
-                  playNotificationSound(true);
-                  // Atualiza lastMessageAt na sessão para que o watchdog de inativos
-                  // possa detectar quando ESTA sessão receber mensagem enquanto inativa
-                  if (db && activeContext.contextId && msg.contextId) {
-                    const sessionDocRef = doc(db, firestorePaths.session(msg.contextId));
-                    updateDoc(sessionDocRef, {
-                      lastMessageAt: new Date().toISOString(),
-                    }).catch((err: any) => {
-                      console.warn('[PULSO_SESSION_TIMESTAMP] Failed to update lastMessageAt:', err);
-                    });
-                  }
-                } else {
-                  playNotificationSound(false);
-                }
-
-                // Visual Desktop Notification
-                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-                  const sessionsList = sessionsRef.current;
-                  const session = sessionsList.find(s => s.contextId === msg.contextId);
-                  const chatLabel = session?.label || 'geral';
-                  const areaLabel = session?.areaId ? (AREA_NAMES[session.areaId] || session.areaId.replace('area_', '')) : 'livre';
-
-                  try {
-                    new window.Notification(`Lótus — [${areaLabel}] ${chatLabel}`, {
-                      body: msg.text,
-                      tag: msg.id,
-                    });
-                  } catch (err) {
-                    console.warn('Failed to fire desktop notification:', err);
-                  }
-                }
-
-                // Voice Presence Proativo: Se a mensagem veio de fora (não gerada nesta aba), fala em voz alta
-                const isRemoteMessage = !msg.requestId || !latencyMapRef.current[msg.requestId];
-                if (isRemoteMessage && msg.text) {
-                  console.log('[PULSO_PRESENCE_PROACTIVE_TTS]', { msgId: msg.id, text: msg.text });
-                  playPresenceSoundCue('speak_start');
-                  voiceStateRef.current = 'speaking';
-                  setVoiceState('speaking');
-                  ttsAdapter.speak(
-                    msg.text,
-                    () => {},
-                    () => {
-                      voiceStateRef.current = 'idle';
-                      setVoiceState('idle');
-                    }
-                  );
-                }
-              }
-            }
-          });
-        }
-
         setState((prev: any) => {
           if (!prev) return prev;
           return { ...prev, allRequests: sortedRequests };
@@ -2362,95 +2288,119 @@ export default function LivePage() {
     };
   }, [db]);
 
-  // ── Global Session Watchdog: notificações para chats inativos ────────────
-  // O listener principal (acima) só escuta o contexto ativo. Portanto, quando
-  // a Lótus responde em outro chat, nenhuma notificação era disparada.
-  // Este listener paralelo observa lastMessageAt em TODAS as sessões e compara
-  // com o lastReadTimes local para detectar mensagens novas em chats fora do foco.
-  const inactiveNotifSeenRef = React.useRef<Record<string, string>>({});
+  // ── Global incoming-message listener ─────────────────────────────────────
+  // Watches real Lótus outputs in every chat. User sends and generic session
+  // activity never create unread state or desktop notifications.
   React.useEffect(() => {
     const isFirestore = pulsoService.getDataMode() === 'firestore';
-    if (!isFirestore || !db || !sessionsLoaded) return;
+    if (!isFirestore || !db) return;
 
-    let unsubSessions: (() => void) | null = null;
+    let unsubscribe: (() => void) | null = null;
 
     try {
-      unsubSessions = onSnapshot(
-        collection(db, firestorePaths.sessions()),
+      const incomingQuery = query(
+        collection(db, firestorePaths.requests()),
+        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"])
+      );
+
+      unsubscribe = onSnapshot(
+        incomingQuery,
         (snapshot) => {
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as Session;
-            const contextId = docSnap.id;
+          const latestByContext: Record<string, string> = {};
 
-            if (!contextId || data.archived) return;
+          snapshot.forEach((docSnap: any) => {
+            const req = docSnap.data();
+            const contextId = req.contextId;
+            const responseText = req.openclawResult?.responseText;
+            const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
+            if (!contextId || req.archived === true || !isAccepted || !responseText?.trim()) return;
 
-            // Ignora o contexto que o usuário está olhando agora
-            if (contextId === activeContextNodeRef.current.contextId) return;
+            const incomingDate = safeConvertToDate(req.updatedAt)
+              || safeConvertToDate(req.openclawProcessedAt)
+              || safeConvertToDate(req.requestedAt);
+            if (!incomingDate) return;
 
-            const lastMsgAtRaw = data.lastMessageAt;
-            if (!lastMsgAtRaw) return;
-
-            const lastMsgAtStr = typeof lastMsgAtRaw === 'object' && typeof (lastMsgAtRaw as any).toDate === 'function'
-              ? (lastMsgAtRaw as any).toDate().toISOString()
-              : String(lastMsgAtRaw);
-
-            // Já vimos essa versão desta sessão? (evita re-disparar no mesmo lastMessageAt)
-            if (inactiveNotifSeenRef.current[contextId] === lastMsgAtStr) return;
-
-            const lastMsgTime = new Date(lastMsgAtStr).getTime();
-
-            // Apenas mensagens após o carregamento da página
-            if (lastMsgTime <= pageLoadTimeRef.current.getTime()) {
-              inactiveNotifSeenRef.current[contextId] = lastMsgAtStr;
-              return;
+            const incomingIso = incomingDate.toISOString();
+            if (!latestByContext[contextId] || incomingIso > latestByContext[contextId]) {
+              latestByContext[contextId] = incomingIso;
             }
+          });
 
-            // Apenas se ainda não foi lido
-            const lastReadStr = lastReadTimes[contextId] || pageLoadTimeRef.current.toISOString();
-            const lastReadTime = new Date(lastReadStr).getTime();
-            if (lastMsgTime <= lastReadTime) {
-              inactiveNotifSeenRef.current[contextId] = lastMsgAtStr;
-              return;
-            }
+          setLatestIncomingTimes(latestByContext);
 
-            // Marca como visto para não repetir
-            inactiveNotifSeenRef.current[contextId] = lastMsgAtStr;
+          // The first snapshot establishes history and must never notify.
+          if (!globalIncomingReadyRef.current) {
+            snapshot.forEach((docSnap: any) => {
+              const req = docSnap.data();
+              const responseText = req.openclawResult?.responseText;
+              if (responseText?.trim()) globalIncomingSeenRef.current.add(docSnap.id);
+            });
+            globalIncomingReadyRef.current = true;
+            return;
+          }
 
-            // ── Disparo: Som de chat inativo ────────────────────────────
-            console.log('[PULSO_INACTIVE_NOTIF] Nova mensagem em chat inativo:', contextId);
-            playNotificationSound(false);
+          snapshot.docChanges().forEach((change: any) => {
+            if (change.type === 'removed') return;
+            const req = change.doc.data();
+            const requestId = change.doc.id;
+            const contextId = req.contextId;
+            const responseText = req.openclawResult?.responseText;
+            const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
+            if (!contextId || req.archived === true || !isAccepted || !responseText?.trim()) return;
+            if (globalIncomingSeenRef.current.has(requestId)) return;
 
-            // ── Disparo: Notificação de Desktop ─────────────────────────
+            const incomingDate = safeConvertToDate(req.updatedAt)
+              || safeConvertToDate(req.openclawProcessedAt)
+              || safeConvertToDate(req.requestedAt);
+            if (!incomingDate || incomingDate.getTime() <= pageLoadTimeRef.current.getTime()) return;
+
+            globalIncomingSeenRef.current.add(requestId);
+            const isActive = contextId === activeContextNodeRef.current.contextId;
+            if (isActive) markContextAsRead(contextId);
+
+            playNotificationSound(isActive);
+
             if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-              const sessionsList = sessionsRef.current;
-              const session = sessionsList.find(s => s.contextId === contextId);
+              const session = sessionsRef.current.find(s => s.contextId === contextId);
               const chatLabel = session?.label || contextId;
               const areaLabel = session?.areaId
                 ? (AREA_NAMES[session.areaId] || session.areaId.replace('area_', ''))
                 : 'livre';
               try {
                 new window.Notification(`Lótus — [${areaLabel}] ${chatLabel}`, {
-                  body: 'Nova mensagem recebida.',
-                  tag: `inactive_${contextId}_${lastMsgAtStr}`,
+                  body: responseText,
+                  tag: `incoming_${requestId}`,
                 });
               } catch (err) {
-                console.warn('[PULSO_INACTIVE_NOTIF] Desktop notification failed:', err);
+                console.warn('[PULSO_GLOBAL_INCOMING] Desktop notification failed:', err);
               }
+            }
+
+            const isRemoteMessage = !latencyMapRef.current[requestId];
+            if (isRemoteMessage && isActive) {
+              console.log('[PULSO_PRESENCE_PROACTIVE_TTS]', { requestId, text: responseText });
+              playPresenceSoundCue('speak_start');
+              voiceStateRef.current = 'speaking';
+              setVoiceState('speaking');
+              ttsAdapter.speak(responseText, () => {}, () => {
+                voiceStateRef.current = 'idle';
+                setVoiceState('idle');
+              });
             }
           });
         },
         (err) => {
-          console.error('[PULSO_INACTIVE_NOTIF] Sessions watchdog error:', err);
+          console.error('[PULSO_GLOBAL_INCOMING] Requests listener error:', err);
         }
       );
     } catch (err) {
-      console.error('[PULSO_INACTIVE_NOTIF] Failed to start sessions watchdog:', err);
+      console.error('[PULSO_GLOBAL_INCOMING] Failed to start requests listener:', err);
     }
 
     return () => {
-      if (unsubSessions) unsubSessions();
+      if (unsubscribe) unsubscribe();
     };
-  }, [db, sessionsLoaded, lastReadTimes, activeContextNode.contextId]);
+  }, [db, markContextAsRead]);
 
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
