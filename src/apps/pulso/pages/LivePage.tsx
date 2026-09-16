@@ -3543,7 +3543,7 @@ export default function LivePage() {
       maxRecordingTimeoutRef.current = setTimeout(() => {
         console.log('Max recording timeout reached.');
         stopVoiceRecognition();
-      }, 60000); // 60 seconds max
+      }, 7 * 60 * 1000); // 7 minutes max
 
     } catch (error) {
       console.error('Microphone error:', error);
