@@ -663,6 +663,7 @@ interface Message {
   replyTo?: { id: string; sender: string; text: string } | null;
   isProgressUpdate?: boolean;
   phase?: string | null;
+  originRequestId?: string | null;
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence' | 'recording_meeting';
@@ -1046,44 +1047,7 @@ export default function LivePage() {
     });
   }, [messages, activeContextNode.contextId]);
 
-  const [latestProgressUpdate, setLatestProgressUpdate] = React.useState<Message | null>(null);
-
-  React.useEffect(() => {
-    setLatestProgressUpdate(null);
-  }, [activeContextNode.contextId]);
-
-  React.useEffect(() => {
-    const lotusMsgs = currentMessages.filter(m => m.sender === 'lotus');
-    if (lotusMsgs.length === 0) {
-      setLatestProgressUpdate(null);
-      return;
-    }
-    const lastMsg = lotusMsgs[lotusMsgs.length - 1];
-    
-    if (lastMsg.isProgressUpdate) {
-      const msgTime = lastMsg.timestamp instanceof Date 
-        ? lastMsg.timestamp.getTime() 
-        : new Date(lastMsg.timestamp).getTime();
-      const now = Date.now();
-      const age = now - msgTime;
-      const TTL = 90000; // 90 seconds
-      
-      if (age < TTL) {
-        setLatestProgressUpdate(lastMsg);
-        
-        const timeLeft = TTL - age;
-        const timer = setTimeout(() => {
-          setLatestProgressUpdate(null);
-        }, timeLeft);
-        
-        return () => clearTimeout(timer);
-      } else {
-        setLatestProgressUpdate(null);
-      }
-    } else {
-      setLatestProgressUpdate(null);
-    }
-  }, [currentMessages]);
+  const [expandedProgressGroups, setExpandedProgressGroups] = React.useState<Record<string, boolean>>({});
 
   const setContextTyping = (contextId: string, typing: boolean) => {
     setContextTypingStates(prev => ({ ...prev, [contextId]: typing }));
@@ -1882,7 +1846,8 @@ export default function LivePage() {
               timestamp: reqTime,
               contextId: req.contextId || null,
               isProgressUpdate: true,
-              phase: req.meta?.phase || null
+              phase: req.meta?.phase || null,
+              originRequestId: req.meta?.originRequestId || null
             });
           }
           
@@ -2058,7 +2023,8 @@ export default function LivePage() {
               timestamp: reqTime,
               contextId: req.contextId || null,
               isProgressUpdate: true,
-              phase: req.meta?.phase || null
+              phase: req.meta?.phase || null,
+              originRequestId: req.meta?.originRequestId || null
             });
           }
 
@@ -3746,10 +3712,6 @@ ${data.transcription}`, {
 
   // Animation resolver
   const getLotusAnimClass = () => {
-    if (contextStatesMap[activeContextNode.contextId]?.lightState?.presence === 'busy') {
-      return 'lotus-busy-anim';
-    }
-
     if (voiceModeRef.current === 'presence') {
       if (voiceStateRef.current === 'presence_listening') return 'lotus-listening-anim';
       if (voiceStateRef.current === 'transcribing' || voiceStateRef.current === 'submitting') return 'lotus-thinking-anim';
@@ -4186,24 +4148,6 @@ ${data.transcription}`, {
                 </div>
               )}
               
-              {/* Presença Transitória Minimalista (Design Ocultista PULSO) */}
-              {contextStatesMap[activeContextNode.contextId]?.lightState?.presence === 'busy' && !(isAtelieActive || isEstudioActive) && (
-                <div className="absolute top-[280px] flex flex-col items-center justify-center w-full text-center pointer-events-none select-none">
-                  <span className="font-mono text-[9px] tracking-[0.2em] text-[#fbf9f5]/20 uppercase">
-                    {activeContextNode.label || 'sessão'}
-                  </span>
-                  <span className="font-mono text-[11px] tracking-[0.15em] text-[#fbf9f5]/40 mt-1 max-w-[280px] truncate">
-                    {contextStatesMap[activeContextNode.contextId].lightState.lastUpdate || 'executando...'}
-                  </span>
-                  {contextStatesMap[activeContextNode.contextId].lightState.progressPercent !== undefined && contextStatesMap[activeContextNode.contextId].lightState.progressPercent !== null && (
-                    <span className="font-mono text-[9px] tracking-[0.2em] text-[#fbf9f5]/15 mt-1">
-                      {"||||||||||".substring(0, Math.min(10, Math.max(0, Math.round(contextStatesMap[activeContextNode.contextId].lightState.progressPercent / 10))))}
-                      {"..........".substring(0, Math.min(10, Math.max(0, 10 - Math.round(contextStatesMap[activeContextNode.contextId].lightState.progressPercent / 10))))}
-                      {` ${contextStatesMap[activeContextNode.contextId].lightState.progressPercent}%`}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -4247,16 +4191,71 @@ ${data.transcription}`, {
               onScroll={handleScroll}
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
             >
-              {currentMessages.map((msg) => {
+              {currentMessages.map((msg, msgIndex) => {
                 if (msg.isProgressUpdate) {
+                  const progressGroupKey = msg.originRequestId || msg.id;
+                  const firstGroupIndex = currentMessages.findIndex(candidate =>
+                    candidate.isProgressUpdate &&
+                    (candidate.originRequestId || candidate.id) === progressGroupKey
+                  );
+
+                  if (msgIndex !== firstGroupIndex) return null;
+
+                  const groupUpdates = currentMessages.filter(candidate =>
+                    candidate.isProgressUpdate &&
+                    (candidate.originRequestId || candidate.id) === progressGroupKey
+                  );
+                  const hasFinalResponse = Boolean(
+                    msg.originRequestId && currentMessages.some(candidate =>
+                      !candidate.isProgressUpdate &&
+                      candidate.sender === 'lotus' &&
+                      candidate.requestId === msg.originRequestId
+                    )
+                  );
+                  const isExpanded = expandedProgressGroups[progressGroupKey] ?? !hasFinalResponse;
+
                   return (
                     <div 
                       key={msg.id} 
-                      className="flex w-full justify-start animate-fade-in pl-3 py-1"
+                      className="flex w-full justify-start animate-fade-in py-1"
                     >
-                      <div className="flex items-center gap-2.5 text-xs text-[#fbf9f5]/40 font-light select-none italic tracking-wide">
-                        <span className="h-1 w-1 rounded-full bg-[#fbf9f5]/40 animate-pulse" />
-                        <span>lótus: {msg.text}</span>
+                      <div className="w-full max-w-[85%] border-l border-white/10 pl-3">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedProgressGroups(prev => ({
+                            ...prev,
+                            [progressGroupKey]: !(prev[progressGroupKey] ?? !hasFinalResponse)
+                          }))}
+                          className="group flex items-center gap-2 bg-transparent border-none p-0 text-left cursor-pointer outline-none text-[#fbf9f5]/45 hover:text-[#fbf9f5]/70 transition-colors"
+                          aria-expanded={isExpanded}
+                        >
+                          {hasFinalResponse ? (
+                            <span className="h-1 w-1 rounded-full bg-[#fbf9f5]/25" />
+                          ) : (
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]/65 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.35)]" />
+                          )}
+                          <span className="text-xs font-light tracking-wide">
+                            {hasFinalResponse ? 'Processo concluído' : 'Em andamento'}
+                          </span>
+                          <span className="text-[#fbf9f5]/25 transition-transform duration-200">
+                            {isExpanded ? <ChevronDown size={13} strokeWidth={1.5} /> : <ChevronRight size={13} strokeWidth={1.5} />}
+                          </span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-2 space-y-2 pb-1">
+                            {groupUpdates.map((update, updateIndex) => (
+                              <div key={update.id} className="flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
+                                <span className={`mt-[0.45rem] h-1 w-1 shrink-0 rounded-full ${
+                                  !hasFinalResponse && updateIndex === groupUpdates.length - 1
+                                    ? 'bg-[#fbf9f5]/55 animate-pulse'
+                                    : 'bg-[#fbf9f5]/20'
+                                }`} />
+                                <span>{update.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -4841,13 +4840,6 @@ ${data.transcription}`, {
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-          </div>
-        )}
-
-        {latestProgressUpdate && (
-          <div className="w-full px-1 py-1.5 flex items-center gap-2 text-xs text-[#fbf9f5]/50 italic font-light animate-pulse select-none lowercase">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#fbf9f5]/55 shadow-[0_0_8px_rgba(251,249,245,0.7)]" />
-            <span>lótus está: {latestProgressUpdate.text}</span>
           </div>
         )}
 
