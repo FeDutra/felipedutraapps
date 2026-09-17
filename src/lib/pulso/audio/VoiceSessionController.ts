@@ -43,6 +43,16 @@ export class VoiceSessionController {
   constructor(config: VoiceSessionConfig) {
     this.config = config;
     this.ttsAdapter = new TTSAdapter();
+    // O Modo Presença tem uma identidade vocal única. Não herda a voz nativa
+    // ou outra preferência eventualmente escolhida para leitura de mensagens.
+    this.ttsAdapter.updatePreferences({
+      ttsProvider: 'kokoro_http',
+      voiceName: 'pf_dora(0.70)+af_bella(0.30)',
+      voiceLang: 'pt-BR',
+      rate: 0.95,
+      pitch: 1,
+      volume: 1
+    }, false);
   }
 
   private transition(newState: VoiceSessionState) {
@@ -319,8 +329,8 @@ export class VoiceSessionController {
             this.silenceStart = Date.now();
           }
         } else {
-          // Se o usuário já falou e agora está em silêncio por > 2s
-          if (this.hasSpoken && this.silenceStart > 0 && Date.now() - this.silenceStart > 2000) {
+          // Uma pausa natural encerra o turno sem impor a demora de um chat gravado.
+          if (this.hasSpoken && this.silenceStart > 0 && Date.now() - this.silenceStart > 1100) {
             this.log('VAD_SPEECH_END');
             this.finalizeUserTurn();
             return;
@@ -417,8 +427,8 @@ export class VoiceSessionController {
         return;
       }
 
-      // Envia ao LLM local (AgentOrchestrator)
-      this.transition('transcribing');
+      // A captura fica parada enquanto a mesma sessão da Lótus processa o turno.
+      this.transition('thinking');
       this.log('LLM_REQUEST_STARTED');
       this.playSoundCue('sent');
 
@@ -427,9 +437,7 @@ export class VoiceSessionController {
 
       if (res && res.responseText) {
         this.config.onTextReceived(userText, res.responseText);
-        await this.generateAndPlayTTS(res.responseText);
-      } else {
-        this.startListeningLoop();
+        await this.speakAssistant(res.responseText);
       }
 
     } catch (err: any) {
@@ -442,7 +450,15 @@ export class VoiceSessionController {
   /**
    * Gera o áudio da resposta (TTS) e inicia a reprodução controlada.
    */
-  private async generateAndPlayTTS(text: string) {
+  public async speakAssistant(text: string, onStart?: () => void, onEnd?: () => void) {
+    if (!text.trim()) {
+      this.startListeningLoop();
+      return;
+    }
+
+    // Uma resposta Firestore pode chegar depois de o modo ter sido encerrado.
+    if (!this.stream) return;
+
     this.transition('speaking');
     this.log('TTS_REQUEST_STARTED');
     this.isAssistantSpeaking = true;
@@ -455,15 +471,19 @@ export class VoiceSessionController {
         () => {
           this.assistantSpeechStartMs = Date.now();
           this.log('ASSISTANT_AUDIO_STARTED');
+          onStart?.();
         },
         () => {
           if (this.isAssistantSpeaking) {
             this.log('ASSISTANT_AUDIO_ENDED');
             this.isAssistantSpeaking = false;
+            onEnd?.();
             this.log('SESSION_RETURNED_TO_LISTENING');
             this.startListeningLoop();
           }
-        }
+        },
+        undefined,
+        { fallbackToNative: false }
       );
     } catch (e) {
       console.warn('Erro ao reproduzir TTS:', e);

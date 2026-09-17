@@ -2093,7 +2093,11 @@ export default function LivePage() {
                 const diffRespToTts = latencyAutoTtsStartRef.current - (latencyResponseReceivedRef.current || latencyAutoTtsStartRef.current);
                 console.log(`[PULSO_LATENCY_RESPONSE_RECEIVED_TO_AUTO_TTS_START_MS] ${diffRespToTts} ms`);
                 
-                ttsAdapter.speak(
+                const presenceController = voiceSessionControllerRef.current;
+                if (!presenceController) {
+                  console.warn('[PULSO_PRESENCE_TTS_SKIPPED_NO_CONTROLLER]', { requestId: req.id });
+                } else {
+                  presenceController.speakAssistant(
                   ttsText,
                   () => {
                     // Latency point 6: First Audio Playing
@@ -2116,28 +2120,13 @@ export default function LivePage() {
                       if (prev === msgId) {
                         setPlayingState('stopped');
                         console.log('[PULSO_PRESENCE_AUTO_TTS_DONE]', { requestId: req.id });
-                        
-                        // Return to listening if we are still in presence mode
-                        if (voiceModeRef.current === 'presence') {
-                          console.log('[PULSO_PRESENCE_MIC_RESUMED_AFTER_TTS]');
-                          voiceStateRef.current = 'presence_listening';
-                          setVoiceState('presence_listening');
-                          startSpeechRecognition('presence');
-                        }
                         return null;
                       }
                       return prev;
                     });
-                  },
-                  () => {
-                    setPlayingMsgId(prev => {
-                      if (prev === msgId) {
-                        setPlayingState('preparing');
-                      }
-                      return prev;
-                    });
                   }
-                );
+                  );
+                }
               }
             }
 
@@ -2879,6 +2868,8 @@ export default function LivePage() {
       // Latency point 3: Request Created in Firestore
       if (originMode === 'presence') {
         latencyRequestCreatedRef.current = Date.now();
+        voiceStateRef.current = 'waiting_lotus';
+        setVoiceState('waiting_lotus');
         const diffTransToReq = latencyRequestCreatedRef.current - (latencyTranscriptionRef.current || latencyRequestCreatedRef.current);
         console.log(`[PULSO_LATENCY_TRANSCRIPTION_TO_REQUEST_CREATED_MS] ${diffTransToReq} ms`);
       }
@@ -3458,6 +3449,8 @@ ${data.transcription}`, {
       setPresenceMode(true);
       setVoiceMode('presence');
       voiceModeRef.current = 'presence';
+      presenceSessionStartTimeRef.current = Date.now();
+      spokenRequestsRef.current.clear();
 
       const controller = new VoiceSessionController({
         activeContextNode,

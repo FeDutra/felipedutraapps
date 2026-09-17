@@ -75,12 +75,12 @@ export class TTSAdapter {
     return this.preferences;
   }
 
-  public updatePreferences(newPrefs: Partial<TTSPreferences>) {
+  public updatePreferences(newPrefs: Partial<TTSPreferences>, persist = true) {
     const oldProvider = this.preferences.ttsProvider;
     const oldVoice = this.preferences.voiceName;
     this.preferences = { ...this.preferences, ...newPrefs };
     
-    if (typeof window !== 'undefined') {
+    if (persist && typeof window !== 'undefined') {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.preferences));
       } catch (e) {
@@ -548,7 +548,8 @@ export class TTSAdapter {
     text: string,
     onStart?: () => void,
     onEnd?: () => void,
-    onPreparing?: () => void
+    onPreparing?: () => void,
+    options?: { fallbackToNative?: boolean }
   ) {
     const startTime = performance.now();
     console.log('[PULSO_TTS_CLICK]');
@@ -759,10 +760,15 @@ export class TTSAdapter {
           if (this.currentAudio === audio) this.currentAudio = null;
           if (!isSessionActive()) return;
 
-          console.warn('[PULSO_TTS_KOKORO_UNAVAILABLE_FALLBACK_NATIVE] Error playing audio element. Falling back to native for remaining chunks.', e);
-          
-          const remainingText = chunks.slice(currentIdx).join(' ');
-          this.speakNative(remainingText, !isFirstPlayingTriggered ? onStart : undefined, onEnd);
+          if (options?.fallbackToNative === false) {
+            console.warn('[PULSO_TTS_KOKORO_REQUIRED_PLAYBACK_FAILED]', e);
+            clearTimeout(slowTimer);
+            onEnd?.();
+          } else {
+            console.warn('[PULSO_TTS_KOKORO_UNAVAILABLE_FALLBACK_NATIVE] Error playing audio element. Falling back to native for remaining chunks.', e);
+            const remainingText = chunks.slice(currentIdx).join(' ');
+            this.speakNative(remainingText, !isFirstPlayingTriggered ? onStart : undefined, onEnd);
+          }
         };
 
         await audio.play();
@@ -771,9 +777,15 @@ export class TTSAdapter {
         if (!isSessionActive()) {
           return;
         }
-        console.warn('[PULSO_TTS_KOKORO_UNAVAILABLE_FALLBACK_NATIVE] Failed to generate chunk. Falling back to native for remaining chunks.', err);
-        const remainingText = chunks.slice(currentIdx).join(' ');
-        this.speakNative(remainingText, !isFirstPlayingTriggered ? onStart : undefined, onEnd);
+        if (options?.fallbackToNative === false) {
+          console.warn('[PULSO_TTS_KOKORO_REQUIRED_GENERATION_FAILED]', err);
+          clearTimeout(slowTimer);
+          onEnd?.();
+        } else {
+          console.warn('[PULSO_TTS_KOKORO_UNAVAILABLE_FALLBACK_NATIVE] Failed to generate chunk. Falling back to native for remaining chunks.', err);
+          const remainingText = chunks.slice(currentIdx).join(' ');
+          this.speakNative(remainingText, !isFirstPlayingTriggered ? onStart : undefined, onEnd);
+        }
       }
     };
 
