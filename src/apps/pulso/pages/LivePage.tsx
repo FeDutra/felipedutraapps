@@ -1332,11 +1332,27 @@ export default function LivePage() {
   );
 
   const [voiceState, setVoiceState] = React.useState<UnifiedVoiceState>('idle');
+  const [recordingElapsedSeconds, setRecordingElapsedSeconds] = React.useState(0);
 
   const voiceModeRef = React.useRef<VoiceMode>('off');
   const voiceStateRef = React.useRef<UnifiedVoiceState>('idle');
   const maxRecordingTimeoutRef = React.useRef<any>(null);
   const spokenRequestsRef = React.useRef<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    if (voiceMode !== 'recording_once') {
+      setRecordingElapsedSeconds(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    setRecordingElapsedSeconds(0);
+    const timer = window.setInterval(() => {
+      setRecordingElapsedSeconds(Math.min(420, Math.floor((Date.now() - startedAt) / 1000)));
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [voiceMode]);
   
   // Latency and session session state tracking
   const presenceSessionStartTimeRef = React.useRef<number>(0);
@@ -1800,24 +1816,23 @@ export default function LivePage() {
       try {
         await authService.ensurePulsoAuthReady();
         
-        const dashboardState = await pulsoService.getDashboardState();
-        const allRoutines = await routinesService.getAll().catch(e => { console.error(e); return []; });
-        const allAgents = await agentsService.getAll().catch(e => { console.error(e); return []; });
-        const allLogs = await healthService.getLogs(15).catch(e => { console.error(e); return []; });
-        const allAreas = await areasService.getAll().catch(e => { console.error(e); return []; });
-        const allRequests = await requestsService.getRequests(200, true).catch(e => { console.error(e); return []; });
-        const allSources = await sourcesService.getAll().catch(e => { console.error(e); return []; });
-        const allTasks = await tasksService.getAll().catch(e => { console.error(e); return []; });
+        // First paint only waits for the conversation and its minimum navigation context.
+        // Operational datasets are hydrated in the background below.
+        const [dashboardState, allAreas, allRequests] = await Promise.all([
+          pulsoService.getDashboardState(),
+          areasService.getAll().catch(e => { console.error(e); return []; }),
+          requestsService.getRequests(200, true).catch(e => { console.error(e); return []; })
+        ]);
         
         setState({
           ...dashboardState,
-          allRoutines: safeArray(allRoutines),
-          allAgents: safeArray(allAgents),
-          allLogs: safeArray(allLogs),
+          allRoutines: [],
+          allAgents: [],
+          allLogs: [],
           allAreas: safeArray(allAreas),
           allRequests: safeArray(allRequests),
-          allSources: safeArray(allSources),
-          allTasks: safeArray(allTasks)
+          allSources: [],
+          allTasks: []
         });
 
         const chatHistory: Message[] = [];
@@ -1909,6 +1924,24 @@ export default function LivePage() {
           },
           ...chatHistory
         ]);
+        setLoading(false);
+
+        void Promise.all([
+          routinesService.getAll().catch(e => { console.error(e); return []; }),
+          agentsService.getAll().catch(e => { console.error(e); return []; }),
+          healthService.getLogs(15).catch(e => { console.error(e); return []; }),
+          sourcesService.getAll().catch(e => { console.error(e); return []; }),
+          tasksService.getAll().catch(e => { console.error(e); return []; })
+        ]).then(([allRoutines, allAgents, allLogs, allSources, allTasks]) => {
+          setState((previous: any) => ({
+            ...previous,
+            allRoutines: safeArray(allRoutines),
+            allAgents: safeArray(allAgents),
+            allLogs: safeArray(allLogs),
+            allSources: safeArray(allSources),
+            allTasks: safeArray(allTasks)
+          }));
+        });
       } catch (err: any) {
         console.error('Lótus Live load error:', err);
         setError(err?.message || 'Erro de sintonização na Lótus Live.');
@@ -5059,6 +5092,12 @@ ${data.transcription}`, {
             {voiceMode === 'recording_once' ? <Mic size={14} strokeWidth={1.5} className="animate-pulse" /> : <Mic size={14} strokeWidth={1.5} />}
           </button>
 
+          {voiceMode === 'recording_once' && (
+            <span className="text-[8px] tabular-nums tracking-[0.12em] text-[#fbf9f5]/45 select-none" aria-live="polite">
+              {`${Math.floor(recordingElapsedSeconds / 60)}:${String(recordingElapsedSeconds % 60).padStart(2, '0')} / 7:00`}
+            </span>
+          )}
+
           <button
             onClick={toggleMeetingRecording}
             className={`p-1.5 transition-all duration-300 bg-transparent border-none cursor-pointer outline-none ${voiceMode === 'recording_meeting' ? 'opacity-100 drop-shadow-[0_0_8px_rgba(184,40,62,0.6)] animate-pulse' : 'opacity-30 hover:opacity-100'}`}
@@ -5079,16 +5118,15 @@ ${data.transcription}`, {
 
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 z-50 bg-[#0c0c0c]/70 backdrop-blur-xl p-8 flex flex-col text-left md:hidden animate-fade-in overflow-y-auto overscroll-contain no-scrollbar"
+          className="fixed inset-0 z-50 bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col text-left md:hidden animate-fade-in"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div 
-            className="flex flex-col gap-6 w-full max-w-[260px]"
+            className="flex flex-col gap-7 w-full max-w-[240px]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Title / Close Button */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 select-none">
-              <span className="text-[10px] font-bold tracking-widest text-[#fbf9f5]/55 uppercase">áreas & chats</span>
+            <div className="flex items-center justify-between select-none">
+              <span className="text-[9px] font-light tracking-[0.24em] text-[#fbf9f5]/35 uppercase">conversas</span>
               <button 
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center justify-center"
@@ -5097,8 +5135,7 @@ ${data.transcription}`, {
               </button>
             </div>
 
-            {/* Accordion list */}
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain no-scrollbar">
               {dynamicAreas.map((area) => {
                 const areaId = area.id;
                 const areaName = area.name || AREA_NAMES[areaId] || areaId.replace('area_', '');
@@ -5108,20 +5145,19 @@ ${data.transcription}`, {
                 const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
                 
                 return (
-                  <div key={areaId} className="flex flex-col gap-2">
-                    {/* Area Header Trigger */}
+                  <div key={areaId} className="flex flex-col gap-2.5">
                     <div 
                       onClick={() => {
                         // accordion reativo restrito: only one area open at a time
                         setActiveMobileAreaId(isExpanded ? null : areaId);
                       }}
-                      className="flex items-center justify-between cursor-pointer py-1 group/mobile-area select-none"
+                      className="flex items-center justify-between cursor-pointer py-0.5 group/mobile-area select-none"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className={`text-base font-mono ${isAreaActive ? 'text-white' : hasUnreadInArea ? 'pulso-unread font-bold animate-pulse' : 'text-[#fbf9f5]/35'}`}>
+                        <span className={`text-sm font-mono ${isAreaActive ? 'text-white' : hasUnreadInArea ? 'pulso-unread animate-pulse' : 'text-[#fbf9f5]/25'}`}>
                           {getAreaIcon({ id: areaId, name: areaName })}
                         </span>
-                        <span className={`text-[10px] tracking-wider uppercase font-sans ${isAreaActive ? 'text-white font-medium' : 'text-[#fbf9f5]/50'}`}>
+                        <span className={`text-[9px] tracking-[0.16em] uppercase font-sans ${isAreaActive ? 'text-white/85' : 'text-[#fbf9f5]/35'}`}>
                           {areaName}
                         </span>
                       </div>
@@ -5130,236 +5166,32 @@ ${data.transcription}`, {
                       </span>
                     </div>
 
-                    {/* Chats list inside Area (Accordion Content) */}
                     {isExpanded && (
-                      <div className="flex flex-col gap-2 pl-6 pb-2 border-l border-white/5 ml-2.5 animate-fade-in">
+                      <div className="flex flex-col gap-3 pl-6 pb-1 animate-fade-in">
                         {areaContexts.map((ctx) => {
                           const isContextActive = activeContextNode.contextId === ctx.contextId;
                           const isUnread = !!unreadContexts[ctx.contextId];
-                          const isCustom = !ctx.isDefault;
                           
                           return (
-                            <div 
+                            <button
                               key={ctx.contextId} 
-                              className="flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer"
+                              className={`w-full py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.14em] uppercase font-sans transition-colors truncate ${
+                                isContextActive ? 'text-white/90' : isUnread ? 'pulso-unread animate-pulse' : 'text-[#fbf9f5]/35'
+                              }`}
                               onClick={() => {
                                 setActiveContextNode(ctx);
-                                setIsMobileMenuOpen(false); // Close menu naturally
+                                setIsMobileMenuOpen(false);
                               }}
                             >
-                              {editingContextId === ctx.contextId ? (
-                                <input
-                                  type="text"
-                                  value={editingContextLabel}
-                                  onChange={(e) => setEditingContextLabel(e.target.value)}
-                                  onBlur={() => handleRenameChat(ctx.contextId)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      handleRenameChat(ctx.contextId);
-                                    }
-                                    if (e.key === 'Escape') setEditingContextId(null);
-                                  }}
-                                  className="bg-white/10 text-white border border-white/20 rounded px-1.5 py-0.5 text-[9px] outline-none w-full lowercase"
-                                  autoFocus
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              ) : (
-                                <span 
-                                  className={`text-[9px] tracking-wider uppercase font-sans cursor-pointer transition-all duration-200 select-none truncate flex-1 text-left ${
-                                    isContextActive 
-                                      ? 'text-white font-medium' 
-                                      : isUnread 
-                                      ? 'pulso-unread font-bold animate-pulse' 
-                                      : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/80'
-                                  }`}
-                                >
-                                  {ctx.label}
-                                </span>
-                              )}
-
-                              {isCustom && editingContextId !== ctx.contextId && (
-                                <div className="flex items-center gap-1.5 shrink-0 select-none ml-2" onClick={(e) => e.stopPropagation()}>
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingContextId(ctx.contextId);
-                                      setEditingContextLabel(ctx.label);
-                                    }}
-                                    className="p-0.5 text-[#fbf9f5]/30 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-                                    title="Renomear chat"
-                                  >
-                                    <Edit2 size={8} />
-                                  </button>
-                                  <button 
-                                    onClick={(e) => {
-                                      handleArchiveChat(ctx.contextId, e);
-                                      setIsMobileMenuOpen(false); // Close menu naturally on archive
-                                    }}
-                                    className="p-0.5 text-[#fbf9f5]/30 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
-                                    title="Arquivar chat"
-                                  >
-                                    <Archive size={8} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                              {ctx.label}
+                            </button>
                           );
                         })}
-
-                        {/* Create dynamic chat in mobile area */}
-                        <div className="pt-1 select-none">
-                          {addingChatAreaId === areaId ? (
-                            <input 
-                              type="text"
-                              value={newChatName}
-                              onChange={(e) => setNewChatName(e.target.value)}
-                              placeholder="nome..."
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const rawLabel = newChatName.trim();
-                                  if (rawLabel) {
-                                    const cleanAreaPrefix = areaId.replace('area_', '');
-                                    const slug = rawLabel
-                                      .toLowerCase()
-                                      .normalize('NFD')
-                                      .replace(/[\u0300-\u036f]/g, '')
-                                      .replace(/[^a-z0-9\s-]/g, '')
-                                      .replace(/\s+/g, '-')
-                                      .replace(/-+/g, '-');
-                                    
-                                    let baseContextId = `${cleanAreaPrefix}_${slug}`;
-                                    let contextId = baseContextId;
-                                    let counter = 1;
-                                    
-                                    while (allContextNodes.some(node => node.contextId === contextId)) {
-                                      contextId = `${baseContextId}-${counter}`;
-                                      counter++;
-                                    }
-                                    
-                                    (async () => {
-                                      const createdSession = await sessionsService.createSession({
-                                        id: contextId,
-                                        label: rawLabel,
-                                        areaId: areaId,
-                                      }).catch(err => {
-                                        console.error("Failed to create session:", err);
-                                        return null;
-                                      });
-
-                                      if (createdSession) {
-                                        const newNode = sessionToContextNode(createdSession);
-                                        if (pulsoService.getDataMode() !== 'firestore') {
-                                          const list = await sessionsService.getAll();
-                                          setSessions(list.map(s => sessionToContextNode(s)));
-                                        }
-                                        setActiveContextNode(newNode);
-                                      }
-                                    })();
-
-                                    setNewChatName('');
-                                    setAddingChatAreaId(null);
-                                    setIsMobileMenuOpen(false); // Close menu naturally
-                                  }
-                                } else if (e.key === 'Escape') {
-                                  setAddingChatAreaId(null);
-                                  setNewChatName('');
-                                }
-                              }}
-                              onBlur={() => {
-                                setTimeout(() => {
-                                  setAddingChatAreaId(null);
-                                  setNewChatName('');
-                                }, 200);
-                              }}
-                              className="bg-transparent border-b border-white/20 text-[#fbf9f5] text-[9px] tracking-wider uppercase w-full py-0.5 outline-none placeholder-white/20 lowercase"
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ) : (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAddingChatAreaId(areaId);
-                              }}
-                              className="text-[8px] tracking-widest text-[#fbf9f5]/25 hover:text-white/60 transition-colors uppercase font-mono bg-transparent border-none cursor-pointer outline-none py-0.5"
-                            >
-                              [ + novo chat ]
-                            </button>
-                          )}
-                        </div>
                       </div>
                     )}
                   </div>
                 );
               })}
-            </div>
-
-            {/* Add Area Input/Button for Mobile */}
-            <div className="flex items-center gap-2.5 py-2 border-t border-white/10 mt-2 select-none">
-              {isAddingArea ? (
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="nova área..."
-                  value={newAreaName}
-                  onChange={(e) => setNewAreaName(e.target.value)}
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter') {
-                      const rawName = newAreaName.trim();
-                      if (rawName) {
-                        const slug = rawName
-                          .toLowerCase()
-                          .normalize('NFD')
-                          .replace(/[\u0300-\u036f]/g, '')
-                          .replace(/[^a-z0-9\s-]/g, '')
-                          .replace(/\s+/g, '-')
-                          .replace(/-+/g, '-');
-                        const areaId = `area_${slug}`;
-                        try {
-                          await areasService.saveArea({
-                            id: areaId,
-                            name: rawName,
-                            slug,
-                            status: 'active',
-                            order: dynamicAreas.length,
-                            type: 'personal',
-                          });
-                          setState((prev: any) => {
-                            if (!prev) return prev;
-                            const existing = prev.allAreas || [];
-                            if (existing.some((a: any) => a.id === areaId)) return prev;
-                            return {
-                              ...prev,
-                              allAreas: [...existing, { id: areaId, name: rawName, slug, status: 'active', order: dynamicAreas.length, type: 'personal' }]
-                            };
-                          });
-                        } catch (err) {
-                          console.error("Erro ao criar área:", err);
-                        }
-                      }
-                      setIsAddingArea(false);
-                      setNewAreaName('');
-                    } else if (e.key === 'Escape') {
-                      setIsAddingArea(false);
-                      setNewAreaName('');
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => {
-                      setIsAddingArea(false);
-                      setNewAreaName('');
-                    }, 200);
-                  }}
-                  className="bg-transparent border-b border-[#fbf9f5]/20 text-[#fbf9f5] text-[9px] tracking-widest uppercase w-full py-0.5 outline-none placeholder-[#fbf9f5]/25 font-sans font-light"
-                />
-              ) : (
-                <button
-                  onClick={() => setIsAddingArea(true)}
-                  className="text-[9px] font-light tracking-widest text-[#fbf9f5]/25 hover:text-[#fbf9f5]/60 transition-colors uppercase select-none cursor-pointer border-none bg-transparent outline-none p-0 text-left w-full"
-                >
-                  + área
-                </button>
-              )}
             </div>
           </div>
         </div>
