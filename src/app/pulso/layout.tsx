@@ -27,7 +27,12 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
   const [pulsoTheme, setPulsoTheme] = React.useState('orange');
 
   React.useEffect(() => {
-    const saved = localStorage.getItem('pulso-theme');
+    let saved: string | null = null;
+    try {
+      saved = window.localStorage.getItem('pulso-theme');
+    } catch (error) {
+      console.warn('[PULSO_THEME_STORAGE_UNAVAILABLE]', error);
+    }
     if (saved) setPulsoTheme(saved);
     const handleThemeChange = (e: any) => {
       setPulsoTheme(e.detail);

@@ -508,6 +508,28 @@ const AREA_ORDER = [
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
 
+// Safari can deny localStorage access in private/standalone contexts. Storage
+// is a convenience for restoring UI preferences; it must never prevent the
+// conversation shell from rendering.
+const safeStorageGet = (key: string): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`[PULSO_STORAGE_READ_UNAVAILABLE] ${key}`, error);
+    return null;
+  }
+};
+
+const safeStorageSet = (key: string, value: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    console.warn(`[PULSO_STORAGE_WRITE_UNAVAILABLE] ${key}`, error);
+  }
+};
+
 const settleWithin = async <T,>(
   operation: Promise<T>,
   timeoutMs: number,
@@ -711,7 +733,9 @@ export type UnifiedVoiceState =
 export default function LivePage() {
   const router = useRouter();
   const [state, setState] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(true);
+  // The shell is intentionally visible from the first render. Data hydration
+  // may continue in the background, but it cannot hold the UI on a spinner.
+  const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [inputMessage, setInputMessage] = React.useState('');
   const [inputHeight, setInputHeight] = React.useState(36);
@@ -903,7 +927,7 @@ export default function LivePage() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const updateThemeColor = () => {
-      const currentTheme = localStorage.getItem('pulso-theme') || 'orange';
+      const currentTheme = safeStorageGet('pulso-theme') || 'orange';
       let metaTheme = document.querySelector('meta[name="theme-color"]');
       if (!metaTheme) {
         metaTheme = document.createElement('meta');
@@ -940,7 +964,7 @@ export default function LivePage() {
       if (prev[contextId] === nowStr) return prev;
       return { ...prev, [contextId]: nowStr };
     });
-    localStorage.setItem(`pulso_last_read_${contextId}`, nowStr);
+    safeStorageSet(`pulso_last_read_${contextId}`, nowStr);
     
     const isFirestore = pulsoService.getDataMode() === 'firestore';
     if (isFirestore && db) {
@@ -950,26 +974,9 @@ export default function LivePage() {
     }
   }, []);
 
-  const getInitialContextNode = (): PulsoContextNode => {
-    if (typeof window !== 'undefined') {
-      const savedId = localStorage.getItem('pulso_active_session_id');
-      if (savedId) {
-        return {
-          contextId: savedId,
-          areaId: 'area_agenda',
-          chatId: 'default',
-          label: 'agenda',
-          subareaId: '',
-          openclawSessionKey: `agent:main:pulso:${savedId}`,
-          archived: false,
-          isDefault: false
-        };
-      }
-    }
-    return LOADING_PLACEHOLDER_NODE;
-  };
-
-  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(getInitialContextNode);
+  // Keep server and first client render identical. The saved session is
+  // restored after Firestore sessions arrive, avoiding hydration mismatch.
+  const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
   const activeContextNodeRef = React.useRef(activeContextNode);
 
   const unreadContexts = React.useMemo(() => {
@@ -1004,7 +1011,7 @@ export default function LivePage() {
     if (sessionRestoredRef.current) return; // only run once
     sessionRestoredRef.current = true;
 
-    const savedId = typeof window !== 'undefined' ? localStorage.getItem('pulso_active_session_id') : null;
+    const savedId = safeStorageGet('pulso_active_session_id');
     if (savedId) {
       const found = sessions.find(s => s.contextId === savedId);
       if (found) {
@@ -1034,19 +1041,23 @@ export default function LivePage() {
       activeContextNode.contextId !== 'loading' &&
       activeContextNode.contextId !== LOADING_PLACEHOLDER_NODE.contextId
     ) {
-      localStorage.setItem('pulso_active_session_id', activeContextNode.contextId);
+      safeStorageSet('pulso_active_session_id', activeContextNode.contextId);
     }
   }, [activeContextNode, markContextAsRead]);
   // Load and listen to read status from localStorage/Firestore
   React.useEffect(() => {
     // 1. Load from localStorage
     const localTimes: Record<string, string> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('pulso_last_read_')) {
-        const contextId = key.replace('pulso_last_read_', '');
-        localTimes[contextId] = localStorage.getItem(key) || '';
+    try {
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith('pulso_last_read_')) {
+          const contextId = key.replace('pulso_last_read_', '');
+          localTimes[contextId] = safeStorageGet(key) || '';
+        }
       }
+    } catch (error) {
+      console.warn('[PULSO_STORAGE_ENUMERATION_UNAVAILABLE]', error);
     }
     setLastReadTimes(localTimes);
 
@@ -1066,7 +1077,7 @@ export default function LivePage() {
                 const firestoreTime = new Date(timeStr).getTime();
                 if (firestoreTime > localTime) {
                   updated[contextId] = timeStr;
-                  localStorage.setItem(`pulso_last_read_${contextId}`, timeStr);
+                  safeStorageSet(`pulso_last_read_${contextId}`, timeStr);
                   hasChanges = true;
                 }
               }
@@ -1266,7 +1277,7 @@ export default function LivePage() {
   const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
   const [kokoroEndpoint, setKokoroEndpoint] = React.useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
+      return safeStorageGet('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
     }
     return 'http://127.0.0.1:8880/v1/audio/speech';
   });
@@ -2265,7 +2276,7 @@ export default function LivePage() {
         });
 
         console.log('[PULSO_ONSNAPSHOT] Mensagens carregadas do Firestore:', {
-          activeSessionId: typeof window !== 'undefined' ? localStorage.getItem('pulso_active_session_id') : null,
+          activeSessionId: safeStorageGet('pulso_active_session_id'),
           contextId: activeContextNode.contextId,
           snapshotMessagesCount: chatHistory.length,
           sourceOfMessages: 'firestore_snapshot',

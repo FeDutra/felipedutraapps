@@ -36,3 +36,18 @@ Mudança iniciada em 17/09/2026 na branch `fix/pulso-mobile-init-20260917`.
 - antes do merge, comparar ou descartar apenas a branch `fix/pulso-mobile-init-20260917`;
 - após merge/deploy, usar `git revert <commit-final>` e republicar apenas o Firebase Hosting;
 - esta mudança não altera worker, credenciais, Firestore nem runtime da VPS.
+# Rollback — boot mobile Safari (17/09/2026)
+
+Baseline reversível: branch `backup/pulso-before-safari-boot-20260917` no commit `84678c6e`.
+
+Para desfazer somente esta correção após o commit de release:
+
+```bash
+git revert <commit-da-correcao-safari>
+npm run build
+firebase deploy --only hosting
+```
+
+Escopo da correção: remover a tela bloqueante de inicialização, manter o
+primeiro render idêntico entre servidor e cliente e tornar preferências em
+`localStorage` opcionais quando o Safari negar acesso.
