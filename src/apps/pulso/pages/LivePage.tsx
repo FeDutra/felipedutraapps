@@ -508,6 +508,30 @@ const AREA_ORDER = [
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
 
+const settleWithin = async <T,>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  label: string,
+  fallback: T
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(`[PULSO_INIT_TIMEOUT] ${label} exceeded ${timeoutMs}ms; continuing with fallback.`);
+      resolve(fallback);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } catch (error) {
+    console.error(`[PULSO_INIT_FAILED] ${label}:`, error);
+    return fallback;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 // Safe date conversion helpers
 const safeGetTime = (dateInput: any): number => {
   if (!dateInput) return 0;
@@ -772,9 +796,16 @@ export default function LivePage() {
   React.useEffect(() => {
     let unlisten: any;
     const setupListener = async () => {
-      unlisten = await listen('cmd_output', (event) => {
-        setEngineeringLogs((prev) => [...prev, event.payload as string]);
-      });
+      // The engineering event bridge exists only inside the Tauri desktop shell.
+      // Calling it on the web throws through window.__TAURI_INTERNALS__.
+      if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) return;
+      try {
+        unlisten = await listen('cmd_output', (event) => {
+          setEngineeringLogs((prev) => [...prev, event.payload as string]);
+        });
+      } catch (error) {
+        console.warn('[PULSO_TAURI_LISTENER_UNAVAILABLE]', error);
+      }
     };
     setupListener();
     return () => {
@@ -799,8 +830,16 @@ export default function LivePage() {
     const seedAndSubscribe = async () => {
       try {
         // Check if pulso_sessions already has documents
-        const snap = await getDocs(collection(db!, firestorePaths.sessions()));
-        if (snap.empty) {
+        const snap = await settleWithin(
+          getDocs(collection(db!, firestorePaths.sessions())),
+          6000,
+          'sessions_seed_check',
+          null
+        );
+        if (!snap) {
+          setSessions(DEFAULT_SESSIONS.map(s => sessionToContextNode({ ...s, createdAt: new Date(), updatedAt: new Date() })));
+          setSessionsLoaded(true);
+        } else if (snap.empty) {
           console.log('[PULSO_SESSIONS] Seeding default sessions...');
           // Seed all default sessions in parallel
           await Promise.all(
@@ -1812,17 +1851,36 @@ export default function LivePage() {
   }, [inputHeight, scrollToBottom]);
   // Load database state once
   React.useEffect(() => {
+    let cancelled = false;
+    const revealFallback = window.setTimeout(() => {
+      if (!cancelled) {
+        console.warn('[PULSO_INIT_REVEAL_FALLBACK] Revealing conversation shell before data hydration finished.');
+        setLoading(false);
+      }
+    }, 3500);
+
     async function load() {
       try {
-        await authService.ensurePulsoAuthReady();
+        await settleWithin(
+          authService.ensurePulsoAuthReady(),
+          3500,
+          'auth_ready',
+          undefined
+        );
+
+        if (cancelled) return;
+        clearTimeout(revealFallback);
+        setLoading(false);
         
         // First paint only waits for the conversation and its minimum navigation context.
         // Operational datasets are hydrated in the background below.
         const [dashboardState, allAreas, allRequests] = await Promise.all([
-          pulsoService.getDashboardState(),
-          areasService.getAll().catch(e => { console.error(e); return []; }),
-          requestsService.getRequests(200, true).catch(e => { console.error(e); return []; })
+          settleWithin(pulsoService.getDashboardState(), 8000, 'dashboard_state', {} as any),
+          settleWithin(areasService.getAll(), 8000, 'areas', [] as any[]),
+          settleWithin(requestsService.getRequests(200, true), 8000, 'requests', [] as any[])
         ]);
+
+        if (cancelled) return;
         
         setState({
           ...dashboardState,
@@ -1924,8 +1982,6 @@ export default function LivePage() {
           },
           ...chatHistory
         ]);
-        setLoading(false);
-
         void Promise.all([
           routinesService.getAll().catch(e => { console.error(e); return []; }),
           agentsService.getAll().catch(e => { console.error(e); return []; }),
@@ -1944,12 +2000,15 @@ export default function LivePage() {
         });
       } catch (err: any) {
         console.error('Lótus Live load error:', err);
-        setError(err?.message || 'Erro de sintonização na Lótus Live.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => {
+      cancelled = true;
+      clearTimeout(revealFallback);
+    };
   }, []);
 
   // Real-time Firestore requests listener (Golden Path to OpenClaw usage)
