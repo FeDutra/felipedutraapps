@@ -324,8 +324,13 @@ function SortableAreaItemWrapper({
       </div>
 
       {/* Sub-contexts (Sanfona style) */}
-      <div 
-        className={`flex flex-col gap-1.5 pl-8 overflow-y-auto no-scrollbar transition-all duration-300 ease-in-out w-full ${
+      {/* pr-2 evita que os botões de ação (abrir ao lado/renomear/arquivar),
+          que ficam coladinhos na borda direita da linha, sejam cortados pelo
+          overflow-y-auto — no CSS, definir overflow só num eixo faz o outro
+          virar "auto" também, então sem essa folga o clique no botão mais à
+          direita não chegava a registrar. */}
+      <div
+        className={`flex flex-col gap-1.5 pl-8 pr-2 overflow-y-auto no-scrollbar transition-all duration-300 ease-in-out w-full ${
           isHovered ? 'max-h-40 opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0 pointer-events-none'
         }`}
       >
