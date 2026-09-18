@@ -139,7 +139,7 @@ function SortableAreaRowMobile({ areaId, children }: SortableAreaRowMobileProps)
     opacity: isDragging ? 0.35 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="flex flex-col gap-2.5 touch-none">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="flex flex-col gap-2.5">
       {children}
     </div>
   );
@@ -169,7 +169,7 @@ function SortableChatItemMobile({ ctx, areaId, isContextActive, isUnread, onSele
       style={style}
       {...attributes}
       {...listeners}
-      className={`w-full py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.14em] uppercase font-sans transition-colors truncate touch-none ${
+      className={`w-full py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.14em] uppercase font-sans transition-colors truncate ${
         isContextActive ? 'text-white/90' : isUnread ? 'pulso-unread animate-pulse' : 'text-[#fbf9f5]/35'
       }`}
       onClick={onSelect}
@@ -262,12 +262,12 @@ function SortableAreaItemWrapper({
           {...listeners}
           className="flex items-center gap-2.5 cursor-grab active:cursor-grabbing py-1 flex-1 touch-none"
         >
-          <span 
+          <span
             className={`text-lg text-center transition-all duration-200 font-mono ${
-              isAreaActive
-                ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
-                : hasUnreadInArea
+              hasUnreadInArea
                 ? 'pulso-unread scale-110 opacity-100 animate-pulse font-bold'
+                : isAreaActive
+                ? 'text-white scale-110 opacity-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
                 : 'text-[#fbf9f5]/35 group-hover/sidebar:text-[#fbf9f5]/65 group-hover/item:text-[#fbf9f5]/90'
             }`}
             style={{ width: '24px' }}
