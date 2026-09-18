@@ -6,6 +6,7 @@ import { listen } from '@tauri-apps/api/event';
 
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   MouseSensor,
@@ -1364,6 +1365,10 @@ export default function LivePage() {
     })
   );
 
+  // DragOverlay state declared here; handlers wired in after getAreaIcon is
+  // defined further below (they depend on it).
+  const [activeDragItem, setActiveDragItem] = React.useState<{ icon: React.ReactNode; label: string } | null>(null);
+
   const searchParams = useSearchParams();
   const contextSurfaceVariant = searchParams?.get('contextSurface') as 'a' | 'b' | 'c' | null;
   const [isContextSurfaceOpen, setIsContextSurfaceOpen] = React.useState(!!contextSurfaceVariant);
@@ -1423,6 +1428,33 @@ export default function LivePage() {
     
     return '⚬';
   };
+
+  // DragOverlay: sem isso, o item arrastado é só o próprio nó da lista se
+  // movendo via transform — ao cruzar pra outra área/lista, ele pode ficar
+  // "preso" na posição antiga e perder o cursor. O overlay é um clone solto
+  // que sempre segue o ponteiro, independente do que acontece nas listas
+  // por baixo.
+  const handleDragStart = React.useCallback((event: { active: { id: string | number; data: { current?: any } } }) => {
+    const data = event.active.data.current;
+    const id = String(event.active.id);
+    if (data?.type === 'area') {
+      const area = dynamicAreas.find(a => a.id === id);
+      if (area) {
+        setActiveDragItem({ icon: getAreaIcon({ id: area.id, name: area.name }), label: area.name });
+        return;
+      }
+    } else if (data?.type === 'chat') {
+      const ctx = allContextNodes.find(n => n.contextId === id);
+      if (ctx) {
+        setActiveDragItem({ icon: null, label: ctx.label });
+        return;
+      }
+    }
+    setActiveDragItem(null);
+  }, [dynamicAreas, allContextNodes]);
+
+  const handleDragCancelOrEnd = React.useCallback(() => setActiveDragItem(null), []);
+
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = React.useState(false);
   const [areaConfigPanelAreaId, setAreaConfigPanelAreaId] = React.useState<string | null>(null);
   const attachmentMenuRef = React.useRef<HTMLDivElement>(null);
@@ -3943,6 +3975,7 @@ ${data.transcription}`, {
   }, [dynamicAreas, allContextNodes, activeContextNode.contextId, setActiveContextNode]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragItem(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -4397,12 +4430,14 @@ ${data.transcription}`, {
           presenceMode ? 'pulso-hidden-left' : 'pulso-visible'
         }`}
       >
-        <DndContext 
+        <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancelOrEnd}
         >
-          <SortableContext 
+          <SortableContext
             items={dynamicAreas.map(a => a.id)}
             strategy={verticalListSortingStrategy}
           >
@@ -4455,6 +4490,14 @@ ${data.transcription}`, {
               );
             })}
           </SortableContext>
+          <DragOverlay>
+            {activeDragItem && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/15 shadow-xl text-[#fbf9f5] pointer-events-none">
+                {activeDragItem.icon && <span className="text-base font-mono">{activeDragItem.icon}</span>}
+                <span className="text-[9px] tracking-widest uppercase font-sans whitespace-nowrap">{activeDragItem.label}</span>
+              </div>
+            )}
+          </DragOverlay>
         </DndContext>
 
         {/* Add Area Input/Button */}
@@ -5556,7 +5599,7 @@ ${data.transcription}`, {
             </div>
 
             <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain no-scrollbar max-h-[calc(100dvh-10rem)]">
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancelOrEnd}>
                 <SortableContext items={dynamicAreas.map(a => a.id)} strategy={verticalListSortingStrategy}>
               {dynamicAreas.map((area) => {
                 const areaId = area.id;
@@ -5625,6 +5668,14 @@ ${data.transcription}`, {
                 );
               })}
                 </SortableContext>
+                <DragOverlay>
+                  {activeDragItem && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/15 shadow-xl text-[#fbf9f5] pointer-events-none">
+                      {activeDragItem.icon && <span className="text-base font-mono">{activeDragItem.icon}</span>}
+                      <span className="text-[9px] tracking-widest uppercase font-sans whitespace-nowrap">{activeDragItem.label}</span>
+                    </div>
+                  )}
+                </DragOverlay>
               </DndContext>
             </div>
           </div>
