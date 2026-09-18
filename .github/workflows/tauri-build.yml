@@ -1,0 +1,85 @@
+name: Build Tauri App
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Plataforma de build"
+        required: true
+        default: "macos"
+        type: choice
+        options:
+          - macos
+          - linux
+          - both
+
+jobs:
+  build-macos:
+    if: ${{ github.event.inputs.target == 'macos' || github.event.inputs.target == 'both' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Runners macos-latest sao Apple Silicon (arm64), mas o sidecar
+          # kokoro_runner versionado no repo so existe em x86_64. Compilar
+          # mirando x86_64 roda em qualquer Mac via Rosetta 2.
+          targets: x86_64-apple-darwin
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build Tauri app (macOS, x86_64)
+        run: npm run pulso:app:build -- --target x86_64-apple-darwin
+        env:
+          NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
+
+      - name: Upload macOS build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-macos-build
+          path: |
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
+          if-no-files-found: warn
+
+  build-linux:
+    if: ${{ github.event.inputs.target == 'linux' || github.event.inputs.target == 'both' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build Tauri app (Linux)
+        run: npm run pulso:app:build
+        env:
+          NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
+
+      - name: Upload Linux build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-linux-build
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: warn
