@@ -3899,7 +3899,7 @@ ${data.transcription}`, {
             {isMobileMenuOpen ? <X size={16} strokeWidth={1.5} /> : <Menu size={16} strokeWidth={1.5} />}
           </button>
           
-          <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">lótus live</span>
+          <span className="text-sm font-semibold tracking-[0.2em] text-[#fbf9f5]/80 lowercase">pulso</span>
           
           {activeContextNode && (
             <>
@@ -5039,13 +5039,6 @@ ${data.transcription}`, {
                     >
                       <FileText size={12} strokeWidth={1.5} />
                       <span>arquivos</span>
-                    </button>
-                    <button
-                      onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
-                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
-                    >
-                      <ImageIcon size={12} strokeWidth={1.5} />
-                      <span>fotos</span>
                     </button>
                     <button
                       onClick={() => { cameraInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
