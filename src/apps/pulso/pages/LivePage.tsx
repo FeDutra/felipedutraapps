@@ -105,22 +105,33 @@ function SortableChatItemDesktop({
         </span>
       )}
 
-      {isCustom && !isEditing && (
+      {!isEditing && (
         <div className="opacity-0 group-hover/ctx:opacity-100 transition-opacity flex items-center gap-1 shrink-0 select-none mr-2">
           <button
-            onClick={(e) => { e.stopPropagation(); onStartRename(); }}
+            onClick={onOpenSplit}
             className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-            title="Renomear chat"
+            title="Abrir ao lado"
           >
-            <Edit2 size={8} />
+            <PanelRight size={8} />
           </button>
-          <button
-            onClick={onArchive}
-            className="p-0.5 text-[#fbf9f5]/35 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
-            title="Arquivar chat"
-          >
-            <Archive size={8} />
-          </button>
+          {isCustom && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartRename(); }}
+                className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+                title="Renomear chat"
+              >
+                <Edit2 size={8} />
+              </button>
+              <button
+                onClick={onArchive}
+                className="p-0.5 text-[#fbf9f5]/35 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
+                title="Arquivar chat"
+              >
+                <Archive size={8} />
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -210,6 +221,7 @@ interface SortableAreaItemWrapperProps {
   getAreaIcon: (area: any) => React.ReactNode;
   onDeleteArea: (areaId: string, areaName: string, e: React.MouseEvent) => void;
   onOpenAreaConfig: (areaId: string) => void;
+  onOpenSplitChat: (contextId: string) => void;
 }
 
 function SortableAreaItemWrapper({
@@ -238,7 +250,8 @@ function SortableAreaItemWrapper({
   setActiveContextNode,
   getAreaIcon,
   onDeleteArea,
-  onOpenAreaConfig
+  onOpenAreaConfig,
+  onOpenSplitChat
 }: SortableAreaItemWrapperProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id, data: { type: 'area' } });
   const style = {
@@ -333,6 +346,7 @@ function SortableAreaItemWrapper({
               onSelect={() => setActiveContextNode(ctx)}
               onStartRename={() => { setEditingContextId(ctx.contextId); setEditingContextLabel(ctx.label); }}
               onArchive={(e) => handleArchiveChat(ctx.contextId, e)}
+              onOpenSplit={(e) => { e.stopPropagation(); onOpenSplitChat(ctx.contextId); }}
             />
           ))}
         </SortableContext>
@@ -4541,6 +4555,7 @@ ${data.transcription}`, {
                   getAreaIcon={getAreaIcon}
                   onDeleteArea={handleDeleteArea}
                   onOpenAreaConfig={setAreaConfigPanelAreaId}
+                  onOpenSplitChat={setSecondaryContextId}
                 />
               );
             })}
