@@ -3,7 +3,7 @@ import React from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
-import { X, Send } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { PulsoContextNode } from '../types/pulso.types';
 
 interface PaneMessage {
@@ -16,14 +16,16 @@ interface PaneMessage {
 interface SecondaryChatPaneProps {
   contextNode: PulsoContextNode;
   onClose: () => void;
-  onSend: (text: string, targetContextNode: PulsoContextNode) => void;
-  isTyping: boolean;
+  isFocused: boolean;
   onFocus: () => void;
 }
 
-export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, onClose, onSend, isTyping, onFocus }) => {
+// Mesma identidade visual do chat principal — sem moldura, sem cabeçalho de
+// widget, sem input próprio. É a mesma sessão, só ao lado. O input
+// permanece único, fixo embaixo ao centro; o foco decide pra qual painel ele
+// escreve.
+export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, onClose, isFocused, onFocus }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
-  const [draft, setDraft] = React.useState('');
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -57,69 +59,37 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length]);
 
-  const handleSubmit = () => {
-    const text = draft.trim();
-    if (!text) return;
-    onSend(text, contextNode);
-    setDraft('');
-  };
-
   return (
     <div
-      className="flex flex-col h-full w-full bg-black/25 border-l border-white/10"
-      onFocus={onFocus}
+      className={`flex flex-col h-full w-full transition-opacity duration-300 ${isFocused ? 'opacity-100' : 'opacity-80'}`}
       onClick={onFocus}
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
-        <span className="text-[9px] tracking-[0.2em] uppercase font-sans text-[#fbf9f5]/70 truncate">{contextNode.label}</span>
+      <div className="flex items-center justify-between px-2 pb-2 shrink-0">
+        <span className={`text-[9px] tracking-[0.2em] uppercase font-sans truncate transition-colors ${isFocused ? 'text-white/85' : 'text-[#fbf9f5]/40'}`}>
+          {contextNode.label}
+        </span>
         <button
-          onClick={onClose}
-          className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center justify-center shrink-0"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="text-[#fbf9f5]/30 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center justify-center shrink-0"
           title="Fechar painel"
         >
-          <X size={14} strokeWidth={1.5} />
+          <X size={12} strokeWidth={1.5} />
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar px-4 py-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar chat-fade-mask px-2 space-y-8">
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'}`}>
+          <div key={msg.id} className={`flex w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
             <div className="max-w-[85%] space-y-1">
-              <span className={`block text-[8px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
+              <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
                 {msg.sender === 'lotus' ? 'lótus' : 'fê'}
               </span>
-              <div className="text-xs leading-relaxed font-light text-[#fbf9f5]/90 whitespace-pre-wrap" style={{ overflowWrap: 'anywhere' }}>
+              <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 whitespace-pre-wrap" style={{ overflowWrap: 'anywhere' }}>
                 {msg.text}
               </div>
             </div>
           </div>
         ))}
-        {isTyping && (
-          <span className="text-[9px] tracking-widest uppercase text-[#fbf9f5]/35 animate-pulse">pensando...</span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/10 shrink-0">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit();
-            }
-          }}
-          placeholder="escrever aqui..."
-          rows={1}
-          className="flex-1 bg-transparent border-none outline-none resize-none text-xs text-[#fbf9f5]/90 placeholder:text-[#fbf9f5]/25 max-h-28"
-        />
-        <button
-          onClick={handleSubmit}
-          disabled={!draft.trim()}
-          className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 transition-colors bg-transparent border-none cursor-pointer outline-none shrink-0"
-        >
-          <Send size={14} strokeWidth={1.5} />
-        </button>
       </div>
     </div>
   );

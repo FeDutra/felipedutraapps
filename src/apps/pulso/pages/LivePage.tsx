@@ -955,6 +955,8 @@ export default function LivePage() {
   // principal, reaproveitando a mesma mecânica visual da Mesa (desloca o
   // conteúdo principal e ocupa a metade direita da tela).
   const [secondaryContextId, setSecondaryContextId] = React.useState<string | null>(null);
+  // Qual painel o input único (fixo embaixo, padrão) atinge quando envia.
+  const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
   const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
   const [isMesaCollapsed, setIsMesaCollapsed] = React.useState(false);
   const [contextStatesMap, setContextStatesMap] = React.useState<Record<string, PulsoContextState>>({});
@@ -1141,6 +1143,11 @@ export default function LivePage() {
   // restored after Firestore sessions arrive, avoiding hydration mismatch.
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
   const activeContextNodeRef = React.useRef(activeContextNode);
+  const secondaryContextNode = React.useMemo(
+    () => (secondaryContextId ? allContextNodes.find(n => n.contextId === secondaryContextId) || null : null),
+    [secondaryContextId, allContextNodes]
+  );
+  const sendTargetContextNode = (focusedPaneSide === 'right' && secondaryContextNode) ? secondaryContextNode : activeContextNode;
 
   // Rascunho não enviado por sessão — trocar de chat, ou até fechar e
   // reabrir a aba, não pode perder o que já foi digitado em outro chat.
@@ -4728,9 +4735,10 @@ ${data.transcription}`, {
                 </div>
               </div>
             )}
-            <div 
+            <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
+              onClick={() => setFocusedPaneSide('left')}
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
             >
               {currentMessages.map((msg, msgIndex) => {
@@ -5249,24 +5257,19 @@ ${data.transcription}`, {
             </button>
           )}
 
-          {/* Split de chats (v1, desktop) — mesma mecânica visual da Mesa */}
-          {secondaryContextId && (() => {
-            const secondaryNode = allContextNodes.find(n => n.contextId === secondaryContextId);
-            if (!secondaryNode) return null;
-            return (
-              <div className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-50 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] transition-all duration-500 ease-in-out pointer-events-auto flex-col animate-fade-in">
-                <div className="w-full h-full overflow-hidden rounded-2xl border border-white/10">
-                  <SecondaryChatPane
-                    contextNode={secondaryNode}
-                    onClose={() => setSecondaryContextId(null)}
-                    onSend={(text, targetNode) => handleSendMessage(text, { targetContextNode: targetNode })}
-                    isTyping={contextTypingStates[secondaryContextId] || false}
-                    onFocus={() => {}}
-                  />
-                </div>
-              </div>
-            );
-          })()}
+          {/* Split de chats (v1, desktop) — mesma identidade visual do chat
+              principal, sem moldura de widget. Um input só, fixo embaixo
+              (padrão); o foco decide pra qual painel ele escreve. */}
+          {secondaryContextNode && (
+            <div className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-28 md:bottom-32 z-40 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] pointer-events-auto flex-col animate-fade-in">
+              <SecondaryChatPane
+                contextNode={secondaryContextNode}
+                onClose={() => { setSecondaryContextId(null); setFocusedPaneSide('left'); }}
+                isFocused={focusedPaneSide === 'right'}
+                onFocus={() => setFocusedPaneSide('right')}
+              />
+            </div>
+          )}
 
 <footer
         className={`fixed bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
@@ -5536,7 +5539,7 @@ ${data.transcription}`, {
                     
                     if (!e.shiftKey) {
                       e.preventDefault();
-                      handleSendMessage();
+                      handleSendMessage(undefined, { targetContextNode: sendTargetContextNode });
                     }
                   }
                 }}
@@ -5634,7 +5637,7 @@ ${data.transcription}`, {
           </button>
 
           <button
-            onClick={() => handleSendMessage()}
+            onClick={() => handleSendMessage(undefined, { targetContextNode: sendTargetContextNode })}
             disabled={!inputMessage.trim()}
             className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
           >
