@@ -661,6 +661,17 @@ const safeStorageSet = (key: string, value: string): void => {
   }
 };
 
+const safeStorageRemove = (key: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    console.warn(`[PULSO_STORAGE_REMOVE_UNAVAILABLE] ${key}`, error);
+  }
+};
+
+const draftStorageKey = (contextId: string) => `pulso_draft_${contextId}`;
+
 const settleWithin = async <T,>(
   operation: Promise<T>,
   timeoutMs: number,
@@ -1110,18 +1121,48 @@ export default function LivePage() {
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
   const activeContextNodeRef = React.useRef(activeContextNode);
 
-  // Rascunho não enviado por sessão — trocar de chat não pode perder o que
-  // já foi digitado em outro. Fonte de verdade por contextId; `inputMessage`
-  // é só o espelho do rascunho da sessão ativa no momento. `inputMessageRef`
-  // (declarado mais abaixo) se auto-sincroniza com `inputMessage` no próprio
-  // efeito dele, então não precisa ser tocado aqui.
+  // Rascunho não enviado por sessão — trocar de chat, ou até fechar e
+  // reabrir a aba, não pode perder o que já foi digitado em outro chat.
+  // localStorage é a fonte de verdade (sobrevive a refresh); o ref em
+  // memória é só um cache rápido pra não bater no storage a cada troca.
   const draftsByContextRef = React.useRef<Record<string, string>>({});
   const previousDraftContextIdRef = React.useRef<string | null>(null);
+  const draftSaveTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistDraft = React.useCallback((contextId: string, text: string) => {
+    draftsByContextRef.current[contextId] = text;
+    if (text.trim()) {
+      safeStorageSet(draftStorageKey(contextId), text);
+    } else {
+      safeStorageRemove(draftStorageKey(contextId));
+    }
+  }, []);
+
+  // Grava com debounce enquanto o usuário digita — não a cada tecla.
+  React.useEffect(() => {
+    const contextId = activeContextNode.contextId;
+    if (!contextId) return;
+    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      persistDraft(contextId, inputMessage);
+    }, 400);
+    return () => {
+      if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+    };
+  }, [inputMessage, activeContextNode.contextId, persistDraft]);
+
   React.useEffect(() => {
     const prevId = previousDraftContextIdRef.current;
     if (prevId && prevId !== activeContextNode.contextId) {
-      draftsByContextRef.current[prevId] = inputMessage;
-      setInputMessage(draftsByContextRef.current[activeContextNode.contextId] || '');
+      persistDraft(prevId, inputMessage); // grava na hora, sem esperar o debounce
+      const restored = draftsByContextRef.current[activeContextNode.contextId]
+        ?? safeStorageGet(draftStorageKey(activeContextNode.contextId))
+        ?? '';
+      setInputMessage(restored);
+    } else if (!prevId) {
+      // Primeira carga desta aba: restaura do localStorage se existir.
+      const restored = safeStorageGet(draftStorageKey(activeContextNode.contextId)) || '';
+      if (restored) setInputMessage(restored);
     }
     previousDraftContextIdRef.current = activeContextNode.contextId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
