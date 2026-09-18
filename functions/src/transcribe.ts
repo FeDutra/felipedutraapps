@@ -70,22 +70,39 @@ Siga rigorosamente as diretrizes abaixo:
       };
 
       console.log(`[PULSO_TRANSCRIBE] Fetching Gemini 2.5 Flash API directly. Key length: ${apiKey.length}`);
-      const startTime = Date.now();
-      
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
 
-      const duration = Date.now() - startTime;
-      console.log(`[PULSO_TRANSCRIBE] Gemini responded in ${duration}ms. Status: ${response.status}`);
+      // 429 (rate limit) e 503 (indisponível) do Gemini costumam falhar em
+      // menos de 1s, sem processar áudio nenhum — retry curto com backoff
+      // resolve a maioria sem custo real de tempo, já que a resposta rápida
+      // e barata do lado do Gemini deixa folga de sobra no timeout da função.
+      const MAX_ATTEMPTS = 3;
+      let response: Response | null = null;
+      let lastErrorText = "";
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const startTime = Date.now();
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const duration = Date.now() - startTime;
+        console.log(`[PULSO_TRANSCRIBE] Gemini responded in ${duration}ms. Status: ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS})`);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Google Gemini API responded with status ${response.status}: ${errorText}`);
+        if (response.ok) break;
+
+        lastErrorText = await response.text();
+        const retryable = response.status === 429 || response.status === 503 || response.status >= 500;
+        if (!retryable || attempt === MAX_ATTEMPTS) break;
+
+        const backoffMs = attempt * 1200;
+        console.warn(`[PULSO_TRANSCRIBE] Retryable error (${response.status}), waiting ${backoffMs}ms before retry.`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+
+      if (!response || !response.ok) {
+        throw new Error(`Google Gemini API responded with status ${response?.status}: ${lastErrorText}`);
       }
 
       const json = (await response.json()) as any;
