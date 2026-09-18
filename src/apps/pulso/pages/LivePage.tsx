@@ -3064,8 +3064,9 @@ export default function LivePage() {
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-    }
-    if (microphoneStreamRef.current) {
+    } else if (microphoneStreamRef.current) {
+      // Sem gravação ativa (ex: erro antes de começar), não há onstop pra
+      // limpar a stream — encerra aqui mesmo.
       microphoneStreamRef.current.getTracks().forEach(track => track.stop());
       microphoneStreamRef.current = null;
     }
@@ -3136,7 +3137,12 @@ export default function LivePage() {
          setInputMessage(newText);
          currentTextRef.current = newText;
          inputMessageRef.current = newText;
-         
+         if (!transcribedText.trim()) {
+           // Sinaliza claramente em vez de deixar a caixa de texto igual, sem
+           // pista nenhuma de que a gravação não virou texto.
+           setVoiceError('não captei nenhum áudio nessa gravação — tenta de novo.');
+         }
+
          setVoiceState('idle');
          voiceStateRef.current = 'idle';
          setVoiceMode('off');
@@ -3215,6 +3221,14 @@ export default function LivePage() {
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
         audioChunksRef.current = [];
+        // Só agora, com o gravador de fato parado e o último chunk garantido,
+        // é seguro encerrar as tracks do microfone. Pará-las antes (no clique
+        // de stop) corta o flush final em alguns navegadores/iOS e produz
+        // áudio truncado/vazio na transcrição.
+        if (microphoneStreamRef.current) {
+          microphoneStreamRef.current.getTracks().forEach(track => track.stop());
+          microphoneStreamRef.current = null;
+        }
         // Only transcribe if we haven't manually aborted or completely exited
         if (voiceStateRef.current === 'recording_once' || voiceStateRef.current === 'presence_listening' || voiceStateRef.current === 'transcribing') {
            transcribeAudioBlob(audioBlob, mode);
