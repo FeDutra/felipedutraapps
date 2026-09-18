@@ -2,6 +2,7 @@
 import ArcaDrawer from '../components/ArcaDrawer';
 import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
+import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { listen } from '@tauri-apps/api/event';
 
 import {
@@ -38,6 +39,7 @@ interface SortableChatItemDesktopProps {
   onSelect: () => void;
   onStartRename: () => void;
   onArchive: (e: React.MouseEvent) => void;
+  onOpenSplit: (e: React.MouseEvent) => void;
 }
 
 function SortableChatItemDesktop({
@@ -54,6 +56,7 @@ function SortableChatItemDesktop({
   onSelect,
   onStartRename,
   onArchive,
+  onOpenSplit,
 }: SortableChatItemDesktopProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: ctx.contextId,
@@ -485,6 +488,7 @@ import {
   Download,
   Edit2,
   Archive,
+  PanelRight,
   ChevronDown,
   ChevronRight,
   Globe,
@@ -934,6 +938,10 @@ export default function LivePage() {
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
+  // Split de chats (v1, desktop): um segundo painel de conversa ao lado do
+  // principal, reaproveitando a mesma mecânica visual da Mesa (desloca o
+  // conteúdo principal e ocupa a metade direita da tela).
+  const [secondaryContextId, setSecondaryContextId] = React.useState<string | null>(null);
   const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
   const [isMesaCollapsed, setIsMesaCollapsed] = React.useState(false);
   const [contextStatesMap, setContextStatesMap] = React.useState<Record<string, PulsoContextState>>({});
@@ -3858,8 +3866,14 @@ ${data.transcription}`, {
       presenceSessionStartTimeRef.current = Date.now();
       spokenRequestsRef.current.clear();
 
+      // Teste manual do modo experimental Gemini Live: abrir /pulso/live?gemini_live=1
+      // Ainda sem ferramentas (Notion/memória) plugadas nesse modo.
+      const useGeminiLive = typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('gemini_live') === '1';
+
       const controller = new VoiceSessionController({
         activeContextNode,
+        useGeminiLive,
         onStateChange: (newState) => {
           setVoiceState(newState);
           voiceStateRef.current = newState;
@@ -4617,7 +4631,7 @@ ${data.transcription}`, {
               : 'overflow-hidden max-w-5xl w-full mt-2 md:mt-6 mb-2 md:mb-4 pb-28'
           }`}
           style={{
-            transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
+            transform: (!isAtelieActive && !isEstudioActive && ((isMesaOpen && !isMesaCollapsed) || !!secondaryContextId))
               ? 'translateX(calc(-22vw + 1.5rem))'
               : 'translateX(0)',
             transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -5221,12 +5235,31 @@ ${data.transcription}`, {
             </button>
           )}
 
+          {/* Split de chats (v1, desktop) — mesma mecânica visual da Mesa */}
+          {secondaryContextId && (() => {
+            const secondaryNode = allContextNodes.find(n => n.contextId === secondaryContextId);
+            if (!secondaryNode) return null;
+            return (
+              <div className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-50 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] transition-all duration-500 ease-in-out pointer-events-auto flex-col animate-fade-in">
+                <div className="w-full h-full overflow-hidden rounded-2xl border border-white/10">
+                  <SecondaryChatPane
+                    contextNode={secondaryNode}
+                    onClose={() => setSecondaryContextId(null)}
+                    onSend={(text, targetNode) => handleSendMessage(text, { targetContextNode: targetNode })}
+                    isTyping={contextTypingStates[secondaryContextId] || false}
+                    onFocus={() => {}}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
 <footer
         className={`fixed bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}
         style={{
-          transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
+          transform: (!isAtelieActive && !isEstudioActive && ((isMesaOpen && !isMesaCollapsed) || !!secondaryContextId))
             ? 'translate(calc(-50% - 22vw + 1.5rem), 0)'
             : 'translate(-50%, 0)',
           transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',

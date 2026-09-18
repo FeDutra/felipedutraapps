@@ -1,4 +1,5 @@
 import { TTSAdapter } from '../TTSAdapter';
+import { GeminiLiveClient, GeminiLiveState } from './GeminiLiveClient';
 
 export type VoiceSessionState =
   | 'idle'
@@ -17,6 +18,29 @@ export interface VoiceSessionConfig {
   onError: (error: string) => void;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
   handleSendMessage: (text: string, options: { originMode: 'presence' }) => Promise<{ responseText: string } | null | void>;
+  /**
+   * Modo experimental: usa a Gemini Live API (voz-para-voz em streaming via
+   * relay próprio) em vez do pipeline turn-based (grava -> STT -> LLM -> TTS).
+   * As ferramentas (Notion/memória) ainda não estão plugadas nesse modo — o
+   * Gemini responde sem acesso a elas. Default false, não muda o comportamento
+   * existente.
+   */
+  useGeminiLive?: boolean;
+}
+
+const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a Lótus, assistente pessoal de voz do Fê (Felipe Dutra), falando em português do Brasil.
+Seja direta, natural e conversacional — está sendo ouvida em voz alta, não lida. Respostas curtas, sem listas nem markdown.
+Nunca use linguagem clichê de IA ("Com certeza! Aqui está..."). Trate o Fê sempre como "Fê".`;
+
+function mapGeminiLiveState(state: GeminiLiveState): VoiceSessionState {
+  switch (state) {
+    case 'idle': return 'idle';
+    case 'connecting': return 'starting';
+    case 'listening': return 'presence_listening';
+    case 'speaking': return 'speaking';
+    case 'error': return 'error';
+    default: return 'idle';
+  }
 }
 
 export class VoiceSessionController {
@@ -39,6 +63,9 @@ export class VoiceSessionController {
   // Barge-in (Interrupção)
   private isAssistantSpeaking = false;
   private assistantSpeechStartMs = 0;
+
+  // Modo experimental Gemini Live
+  private geminiLiveClient: GeminiLiveClient | null = null;
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
@@ -176,6 +203,11 @@ export class VoiceSessionController {
   public async start(passedAudioContext?: AudioContext) {
     this.log('VOICE_SESSION_START_REQUESTED');
     this.transition('starting');
+
+    if (this.config.useGeminiLive) {
+      this.startGeminiLive();
+      return;
+    }
 
     try {
       this.log('MIC_PERMISSION_REQUESTED');
@@ -492,12 +524,57 @@ export class VoiceSessionController {
     }
   }
 
+  // ---- Modo experimental Gemini Live ----
+
+  private startGeminiLive() {
+    const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL;
+    const token = process.env.NEXT_PUBLIC_LIVE_VOICE_TOKEN;
+
+    if (!relayUrl || !token) {
+      this.log('GEMINI_LIVE_CONFIG_MISSING');
+      this.config.onError('Relay de voz Gemini Live não configurado (NEXT_PUBLIC_LIVE_VOICE_RELAY_URL/TOKEN ausentes).');
+      this.transition('error');
+      return;
+    }
+
+    this.geminiLiveClient = new GeminiLiveClient({
+      relayUrl: `${relayUrl}?token=${encodeURIComponent(token)}`,
+      systemInstruction: GEMINI_LIVE_SYSTEM_INSTRUCTION,
+      onStateChange: (state) => {
+        this.transition(mapGeminiLiveState(state));
+      },
+      onTranscript: (role, text) => {
+        this.log('GEMINI_LIVE_TRANSCRIPT', { role, text });
+        // onTextReceived espera (userText, assistantText) juntos por turno;
+        // nesse modo os dois chegam em eventos separados, então repassamos
+        // cada um isoladamente pro chamador decidir como exibir.
+        if (role === 'user') {
+          this.config.onTextReceived(text, '');
+        } else {
+          this.config.onTextReceived('', text);
+        }
+      },
+      onError: (message) => {
+        this.log('GEMINI_LIVE_ERROR', message);
+        this.config.onError(message);
+      }
+    });
+
+    this.geminiLiveClient.start();
+  }
+
   /**
    * Finaliza e limpa completamente todos os recursos abertos na sessão.
    */
   public stop() {
     this.log('VOICE_SESSION_STOPPED');
     this.transition('idle');
+
+    if (this.geminiLiveClient) {
+      this.geminiLiveClient.stop();
+      this.geminiLiveClient = null;
+      return;
+    }
 
     if (this.maxRecordTimeout) clearTimeout(this.maxRecordTimeout);
     if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
