@@ -5205,7 +5205,7 @@ ${data.transcription}`, {
               </button>
             </div>
 
-            <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain no-scrollbar">
+            <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain no-scrollbar max-h-[calc(100dvh-10rem)]">
               {dynamicAreas.map((area) => {
                 const areaId = area.id;
                 const areaName = area.name || AREA_NAMES[areaId] || areaId.replace('area_', '');
