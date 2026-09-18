@@ -48,6 +48,7 @@ interface SortableAreaItemWrapperProps {
   setActiveContextNode: (node: any) => void;
   getAreaIcon: (area: any) => React.ReactNode;
   onDeleteArea: (areaId: string, areaName: string, e: React.MouseEvent) => void;
+  onOpenAreaConfig: (areaId: string) => void;
 }
 
 function SortableAreaItemWrapper({
@@ -75,7 +76,8 @@ function SortableAreaItemWrapper({
   setSessions,
   setActiveContextNode,
   getAreaIcon,
-  onDeleteArea
+  onDeleteArea,
+  onOpenAreaConfig
 }: SortableAreaItemWrapperProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id });
   const style = {
@@ -125,6 +127,15 @@ function SortableAreaItemWrapper({
             {area.name}
           </span>
         </div>
+
+        {/* Configure Area Button (Visible on hover) */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenAreaConfig(area.id); }}
+          className="opacity-0 group-hover/item:opacity-100 transition-opacity p-1 text-[#fbf9f5]/25 hover:text-white bg-transparent border-none cursor-pointer outline-none shrink-0"
+          title={`Configurar área ${area.name}`}
+        >
+          <Settings size={10} strokeWidth={2} />
+        </button>
 
         {/* Delete Area Button (Visible on hover, except for default core system areas) */}
         {!['area_eu', 'area_trabalho', 'area_casa', 'area_familia', 'area_criacao', 'area_estudo', 'area_habitos', 'area_saude', 'area_dinheiro', 'area_pessoas', 'area_viagens', 'area_lazer', 'area_sistema', 'area_futuro', 'area_livre', 'area_despertar'].includes(area.id) && (
@@ -4213,6 +4224,7 @@ ${data.transcription}`, {
                   setActiveContextNode={setActiveContextNode}
                   getAreaIcon={getAreaIcon}
                   onDeleteArea={handleDeleteArea}
+                  onOpenAreaConfig={setAreaConfigPanelAreaId}
                 />
               );
             })}
