@@ -1,5 +1,6 @@
 'use client';
 import ArcaDrawer from '../components/ArcaDrawer';
+import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
 import { listen } from '@tauri-apps/api/event';
 
@@ -1249,6 +1250,7 @@ export default function LivePage() {
     return '⚬';
   };
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = React.useState(false);
+  const [areaConfigPanelAreaId, setAreaConfigPanelAreaId] = React.useState<string | null>(null);
   const attachmentMenuRef = React.useRef<HTMLDivElement>(null);
 
   // Attachment and header menus render into a portal (their own full-screen
@@ -5245,7 +5247,7 @@ ${data.transcription}`, {
                 
                 return (
                   <div key={areaId} className="flex flex-col gap-2.5">
-                    <div 
+                    <div
                       onClick={() => {
                         // accordion reativo restrito: only one area open at a time
                         setActiveMobileAreaId(isExpanded ? null : areaId);
@@ -5260,9 +5262,23 @@ ${data.transcription}`, {
                           {areaName}
                         </span>
                       </div>
-                      <span className="text-[#fbf9f5]/25 group-hover/mobile-area:text-[#fbf9f5]/50 transition-colors">
-                        {isExpanded ? <ChevronDown size={12} strokeWidth={1.5} /> : <ChevronRight size={12} strokeWidth={1.5} />}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAreaConfigPanelAreaId(areaId);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="text-[#fbf9f5]/25 hover:text-white/70 transition-colors bg-transparent border-none outline-none cursor-pointer flex items-center justify-center"
+                          title={`Configurar área ${areaName}`}
+                        >
+                          <Settings size={12} strokeWidth={1.5} />
+                        </button>
+                        <span className="text-[#fbf9f5]/25 group-hover/mobile-area:text-[#fbf9f5]/50 transition-colors">
+                          {isExpanded ? <ChevronDown size={12} strokeWidth={1.5} /> : <ChevronRight size={12} strokeWidth={1.5} />}
+                        </span>
+                      </div>
                     </div>
 
                     {isExpanded && (
@@ -5294,6 +5310,18 @@ ${data.transcription}`, {
             </div>
           </div>
         </div>
+      )}
+
+      {areaConfigPanelAreaId && (
+        <AreaConfigPanel
+          areaId={areaConfigPanelAreaId}
+          areaName={
+            dynamicAreas.find(a => a.id === areaConfigPanelAreaId)?.name
+            || AREA_NAMES[areaConfigPanelAreaId]
+            || areaConfigPanelAreaId.replace('area_', '')
+          }
+          onClose={() => setAreaConfigPanelAreaId(null)}
+        />
       )}
 
       {(isSidebarOpen || isTtsSettingsOpen) && (
