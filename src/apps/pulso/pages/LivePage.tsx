@@ -8,7 +8,8 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent
@@ -1323,10 +1324,22 @@ export default function LivePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
   
+  // Mouse (desktop) ativa o arrasto com um pequeno deslocamento, instantâneo
+  // — não conflita com scroll porque mouse não faz scroll por arrasto.
+  // Touch (celular) precisa de uma "segurada" (delay) antes de ativar o
+  // arrasto, senão qualquer scroll vertical na lista é sequestrado como
+  // drag. `tolerance` cancela o drag se o dedo escorregar demais durante a
+  // espera — aí o gesto vira scroll normal.
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
