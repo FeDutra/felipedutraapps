@@ -1167,8 +1167,11 @@ export default function LivePage() {
   }, []);
 
   // Grava com debounce enquanto o usuário digita — não a cada tecla.
+  // Chave é o contexto ALVO do envio (sendTargetContextNode), não sempre o
+  // painel da esquerda — assim o rascunho certo é salvo mesmo digitando pro
+  // painel secundário focado.
   React.useEffect(() => {
-    const contextId = activeContextNode.contextId;
+    const contextId = sendTargetContextNode.contextId;
     if (!contextId) return;
     if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
     draftSaveTimeoutRef.current = setTimeout(() => {
@@ -1177,24 +1180,30 @@ export default function LivePage() {
     return () => {
       if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
     };
-  }, [inputMessage, activeContextNode.contextId, persistDraft]);
+  }, [inputMessage, sendTargetContextNode.contextId, persistDraft]);
 
+  // Troca de contexto alvo (área diferente, OU foco mudou pro painel
+  // secundário): salva o rascunho de onde estava e troca visivelmente o que
+  // a caixa de texto mostra pelo rascunho do novo alvo. Sem isso, a caixa
+  // continuava mostrando o texto de outro chat mesmo com o foco já tendo
+  // mudado — dava a impressão de que o clique não fez nada.
   React.useEffect(() => {
     const prevId = previousDraftContextIdRef.current;
-    if (prevId && prevId !== activeContextNode.contextId) {
+    const targetId = sendTargetContextNode.contextId;
+    if (prevId && prevId !== targetId) {
       persistDraft(prevId, inputMessage); // grava na hora, sem esperar o debounce
-      const restored = draftsByContextRef.current[activeContextNode.contextId]
-        ?? safeStorageGet(draftStorageKey(activeContextNode.contextId))
+      const restored = draftsByContextRef.current[targetId]
+        ?? safeStorageGet(draftStorageKey(targetId))
         ?? '';
       setInputMessage(restored);
     } else if (!prevId) {
       // Primeira carga desta aba: restaura do localStorage se existir.
-      const restored = safeStorageGet(draftStorageKey(activeContextNode.contextId)) || '';
+      const restored = safeStorageGet(draftStorageKey(targetId)) || '';
       if (restored) setInputMessage(restored);
     }
-    previousDraftContextIdRef.current = activeContextNode.contextId;
+    previousDraftContextIdRef.current = targetId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeContextNode.contextId]);
+  }, [sendTargetContextNode.contextId]);
 
   const unreadContexts = React.useMemo(() => {
     const unreads: Record<string, boolean> = {};
@@ -5271,7 +5280,7 @@ ${data.transcription}`, {
               principal, sem moldura de widget. Um input só, fixo embaixo
               (padrão); o foco decide pra qual painel ele escreve. */}
           {secondaryContextNode && (
-            <div className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-28 md:bottom-32 z-40 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] pointer-events-auto flex-col animate-fade-in">
+            <div className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-28 md:bottom-32 z-40 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] max-w-xl lg:max-w-2xl 2xl:max-w-3xl pointer-events-auto flex-col animate-fade-in">
               <SecondaryChatPane
                 contextNode={secondaryContextNode}
                 onClose={() => { setSecondaryContextId(null); setFocusedPaneSide('left'); }}
