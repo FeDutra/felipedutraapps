@@ -1541,6 +1541,7 @@ export default function LivePage() {
   const animationFrameRef = React.useRef<number>(0);
   const startSpeechRecognitionRef = React.useRef<any>(null);
   const baseTextBeforeRecordingRef = React.useRef<string>('');
+  const sendAfterTranscribeRef = React.useRef<boolean>(false);
   const voiceSessionControllerRef = React.useRef<VoiceSessionController | null>(null);
 
   React.useEffect(() => {
@@ -3136,6 +3137,21 @@ export default function LivePage() {
       if (mode === 'recording_once') {
          const currentBase = baseTextBeforeRecordingRef.current;
          const newText = transcribedText.trim() ? (currentBase ? `${currentBase}${transcribedText}` : transcribedText) : currentBase.trim();
+         const shouldSendDirect = sendAfterTranscribeRef.current;
+         sendAfterTranscribeRef.current = false;
+
+         if (shouldSendDirect && newText.trim()) {
+           setInputMessage('');
+           currentTextRef.current = '';
+           inputMessageRef.current = '';
+           setVoiceState('idle');
+           voiceStateRef.current = 'idle';
+           setVoiceMode('off');
+           voiceModeRef.current = 'off';
+           handleSendMessage(newText, { originMode: 'recording_once' });
+           return;
+         }
+
          setInputMessage(newText);
          currentTextRef.current = newText;
          inputMessageRef.current = newText;
@@ -3541,6 +3557,31 @@ ${data.transcription}`, {
     }
   }, [startSpeechRecognition, stopVoiceRecognition, isSpeechRecognitionSupported]);
 
+  // Para, transcreve normalmente e já envia a mensagem assim que o texto sai
+  // — sem precisar de um segundo toque no botão de enviar.
+  const sendRecordingOnceDirect = React.useCallback(() => {
+    if (voiceModeRef.current !== 'recording_once') return;
+    sendAfterTranscribeRef.current = true;
+    voiceModeRef.current = 'off';
+    stopVoiceRecognition();
+    setVoiceMode('off');
+  }, [stopVoiceRecognition]);
+
+  // Desiste da gravação: para sem transcrever e restaura o texto que já
+  // estava na caixa antes de começar a gravar.
+  const cancelRecordingOnce = React.useCallback(() => {
+    if (voiceModeRef.current !== 'recording_once') return;
+    sendAfterTranscribeRef.current = false;
+    voiceModeRef.current = 'off';
+    voiceStateRef.current = 'idle'; // onstop só transcreve se o estado ainda permitir
+    setVoiceMode('off');
+    setVoiceState('idle');
+    stopVoiceRecognition();
+    const originalText = baseTextBeforeRecordingRef.current;
+    setInputMessage(originalText);
+    currentTextRef.current = originalText;
+    inputMessageRef.current = originalText;
+  }, [stopVoiceRecognition]);
 
   const togglePresenceMode = React.useCallback(async (e?: React.MouseEvent) => {
     if (e) {
@@ -5194,9 +5235,25 @@ ${data.transcription}`, {
           </button>
 
           {voiceMode === 'recording_once' && (
-            <span className="text-[8px] tabular-nums tracking-[0.12em] text-[#fbf9f5]/45 select-none" aria-live="polite">
-              {`${Math.floor(recordingElapsedSeconds / 60)}:${String(recordingElapsedSeconds % 60).padStart(2, '0')} / 7:00`}
-            </span>
+            <div className="flex items-center gap-2 animate-fade-in">
+              <span className="text-[8px] tabular-nums tracking-[0.12em] text-[#fbf9f5]/45 select-none" aria-live="polite">
+                {`${Math.floor(recordingElapsedSeconds / 60)}:${String(recordingElapsedSeconds % 60).padStart(2, '0')} / 7:00`}
+              </span>
+              <button
+                onClick={cancelRecordingOnce}
+                className="p-1 text-[#fbf9f5]/40 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
+                title="cancelar gravação"
+              >
+                <X size={13} strokeWidth={1.5} />
+              </button>
+              <button
+                onClick={sendRecordingOnceDirect}
+                className="p-1 text-[#fbf9f5]/60 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+                title="parar e enviar direto"
+              >
+                <Send size={13} strokeWidth={1.5} />
+              </button>
+            </div>
           )}
 
           <button
