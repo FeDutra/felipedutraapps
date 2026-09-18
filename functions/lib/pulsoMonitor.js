@@ -201,6 +201,8 @@ let currentCronContext = "pulso-monitor";
 // ─── thresholds ──────────────────────────────────────────────────────────────
 const QUEUE_STUCK_MS = 5 * 60 * 1000; // request preso > 5 min = alerta
 const QUEUE_CRITICAL_MS = 15 * 60 * 1000; // preso > 15 min = crítico
+const ORPHAN_LOCK_LOG_MS = 5 * 60 * 1000; // lock > 5 min = registrado no log (ação continua)
+const ORPHAN_LOCK_ALERT_MS = 12 * 60 * 1000; // lock > 12 min (2+ checagens seguidas) = publica no chat ALERTAS
 const QUEUE_SIZE_WARN = 10; // fila com > 10 itens = alerta
 const QUEUE_SIZE_CRITICAL = 30; // fila > 30 = crítico
 const LATENCY_WARN_MS = 10000; // acima de 10s = amarelo
@@ -356,24 +358,32 @@ exports.pulsoQueueWatchdog = (0, scheduler_1.onSchedule)({ schedule: "every 5 mi
     else {
         await resolveAlert("pulso-watchdog-queue-stuck", "pulsoQueueWatchdog");
     }
-    // Locks expirados (requests em processing_openclaw há mais de 5 min sem atualização)
+    // Locks em processing_openclaw sem atualização.
+    // Sessões legítimas (Bash longo, espera de confirmação humana em AskUserQuestion/secrets)
+    // rotineiramente passam de 5 min sem estar mortas — por isso a detecção continua em 5 min
+    // (log/ação), mas só publicamos no chat ALERTAS quando o lock persiste além de 12 min,
+    // ou seja, sobrevive a pelo menos duas checagens seguidas do watchdog.
     const processingSnap = await db.collection(REQUESTS)
         .where("status", "==", "processing_openclaw")
         .where("archived", "==", false)
         .get();
     const orphanLocks = processingSnap.docs.filter(d => {
         const ms = toMs(d.data().updatedAt || d.data().startedAt || d.data().requestedAt);
-        return ms !== null && now - ms > 5 * 60 * 1000;
+        return ms !== null && now - ms > ORPHAN_LOCK_LOG_MS;
     });
-    if (orphanLocks.length > 0) {
-        alerts.push(`Lock órfão: ${orphanLocks.length} request(s) travados em processing`);
+    const orphanLocksSustained = processingSnap.docs.filter(d => {
+        const ms = toMs(d.data().updatedAt || d.data().startedAt || d.data().requestedAt);
+        return ms !== null && now - ms > ORPHAN_LOCK_ALERT_MS;
+    });
+    if (orphanLocksSustained.length > 0) {
+        alerts.push(`Lock órfão: ${orphanLocksSustained.length} request(s) travados em processing há mais de ${ORPHAN_LOCK_ALERT_MS / 60000} min`);
         await raiseAlert({
             id: "pulso-watchdog-orphan-lock",
             name: "Pulso: Watchdog — Lock órfão em processing",
-            description: `${orphanLocks.length} request(s) presos em processing_openclaw há mais de 5 min sem atualização de estado.\nO worker pode ter morrido durante o processamento.`,
+            description: `${orphanLocksSustained.length} request(s) presos em processing_openclaw há mais de ${ORPHAN_LOCK_ALERT_MS / 60000} min sem atualização de estado, em pelo menos duas checagens seguidas do watchdog.\nO worker pode ter morrido durante o processamento.`,
             severity: "high",
             tags: ["watchdog", "lock", "orphan"],
-            details: { orphanLocks: orphanLocks.length, ids: orphanLocks.slice(0, 5).map(d => d.id) },
+            details: { orphanLocks: orphanLocksSustained.length, ids: orphanLocksSustained.slice(0, 5).map(d => d.id) },
         });
     }
     else {
@@ -383,9 +393,10 @@ exports.pulsoQueueWatchdog = (0, scheduler_1.onSchedule)({ schedule: "every 5 mi
         alerts,
         blocked: blocked.length,
         orphanLocks: orphanLocks.length,
+        orphanLocksSustained: orphanLocksSustained.length,
         healthy: alerts.length === 0,
     });
-    console.log("[pulsoQueueWatchdog]", { alerts, blocked: blocked.length, orphanLocks: orphanLocks.length });
+    console.log("[pulsoQueueWatchdog]", { alerts, blocked: blocked.length, orphanLocks: orphanLocks.length, orphanLocksSustained: orphanLocksSustained.length });
 });
 // ═══════════════════════════════════════════════════════════════════════════════
 // CRON 3 — Latência Ponta a Ponta (a cada 15 minutos)
