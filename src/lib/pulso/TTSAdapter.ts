@@ -21,9 +21,10 @@ export interface TTSPreferences {
 }
 
 const STORAGE_KEY = 'pulso_tts_preferences';
+const MIGRATION_KEY = 'pulso_tts_migration_v1_kokoro_default';
 
 const DEFAULT_PREFERENCES: TTSPreferences = {
-  ttsProvider: 'browser_native',
+  ttsProvider: 'kokoro_http',
   voiceName: '',
   voiceURI: '',
   voiceLang: 'pt-BR',
@@ -66,6 +67,17 @@ export class TTSAdapter {
       if (stored) {
         this.preferences = { ...DEFAULT_PREFERENCES, ...JSON.parse(stored) };
       }
+
+      // Migração única: navegadores que ficaram travados em browser_native (valor
+      // antigo do default) voltam a usar Kokoro sem precisar reconfigurar na mão.
+      // Se a pessoa escolher nativo de propósito depois, essa escolha é respeitada.
+      if (!localStorage.getItem(MIGRATION_KEY)) {
+        if (this.preferences.ttsProvider === 'browser_native') {
+          this.preferences.ttsProvider = 'kokoro_http';
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.preferences));
+        }
+        localStorage.setItem(MIGRATION_KEY, '1');
+      }
     } catch (e) {
       console.warn('Failed to load TTS preferences from localStorage:', e);
     }
@@ -105,7 +117,7 @@ export class TTSAdapter {
       const payloadText = this.normalizeTextForSpeech('ok');
       const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
       let voice = this.preferences.voiceName || defaultVoice;
-      const rate = this.preferences.rate === 1.0 ? 0.95 : this.preferences.rate;
+      const rate = this.preferences.rate;
 
       let endpoint = getKokoroEndpoint();
       if (this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'local_kokoro_sidecar') {
@@ -475,7 +487,7 @@ export class TTSAdapter {
   private async getChunkAudio(chunkText: string, provider: TTSProvider, voice: string, rate: number, signal?: AbortSignal): Promise<Blob> {
     const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
     let actualVoice = voice || defaultVoice;
-    const actualRate = rate === 1.0 ? 0.95 : rate;
+    const actualRate = rate;
     
     const cacheKey = `${provider}:${actualVoice}:${actualRate}:${chunkText}`;
     if (this.audioCache.has(cacheKey)) {
