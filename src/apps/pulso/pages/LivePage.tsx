@@ -4016,70 +4016,76 @@ ${data.transcription}`, {
             </button>
             
             {isHeaderMenuOpen && !contextSurfaceVariant && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-transparent backdrop-blur-xl z-[60] text-left transition-all duration-300">
-                <div className="flex flex-col text-[10px] font-light tracking-widest text-[#fbf9f5] lowercase">
-                  {/* Mobile-only navigation items */}
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEngineeringActive(!isEngineeringActive); if (!isEngineeringActive) { setIsAtelieActive(false); setIsEstudioActive(false); } }}
-                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <span>[ engenharia ]</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsAtelieActive(!isAtelieActive); if (!isAtelieActive) { setIsEngineeringActive(false); setIsEstudioActive(false); } }}
-                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <span>{isAtelieActive ? '[ chat ]' : '[ ateliê ]'}</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEstudioActive(!isEstudioActive); if (!isEstudioActive) { setIsEngineeringActive(false); setIsAtelieActive(false); } }}
-                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <span>[ estúdio ]</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsArcaOpen(!isArcaOpen); }}
-                    className="flex md:hidden items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <span>[ arca ]</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
-                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <Activity size={12} strokeWidth={1.5} />
-                    <span>sinais operacionais</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); setIsTtsSettingsOpen(true); }}
-                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <Mic size={12} strokeWidth={1.5} />
-                    <span>voz da lótus (tts)</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/ecossistema'); }}
-                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <Layers size={12} strokeWidth={1.5} />
-                    <span>visão do contexto</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/eventos'); }}
-                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left border-b border-white/5 bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <Database size={12} strokeWidth={1.5} />
-                    <span>logs técnicos</span>
-                  </button>
-                  <button 
-                    onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/conexoes'); }}
-                    className="flex items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left bg-transparent border-none outline-none cursor-pointer text-[#fbf9f5]"
-                  >
-                    <Globe size={12} strokeWidth={1.5} />
-                    <span>conexões</span>
-                  </button>
+              <>
+                <div
+                  className="fixed inset-0 z-50 bg-[#0c0c0c]/76 backdrop-blur-xl animate-fade-in"
+                  onClick={() => setIsHeaderMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 w-48 z-[60] text-left animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-col gap-6">
+                    {/* Mobile-only navigation items */}
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEngineeringActive(!isEngineeringActive); if (!isEngineeringActive) { setIsAtelieActive(false); setIsEstudioActive(false); } }}
+                      className="flex md:hidden items-center py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <span>engenharia</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); setIsAtelieActive(!isAtelieActive); if (!isAtelieActive) { setIsEngineeringActive(false); setIsEstudioActive(false); } }}
+                      className="flex md:hidden items-center py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <span>{isAtelieActive ? 'chat' : 'ateliê'}</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEstudioActive(!isEstudioActive); if (!isEstudioActive) { setIsEngineeringActive(false); setIsAtelieActive(false); } }}
+                      className="flex md:hidden items-center py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <span>estúdio</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); setIsArcaOpen(!isArcaOpen); }}
+                      className="flex md:hidden items-center py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <span>arca</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Activity size={12} strokeWidth={1.5} />
+                      <span>sinais operacionais</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); setIsTtsSettingsOpen(true); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Mic size={12} strokeWidth={1.5} />
+                      <span>voz da lótus (tts)</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/ecossistema'); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Layers size={12} strokeWidth={1.5} />
+                      <span>visão do contexto</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/eventos'); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Database size={12} strokeWidth={1.5} />
+                      <span>logs técnicos</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/conexoes'); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Globe size={12} strokeWidth={1.5} />
+                      <span>conexões</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </div>
