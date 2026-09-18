@@ -110,7 +110,7 @@ export const AreaConfigPanel: React.FC<AreaConfigPanelProps> = ({ areaId, areaNa
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] bg-[#0c0c0c]/76 backdrop-blur-xl flex items-stretch md:items-center justify-center animate-fade-in"
+      className="fixed inset-0 z-[80] bg-[#0c0c0c]/92 backdrop-blur-3xl flex items-stretch md:items-center justify-center animate-fade-in"
       onClick={onClose}
     >
       <div
