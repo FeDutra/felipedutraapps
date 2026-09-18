@@ -77,7 +77,11 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar chat-fade-mask px-2 space-y-8">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar chat-fade-mask px-2">
+        {/* max-w-2xl casa com a largura de linha típica do chat principal —
+            sem isso, 85% de um painel de meia-tela fica bem mais largo que
+            o texto da esquerda. */}
+        <div className="max-w-2xl mx-auto space-y-8">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
             <div className="max-w-[85%] space-y-1">
@@ -90,6 +94,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

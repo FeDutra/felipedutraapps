@@ -4652,10 +4652,18 @@ ${data.transcription}`, {
               : 'overflow-hidden max-w-5xl w-full mt-2 md:mt-6 mb-2 md:mb-4 pb-28'
           }`}
           style={{
-            transform: (!isAtelieActive && !isEstudioActive && ((isMesaOpen && !isMesaCollapsed) || !!secondaryContextId))
+            transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !secondaryContextId)
               ? 'translateX(calc(-22vw + 1.5rem))'
               : 'translateX(0)',
-            transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
+            // Split de chats: em vez de deslocar a caixa inteira (que continua
+            // centralizada em si mesma, só que fora do centro da tela), reduz
+            // a largura pra caber só na metade esquerda — assim o próprio
+            // `items-center justify-center` do <main> centraliza de verdade
+            // dentro do espaço disponível, igual o painel da direita faz.
+            maxWidth: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? 'calc(50vw - 4rem)' : undefined,
+            marginLeft: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? '1.5rem' : undefined,
+            marginRight: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? 'auto' : undefined,
+            transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1), max-width 500ms ease-in-out, margin 500ms ease-in-out',
           }}
         >
 
@@ -4739,7 +4747,9 @@ ${data.transcription}`, {
               ref={scrollContainerRef}
               onScroll={handleScroll}
               onClick={() => setFocusedPaneSide('left')}
-              className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8"
+              className={`absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8 transition-opacity duration-300 ${
+                secondaryContextNode && focusedPaneSide === 'right' ? 'opacity-80' : 'opacity-100'
+              }`}
             >
               {currentMessages.map((msg, msgIndex) => {
                 if (msg.isProgressUpdate) {
@@ -5276,7 +5286,9 @@ ${data.transcription}`, {
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}
         style={{
-          transform: (!isAtelieActive && !isEstudioActive && ((isMesaOpen && !isMesaCollapsed) || !!secondaryContextId))
+          // Input fica sempre no centro padrão, mesmo com o split aberto —
+          // é um input só, compartilhado, não pertence a um lado específico.
+          transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !secondaryContextId)
             ? 'translate(calc(-50% - 22vw + 1.5rem), 0)'
             : 'translate(-50%, 0)',
           transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -5286,7 +5298,7 @@ ${data.transcription}`, {
         {activeContextNode && (
           <div className="w-full flex items-center justify-center gap-3 mb-0.5 animate-fade-in select-none">
             <span className="text-[9px] text-[#fbf9f5]/25 tracking-widest uppercase font-mono font-light">
-              [ contexto ativo: {activeContextNode.label} ]
+              [ contexto ativo: {sendTargetContextNode.label} ]
             </span>
             {isAtelieActive && (
               <button
