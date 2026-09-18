@@ -236,6 +236,7 @@ export interface PulsoContextNode {
   updatedAt?: Date;
   runtimeStatus?: string;
   errorMessage?: string | null;
+  order?: number;
 }
 
 /**
@@ -256,6 +257,8 @@ export interface Session {
   areaId?: string | null;
   /** Optional subarea identifier for legacy compatibility */
   subareaId?: string;
+  /** Manual sort position within its area (drag-and-drop reorder) */
+  order?: number;
   /** The OpenClaw session key used to route to the correct agent context */
   openclawSessionKey: string;
   /** Whether this is a seeded/system session that ships with the platform */

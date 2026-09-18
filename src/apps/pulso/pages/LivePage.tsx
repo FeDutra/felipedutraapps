@@ -22,6 +22,162 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+interface SortableChatItemDesktopProps {
+  ctx: PulsoContextNode;
+  areaId: string;
+  isContextActive: boolean;
+  isUnread: boolean;
+  isCustom: boolean;
+  isEditing: boolean;
+  editingContextLabel: string;
+  setEditingContextLabel: (val: string) => void;
+  handleRenameChat: (id: string) => void;
+  setEditingContextId: (id: string | null) => void;
+  onSelect: () => void;
+  onStartRename: () => void;
+  onArchive: (e: React.MouseEvent) => void;
+}
+
+function SortableChatItemDesktop({
+  ctx,
+  areaId,
+  isContextActive,
+  isUnread,
+  isCustom,
+  isEditing,
+  editingContextLabel,
+  setEditingContextLabel,
+  handleRenameChat,
+  setEditingContextId,
+  onSelect,
+  onStartRename,
+  onArchive,
+}: SortableChatItemDesktopProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: ctx.contextId,
+    data: { type: 'chat', areaId },
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onSelect}
+      className="group/ctx flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer touch-none"
+    >
+      {isEditing ? (
+        <input
+          type="text"
+          value={editingContextLabel}
+          onChange={(e) => setEditingContextLabel(e.target.value)}
+          onBlur={() => handleRenameChat(ctx.contextId)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRenameChat(ctx.contextId);
+            if (e.key === 'Escape') setEditingContextId(null);
+          }}
+          className="bg-white/15 text-white border border-white/20 rounded px-1 py-0.5 text-[8px] outline-none w-20"
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span
+          className={`text-[8px] tracking-wider uppercase font-sans font-light cursor-pointer transition-all duration-200 select-none truncate flex-1 text-left ${
+            isContextActive
+              ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
+              : isUnread
+              ? 'pulso-unread font-bold animate-pulse'
+              : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
+          }`}
+        >
+          {ctx.label}
+        </span>
+      )}
+
+      {isCustom && !isEditing && (
+        <div className="opacity-0 group-hover/ctx:opacity-100 transition-opacity flex items-center gap-1 shrink-0 select-none mr-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); onStartRename(); }}
+            className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+            title="Renomear chat"
+          >
+            <Edit2 size={8} />
+          </button>
+          <button
+            onClick={onArchive}
+            className="p-0.5 text-[#fbf9f5]/35 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
+            title="Arquivar chat"
+          >
+            <Archive size={8} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SortableAreaRowMobileProps {
+  areaId: string;
+  children: React.ReactNode;
+}
+
+function SortableAreaRowMobile({ areaId, children }: SortableAreaRowMobileProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: areaId,
+    data: { type: 'area' },
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="flex flex-col gap-2.5 touch-none">
+      {children}
+    </div>
+  );
+}
+
+interface SortableChatItemMobileProps {
+  ctx: PulsoContextNode;
+  areaId: string;
+  isContextActive: boolean;
+  isUnread: boolean;
+  onSelect: () => void;
+}
+
+function SortableChatItemMobile({ ctx, areaId, isContextActive, isUnread, onSelect }: SortableChatItemMobileProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: ctx.contextId,
+    data: { type: 'chat', areaId },
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  };
+  return (
+    <button
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`w-full py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.14em] uppercase font-sans transition-colors truncate touch-none ${
+        isContextActive ? 'text-white/90' : isUnread ? 'pulso-unread animate-pulse' : 'text-[#fbf9f5]/35'
+      }`}
+      onClick={onSelect}
+    >
+      {ctx.label}
+    </button>
+  );
+}
+
 interface SortableAreaItemWrapperProps {
   area: { id: string; name: string };
   isAreaActive: boolean;
@@ -79,7 +235,7 @@ function SortableAreaItemWrapper({
   onDeleteArea,
   onOpenAreaConfig
 }: SortableAreaItemWrapperProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id, data: { type: 'area' } });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -155,72 +311,26 @@ function SortableAreaItemWrapper({
           isHovered ? 'max-h-40 opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0 pointer-events-none'
         }`}
       >
-        {areaContexts.map((ctx) => {
-          const isContextActive = activeContextNode.contextId === ctx.contextId;
-          const isUnread = !!unreadContexts[ctx.contextId];
-          const isCustom = !ctx.isDefault;
-          
-          return (
-            <div
+        <SortableContext items={areaContexts.map(c => c.contextId)} strategy={verticalListSortingStrategy}>
+          {areaContexts.map((ctx) => (
+            <SortableChatItemDesktop
               key={ctx.contextId}
-              onClick={() => {
-                setActiveContextNode(ctx);
-              }}
-              className="group/ctx flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer"
-            >
-              {editingContextId === ctx.contextId ? (
-                <input
-                  type="text"
-                  value={editingContextLabel}
-                  onChange={(e) => setEditingContextLabel(e.target.value)}
-                  onBlur={() => handleRenameChat(ctx.contextId)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleRenameChat(ctx.contextId);
-                    if (e.key === 'Escape') setEditingContextId(null);
-                  }}
-                  className="bg-white/15 text-white border border-white/20 rounded px-1 py-0.5 text-[8px] outline-none w-20"
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span
-                  className={`text-[8px] tracking-wider uppercase font-sans font-light cursor-pointer transition-all duration-200 select-none truncate flex-1 text-left ${
-                    isContextActive
-                      ? 'text-white font-medium drop-shadow-[0_0_4px_rgba(255,255,255,0.3)]'
-                      : isUnread
-                      ? 'pulso-unread font-bold animate-pulse'
-                      : 'text-[#fbf9f5]/40 hover:text-[#fbf9f5]/85'
-                  }`}
-                >
-                  {ctx.label}
-                </span>
-              )}
-              
-              {isCustom && editingContextId !== ctx.contextId && (
-                <div className="opacity-0 group-hover/ctx:opacity-100 transition-opacity flex items-center gap-1 shrink-0 select-none mr-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingContextId(ctx.contextId);
-                      setEditingContextLabel(ctx.label);
-                    }}
-                    className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-                    title="Renomear chat"
-                  >
-                    <Edit2 size={8} />
-                  </button>
-                  <button
-                    onClick={(e) => handleArchiveChat(ctx.contextId, e)}
-                    className="p-0.5 text-[#fbf9f5]/35 hover:text-[#b8283e] transition-colors bg-transparent border-none cursor-pointer outline-none"
-                    title="Arquivar chat"
-                  >
-                    <Archive size={8} />
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+              ctx={ctx}
+              areaId={area.id}
+              isContextActive={activeContextNode.contextId === ctx.contextId}
+              isUnread={!!unreadContexts[ctx.contextId]}
+              isCustom={!ctx.isDefault}
+              isEditing={editingContextId === ctx.contextId}
+              editingContextLabel={editingContextLabel}
+              setEditingContextLabel={setEditingContextLabel}
+              handleRenameChat={handleRenameChat}
+              setEditingContextId={setEditingContextId}
+              onSelect={() => setActiveContextNode(ctx)}
+              onStartRename={() => { setEditingContextId(ctx.contextId); setEditingContextLabel(ctx.label); }}
+              onArchive={(e) => handleArchiveChat(ctx.contextId, e)}
+            />
+          ))}
+        </SortableContext>
 
         {/* Add Chat Input/Button */}
         <div className="mt-0.5">
@@ -443,6 +553,7 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   isDefault: session.isDefault ?? false,
   lastMessageAt: session.lastMessageAt,
   updatedAt: session.updatedAt,
+  order: session.order,
 });
 
 /**
@@ -520,6 +631,11 @@ const AREA_ORDER = [
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
+
+// Ordem manual (drag-and-drop) primeiro; chats sem `order` ficam no fim, na
+// ordem em que já vinham (sort é estável).
+const sortByOrder = (a: PulsoContextNode, b: PulsoContextNode) =>
+  (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
 
 // Safari can deny localStorage access in private/standalone contexts. Storage
 // is a convenience for restoring UI preferences; it must never prevent the
@@ -3722,35 +3838,91 @@ ${data.transcription}`, {
   const activeProjects = safeArray(state?.activeProjects).filter((p: any) => p && p.archived !== true && p.status === 'active');
   const openTasks = safeArray(state?.openTasks).filter((t: any) => t && t.archived !== true && t.status !== 'completed');
   const pendingInbox = safeArray(state?.pendingInbox).filter((i: any) => i && i.archived !== true && i.status === 'new');
+  // Move um chat pra área que ele foi solto em cima (append no fim da área
+  // destino), ou reordena dentro da própria área se soltou sobre outro chat
+  // da mesma área. Grava no Firestore e atualiza local pra resposta imediata.
+  const handleChatDragEnd = React.useCallback(async (active: DragEndEvent['active'], over: NonNullable<DragEndEvent['over']>) => {
+    const contextId = String(active.id);
+    const sourceAreaId = (active.data.current as any)?.areaId as string | undefined;
+    const overId = String(over.id);
+    const overIsArea = dynamicAreas.some(a => a.id === overId);
+    const overChatAreaId = (over.data.current as any)?.areaId as string | undefined;
+    const targetAreaId = overIsArea ? overId : (overChatAreaId || sourceAreaId);
+    if (!targetAreaId || !sourceAreaId) return;
+
+    if (targetAreaId !== sourceAreaId) {
+      const destContexts = allContextNodes.filter(n => n.areaId === targetAreaId);
+      const maxOrder = destContexts.reduce((m, c) => Math.max(m, c.order ?? -1), -1);
+      const newOrder = maxOrder + 1;
+
+      setSessions(prev => prev.map(n => n.contextId === contextId ? { ...n, areaId: targetAreaId, order: newOrder } : n));
+      if (activeContextNode.contextId === contextId) {
+        setActiveContextNode((prev: any) => ({ ...prev, areaId: targetAreaId, order: newOrder }));
+      }
+      try {
+        await setDoc(doc(db!, firestorePaths.session(contextId)), { areaId: targetAreaId, order: newOrder, updatedAt: new Date() }, { merge: true });
+      } catch (err) {
+        console.error('Erro ao mover chat de área:', err);
+      }
+      return;
+    }
+
+    if (overIsArea) return; // soltou na própria área de origem, sem reordenar
+    const areaContexts = allContextNodes.filter(n => n.areaId === sourceAreaId).sort(sortByOrder);
+    const oldIndex = areaContexts.findIndex(c => c.contextId === contextId);
+    const newIndex = areaContexts.findIndex(c => c.contextId === overId);
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+    const reordered = arrayMove(areaContexts, oldIndex, newIndex);
+
+    setSessions(prev => {
+      const orderMap = new Map(reordered.map((c, i) => [c.contextId, i]));
+      return prev.map(n => orderMap.has(n.contextId) ? { ...n, order: orderMap.get(n.contextId) } : n);
+    });
+
+    try {
+      await Promise.all(reordered.map((c, i) =>
+        setDoc(doc(db!, firestorePaths.session(c.contextId)), { order: i, updatedAt: new Date() }, { merge: true })
+      ));
+    } catch (err) {
+      console.error('Erro ao reordenar chats:', err);
+    }
+  }, [dynamicAreas, allContextNodes, activeContextNode.contextId, setActiveContextNode]);
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIndex = dynamicAreas.findIndex(a => a.id === active.id);
-      const newIndex = dynamicAreas.findIndex(a => a.id === over.id);
-      const newOrder = arrayMove(dynamicAreas, oldIndex, newIndex);
-      
-      setState((prev: any) => {
-        if (!prev) return prev;
-        const updatedAreas = [...(prev.allAreas || [])];
-        newOrder.forEach((item, index) => {
-          const idx = updatedAreas.findIndex(a => a.id === item.id);
-          if (idx !== -1) {
-            updatedAreas[idx] = { ...updatedAreas[idx], order: index };
-          } else {
-            updatedAreas.push({ id: item.id, name: item.name, order: index, status: 'active', type: 'personal' });
-          }
-        });
-        return { ...prev, allAreas: updatedAreas };
-      });
+    if (!over || active.id === over.id) return;
 
-      try {
-        const promises = newOrder.map((areaToSave, index) => {
-          return areasService.saveArea({ id: areaToSave.id, name: areaToSave.name, order: index, status: 'active' } as any);
-        });
-        await Promise.all(promises);
-      } catch (err) {
-        console.error("Erro ao salvar ordem das áreas:", err);
-      }
+    if ((active.data.current as any)?.type === 'chat') {
+      await handleChatDragEnd(active, over);
+      return;
+    }
+
+    const oldIndex = dynamicAreas.findIndex(a => a.id === active.id);
+    const newIndex = dynamicAreas.findIndex(a => a.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(dynamicAreas, oldIndex, newIndex);
+
+    setState((prev: any) => {
+      if (!prev) return prev;
+      const updatedAreas = [...(prev.allAreas || [])];
+      newOrder.forEach((item, index) => {
+        const idx = updatedAreas.findIndex(a => a.id === item.id);
+        if (idx !== -1) {
+          updatedAreas[idx] = { ...updatedAreas[idx], order: index };
+        } else {
+          updatedAreas.push({ id: item.id, name: item.name, order: index, status: 'active', type: 'personal' });
+        }
+      });
+      return { ...prev, allAreas: updatedAreas };
+    });
+
+    try {
+      const promises = newOrder.map((areaToSave, index) => {
+        return areasService.saveArea({ id: areaToSave.id, name: areaToSave.name, order: index, status: 'active' } as any);
+      });
+      await Promise.all(promises);
+    } catch (err) {
+      console.error("Erro ao salvar ordem das áreas:", err);
     }
   };
 
@@ -4182,7 +4354,7 @@ ${data.transcription}`, {
           >
             {dynamicAreas.map((area) => {
               const areaId = area.id;
-              const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
+              const areaContexts = allContextNodes.filter(n => n.areaId === areaId).sort(sortByOrder);
               const isHovered = hoveredAreaId === areaId;
               const isAreaActive = activeAreaId === areaId;
               const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
@@ -5306,16 +5478,18 @@ ${data.transcription}`, {
             </div>
 
             <div className="flex flex-col gap-6 overflow-y-auto overscroll-contain no-scrollbar max-h-[calc(100dvh-10rem)]">
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={dynamicAreas.map(a => a.id)} strategy={verticalListSortingStrategy}>
               {dynamicAreas.map((area) => {
                 const areaId = area.id;
                 const areaName = area.name || AREA_NAMES[areaId] || areaId.replace('area_', '');
-                const areaContexts = allContextNodes.filter(n => n.areaId === areaId);
+                const areaContexts = allContextNodes.filter(n => n.areaId === areaId).sort(sortByOrder);
                 const isAreaActive = activeAreaId === areaId;
                 const isExpanded = activeMobileAreaId === areaId;
                 const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
-                
+
                 return (
-                  <div key={areaId} className="flex flex-col gap-2.5">
+                  <SortableAreaRowMobile key={areaId} areaId={areaId}>
                     <div
                       onClick={() => {
                         // accordion reativo restrito: only one area open at a time
@@ -5352,30 +5526,28 @@ ${data.transcription}`, {
 
                     {isExpanded && (
                       <div className="flex flex-col gap-3 pl-6 pb-1 animate-fade-in">
-                        {areaContexts.map((ctx) => {
-                          const isContextActive = activeContextNode.contextId === ctx.contextId;
-                          const isUnread = !!unreadContexts[ctx.contextId];
-                          
-                          return (
-                            <button
-                              key={ctx.contextId} 
-                              className={`w-full py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.14em] uppercase font-sans transition-colors truncate ${
-                                isContextActive ? 'text-white/90' : isUnread ? 'pulso-unread animate-pulse' : 'text-[#fbf9f5]/35'
-                              }`}
-                              onClick={() => {
+                        <SortableContext items={areaContexts.map(c => c.contextId)} strategy={verticalListSortingStrategy}>
+                          {areaContexts.map((ctx) => (
+                            <SortableChatItemMobile
+                              key={ctx.contextId}
+                              ctx={ctx}
+                              areaId={areaId}
+                              isContextActive={activeContextNode.contextId === ctx.contextId}
+                              isUnread={!!unreadContexts[ctx.contextId]}
+                              onSelect={() => {
                                 setActiveContextNode(ctx);
                                 setIsMobileMenuOpen(false);
                               }}
-                            >
-                              {ctx.label}
-                            </button>
-                          );
-                        })}
+                            />
+                          ))}
+                        </SortableContext>
                       </div>
                     )}
-                  </div>
+                  </SortableAreaRowMobile>
                 );
               })}
+                </SortableContext>
+              </DndContext>
             </div>
           </div>
         </div>
