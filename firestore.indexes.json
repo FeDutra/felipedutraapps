@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pulso_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requestType", "order": "ASCENDING" },
+        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

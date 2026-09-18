@@ -494,7 +494,7 @@ import {
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
-import { onSnapshot, collection, query, where, doc, setDoc, updateDoc, getDocs } from "firebase/firestore";
+import { onSnapshot, collection, query, where, doc, setDoc, updateDoc, getDocs, orderBy, limit } from "firebase/firestore";
 import { db, storage } from '../../../shared/lib/firebase/client';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
@@ -1129,6 +1129,23 @@ export default function LivePage() {
     });
     return unreads;
   }, [allContextNodes, lastReadTimes, latestIncomingTimes, activeContextNode.contextId]);
+
+  // Áreas com pelo menos um chat não lido, e o chat mais recente entre eles
+  // — usado pro badge flutuante mobile (só o ícone da área piscando, sem
+  // abrir o sanduíche inteiro).
+  const areasWithUnread = React.useMemo(() => {
+    const map = new Map<string, PulsoContextNode>();
+    allContextNodes.forEach(node => {
+      if (!node.areaId || !unreadContexts[node.contextId]) return;
+      const current = map.get(node.areaId);
+      const nodeTime = safeConvertToDate(node.lastMessageAt || node.updatedAt)?.getTime() || 0;
+      const currentTime = current ? (safeConvertToDate(current.lastMessageAt || current.updatedAt)?.getTime() || 0) : -1;
+      if (!current || nodeTime > currentTime) {
+        map.set(node.areaId, node);
+      }
+    });
+    return map;
+  }, [allContextNodes, unreadContexts]);
 
   // ── Session Restore (runs once when sessions finish loading) ──────────────
   // IMPORTANT: This ref tracks whether we already restored once, so the persist
@@ -2513,9 +2530,16 @@ export default function LivePage() {
     let unsubscribe: (() => void) | null = null;
 
     try {
+      // Sem orderBy+limit isso varria a coleção inteira (5000+ docs e
+      // crescendo) a cada escrita em QUALQUER chat de QUALQUER área — gerava
+      // recomputação pesada no cliente toda hora, causando o "instável" que
+      // Fe reportou nas notificações. Bound pelos mais recentes é suficiente
+      // pra saber o que está não-lido.
       const incomingQuery = query(
         collection(db, firestorePaths.requests()),
-        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"])
+        where("requestType", "in", ["conversation_command", "active_message", "local_interaction"]),
+        orderBy("requestedAt", "desc"),
+        limit(300)
       );
 
       unsubscribe = onSnapshot(
@@ -5457,6 +5481,30 @@ ${data.transcription}`, {
           </button>
         </div>
       </footer>
+
+      {/* Badge flutuante mobile: quando uma área não visível apita, mostra só
+          o ícone dela piscando, no mesmo alinhamento em que a lista de áreas
+          apareceria com o sanduíche aberto — sem abrir o sanduíche inteiro. */}
+      {!isMobileMenuOpen && areasWithUnread.size > 0 && (
+        <div className="md:hidden fixed left-6 top-[max(5.5rem,calc(env(safe-area-inset-top)+5.5rem))] z-40 flex flex-col gap-4 animate-fade-in">
+          {Array.from(areasWithUnread.entries()).map(([areaId, ctx]) => {
+            const areaName = dynamicAreas.find(a => a.id === areaId)?.name || AREA_NAMES[areaId] || areaId.replace('area_', '');
+            return (
+              <button
+                key={areaId}
+                onClick={() => {
+                  setActiveContextNode(ctx);
+                  setActiveMobileAreaId(areaId);
+                }}
+                className="text-lg font-mono pulso-unread animate-pulse bg-transparent border-none outline-none cursor-pointer flex items-center justify-center p-0 leading-none"
+                title={areaName}
+              >
+                {getAreaIcon({ id: areaId, name: areaName })}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isMobileMenuOpen && (
         <div 
