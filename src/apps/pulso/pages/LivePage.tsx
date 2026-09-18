@@ -1109,6 +1109,23 @@ export default function LivePage() {
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
   const activeContextNodeRef = React.useRef(activeContextNode);
 
+  // Rascunho não enviado por sessão — trocar de chat não pode perder o que
+  // já foi digitado em outro. Fonte de verdade por contextId; `inputMessage`
+  // é só o espelho do rascunho da sessão ativa no momento. `inputMessageRef`
+  // (declarado mais abaixo) se auto-sincroniza com `inputMessage` no próprio
+  // efeito dele, então não precisa ser tocado aqui.
+  const draftsByContextRef = React.useRef<Record<string, string>>({});
+  const previousDraftContextIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const prevId = previousDraftContextIdRef.current;
+    if (prevId && prevId !== activeContextNode.contextId) {
+      draftsByContextRef.current[prevId] = inputMessage;
+      setInputMessage(draftsByContextRef.current[activeContextNode.contextId] || '');
+    }
+    previousDraftContextIdRef.current = activeContextNode.contextId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeContextNode.contextId]);
+
   const unreadContexts = React.useMemo(() => {
     const unreads: Record<string, boolean> = {};
     allContextNodes.forEach(node => {
