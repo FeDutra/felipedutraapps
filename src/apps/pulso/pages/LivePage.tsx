@@ -298,6 +298,7 @@ function SortableAreaItemWrapper({
 }
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { 
   pulsoService, 
@@ -1250,18 +1251,9 @@ export default function LivePage() {
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = React.useState(false);
   const attachmentMenuRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
-        setIsAttachmentMenuOpen(false);
-      }
-      if (headerMenuRef.current && !headerMenuRef.current.contains(event.target as Node)) {
-        setIsHeaderMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  // Attachment and header menus render into a portal (their own full-screen
+  // backdrop handles click-outside-to-close), so they're intentionally not
+  // covered by this ref-based outside-click check.
   
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -4015,13 +4007,21 @@ ${data.transcription}`, {
               <span>[ {isContextSurfaceOpen ? '✕' : '⋯'} ]</span>
             </button>
             
-            {isHeaderMenuOpen && !contextSurfaceVariant && (
-              <>
-                <div
-                  className="fixed inset-0 z-50 bg-[#0c0c0c]/76 backdrop-blur-xl animate-fade-in"
-                  onClick={() => setIsHeaderMenuOpen(false)}
-                />
-                <div className="absolute right-0 top-full mt-2 w-48 z-[60] text-left animate-fade-in" onClick={(e) => e.stopPropagation()}>
+            {isHeaderMenuOpen && !contextSurfaceVariant && typeof document !== 'undefined' && createPortal(
+              <div
+                className="fixed inset-0 z-[70] bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-end text-left animate-fade-in"
+                onClick={() => setIsHeaderMenuOpen(false)}
+              >
+                <div className="flex flex-col gap-7 w-full max-w-[220px]" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between select-none">
+                    <span className="text-[9px] font-light tracking-[0.24em] text-[#fbf9f5]/35 uppercase">menu</span>
+                    <button
+                      onClick={() => setIsHeaderMenuOpen(false)}
+                      className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center justify-center"
+                    >
+                      <X size={14} strokeWidth={1.5} />
+                    </button>
+                  </div>
                   <div className="flex flex-col gap-6">
                     {/* Mobile-only navigation items */}
                     <button
@@ -4085,7 +4085,8 @@ ${data.transcription}`, {
                     </button>
                   </div>
                 </div>
-              </>
+              </div>,
+              document.body
             )}
           </div>
         </div>
@@ -5016,40 +5017,55 @@ ${data.transcription}`, {
               <Paperclip size={14} strokeWidth={1.5} />
             </button>
             
-            <div className={`absolute bottom-full left-0 mb-2 w-36 bg-transparent backdrop-blur-xl pulso-transition ${
-              isAttachmentMenuOpen ? 'opacity-100 transform translate-y-0 pointer-events-auto scale-100' : 'opacity-0 transform translate-y-2 pointer-events-none scale-95'
-            }`}>
-              <div className="flex flex-col text-xs font-light tracking-wide text-[#fbf9f5]">
-                <button 
-                  onClick={() => { fileInputRef.current?.setAttribute('accept', '*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
-                >
-                  <FileText size={12} className="opacity-70" />
-                  <span>arquivos</span>
-                </button>
-                <button 
-                  onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
-                >
-                  <ImageIcon size={12} className="opacity-70" />
-                  <span>fotos</span>
-                </button>
-                <button 
-                  onClick={() => { cameraInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-white/5 bg-transparent cursor-pointer"
-                >
-                  <Camera size={12} className="opacity-70" />
-                  <span>câmera</span>
-                </button>
-                <button 
-                  onClick={() => { fileInputRef.current?.setAttribute('accept', 'audio/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
-                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-white/10 transition-colors text-left bg-transparent cursor-pointer"
-                >
-                  <Volume2 size={12} className="opacity-70" />
-                  <span>áudio</span>
-                </button>
-              </div>
-            </div>
+            {isAttachmentMenuOpen && typeof document !== 'undefined' && createPortal(
+              <div
+                className="fixed inset-0 z-[70] bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-end text-left animate-fade-in"
+                onClick={() => setIsAttachmentMenuOpen(false)}
+              >
+                <div className="flex flex-col gap-7 w-full max-w-[200px]" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between select-none">
+                    <span className="text-[9px] font-light tracking-[0.24em] text-[#fbf9f5]/35 uppercase">anexar</span>
+                    <button
+                      onClick={() => setIsAttachmentMenuOpen(false)}
+                      className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center justify-center"
+                    >
+                      <X size={14} strokeWidth={1.5} />
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-6">
+                    <button
+                      onClick={() => { fileInputRef.current?.setAttribute('accept', '*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <FileText size={12} strokeWidth={1.5} />
+                      <span>arquivos</span>
+                    </button>
+                    <button
+                      onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <ImageIcon size={12} strokeWidth={1.5} />
+                      <span>fotos</span>
+                    </button>
+                    <button
+                      onClick={() => { cameraInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Camera size={12} strokeWidth={1.5} />
+                      <span>câmera</span>
+                    </button>
+                    <button
+                      onClick={() => { fileInputRef.current?.setAttribute('accept', 'audio/*'); fileInputRef.current?.click(); setIsAttachmentMenuOpen(false); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Volume2 size={12} strokeWidth={1.5} />
+                      <span>áudio</span>
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
           </div>
 
         {/* Quote preview bar was moved above the input row — removed from here */}
