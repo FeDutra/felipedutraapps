@@ -75,6 +75,8 @@ function SortableChatItemDesktop({
       {...attributes}
       {...listeners}
       onClick={onSelect}
+      onContextMenu={(e) => { e.preventDefault(); onOpenSplit(e); }}
+      title="Clique direito: abrir ao lado"
       className="group/ctx flex items-center justify-between gap-2 w-full py-0.5 cursor-pointer touch-none"
     >
       {isEditing ? (
@@ -107,13 +109,6 @@ function SortableChatItemDesktop({
 
       {!isEditing && (
         <div className="opacity-0 group-hover/ctx:opacity-100 transition-opacity flex items-center gap-1 shrink-0 select-none mr-2">
-          <button
-            onClick={onOpenSplit}
-            className="p-0.5 text-[#fbf9f5]/35 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-            title="Abrir ao lado"
-          >
-            <PanelRight size={8} />
-          </button>
           {isCustom && (
             <>
               <button
@@ -507,7 +502,6 @@ import {
   Download,
   Edit2,
   Archive,
-  PanelRight,
   ChevronDown,
   ChevronRight,
   Globe,
