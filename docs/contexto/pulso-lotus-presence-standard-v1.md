@@ -14,8 +14,9 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 - O corpo da orbe é transparente: apenas a membrana branca e sua luz são opacas.
 - Qualquer separação do conteúdo sob a orbe usa somente blur gaussiano, sombra
   difusa e escurecimento radial suave, sem disco, recorte ou borda circular visível.
-- A abertura nasce de blur e foco, permanece no centro por dois segundos com
-  duas respirações curtas, acomoda sua dimensão ainda parada e só então se
+- A abertura nasce de blur e foco e permanece no centro por cerca de 1,6
+  segundo no total: duas respirações rápidas, acomodação dimensional e
+  raccord. Só então se
   desloca até a posição de repouso da interface real. O último quadro da
   acomodação e o primeiro quadro da viagem devem ter escala, luz e textura
   idênticas, separados por uma microfase estável de raccord. A pausa é viva,

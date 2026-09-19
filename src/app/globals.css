@@ -254,11 +254,11 @@ body {
 }
 
 .lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-visual {
-  animation: lotus-presence-breathe 2000ms var(--lotus-motion-ease) both;
+  animation: lotus-presence-breathe 1100ms var(--lotus-motion-ease) both;
 }
 
 .lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-visual {
-  animation: lotus-presence-handoff 160ms var(--lotus-motion-ease) both;
+  animation: lotus-presence-handoff 140ms var(--lotus-motion-ease) both;
 }
 
 .lotus-orb-presence {
@@ -277,7 +277,7 @@ body {
 }
 
 .lotus-orb-scale {
-  transition: scale 720ms var(--lotus-motion-ease);
+  transition: scale 360ms var(--lotus-motion-ease);
   will-change: scale;
 }
 

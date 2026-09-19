@@ -1193,7 +1193,11 @@ export default function LivePage() {
   }, []);
 
   const handleOrbScaleAligned = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
-    if (event.currentTarget !== event.target || event.propertyName !== 'scale') return;
+    if (
+      event.currentTarget !== event.target
+      || event.propertyName !== 'scale'
+      || event.elapsedTime < 0.34
+    ) return;
     setOrbEntryPhase(current => current === 'align' ? 'handoff' : current);
   }, []);
 
@@ -1210,7 +1214,7 @@ export default function LivePage() {
       () => setOrbEntryPhase(current => (
         current === 'birth' ? 'breathe' : current === 'breathe' ? 'align' : current === 'align' ? 'handoff' : current === 'handoff' ? 'travel' : current === 'travel' ? 'settled' : current
       )),
-      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 2300 : orbEntryPhase === 'align' ? 950 : orbEntryPhase === 'handoff' ? 320 : 1800
+      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 1350 : orbEntryPhase === 'align' ? 580 : orbEntryPhase === 'handoff' ? 280 : 1800
     );
     return () => window.clearTimeout(fallbackTimer);
   }, [orbEntryPhase]);
