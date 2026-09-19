@@ -2477,9 +2477,14 @@ export default function LivePage() {
             // A UI continua recebendo o progresso inteiro. Em Presença, a
             // atualização também vira uma frase curta — uma vez só.
             const presenceController = voiceSessionControllerRef.current;
-            const progressTimeMs = req.clientCreatedAtMs || safeGetTime(req.requestedAt) || safeGetTime(req.createdAt) || 0;
+            // Progressos e respostas podem nascer em documentos separados do
+            // pedido original (active_message/progress_update). O elo
+            // canônico é originRequestId, não o id do documento derivado.
+            const originRequestId = req.meta?.originRequestId || req.openclawResult?.meta?.originRequestId || req.originRequestId || req.id;
+            const progressTimeMs = req.clientCreatedAtMs || safeGetTime(req.requestedAt) || safeGetTime(req.createdAt) || safeGetTime(req.updatedAt) || 0;
             const canNarrateProgress = voiceModeRef.current === 'presence'
-              && progressTimeMs > presenceSessionStartTimeRef.current
+              && voiceReplyRequestsRef.current.has(originRequestId)
+              && (progressTimeMs === 0 || progressTimeMs > presenceSessionStartTimeRef.current)
               && presenceController?.isGeminiLiveActive()
               && !narratedPresenceProgressRef.current.has(req.id);
             if (canNarrateProgress) {
@@ -2499,8 +2504,11 @@ export default function LivePage() {
             const hasRealResponse = responseText && responseText.trim() !== '';
 
             // Check if auto TTS needs to be triggered in presence mode
-            const requestOriginMode = req.mode || req.originMode || (voiceReplyRequestsRef.current.has(req.id) ? 'presence' : 'text');
-            const reqTimeMs = req.clientCreatedAtMs || (req.requestedAt ? new Date(req.requestedAt).getTime() : 0);
+            const originRequestId = req.meta?.originRequestId || req.openclawResult?.meta?.originRequestId || req.originRequestId || req.id;
+            // mode físico é "voice" para o runtime; originMode preserva a
+            // intenção de interface (presence). Ele precisa ter prioridade.
+            const requestOriginMode = req.originMode || req.mode || (voiceReplyRequestsRef.current.has(originRequestId) ? 'presence' : 'text');
+            const reqTimeMs = req.clientCreatedAtMs || safeGetTime(req.requestedAt) || safeGetTime(req.createdAt) || safeGetTime(req.updatedAt) || 0;
             
             const isErrorState = (status === 'error' || status === 'timeout');
             const ttsText = isErrorState ? 'Falha operacional. Nuvem indisponível ou sem cota.' : responseText;
@@ -2523,13 +2531,16 @@ export default function LivePage() {
                     sessionStart: presenceSessionStartTimeRef.current
                   });
                 }
-              } else if (spokenRequestsRef.current.has(req.id)) {
-                console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: req.id });
+              } else if (spokenRequestsRef.current.has(originRequestId)) {
+                console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: originRequestId });
               } else if (useGeminiNarration && presenceController?.narratePresenceResult(ttsText)) {
                 // A resposta completa continua no chat. Na conversa falada,
                 // a Gemini só a traduz para uma devolutiva curta e humana.
-                spokenRequestsRef.current.add(req.id);
-                console.log('[PULSO_GEMINI_LIVE_RESULT_NARRATED]', { requestId: req.id });
+                spokenRequestsRef.current.add(originRequestId);
+                // Não deixa uma resposta antiga voltar a ser confundida com
+                // uma interação aberta numa próxima sessão de Presença.
+                voiceReplyRequestsRef.current.delete(originRequestId);
+                console.log('[PULSO_GEMINI_LIVE_RESULT_NARRATED]', { requestId: originRequestId });
               } else if (voiceStateRef.current === 'speaking') {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
               } else {
@@ -3978,6 +3989,7 @@ ${data.transcription}`, {
       voiceModeRef.current = 'presence';
       presenceSessionStartTimeRef.current = Date.now();
       spokenRequestsRef.current.clear();
+      voiceReplyRequestsRef.current.clear();
       narratedPresenceProgressRef.current.clear();
 
       // Teste manual do modo experimental Gemini Live: abrir /pulso/live?gemini_live=1

@@ -102,7 +102,14 @@ export class GeminiLiveClient {
   // Orquestração reconhecimento -> backend real -> narração do resultado
   private pendingUserTranscript = '';
   private awaitingResult = false;
-  private checkpointInFlight = false;
+  /**
+   * A Live API aceita novos turnos enquanto reproduz áudio, mas não garante
+   * a ordem deles. Para presença, ordem é presença: a confirmação curta vem
+   * primeiro; checkpoints e resultado entram depois, sem se atropelarem nem
+   * desaparecerem durante uma fala em curso.
+   */
+  private narrationQueue: Array<{ kind: 'checkpoint' | 'result'; text: string }> = [];
+  private narrationInFlight: 'checkpoint' | 'result' | null = null;
 
   private closedByUser = false;
 
@@ -227,10 +234,17 @@ export class GeminiLiveClient {
         this.turnCompletePending = true;
         this.maybeReturnToListening();
 
-        if (this.checkpointInFlight) {
+        if (this.narrationInFlight === 'checkpoint') {
           // Checkpoint narrado no meio de um processo longo — não mexe no
-          // ciclo de reconhecimento/resultado, só consome esse turno.
-          this.checkpointInFlight = false;
+          // ciclo de reconhecimento/resultado, só libera a próxima fala.
+          this.narrationInFlight = null;
+          this.flushNarrationQueue();
+        } else if (this.narrationInFlight === 'result') {
+          // Resultado final: fecha o ciclo daquele pedido e libera uma nova
+          // interação falada do Fê.
+          this.narrationInFlight = null;
+          this.awaitingResult = false;
+          this.flushNarrationQueue();
         } else if (!this.awaitingResult) {
           // Esse turno foi o reconhecimento curto ("peraí, deixa eu ver").
           // Dispara o pipeline real com o que o Fê falou; a próxima fala do
@@ -241,9 +255,6 @@ export class GeminiLiveClient {
             this.awaitingResult = true;
             this.config.onUserTurnReady?.(userText);
           }
-        } else {
-          // Esse turno foi a narração do resultado real. Ciclo completo.
-          this.awaitingResult = false;
         }
       }
       return;
@@ -365,7 +376,27 @@ export class GeminiLiveClient {
     if (this.turnCompletePending && this.pendingSources === 0) {
       this.turnCompletePending = false;
       this.setState('listening');
+      this.flushNarrationQueue();
     }
+  }
+
+  /** Envia uma fala pendente somente quando a fala anterior já terminou. */
+  private flushNarrationQueue() {
+    if (this.narrationInFlight || this.turnCompletePending || this.pendingSources > 0) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const next = this.narrationQueue.shift();
+    if (!next) return;
+
+    this.narrationInFlight = next.kind;
+    this.ws.send(JSON.stringify({
+      clientContent: {
+        turns: [{
+          role: 'user',
+          parts: [{ text: next.kind === 'result' ? `[RESULTADO] ${next.text}` : `[CHECKPOINT] ${next.text}` }]
+        }],
+        turnComplete: true
+      }
+    }));
   }
 
   private flushPlayback() {
@@ -386,12 +417,8 @@ export class GeminiLiveClient {
    */
   public sendResultText(resultText: string) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    this.ws.send(JSON.stringify({
-      clientContent: {
-        turns: [{ role: 'user', parts: [{ text: `[RESULTADO] ${resultText}` }] }],
-        turnComplete: true
-      }
-    }));
+    this.narrationQueue.push({ kind: 'result', text: resultText });
+    this.flushNarrationQueue();
     return true;
   }
 
@@ -403,16 +430,18 @@ export class GeminiLiveClient {
    * checkpoints em sequência rápida não são suportados ainda.
    */
   public sendCheckpointText(checkpointText: string) {
-    // Nunca atropela uma atualização falada anterior. O próximo progresso do
-    // processo continuará aparecendo no chat e poderá ser narrado depois.
-    if (this.checkpointInFlight || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    this.checkpointInFlight = true;
-    this.ws.send(JSON.stringify({
-      clientContent: {
-        turns: [{ role: 'user', parts: [{ text: `[CHECKPOINT] ${checkpointText}` }] }],
-        turnComplete: true
-      }
-    }));
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    // O chat pode receber dezenas de eventos; a voz recebe uma fila curta e
+    // humana. Preserva o primeiro e o mais recente, em vez de virar locução.
+    const alreadyQueued = this.narrationQueue.some(item => item.kind === 'checkpoint' && item.text === checkpointText);
+    if (alreadyQueued) return true;
+    const checkpoints = this.narrationQueue.filter(item => item.kind === 'checkpoint');
+    if (checkpoints.length >= 2) {
+      const oldestIndex = this.narrationQueue.findIndex(item => item.kind === 'checkpoint');
+      if (oldestIndex >= 0) this.narrationQueue.splice(oldestIndex, 1);
+    }
+    this.narrationQueue.push({ kind: 'checkpoint', text: checkpointText });
+    this.flushNarrationQueue();
     return true;
   }
 
