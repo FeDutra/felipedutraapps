@@ -210,9 +210,8 @@ interface SortableAreaItemWrapperProps {
   setNewChatName: (val: string) => void;
   setAddingChatAreaId: (id: string | null) => void;
   setHoveredAreaId: (id: string | null) => void;
-  allContextNodes: any[];
-  setSessions: any;
   setActiveContextNode: (node: any) => void;
+  onCreateChat: (areaId: string, label: string) => Promise<boolean>;
   getAreaIcon: (area: any) => React.ReactNode;
   onDeleteArea: (areaId: string, areaName: string, e: React.MouseEvent) => void;
   onOpenAreaConfig: (areaId: string) => void;
@@ -240,9 +239,8 @@ function SortableAreaItemWrapper({
   setNewChatName,
   setAddingChatAreaId,
   setHoveredAreaId,
-  allContextNodes,
-  setSessions,
   setActiveContextNode,
+  onCreateChat,
   getAreaIcon,
   onDeleteArea,
   onOpenAreaConfig,
@@ -364,43 +362,7 @@ function SortableAreaItemWrapper({
                 if (e.key === 'Enter') {
                   const rawLabel = newChatName.trim();
                   if (rawLabel) {
-                    const cleanAreaPrefix = area.id.replace('area_', '');
-                    const slug = rawLabel
-                      .toLowerCase()
-                      .normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .replace(/[^a-z0-9\s-]/g, '')
-                      .replace(/\s+/g, '-')
-                      .replace(/-+/g, '-');
-                    
-                    let baseContextId = `${cleanAreaPrefix}_${slug}`;
-                    let contextId = baseContextId;
-                    let counter = 1;
-                    
-                    while (allContextNodes.some(node => node.contextId === contextId)) {
-                      contextId = `${baseContextId}-${counter}`;
-                      counter++;
-                    }
-                    
-                    (async () => {
-                      const createdSession = await sessionsService.createSession({
-                        id: contextId,
-                        label: rawLabel,
-                        areaId: area.id,
-                      }).catch(err => {
-                        console.error("Failed to create session:", err);
-                        return null;
-                      });
-
-                      if (createdSession) {
-                        const newNode = sessionToContextNode(createdSession);
-                        if (pulsoService.getDataMode() !== 'firestore') {
-                          const list = await sessionsService.getAll();
-                          setSessions(list.map(s => sessionToContextNode(s)));
-                        }
-                        setActiveContextNode(newNode);
-                      }
-                    })();
+                    void onCreateChat(area.id, rawLabel);
                     
                     setNewChatName('');
                     setAddingChatAreaId(null);
@@ -1449,6 +1411,48 @@ export default function LivePage() {
 
   const [isAddingArea, setIsAddingArea] = React.useState(false);
   const [newAreaName, setNewAreaName] = React.useState('');
+
+  const handleCreateChat = React.useCallback(async (areaId: string, rawLabel: string) => {
+    const label = rawLabel.trim();
+    if (!label) return false;
+
+    const cleanAreaPrefix = areaId.replace('area_', '');
+    const slug = label
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+
+    const baseContextId = `${cleanAreaPrefix}_${slug || 'chat'}`;
+    let contextId = baseContextId;
+    let counter = 1;
+
+    while (allContextNodes.some(node => node.contextId === contextId)) {
+      contextId = `${baseContextId}-${counter}`;
+      counter++;
+    }
+
+    const createdSession = await sessionsService.createSession({
+      id: contextId,
+      label,
+      areaId,
+    }).catch(err => {
+      console.error('Failed to create session:', err);
+      return null;
+    });
+
+    if (!createdSession) return false;
+
+    const newNode = sessionToContextNode(createdSession);
+    if (pulsoService.getDataMode() !== 'firestore') {
+      const list = await sessionsService.getAll();
+      setSessions(list.map(session => sessionToContextNode(session)));
+    }
+    setActiveContextNode(newNode);
+    return true;
+  }, [allContextNodes]);
 
   const dynamicAreas = React.useMemo(() => {
     const list: Array<{ id: string; name: string; order: number }> = [];
@@ -4792,9 +4796,8 @@ ${data.transcription}`, {
                   setNewChatName={setNewChatName}
                   setAddingChatAreaId={setAddingChatAreaId}
                   setHoveredAreaId={setHoveredAreaId}
-                  allContextNodes={allContextNodes}
-                  setSessions={setSessions}
                   setActiveContextNode={setActiveContextNode}
+                  onCreateChat={handleCreateChat}
                   getAreaIcon={getAreaIcon}
                   onDeleteArea={handleDeleteArea}
                   onOpenAreaConfig={setAreaConfigPanelAreaId}
@@ -6047,6 +6050,51 @@ ${data.transcription}`, {
                             />
                           ))}
                         </SortableContext>
+
+                        {addingChatAreaId === areaId ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            inputMode="text"
+                            enterKeyHint="done"
+                            placeholder="novo chat..."
+                            value={newChatName}
+                            onChange={(e) => setNewChatName(e.target.value)}
+                            onKeyDown={async (e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const created = await handleCreateChat(areaId, newChatName);
+                                if (created) {
+                                  setNewChatName('');
+                                  setAddingChatAreaId(null);
+                                  setIsMobileMenuOpen(false);
+                                }
+                              } else if (e.key === 'Escape') {
+                                setAddingChatAreaId(null);
+                                setNewChatName('');
+                              }
+                            }}
+                            onBlur={() => {
+                              window.setTimeout(() => {
+                                setAddingChatAreaId(null);
+                                setNewChatName('');
+                              }, 200);
+                            }}
+                            className="w-full bg-transparent border-0 border-b border-[#fbf9f5]/20 px-0 py-1.5 text-[9px] tracking-[0.14em] uppercase text-[#fbf9f5]/80 outline-none placeholder:text-[#fbf9f5]/25"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNewChatName('');
+                              setAddingChatAreaId(areaId);
+                            }}
+                            className="w-full py-1.5 text-left bg-transparent border-none outline-none text-[8px] tracking-[0.16em] uppercase font-sans text-[#fbf9f5]/25 transition-colors active:text-[#fbf9f5]/65"
+                          >
+                            + novo chat
+                          </button>
+                        )}
                       </div>
                     )}
                   </SortableAreaRowMobile>
