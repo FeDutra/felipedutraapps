@@ -1139,6 +1139,17 @@ export default function LivePage() {
     suppressSplitOrbClickRef.current = false;
   }, [secondaryContextId]);
 
+  const measureOrbHomeCenter = React.useCallback(() => {
+    const rect = orbHomeAnchorRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    const next = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    setOrbHomeCenter(current => (
+      Math.abs(current.x - next.x) < 0.25 && Math.abs(current.y - next.y) < 0.25
+        ? current
+        : next
+    ));
+  }, []);
+
   const handleOrbEntryAnimationEnd = React.useCallback((event: React.AnimationEvent<HTMLDivElement>) => {
     if (event.currentTarget !== event.target) return;
     if (event.animationName === 'lotus-presence-birth') {
@@ -1150,9 +1161,12 @@ export default function LivePage() {
       return;
     }
     if (event.animationName === 'lotus-presence-handoff') {
+      // Re-read the historical chat anchor at the exact departure point. The
+      // shell can finish hydrating after the early startup frames.
+      measureOrbHomeCenter();
       setOrbEntryPhase(current => current === 'handoff' ? 'travel' : current);
     }
-  }, []);
+  }, [measureOrbHomeCenter]);
 
   const handleOrbScaleAligned = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
     if (
@@ -1184,24 +1198,20 @@ export default function LivePage() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     let frame = 0;
-    const startedAt = performance.now();
+    const trackContinuously = orbEntryPhase !== 'travel' && orbEntryPhase !== 'settled';
+    const trackingStartedAt = performance.now();
     const trackAnchor = () => {
-      const rect = orbHomeAnchorRef.current?.getBoundingClientRect();
-      if (rect && rect.width > 0 && rect.height > 0) {
-        const next = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-        setOrbHomeCenter(current => (
-          Math.abs(current.x - next.x) < 0.25 && Math.abs(current.y - next.y) < 0.25
-            ? current
-            : next
-        ));
-      }
-      if (performance.now() - startedAt < 1350) {
+      measureOrbHomeCenter();
+      // Session/message hydration can finish after the orb has already arrived.
+      // Keep following the canonical anchor briefly instead of freezing a stale
+      // coordinate captured during startup.
+      if (trackContinuously || performance.now() - trackingStartedAt < 6000) {
         frame = window.requestAnimationFrame(trackAnchor);
       }
     };
     frame = window.requestAnimationFrame(trackAnchor);
     return () => window.cancelAnimationFrame(frame);
-  }, [windowWidth, windowHeight, presenceMode, secondaryContextId, isMesaOpen, isMesaCollapsed, isAtelieActive, isEstudioActive]);
+  }, [measureOrbHomeCenter, orbEntryPhase, windowWidth, windowHeight, presenceMode, secondaryContextId, isMesaOpen, isMesaCollapsed, isAtelieActive, isEstudioActive]);
 
   // Rascunho não enviado por sessão — trocar de chat, ou até fechar e
   // reabrir a aba, não pode perder o que já foi digitado em outro chat.
@@ -4969,7 +4979,7 @@ ${data.transcription}`, {
             aria-hidden="true"
             className={isWorkspaceMode || secondaryContextNode
               ? 'absolute left-1/2 top-1/2 w-px h-px pointer-events-none'
-              : `relative w-36 h-36 md:w-64 md:h-64 shrink-0 pointer-events-none transition-all duration-[1200ms] ease-in-out ${
+              : `relative w-36 h-36 md:w-64 md:h-64 shrink-0 pointer-events-none ${
                   presenceMode
                     ? 'translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]'
                     : 'mt-10 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'

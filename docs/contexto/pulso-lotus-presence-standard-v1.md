@@ -33,6 +33,9 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 
 - A instância persistente vive em uma camada fixa acima das superfícies.
 - Cada composição fornece apenas uma âncora/destino; não monta outra orbe local.
+- A posição oficial do chat é a própria âncora histórica do layout. Durante a
+  abertura, sua coordenada deve permanecer sendo medida até o ponto de saída;
+  nunca congelar uma leitura anterior à hidratação completa da interface.
 - Escala e deslocamento são fases independentes na abertura: a orbe termina a
   acomodação dimensional, pinta um estado estável de raccord e só então inicia
   a mudança de posição.
