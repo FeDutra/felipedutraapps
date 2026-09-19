@@ -15,6 +15,7 @@ interface PaneMessage {
 
 interface SecondaryChatPaneProps {
   contextNode: PulsoContextNode;
+  areaIcon: React.ReactNode;
   onClose: () => void;
   isFocused: boolean;
   onFocus: () => void;
@@ -24,7 +25,7 @@ interface SecondaryChatPaneProps {
 // widget, sem input próprio. É a mesma sessão, só ao lado. O input
 // permanece único, fixo embaixo ao centro; o foco decide pra qual painel ele
 // escreve.
-export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, onClose, isFocused, onFocus }) => {
+export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, areaIcon, onClose, isFocused, onFocus }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -65,8 +66,13 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
       onClick={onFocus}
     >
       <div className="flex items-center justify-between px-2 pb-2 shrink-0">
-        <span className={`text-[9px] tracking-[0.2em] uppercase font-sans truncate transition-colors ${isFocused ? 'text-white/85' : 'text-[#fbf9f5]/40'}`}>
-          {contextNode.label}
+        <span className="flex items-center gap-2 min-w-0">
+          <span className={`text-sm font-mono shrink-0 transition-colors ${isFocused ? 'text-white/85' : 'text-[#fbf9f5]/40'}`}>
+            {areaIcon}
+          </span>
+          <span className={`text-[9px] tracking-[0.2em] uppercase font-sans truncate transition-colors ${isFocused ? 'text-white/85' : 'text-[#fbf9f5]/40'}`}>
+            {contextNode.label}
+          </span>
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}

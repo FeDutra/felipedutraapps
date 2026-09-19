@@ -4670,7 +4670,7 @@ ${data.transcription}`, {
             // `items-center justify-center` do <main> centraliza de verdade
             // dentro do espaço disponível, igual o painel da direita faz.
             maxWidth: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? 'calc(50vw - 4rem)' : undefined,
-            marginLeft: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? '1.5rem' : undefined,
+            marginLeft: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? '2rem' : undefined,
             marginRight: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? 'auto' : undefined,
             transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1), max-width 500ms ease-in-out, margin 500ms ease-in-out',
           }}
@@ -5278,16 +5278,38 @@ ${data.transcription}`, {
 
           {/* Split de chats (v1, desktop) — mesma identidade visual do chat
               principal, sem moldura de widget. Um input só, fixo embaixo
-              (padrão); o foco decide pra qual painel ele escreve. */}
+              (padrão); o foco decide pra qual painel ele escreve. Largura
+              50/50 exata dos dois lados — ver nota de exceção pra telas
+              grandes (>15") ainda pendente de decisão do Fe. */}
           {secondaryContextNode && (
-            <div className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-28 md:bottom-32 z-40 w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] max-w-xl lg:max-w-2xl 2xl:max-w-3xl pointer-events-auto flex-col animate-fade-in">
-              <SecondaryChatPane
-                contextNode={secondaryContextNode}
-                onClose={() => { setSecondaryContextId(null); setFocusedPaneSide('left'); }}
-                isFocused={focusedPaneSide === 'right'}
-                onFocus={() => setFocusedPaneSide('right')}
-              />
-            </div>
+            <>
+              {/* Título + ícone da área do painel esquerdo — só aparece com o
+                  split aberto, espelhando o painel direito. */}
+              <div
+                className="hidden md:flex fixed top-20 md:top-24 left-8 z-40 items-center gap-2 pointer-events-none animate-fade-in"
+                style={{ width: 'calc(50vw - 4rem)' }}
+              >
+                <span className="text-sm font-mono text-white/85 shrink-0">
+                  {getAreaIcon({ id: activeContextNode.areaId, name: dynamicAreas.find(a => a.id === activeContextNode.areaId)?.name || '' })}
+                </span>
+                <span className="text-[9px] tracking-[0.2em] uppercase font-sans text-white/85 truncate">
+                  {activeContextNode.label}
+                </span>
+              </div>
+
+              <div
+                className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-28 md:bottom-32 z-40 pointer-events-auto flex-col animate-fade-in"
+                style={{ width: 'calc(50vw - 4rem)' }}
+              >
+                <SecondaryChatPane
+                  contextNode={secondaryContextNode}
+                  areaIcon={getAreaIcon({ id: secondaryContextNode.areaId, name: dynamicAreas.find(a => a.id === secondaryContextNode.areaId)?.name || '' })}
+                  onClose={() => { setSecondaryContextId(null); setFocusedPaneSide('left'); }}
+                  isFocused={focusedPaneSide === 'right'}
+                  onFocus={() => setFocusedPaneSide('right')}
+                />
+              </div>
+            </>
           )}
 
 <footer
