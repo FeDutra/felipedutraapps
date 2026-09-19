@@ -1827,6 +1827,9 @@ export default function LivePage() {
   const baseTextBeforeRecordingRef = React.useRef<string>('');
   const sendAfterTranscribeRef = React.useRef<boolean>(false);
   const voiceSessionControllerRef = React.useRef<VoiceSessionController | null>(null);
+  // Atualizações podem reaparecer em cada snapshot do Firestore. Esta memória
+  // local impede a mesma frase de ser narrada repetidamente na voz.
+  const narratedPresenceProgressRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -2216,6 +2219,7 @@ export default function LivePage() {
               phase: req.meta?.phase || null,
               originRequestId: req.meta?.originRequestId || null
             });
+
           }
           
           const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction' || req.requestType === 'active_message';
@@ -2412,6 +2416,22 @@ export default function LivePage() {
               phase: req.meta?.phase || null,
               originRequestId: req.meta?.originRequestId || null
             });
+
+            // A UI continua recebendo o progresso inteiro. Em Presença, a
+            // atualização também vira uma frase curta — uma vez só.
+            const presenceController = voiceSessionControllerRef.current;
+            const progressTimeMs = req.clientCreatedAtMs || safeGetTime(req.requestedAt) || safeGetTime(req.createdAt) || 0;
+            const canNarrateProgress = voiceModeRef.current === 'presence'
+              && progressTimeMs > presenceSessionStartTimeRef.current
+              && presenceController?.isGeminiLiveActive()
+              && !narratedPresenceProgressRef.current.has(req.id);
+            if (canNarrateProgress) {
+              const progressText = (req.text || req.message || '').trim();
+              if (progressText && presenceController?.notifyPresenceCheckpoint(progressText)) {
+                narratedPresenceProgressRef.current.add(req.id);
+                console.log('[PULSO_GEMINI_LIVE_CHECKPOINT_NARRATED]', { requestId: req.id });
+              }
+            }
           }
 
           const isConvCommand = req.requestType === 'conversation_command' || req.requestType === 'local_interaction' || req.requestType === 'active_message';
@@ -2432,6 +2452,8 @@ export default function LivePage() {
             if (hasSpeakableResponse && requestOriginMode === 'presence') {
               const isPresenceActive = voiceModeRef.current === 'presence';
               const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
+              const presenceController = voiceSessionControllerRef.current;
+              const useGeminiNarration = presenceController?.isGeminiLiveActive() ?? false;
               
               if (!isPresenceActive || !isRecent) {
                 if (!spokenRequestsRef.current.has(req.id)) {
@@ -2446,6 +2468,11 @@ export default function LivePage() {
                 }
               } else if (spokenRequestsRef.current.has(req.id)) {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: req.id });
+              } else if (useGeminiNarration && presenceController?.narratePresenceResult(ttsText)) {
+                // A resposta completa continua no chat. Na conversa falada,
+                // a Gemini só a traduz para uma devolutiva curta e humana.
+                spokenRequestsRef.current.add(req.id);
+                console.log('[PULSO_GEMINI_LIVE_RESULT_NARRATED]', { requestId: req.id });
               } else if (voiceStateRef.current === 'speaking') {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
               } else {
@@ -3894,9 +3921,10 @@ ${data.transcription}`, {
       voiceModeRef.current = 'presence';
       presenceSessionStartTimeRef.current = Date.now();
       spokenRequestsRef.current.clear();
+      narratedPresenceProgressRef.current.clear();
 
       // Teste manual do modo experimental Gemini Live: abrir /pulso/live?gemini_live=1
-      // Ainda sem ferramentas (Notion/memória) plugadas nesse modo.
+      // Gemini é somente a voz; ferramentas e memória seguem no OpenClaw.
       const useGeminiLive = typeof window !== 'undefined' &&
         new URLSearchParams(window.location.search).get('gemini_live') === '1';
 

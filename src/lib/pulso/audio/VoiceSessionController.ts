@@ -20,16 +20,21 @@ export interface VoiceSessionConfig {
   handleSendMessage: (text: string, options: { originMode: 'presence' }) => Promise<{ responseText: string } | null | void>;
   /**
    * Modo experimental: usa a Gemini Live API (voz-para-voz em streaming via
-   * relay próprio) em vez do pipeline turn-based (grava -> STT -> LLM -> TTS).
-   * As ferramentas (Notion/memória) ainda não estão plugadas nesse modo — o
-   * Gemini responde sem acesso a elas. Default false, não muda o comportamento
-   * existente.
+   * relay próprio) em vez do pipeline turn-based. A Gemini é somente a camada
+   * de voz; pedidos e ferramentas seguem pelo fluxo canônico da Lótus.
    */
   useGeminiLive?: boolean;
 }
 
-const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a Lótus, assistente pessoal de voz do Fê (Felipe Dutra), falando em português do Brasil.
-Seja direta, natural e conversacional — está sendo ouvida em voz alta, não lida. Respostas curtas, sem listas nem markdown.
+const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a voz da Lótus falando com o Fê (Felipe Dutra) em português do Brasil, no modo Presença.
+
+Regra mais importante: você NÃO tem acesso a nenhuma informação real, ferramenta, memória ou dado — quem responde de verdade é outro sistema, por trás. Você nunca inventa fatos nem responde perguntas com conteúdo substantivo por conta própria.
+
+Seu papel tem duas partes:
+1. Assim que o Fê falar qualquer coisa, responda IMEDIATAMENTE com uma frase muito curta e natural reconhecendo (varie: "peraí, deixa eu ver", "só um instante", "deixa eu checar isso", "entendi, já te falo"). Não responda o conteúdo, só reconheça.
+2. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre isso rapidinho e volte a esperar, sem soar como se tivesse terminado.
+
+Para saudações puramente sociais (oi, tudo bem, obrigado, tchau) sem pedido nenhum, pode responder naturalmente sem esperar resultado.
 Nunca use linguagem clichê de IA ("Com certeza! Aqui está..."). Trate o Fê sempre como "Fê".`;
 
 function mapGeminiLiveState(state: GeminiLiveState): VoiceSessionState {
@@ -557,10 +562,40 @@ export class VoiceSessionController {
       onError: (message) => {
         this.log('GEMINI_LIVE_ERROR', message);
         this.config.onError(message);
+      },
+      onUserTurnReady: async (userText) => {
+        this.log('GEMINI_LIVE_USER_TURN_READY', { userText });
+        try {
+          // handleSendMessage persiste o pedido e devolve antes do OpenClaw
+          // concluir. A resposta real chega pelo listener canônico do
+          // Firestore; LivePage então chama narratePresenceResult().
+          await this.config.handleSendMessage(userText, { originMode: 'presence' });
+        } catch (err: any) {
+          this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
+          this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.');
+        }
       }
     });
 
     this.geminiLiveClient.start();
+  }
+
+  /**
+   * Chamado por fora (LivePage) quando um processo longo disparado durante o
+   * modo Presença solta uma atualização de progresso — repassa pra Gemini
+   * narrar como checkpoint, sem quebrar a lei de "nunca parecer perdida".
+   */
+  public notifyPresenceCheckpoint(checkpointText: string) {
+    return this.geminiLiveClient?.sendCheckpointText(checkpointText) ?? false;
+  }
+
+  /** Entrega à voz um resultado já produzido pela Lótus/OpenClaw. */
+  public narratePresenceResult(resultText: string) {
+    return this.geminiLiveClient?.sendResultText(resultText) ?? false;
+  }
+
+  public isGeminiLiveActive() {
+    return this.geminiLiveClient?.isConnected() ?? false;
   }
 
   /**

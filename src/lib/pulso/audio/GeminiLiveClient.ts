@@ -23,6 +23,14 @@ export interface GeminiLiveConfig {
   onStateChange: (state: GeminiLiveState) => void;
   onTranscript?: (role: 'user' | 'assistant', text: string) => void;
   onError: (message: string) => void;
+  /**
+   * Disparado quando a Lótus-voz termina de falar o reconhecimento curto
+   * ("peraí, deixa eu ver") logo após o Fê falar. É o sinal pra rodar o
+   * pipeline de verdade (AgentOrchestrator) com o texto transcrito e, quando
+   * o resultado sair, chamar sendResultText() com a resposta real.
+   * A Gemini Live nunca responde por conta própria — só reconhece e narra.
+   */
+  onUserTurnReady?: (userText: string) => void;
 }
 
 function base64FromInt16(samples: Int16Array): string {
@@ -40,6 +48,17 @@ function int16FromBase64(base64: string): Int16Array {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Int16Array(bytes.buffer);
+}
+
+function isPurelySocialTurn(text: string) {
+  const normalized = text
+    .toLocaleLowerCase('pt-BR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return /^(oi|ola|bom dia|boa tarde|boa noite|tudo bem|obrigado|obrigada|valeu|tchau|ate logo|ate mais)$/.test(normalized);
 }
 
 /** Downsample simples (decimação) de Float32 numa taxa de origem pra 16kHz. */
@@ -79,6 +98,11 @@ export class GeminiLiveClient {
   private nextPlaybackTime = 0;
   private pendingSources = 0;
   private turnCompletePending = false;
+
+  // Orquestração reconhecimento -> backend real -> narração do resultado
+  private pendingUserTranscript = '';
+  private awaitingResult = false;
+  private checkpointInFlight = false;
 
   private closedByUser = false;
 
@@ -185,6 +209,7 @@ export class GeminiLiveClient {
       }
 
       if (sc.inputTranscription?.text) {
+        this.pendingUserTranscript += sc.inputTranscription.text;
         this.config.onTranscript?.('user', sc.inputTranscription.text);
       }
       if (sc.outputTranscription?.text) {
@@ -201,6 +226,25 @@ export class GeminiLiveClient {
       if (sc.turnComplete) {
         this.turnCompletePending = true;
         this.maybeReturnToListening();
+
+        if (this.checkpointInFlight) {
+          // Checkpoint narrado no meio de um processo longo — não mexe no
+          // ciclo de reconhecimento/resultado, só consome esse turno.
+          this.checkpointInFlight = false;
+        } else if (!this.awaitingResult) {
+          // Esse turno foi o reconhecimento curto ("peraí, deixa eu ver").
+          // Dispara o pipeline real com o que o Fê falou; a próxima fala do
+          // Gemini só acontece quando sendResultText() for chamado por fora.
+          const userText = this.pendingUserTranscript.trim();
+          this.pendingUserTranscript = '';
+          if (userText && !isPurelySocialTurn(userText)) {
+            this.awaitingResult = true;
+            this.config.onUserTurnReady?.(userText);
+          }
+        } else {
+          // Esse turno foi a narração do resultado real. Ciclo completo.
+          this.awaitingResult = false;
+        }
       }
       return;
     }
@@ -333,6 +377,47 @@ export class GeminiLiveClient {
     }
     this.pendingSources = 0;
     this.turnCompletePending = false;
+  }
+
+  /**
+   * Injeta o resultado real (vindo do AgentOrchestrator) como uma fala que o
+   * Gemini deve narrar de forma breve e natural — nunca literal. Só deve ser
+   * chamado depois de onUserTurnReady disparar.
+   */
+  public sendResultText(resultText: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: 'user', parts: [{ text: `[RESULTADO] ${resultText}` }] }],
+        turnComplete: true
+      }
+    }));
+    return true;
+  }
+
+  /**
+   * Checkpoint intermediário durante um processo longo (ex: programar algo).
+   * Não fecha o ciclo de awaitingResult — usa role 'user' com um marcador
+   * diferente pra o Gemini narrar sem soltar o "aguardando resultado final".
+   * Chamar só um de cada vez (espera o anterior terminar de falar) — vários
+   * checkpoints em sequência rápida não são suportados ainda.
+   */
+  public sendCheckpointText(checkpointText: string) {
+    // Nunca atropela uma atualização falada anterior. O próximo progresso do
+    // processo continuará aparecendo no chat e poderá ser narrado depois.
+    if (this.checkpointInFlight || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    this.checkpointInFlight = true;
+    this.ws.send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: 'user', parts: [{ text: `[CHECKPOINT] ${checkpointText}` }] }],
+        turnComplete: true
+      }
+    }));
+    return true;
+  }
+
+  public isConnected() {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 
   public stop() {
