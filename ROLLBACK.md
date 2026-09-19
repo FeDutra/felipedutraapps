@@ -103,3 +103,20 @@ em Firestore, Functions, credenciais ou runtime da VPS.
 
 Para reverter somente este refinamento, usar `git revert <commit-da-entrada-contínua>`,
 reconstruir o frontend e republicar apenas o Firebase Hosting.
+
+---
+
+# Rollback — ritmo de Presença (19/09/2026)
+
+## Escopo
+
+- consolida `progress_update` rápidos em um único checkpoint oral;
+- espera 4,5s após a confirmação inicial e 12s entre checkpoints;
+- descarta checkpoints pendentes quando o resultado final chega;
+- orienta a voz Gemini para uma fala adulta, concreta e não infantilizada.
+
+## Reversão
+
+Reverter somente o commit desta alteração, executar `npm run build` e publicar
+apenas o Firebase Hosting. Não altera Firestore, Functions, credenciais ou o
+relay da VPS.

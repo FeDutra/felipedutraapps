@@ -110,6 +110,14 @@ export class GeminiLiveClient {
    */
   private narrationQueue: Array<{ kind: 'checkpoint' | 'result'; text: string }> = [];
   private narrationInFlight: 'checkpoint' | 'result' | null = null;
+  /** O chat pode produzir muitos eventos; a voz precisa de marcos, não de logs. */
+  private deferredCheckpointText: string | null = null;
+  private checkpointTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastNarrationCompletedAt = 0;
+  private lastCheckpointSpokenAt = 0;
+
+  private static readonly FIRST_CHECKPOINT_DELAY_MS = 4_500;
+  private static readonly MIN_CHECKPOINT_GAP_MS = 12_000;
 
   private closedByUser = false;
 
@@ -375,9 +383,46 @@ export class GeminiLiveClient {
   private maybeReturnToListening() {
     if (this.turnCompletePending && this.pendingSources === 0) {
       this.turnCompletePending = false;
+      this.lastNarrationCompletedAt = Date.now();
       this.setState('listening');
       this.flushNarrationQueue();
+      this.scheduleDeferredCheckpoint();
     }
+  }
+
+  private normalizeCheckpoint(text: string) {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Um checkpoint só fala depois que a confirmação inicial assentou. Eventos
+   * sucessivos se fundem no marco mais recente; resultado final sempre vence.
+   */
+  private scheduleDeferredCheckpoint() {
+    if (!this.deferredCheckpointText || !this.awaitingResult) return;
+    if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
+    // A confirmação inicial ainda está tocando: guarda o marco e só calcula
+    // sua janela depois da fala terminar de fato.
+    if (this.narrationInFlight || this.turnCompletePending || this.pendingSources > 0) return;
+    if (this.checkpointTimer) clearTimeout(this.checkpointTimer);
+
+    const now = Date.now();
+    const firstEligibleAt = this.lastNarrationCompletedAt + GeminiLiveClient.FIRST_CHECKPOINT_DELAY_MS;
+    const nextEligibleAt = this.lastCheckpointSpokenAt
+      ? Math.max(firstEligibleAt, this.lastCheckpointSpokenAt + GeminiLiveClient.MIN_CHECKPOINT_GAP_MS)
+      : firstEligibleAt;
+    const delay = Math.max(0, nextEligibleAt - now);
+
+    this.checkpointTimer = setTimeout(() => {
+      this.checkpointTimer = null;
+      const text = this.deferredCheckpointText;
+      this.deferredCheckpointText = null;
+      if (!text || !this.awaitingResult) return;
+      if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
+      this.narrationQueue.push({ kind: 'checkpoint', text });
+      this.lastCheckpointSpokenAt = Date.now();
+      this.flushNarrationQueue();
+    }, delay);
   }
 
   /** Envia uma fala pendente somente quando a fala anterior já terminou. */
@@ -417,6 +462,12 @@ export class GeminiLiveClient {
    */
   public sendResultText(resultText: string) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    this.deferredCheckpointText = null;
+    if (this.checkpointTimer) {
+      clearTimeout(this.checkpointTimer);
+      this.checkpointTimer = null;
+    }
+    this.narrationQueue = this.narrationQueue.filter(item => item.kind !== 'checkpoint');
     this.narrationQueue.push({ kind: 'result', text: resultText });
     this.flushNarrationQueue();
     return true;
@@ -431,17 +482,16 @@ export class GeminiLiveClient {
    */
   public sendCheckpointText(checkpointText: string) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    // O chat pode receber dezenas de eventos; a voz recebe uma fila curta e
-    // humana. Preserva o primeiro e o mais recente, em vez de virar locução.
-    const alreadyQueued = this.narrationQueue.some(item => item.kind === 'checkpoint' && item.text === checkpointText);
-    if (alreadyQueued) return true;
-    const checkpoints = this.narrationQueue.filter(item => item.kind === 'checkpoint');
-    if (checkpoints.length >= 2) {
-      const oldestIndex = this.narrationQueue.findIndex(item => item.kind === 'checkpoint');
-      if (oldestIndex >= 0) this.narrationQueue.splice(oldestIndex, 1);
+    const text = this.normalizeCheckpoint(checkpointText);
+    if (!text || !this.awaitingResult) return false;
+
+    const queuedCheckpoint = this.narrationQueue.find(item => item.kind === 'checkpoint');
+    if (queuedCheckpoint) {
+      queuedCheckpoint.text = text;
+    } else {
+      this.deferredCheckpointText = text;
     }
-    this.narrationQueue.push({ kind: 'checkpoint', text: checkpointText });
-    this.flushNarrationQueue();
+    this.scheduleDeferredCheckpoint();
     return true;
   }
 
@@ -451,6 +501,9 @@ export class GeminiLiveClient {
 
   public stop() {
     this.closedByUser = true;
+    if (this.checkpointTimer) clearTimeout(this.checkpointTimer);
+    this.checkpointTimer = null;
+    this.deferredCheckpointText = null;
     this.teardownMic();
     this.flushPlayback();
     if (this.playbackContext) {
