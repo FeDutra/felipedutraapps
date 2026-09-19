@@ -964,7 +964,7 @@ export default function LivePage() {
   const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
   const [splitOrbPosition, setSplitOrbPosition] = React.useState<{ x: number; y: number } | null>(null);
   const [isSplitOrbDragging, setIsSplitOrbDragging] = React.useState(false);
-  const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'breathe' | 'align' | 'travel' | 'settled'>('birth');
+  const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'breathe' | 'align' | 'handoff' | 'travel' | 'settled'>('birth');
   const [orbHomeCenter, setOrbHomeCenter] = React.useState({ x: 512, y: 384 });
   const orbHomeAnchorRef = React.useRef<HTMLDivElement | null>(null);
   const splitOrbDragRef = React.useRef<{
@@ -1185,12 +1185,16 @@ export default function LivePage() {
     }
     if (event.animationName === 'lotus-presence-breathe') {
       setOrbEntryPhase(current => current === 'breathe' ? 'align' : current);
+      return;
+    }
+    if (event.animationName === 'lotus-presence-handoff') {
+      setOrbEntryPhase(current => current === 'handoff' ? 'travel' : current);
     }
   }, []);
 
   const handleOrbScaleAligned = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
     if (event.currentTarget !== event.target || event.propertyName !== 'scale') return;
-    setOrbEntryPhase(current => current === 'align' ? 'travel' : current);
+    setOrbEntryPhase(current => current === 'align' ? 'handoff' : current);
   }, []);
 
   const handleOrbTravelEnd = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
@@ -1204,9 +1208,9 @@ export default function LivePage() {
     // Safety net only: the actual handoff is driven by animation/transition end.
     const fallbackTimer = window.setTimeout(
       () => setOrbEntryPhase(current => (
-        current === 'birth' ? 'breathe' : current === 'breathe' ? 'align' : current === 'align' ? 'travel' : current === 'travel' ? 'settled' : current
+        current === 'birth' ? 'breathe' : current === 'breathe' ? 'align' : current === 'align' ? 'handoff' : current === 'handoff' ? 'travel' : current === 'travel' ? 'settled' : current
       )),
-      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 2300 : orbEntryPhase === 'align' ? 950 : 1800
+      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 2300 : orbEntryPhase === 'align' ? 950 : orbEntryPhase === 'handoff' ? 320 : 1800
     );
     return () => window.clearTimeout(fallbackTimer);
   }, [orbEntryPhase]);
@@ -4447,7 +4451,7 @@ ${data.transcription}`, {
 
   const isWorkspaceMode = isAtelieActive || isEstudioActive;
   const orbHasEntered = orbEntryPhase === 'travel' || orbEntryPhase === 'settled';
-  const orbHasAligned = orbEntryPhase === 'align' || orbHasEntered;
+  const orbHasAligned = orbEntryPhase === 'align' || orbEntryPhase === 'handoff' || orbHasEntered;
   const orbTarget = !orbHasEntered
     ? { x: windowWidth / 2, y: windowHeight / 2 }
     : secondaryContextNode

@@ -239,6 +239,12 @@ body {
   }
 }
 
+@keyframes lotus-presence-handoff {
+  from, to {
+    opacity: 1;
+  }
+}
+
 .lotus-orb-visual {
   will-change: transform, filter, opacity;
 }
@@ -251,6 +257,10 @@ body {
   animation: lotus-presence-breathe 2000ms var(--lotus-motion-ease) both;
 }
 
+.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-visual {
+  animation: lotus-presence-handoff 160ms var(--lotus-motion-ease) both;
+}
+
 .lotus-orb-presence {
   transition-property: transform, opacity, filter;
   transition-duration: 1500ms, 520ms, 1500ms;
@@ -261,6 +271,7 @@ body {
 .lotus-orb-presence[data-entry-phase='birth'],
 .lotus-orb-presence[data-entry-phase='breathe'],
 .lotus-orb-presence[data-entry-phase='align'],
+.lotus-orb-presence[data-entry-phase='handoff'],
 .lotus-orb-presence[data-dragging='true'] {
   transition: none;
 }
