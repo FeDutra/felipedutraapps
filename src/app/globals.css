@@ -281,6 +281,11 @@ body {
   will-change: scale;
 }
 
+.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-scale,
+.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-scale {
+  transition: none;
+}
+
 .lotus-orb-membrane {
   transition: border-color 1000ms var(--lotus-motion-ease),
     filter 1000ms var(--lotus-motion-ease),
@@ -321,6 +326,14 @@ body {
   opacity: 0.62;
   filter: blur(30px);
   transform: scale(0.98);
+}
+
+.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-veil,
+.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-veil {
+  opacity: 0.62;
+  filter: blur(30px);
+  transform: scale(0.98);
+  transition: none;
 }
 
 .pulso-entry-curtain {
