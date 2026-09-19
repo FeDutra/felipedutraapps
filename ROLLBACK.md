@@ -51,3 +51,24 @@ firebase deploy --only hosting
 Escopo da correção: remover a tela bloqueante de inicialização, manter o
 primeiro render idêntico entre servidor e cliente e tornar preferências em
 `localStorage` opcionais quando o Safari negar acesso.
+
+---
+
+# Rollback — presença contínua da orbe (19/09/2026)
+
+Baseline reversível: `47d9dd48` em `main`.
+
+## Escopo
+
+- remover o disco preto opaco ao redor da orbe;
+- preservar transparência com blur e escurecimento radial difusos;
+- manter uma única instância fixa da Lótus entre abertura, repouso, Presença,
+  split, Mesa, Ateliê e Estúdio;
+- interpolar posição e escala em vez de remontar ou teleportar a orbe;
+- registrar o padrão em `docs/contexto/pulso-lotus-presence-standard-v1.md`.
+
+## Reversão
+
+Após o commit desta correção, usar `git revert <commit-da-presenca-continua>`,
+executar `npm run build` e republicar somente o Firebase Hosting. A mudança não
+altera Firestore, funções, credenciais nem runtime da VPS.

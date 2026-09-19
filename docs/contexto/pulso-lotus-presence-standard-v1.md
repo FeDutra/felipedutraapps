@@ -1,0 +1,40 @@
+# PULSO — padrão de presença contínua da Lótus v1
+
+## Princípio
+
+A orbe é a presença contínua da Lótus, não um componente descartável de cada tela.
+Ela deve permanecer visualmente a mesma entidade durante abertura, conversa, modo
+Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
+
+## Invariantes visuais
+
+- Uma única instância visual persistente atravessa os estados da interface.
+- Mudanças de posição e escala são interpoladas; a orbe nunca desaparece em um
+  lugar para reaparecer em outro.
+- O corpo da orbe é transparente: apenas a membrana branca e sua luz são opacas.
+- Qualquer separação do conteúdo sob a orbe usa somente blur gaussiano, sombra
+  difusa e escurecimento radial suave, sem disco, recorte ou borda circular visível.
+- A abertura nasce de blur e foco, pulsa uma vez e então se desloca até a posição
+  de repouso da interface real.
+- O movimento em repouso continua sutil e orgânico, sem competir com o conteúdo.
+- `prefers-reduced-motion` reduz a abertura e todas as travessias a transições
+  praticamente instantâneas.
+
+## Invariantes de implementação
+
+- A instância persistente vive em uma camada fixa acima das superfícies.
+- Cada composição fornece apenas uma âncora/destino; não monta outra orbe local.
+- Transições entre destinos usam a mesma curva amortecida do sistema.
+- Arraste em split move a própria instância e desativa interpolação apenas durante
+  o gesto; ao encerrar, a continuidade volta a ser aplicada.
+- Novos modos e painéis devem declarar para onde a presença se desloca antes de
+  serem considerados acabados.
+
+## Verificação mínima para mudanças futuras
+
+1. Abrir `/pulso/live` em desktop e mobile e observar nascimento + acomodação.
+2. Entrar e sair do modo Presença sem salto ou remontagem.
+3. Abrir e fechar split e Mesa, verificando a trajetória contínua.
+4. Confirmar que texto/conteúdo continua perceptível sob o halo, sem círculo preto.
+5. Testar `prefers-reduced-motion`.
+

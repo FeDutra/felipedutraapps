@@ -899,11 +899,16 @@ export default function LivePage() {
   const [inputMessage, setInputMessage] = React.useState('');
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
+  const [windowHeight, setWindowHeight] = React.useState<number>(768);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       setWindowWidth(window.innerWidth);
-      const handleResize = () => setWindowWidth(window.innerWidth);
+      setWindowHeight(window.innerHeight);
+      const handleResize = () => {
+        setWindowWidth(window.innerWidth);
+        setWindowHeight(window.innerHeight);
+      };
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
     }
@@ -958,6 +963,10 @@ export default function LivePage() {
   // Qual painel o input único (fixo embaixo, padrão) atinge quando envia.
   const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
   const [splitOrbPosition, setSplitOrbPosition] = React.useState<{ x: number; y: number } | null>(null);
+  const [isSplitOrbDragging, setIsSplitOrbDragging] = React.useState(false);
+  const [orbHasEntered, setOrbHasEntered] = React.useState(false);
+  const [orbHomeCenter, setOrbHomeCenter] = React.useState({ x: 512, y: 384 });
+  const orbHomeAnchorRef = React.useRef<HTMLDivElement | null>(null);
   const splitOrbDragRef = React.useRef<{
     pointerId: number;
     pointerStartX: number;
@@ -1163,9 +1172,39 @@ export default function LivePage() {
     // Cada abertura do split parte do centro. A posição é livre durante essa
     // composição, mas não contamina o modo single nem a abertura seguinte.
     setSplitOrbPosition(null);
+    setIsSplitOrbDragging(false);
     splitOrbDragRef.current = null;
     suppressSplitOrbClickRef.current = false;
   }, [secondaryContextId]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timer = window.setTimeout(() => setOrbHasEntered(true), reduceMotion ? 40 : 1120);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let frame = 0;
+    const startedAt = performance.now();
+    const trackAnchor = () => {
+      const rect = orbHomeAnchorRef.current?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        const next = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        setOrbHomeCenter(current => (
+          Math.abs(current.x - next.x) < 0.25 && Math.abs(current.y - next.y) < 0.25
+            ? current
+            : next
+        ));
+      }
+      if (performance.now() - startedAt < 1350) {
+        frame = window.requestAnimationFrame(trackAnchor);
+      }
+    };
+    frame = window.requestAnimationFrame(trackAnchor);
+    return () => window.cancelAnimationFrame(frame);
+  }, [windowWidth, windowHeight, presenceMode, secondaryContextId, isMesaOpen, isMesaCollapsed, isAtelieActive, isEstudioActive]);
 
   // Rascunho não enviado por sessão — trocar de chat, ou até fechar e
   // reabrir a aba, não pode perder o que já foi digitado em outro chat.
@@ -3989,6 +4028,7 @@ ${data.transcription}`, {
       orbStartY: origin.y,
       moved: false,
     };
+    setIsSplitOrbDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   }, [secondaryContextNode, splitOrbPosition]);
 
@@ -4010,6 +4050,7 @@ ${data.transcription}`, {
     if (!drag || drag.pointerId !== event.pointerId) return;
     suppressSplitOrbClickRef.current = drag.moved;
     splitOrbDragRef.current = null;
+    setIsSplitOrbDragging(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -4335,16 +4376,16 @@ ${data.transcription}`, {
 
   // Animation resolver
   const getLotusAnimClass = () => {
-    if (voiceModeRef.current === 'presence') {
-      if (voiceStateRef.current === 'presence_listening') return 'lotus-listening-anim';
-      if (voiceStateRef.current === 'transcribing' || voiceStateRef.current === 'submitting') return 'lotus-thinking-anim';
-      if (voiceStateRef.current === 'waiting_lotus') return 'lotus-waiting-anim';
-      if (voiceStateRef.current === 'speaking') return 'lotus-responding-anim';
-      if (voiceStateRef.current === 'error') return 'lotus-error-anim';
+    if (voiceMode === 'presence') {
+      if (voiceState === 'presence_listening') return 'lotus-listening-anim';
+      if (voiceState === 'transcribing' || voiceState === 'submitting') return 'lotus-thinking-anim';
+      if (voiceState === 'waiting_lotus') return 'lotus-waiting-anim';
+      if (voiceState === 'speaking') return 'lotus-responding-anim';
+      if (voiceState === 'error') return 'lotus-error-anim';
       return 'lotus-idle-anim';
     }
     
-    if (voiceModeRef.current === 'recording_once') {
+    if (voiceMode === 'recording_once') {
       return 'lotus-listening-anim';
     }
     
@@ -4352,6 +4393,26 @@ ${data.transcription}`, {
     
     return 'lotus-idle-anim';
   };
+
+  const isWorkspaceMode = isAtelieActive || isEstudioActive;
+  const orbTarget = !orbHasEntered
+    ? { x: windowWidth / 2, y: windowHeight / 2 }
+    : secondaryContextNode
+      ? (splitOrbPosition || { x: windowWidth / 2, y: windowHeight / 2 })
+      : isWorkspaceMode
+        ? {
+            x: windowWidth < 768 ? windowWidth / 2 : Math.min(windowWidth - 72, windowWidth / 2 + Math.min(300, windowWidth * 0.22)),
+            y: windowHeight - (windowWidth < 768 ? 86 : 76),
+          }
+        : orbHomeCenter;
+  const orbOuterScale = isWorkspaceMode && orbHasEntered ? 0.42 : 1;
+  const orbVisualScaleClass = !orbHasEntered
+    ? 'scale-[0.72] md:scale-[0.86]'
+    : secondaryContextNode
+      ? 'scale-[0.55]'
+      : presenceMode && !isWorkspaceMode
+        ? 'scale-[0.75] md:scale-100'
+        : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]';
 
 
   return (
@@ -4746,6 +4807,46 @@ ${data.transcription}`, {
         </div>
       </div>
 
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Lótus — modo presença: ${voiceState}`}
+          onClick={handleOrbClick}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              togglePresenceMode();
+            }
+          }}
+          onPointerDown={secondaryContextNode ? handleSplitOrbPointerDown : undefined}
+          onPointerMove={secondaryContextNode ? handleSplitOrbPointerMove : undefined}
+          onPointerUp={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
+          onPointerCancel={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
+          className={`lotus-orb-presence fixed left-0 top-0 z-[65] w-64 h-64 flex items-center justify-center select-none touch-none pointer-events-auto outline-none ${
+            secondaryContextNode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+          } ${!orbHasEntered ? 'lotus-orb-is-birthing' : ''}`}
+          style={{
+            transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
+            transition: isSplitOrbDragging
+              ? 'none'
+              : 'transform 760ms cubic-bezier(0.16, 1, 0.3, 1), opacity 420ms ease, filter 720ms ease',
+          }}
+        >
+          <div className="lotus-orb-veil absolute inset-[-72px] pointer-events-none" />
+          <div className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center">
+            <div className={`absolute flex items-center justify-center origin-center transition-transform duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${orbVisualScaleClass}`}>
+              <div
+                className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] bg-transparent transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`}
+              />
+              {voiceMode === 'recording_meeting' && (
+                <div className="absolute -bottom-20 flex flex-col items-center pointer-events-none">
+                  <div className="w-[10px] h-[10px] bg-[#b8283e] rounded-full animate-pulse shadow-[0_0_12px_rgba(184,40,62,1)]" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         <main
           className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative ${secondaryContextNode ? 'pointer-events-none z-[60]' : 'pointer-events-auto z-10'} ${
             isAtelieActive || isEstudioActive
@@ -4776,48 +4877,18 @@ ${data.transcription}`, {
             <EstudioWorkspace activeContextNode={activeContextNode} isActive={isEstudioActive} />
           </div>
           
-          <div 
-            onClick={handleOrbClick}
-            onPointerDown={secondaryContextNode ? handleSplitOrbPointerDown : undefined}
-            onPointerMove={secondaryContextNode ? handleSplitOrbPointerMove : undefined}
-            onPointerUp={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
-            onPointerCancel={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
-            className={isAtelieActive || isEstudioActive
-              ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
-              : secondaryContextNode
-              ? `fixed z-50 w-64 h-64 flex items-center justify-center select-none touch-none cursor-grab active:cursor-grabbing pointer-events-auto transition-[filter] duration-500 ease-out origin-center`
-              : `relative w-36 h-36 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
-                  presenceMode 
-                    ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
-                    : 'mt-10 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
+          <div
+            ref={orbHomeAnchorRef}
+            aria-hidden="true"
+            className={isWorkspaceMode || secondaryContextNode
+              ? 'absolute left-1/2 top-1/2 w-px h-px pointer-events-none'
+              : `relative w-36 h-36 md:w-64 md:h-64 shrink-0 pointer-events-none transition-all duration-[1200ms] ease-in-out ${
+                  presenceMode
+                    ? 'translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]'
+                    : 'mt-10 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
                 }`
             }
-            style={secondaryContextNode ? {
-              left: splitOrbPosition ? `${splitOrbPosition.x}px` : '50%',
-              top: splitOrbPosition ? `${splitOrbPosition.y}px` : '50%',
-              transform: 'translate(-50%, -50%)',
-            } : undefined}
-          >
-            {secondaryContextNode && (
-              <div className="absolute inset-[-42px] rounded-full bg-[#0c0c0c]/55 backdrop-blur-2xl shadow-[0_0_70px_rgba(0,0,0,0.82)] pointer-events-none" />
-            )}
-            <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-              secondaryContextNode && !(isAtelieActive || isEstudioActive)
-                ? 'scale-[0.55]'
-                : presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
-            }`}>
-              <div 
-                className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
-                aria-label={`Modo Presença: ${voiceState}`}
-              />
-              {voiceMode === 'recording_meeting' && (
-                <div className="absolute -bottom-20 flex flex-col items-center pointer-events-none">
-                  <div className="w-[10px] h-[10px] bg-[#b8283e] rounded-full animate-pulse shadow-[0_0_12px_rgba(184,40,62,1)]" />
-                </div>
-              )}
-              
-            </div>
-          </div>
+          />
 
           {(!secondaryContextNode && (!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory))) && (
             <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>

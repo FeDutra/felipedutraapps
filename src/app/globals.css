@@ -213,6 +213,58 @@ body {
 }
 
 /* Organic Breathing / Floating animations for Lótus HTML Div Shape */
+@keyframes lotus-presence-birth {
+  0% {
+    opacity: 0;
+    filter: blur(34px);
+    transform: scale(0.72);
+  }
+  38% {
+    opacity: 0.58;
+    filter: blur(17px);
+    transform: scale(0.9);
+  }
+  76% {
+    opacity: 1;
+    filter: blur(2.5px);
+    transform: scale(1.018);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+.lotus-orb-visual {
+  animation: lotus-presence-birth 1120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, filter, opacity;
+}
+
+.lotus-orb-veil {
+  background: radial-gradient(
+    circle at center,
+    rgba(4, 4, 4, 0.2) 0%,
+    rgba(4, 4, 4, 0.13) 24%,
+    rgba(4, 4, 4, 0.065) 48%,
+    rgba(4, 4, 4, 0.018) 67%,
+    transparent 84%
+  );
+  -webkit-backdrop-filter: blur(13px);
+  backdrop-filter: blur(13px);
+  -webkit-mask-image: radial-gradient(circle at center, #000 0%, rgba(0, 0, 0, 0.96) 42%, rgba(0, 0, 0, 0.48) 66%, transparent 86%);
+  mask-image: radial-gradient(circle at center, #000 0%, rgba(0, 0, 0, 0.96) 42%, rgba(0, 0, 0, 0.48) 66%, transparent 86%);
+  opacity: 0.86;
+  transform: scale(1.04);
+  transition: opacity 700ms ease, transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.lotus-orb-presence:hover .lotus-orb-veil {
+  opacity: 0.94;
+  transform: scale(1.07);
+}
+
 @keyframes organic-breathe {
   0%, 100% {
     border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
@@ -363,6 +415,22 @@ body {
 .lotus-error-anim {
   animation: organic-error 1.8s ease-in-out infinite;
   transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lotus-orb-presence,
+  .lotus-orb-visual,
+  .lotus-orb-veil,
+  .lotus-idle-anim,
+  .lotus-listening-anim,
+  .lotus-thinking-anim,
+  .lotus-responding-anim,
+  .lotus-waiting-anim,
+  .lotus-error-anim,
+  .lotus-busy-anim {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 .chat-fade-mask {
