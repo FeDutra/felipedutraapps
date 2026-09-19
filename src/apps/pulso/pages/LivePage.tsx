@@ -4869,12 +4869,16 @@ ${data.transcription}`, {
           data-entry-phase={orbEntryPhase}
           className={`lotus-orb-presence fixed left-0 top-0 z-[65] w-64 h-64 flex items-center justify-center select-none touch-none outline-none ${
             secondaryContextNode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-          } ${orbEntryPhase !== 'settled' ? 'pointer-events-none' : 'pointer-events-auto'}`}
+          } ${orbEntryPhase !== 'settled' ? 'pointer-events-none' : 'pointer-events-auto'} ${
+            isMobileMenuOpen ? 'opacity-0 !pointer-events-none md:opacity-100' : ''
+          }`}
           style={{
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
             transition: orbEntryPhase === 'birth' || isSplitOrbDragging
               ? 'none'
-              : 'transform 840ms cubic-bezier(0.22, 1, 0.36, 1), opacity 560ms ease, filter 840ms ease',
+              : isMobileMenuOpen
+                ? 'opacity 200ms ease'
+                : 'transform 840ms cubic-bezier(0.22, 1, 0.36, 1), opacity 560ms ease, filter 840ms ease',
           }}
         >
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
