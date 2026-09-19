@@ -4664,15 +4664,7 @@ ${data.transcription}`, {
             transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !secondaryContextId)
               ? 'translateX(calc(-22vw + 1.5rem))'
               : 'translateX(0)',
-            // Split de chats: em vez de deslocar a caixa inteira (que continua
-            // centralizada em si mesma, só que fora do centro da tela), reduz
-            // a largura pra caber só na metade esquerda — assim o próprio
-            // `items-center justify-center` do <main> centraliza de verdade
-            // dentro do espaço disponível, igual o painel da direita faz.
-            maxWidth: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? 'calc(50vw - 4rem)' : undefined,
-            marginLeft: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? '2rem' : undefined,
-            marginRight: (!isAtelieActive && !isEstudioActive && secondaryContextNode) ? 'auto' : undefined,
-            transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1), max-width 500ms ease-in-out, margin 500ms ease-in-out',
+            transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
 
@@ -4694,6 +4686,8 @@ ${data.transcription}`, {
             onClick={togglePresenceMode}
             className={isAtelieActive || isEstudioActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
+              : secondaryContextNode
+              ? `fixed top-[4.35rem] left-1/2 -translate-x-1/2 z-50 w-10 h-10 flex items-center justify-center select-none transition-all duration-700 ease-out origin-center ${!presenceMode ? 'cursor-pointer' : ''}`
               : `relative w-36 h-36 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
                     ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
@@ -4702,7 +4696,9 @@ ${data.transcription}`, {
             }
           >
             <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
-              presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
+              secondaryContextNode && !(isAtelieActive || isEstudioActive)
+                ? 'scale-[0.085]'
+                : presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
             }`}>
               <div 
                 className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`} 
@@ -4717,7 +4713,7 @@ ${data.transcription}`, {
             </div>
           </div>
 
-          {(!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory)) && (
+          {(!secondaryContextNode && (!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory))) && (
             <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
               
               <div 
@@ -4756,9 +4752,7 @@ ${data.transcription}`, {
               ref={scrollContainerRef}
               onScroll={handleScroll}
               onClick={() => setFocusedPaneSide('left')}
-              className={`absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8 transition-opacity duration-300 ${
-                secondaryContextNode && focusedPaneSide === 'right' ? 'opacity-80' : 'opacity-100'
-              }`}
+              className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8 transition-opacity duration-300"
             >
               {currentMessages.map((msg, msgIndex) => {
                 if (msg.isProgressUpdate) {
@@ -5283,24 +5277,20 @@ ${data.transcription}`, {
               grandes (>15") ainda pendente de decisão do Fe. */}
           {secondaryContextNode && (
             <>
-              {/* Título + ícone da área do painel esquerdo — só aparece com o
-                  split aberto, espelhando o painel direito. */}
-              <div
-                className="hidden md:flex fixed top-20 md:top-24 left-8 z-40 items-center gap-2 pointer-events-none animate-fade-in"
-                style={{ width: 'calc(50vw - 4rem)' }}
-              >
-                <span className="text-sm font-mono text-white/85 shrink-0">
-                  {getAreaIcon({ id: activeContextNode.areaId, name: dynamicAreas.find(a => a.id === activeContextNode.areaId)?.name || '' })}
-                </span>
-                <span className="text-[9px] tracking-[0.2em] uppercase font-sans text-white/85 truncate">
-                  {activeContextNode.label}
-                </span>
+              <div className="hidden md:flex fixed top-24 bottom-32 left-20 right-[calc(50%+0.75rem)] z-40 pointer-events-auto flex-col animate-fade-in">
+                <SecondaryChatPane
+                  contextNode={activeContextNode}
+                  areaIcon={getAreaIcon({ id: activeContextNode.areaId, name: dynamicAreas.find(a => a.id === activeContextNode.areaId)?.name || '' })}
+                  onClose={() => {
+                    setActiveContextNode(secondaryContextNode);
+                    setSecondaryContextId(null);
+                    setFocusedPaneSide('left');
+                  }}
+                  isFocused={focusedPaneSide === 'left'}
+                  onFocus={() => setFocusedPaneSide('left')}
+                />
               </div>
-
-              <div
-                className="hidden md:flex fixed top-20 md:top-24 right-0 md:right-8 bottom-28 md:bottom-32 z-40 pointer-events-auto flex-col animate-fade-in"
-                style={{ width: 'calc(50vw - 4rem)' }}
-              >
+              <div className="hidden md:flex fixed top-24 bottom-32 left-[calc(50%+0.75rem)] right-20 z-40 pointer-events-auto flex-col animate-fade-in">
                 <SecondaryChatPane
                   contextNode={secondaryContextNode}
                   areaIcon={getAreaIcon({ id: secondaryContextNode.areaId, name: dynamicAreas.find(a => a.id === secondaryContextNode.areaId)?.name || '' })}
