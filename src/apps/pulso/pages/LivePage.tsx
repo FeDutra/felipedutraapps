@@ -964,7 +964,7 @@ export default function LivePage() {
   const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
   const [splitOrbPosition, setSplitOrbPosition] = React.useState<{ x: number; y: number } | null>(null);
   const [isSplitOrbDragging, setIsSplitOrbDragging] = React.useState(false);
-  const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'breathe' | 'travel' | 'settled'>('birth');
+  const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'breathe' | 'align' | 'travel' | 'settled'>('birth');
   const [orbHomeCenter, setOrbHomeCenter] = React.useState({ x: 512, y: 384 });
   const orbHomeAnchorRef = React.useRef<HTMLDivElement | null>(null);
   const splitOrbDragRef = React.useRef<{
@@ -1184,8 +1184,13 @@ export default function LivePage() {
       return;
     }
     if (event.animationName === 'lotus-presence-breathe') {
-      setOrbEntryPhase(current => current === 'breathe' ? 'travel' : current);
+      setOrbEntryPhase(current => current === 'breathe' ? 'align' : current);
     }
+  }, []);
+
+  const handleOrbScaleAligned = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target || event.propertyName !== 'scale') return;
+    setOrbEntryPhase(current => current === 'align' ? 'travel' : current);
   }, []);
 
   const handleOrbTravelEnd = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
@@ -1199,9 +1204,9 @@ export default function LivePage() {
     // Safety net only: the actual handoff is driven by animation/transition end.
     const fallbackTimer = window.setTimeout(
       () => setOrbEntryPhase(current => (
-        current === 'birth' ? 'breathe' : current === 'breathe' ? 'travel' : current === 'travel' ? 'settled' : current
+        current === 'birth' ? 'breathe' : current === 'breathe' ? 'align' : current === 'align' ? 'travel' : current === 'travel' ? 'settled' : current
       )),
-      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 2300 : 1800
+      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 2300 : orbEntryPhase === 'align' ? 950 : 1800
     );
     return () => window.clearTimeout(fallbackTimer);
   }, [orbEntryPhase]);
@@ -4442,6 +4447,7 @@ ${data.transcription}`, {
 
   const isWorkspaceMode = isAtelieActive || isEstudioActive;
   const orbHasEntered = orbEntryPhase === 'travel' || orbEntryPhase === 'settled';
+  const orbHasAligned = orbEntryPhase === 'align' || orbHasEntered;
   const orbTarget = !orbHasEntered
     ? { x: windowWidth / 2, y: windowHeight / 2 }
     : secondaryContextNode
@@ -4453,7 +4459,7 @@ ${data.transcription}`, {
           }
         : orbHomeCenter;
   const orbOuterScale = isWorkspaceMode && orbHasEntered ? 0.42 : 1;
-  const orbVisualScaleClass = !orbHasEntered
+  const orbVisualScaleClass = !orbHasAligned
     ? 'scale-[0.46] md:scale-[0.68]'
     : secondaryContextNode
       ? 'scale-[0.55]'
@@ -4895,7 +4901,10 @@ ${data.transcription}`, {
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
             onAnimationEnd={handleOrbEntryAnimationEnd}
           >
-            <div className={`lotus-orb-scale absolute flex items-center justify-center origin-center ${orbVisualScaleClass}`}>
+            <div
+              className={`lotus-orb-scale absolute flex items-center justify-center origin-center ${orbVisualScaleClass}`}
+              onTransitionEnd={handleOrbScaleAligned}
+            >
               <div
                 className={`lotus-orb-membrane w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] bg-transparent flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`}
               />

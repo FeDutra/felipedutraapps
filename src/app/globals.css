@@ -260,13 +260,14 @@ body {
 
 .lotus-orb-presence[data-entry-phase='birth'],
 .lotus-orb-presence[data-entry-phase='breathe'],
+.lotus-orb-presence[data-entry-phase='align'],
 .lotus-orb-presence[data-dragging='true'] {
   transition: none;
 }
 
 .lotus-orb-scale {
-  transition: transform 1500ms var(--lotus-motion-ease);
-  will-change: transform;
+  transition: scale 720ms var(--lotus-motion-ease);
+  will-change: scale;
 }
 
 .lotus-orb-membrane {

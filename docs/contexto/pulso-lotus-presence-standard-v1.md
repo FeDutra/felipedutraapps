@@ -15,8 +15,10 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 - Qualquer separação do conteúdo sob a orbe usa somente blur gaussiano, sombra
   difusa e escurecimento radial suave, sem disco, recorte ou borda circular visível.
 - A abertura nasce de blur e foco, permanece no centro por dois segundos com
-  duas respirações curtas e então se desloca até a posição de repouso da
-  interface real. A pausa é viva, não um congelamento.
+  duas respirações curtas, acomoda sua dimensão ainda parada e só então se
+  desloca até a posição de repouso da interface real. O último quadro da
+  acomodação e o primeiro quadro da viagem devem ter escala, luz e textura
+  idênticas. A pausa é viva, não um congelamento.
 - O nascimento começa em escala e opacidade zero. Blur, luz, escala, opacidade,
   deslocamento e dissipação usam uma curva simétrica `ease-in-out` declarada no
   CSS; não há saltos de keyframe, curvas abruptas ou troca de instância entre
@@ -29,6 +31,8 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 
 - A instância persistente vive em uma camada fixa acima das superfícies.
 - Cada composição fornece apenas uma âncora/destino; não monta outra orbe local.
+- Escala e deslocamento são fases independentes na abertura: a orbe termina a
+  acomodação dimensional antes de iniciar a mudança de posição.
 - Transições entre destinos usam a mesma curva `ease-in-out` do sistema,
   centralizada no CSS.
 - Arraste em split move a própria instância e desativa interpolação apenas durante
