@@ -4068,6 +4068,18 @@ ${data.transcription}`, {
     }
   }, []);
 
+  const handleSplitOrbContextMenu = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!secondaryContextNode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    splitOrbDragRef.current = null;
+    suppressSplitOrbClickRef.current = true;
+    setIsSplitOrbDragging(false);
+    // null e o centro canonico do split. Mantemos a posicao derivada da
+    // viewport para que resize e troca de monitor continuem corretos.
+    setSplitOrbPosition(null);
+  }, [secondaryContextNode]);
+
   const handleOrbClick = React.useCallback((event: React.MouseEvent) => {
     if (suppressSplitOrbClickRef.current) {
       suppressSplitOrbClickRef.current = false;
@@ -4834,6 +4846,7 @@ ${data.transcription}`, {
           onPointerMove={secondaryContextNode ? handleSplitOrbPointerMove : undefined}
           onPointerUp={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
           onPointerCancel={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
+          onContextMenu={secondaryContextNode ? handleSplitOrbContextMenu : undefined}
           className={`lotus-orb-presence fixed left-0 top-0 z-[65] w-64 h-64 flex items-center justify-center select-none touch-none pointer-events-auto outline-none ${
             secondaryContextNode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
           } ${!orbHasEntered ? 'lotus-orb-is-birthing' : ''}`}
@@ -4841,7 +4854,7 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
             transition: isSplitOrbDragging
               ? 'none'
-              : 'transform 760ms cubic-bezier(0.16, 1, 0.3, 1), opacity 420ms ease, filter 720ms ease',
+              : 'transform 1120ms cubic-bezier(0.22, 1, 0.36, 1), opacity 560ms ease, filter 960ms ease',
           }}
         >
           <div className="lotus-orb-veil absolute inset-[-72px] pointer-events-none" />

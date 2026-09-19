@@ -242,22 +242,51 @@ body {
 }
 
 .lotus-orb-veil {
+  border-radius: 9999px;
+  isolation: isolate;
   background: radial-gradient(
     circle at center,
-    rgba(4, 4, 4, 0.2) 0%,
-    rgba(4, 4, 4, 0.13) 24%,
-    rgba(4, 4, 4, 0.065) 48%,
-    rgba(4, 4, 4, 0.018) 67%,
-    transparent 84%
+    rgba(4, 4, 4, 0.22) 0%,
+    rgba(4, 4, 4, 0.14) 24%,
+    rgba(4, 4, 4, 0.072) 45%,
+    rgba(4, 4, 4, 0.026) 60%,
+    rgba(4, 4, 4, 0.007) 70%,
+    transparent 79%
   );
-  -webkit-backdrop-filter: blur(13px);
-  backdrop-filter: blur(13px);
-  -webkit-mask-image: radial-gradient(circle at center, #000 0%, rgba(0, 0, 0, 0.96) 42%, rgba(0, 0, 0, 0.48) 66%, transparent 86%);
-  mask-image: radial-gradient(circle at center, #000 0%, rgba(0, 0, 0, 0.96) 42%, rgba(0, 0, 0, 0.48) 66%, transparent 86%);
+  /*
+   * O escurecimento radial e o blur de fundo precisam morrer bem antes do
+   * limite do elemento. Aplicar backdrop-filter na caixa inteira deixa o
+   * raster quadrado visivel quando a orbe atravessa texto claro.
+   */
+  filter: blur(10px);
   opacity: 0.86;
   transform: scale(1.04);
   transition: opacity 700ms ease, transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, transform;
+}
+
+.lotus-orb-veil::before {
+  content: '';
+  position: absolute;
+  inset: 17%;
+  border-radius: 9999px;
+  background: rgba(4, 4, 4, 0.035);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  -webkit-mask: radial-gradient(
+    circle at center,
+    #000 0%,
+    rgba(0, 0, 0, 0.92) 42%,
+    rgba(0, 0, 0, 0.42) 67%,
+    transparent 88%
+  ) center / 100% 100% no-repeat;
+  mask: radial-gradient(
+    circle at center,
+    #000 0%,
+    rgba(0, 0, 0, 0.92) 42%,
+    rgba(0, 0, 0, 0.42) 67%,
+    transparent 88%
+  ) center / 100% 100% no-repeat;
 }
 
 .lotus-orb-presence:hover .lotus-orb-veil {
