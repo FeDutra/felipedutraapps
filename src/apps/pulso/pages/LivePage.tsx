@@ -957,6 +957,16 @@ export default function LivePage() {
   const [secondaryContextId, setSecondaryContextId] = React.useState<string | null>(null);
   // Qual painel o input único (fixo embaixo, padrão) atinge quando envia.
   const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
+  const [splitOrbPosition, setSplitOrbPosition] = React.useState<{ x: number; y: number } | null>(null);
+  const splitOrbDragRef = React.useRef<{
+    pointerId: number;
+    pointerStartX: number;
+    pointerStartY: number;
+    orbStartX: number;
+    orbStartY: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressSplitOrbClickRef = React.useRef(false);
   const [activeMesaArtifact, setActiveMesaArtifact] = React.useState<{id: string, title: string, content: string, contextId?: string} | null>(null);
   const [isMesaCollapsed, setIsMesaCollapsed] = React.useState(false);
   const [contextStatesMap, setContextStatesMap] = React.useState<Record<string, PulsoContextState>>({});
@@ -1148,6 +1158,14 @@ export default function LivePage() {
     [secondaryContextId, allContextNodes]
   );
   const sendTargetContextNode = (focusedPaneSide === 'right' && secondaryContextNode) ? secondaryContextNode : activeContextNode;
+
+  React.useEffect(() => {
+    // Cada abertura do split parte do centro. A posição é livre durante essa
+    // composição, mas não contamina o modo single nem a abertura seguinte.
+    setSplitOrbPosition(null);
+    splitOrbDragRef.current = null;
+    suppressSplitOrbClickRef.current = false;
+  }, [secondaryContextId]);
 
   // Rascunho não enviado por sessão — trocar de chat, ou até fechar e
   // reabrir a aba, não pode perder o que já foi digitado em outro chat.
@@ -3960,6 +3978,52 @@ ${data.transcription}`, {
     }
   }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage]);
 
+  const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!secondaryContextNode || typeof window === 'undefined') return;
+    const origin = splitOrbPosition || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    splitOrbDragRef.current = {
+      pointerId: event.pointerId,
+      pointerStartX: event.clientX,
+      pointerStartY: event.clientY,
+      orbStartX: origin.x,
+      orbStartY: origin.y,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [secondaryContextNode, splitOrbPosition]);
+
+  const handleSplitOrbPointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = splitOrbDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || typeof window === 'undefined') return;
+    const deltaX = event.clientX - drag.pointerStartX;
+    const deltaY = event.clientY - drag.pointerStartY;
+    if (Math.hypot(deltaX, deltaY) > 4) drag.moved = true;
+    const edge = 145;
+    setSplitOrbPosition({
+      x: Math.max(edge, Math.min(window.innerWidth - edge, drag.orbStartX + deltaX)),
+      y: Math.max(edge, Math.min(window.innerHeight - edge, drag.orbStartY + deltaY)),
+    });
+  }, []);
+
+  const handleSplitOrbPointerUp = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = splitOrbDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    suppressSplitOrbClickRef.current = drag.moved;
+    splitOrbDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const handleOrbClick = React.useCallback((event: React.MouseEvent) => {
+    if (suppressSplitOrbClickRef.current) {
+      suppressSplitOrbClickRef.current = false;
+      event.stopPropagation();
+      return;
+    }
+    togglePresenceMode(event);
+  }, [togglePresenceMode]);
+
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
     if (voiceState === 'recording_once') setVoiceState('idle');
@@ -4683,13 +4747,15 @@ ${data.transcription}`, {
       </div>
 
         <main
-          className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative pointer-events-auto z-10 ${
+          className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative ${secondaryContextNode ? 'pointer-events-none z-[60]' : 'pointer-events-auto z-10'} ${
             isAtelieActive || isEstudioActive
               ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0'
               : 'overflow-hidden max-w-5xl w-full mt-2 md:mt-6 mb-2 md:mb-4 pb-28'
           }`}
           style={{
-            transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !secondaryContextId)
+            transform: secondaryContextId
+              ? 'none'
+              : (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
               ? 'translateX(calc(-22vw + 1.5rem))'
               : 'translateX(0)',
             transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -4711,21 +4777,33 @@ ${data.transcription}`, {
           </div>
           
           <div 
-            onClick={togglePresenceMode}
+            onClick={handleOrbClick}
+            onPointerDown={secondaryContextNode ? handleSplitOrbPointerDown : undefined}
+            onPointerMove={secondaryContextNode ? handleSplitOrbPointerMove : undefined}
+            onPointerUp={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
+            onPointerCancel={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
             className={isAtelieActive || isEstudioActive
               ? `fixed bottom-[18px] left-1/2 translate-x-[200px] sm:translate-x-[240px] md:translate-x-[300px] z-50 cursor-pointer pointer-events-auto transition-all duration-[1200ms] ease-in-out scale-[0.22] origin-center opacity-85 hover:opacity-100 filter-none`
               : secondaryContextNode
-              ? `fixed top-[4.35rem] left-1/2 -translate-x-1/2 z-50 w-10 h-10 flex items-center justify-center select-none transition-all duration-700 ease-out origin-center ${!presenceMode ? 'cursor-pointer' : ''}`
+              ? `fixed z-50 w-64 h-64 flex items-center justify-center select-none touch-none cursor-grab active:cursor-grabbing pointer-events-auto transition-[filter] duration-500 ease-out origin-center`
               : `relative w-36 h-36 md:w-64 md:h-64 flex items-center justify-center shrink-0 select-none transition-all duration-[1200ms] ease-in-out origin-center ${!presenceMode ? 'cursor-pointer' : ''} ${
                   presenceMode 
                     ? 'z-20 translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]' 
                     : 'mt-10 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 z-10 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
                 }`
             }
+            style={secondaryContextNode ? {
+              left: splitOrbPosition ? `${splitOrbPosition.x}px` : '50%',
+              top: splitOrbPosition ? `${splitOrbPosition.y}px` : '50%',
+              transform: 'translate(-50%, -50%)',
+            } : undefined}
           >
+            {secondaryContextNode && (
+              <div className="absolute inset-[-42px] rounded-full bg-[#0c0c0c]/55 backdrop-blur-2xl shadow-[0_0_70px_rgba(0,0,0,0.82)] pointer-events-none" />
+            )}
             <div className={`absolute flex items-center justify-center transition-transform duration-1000 ease-in-out origin-center ${
               secondaryContextNode && !(isAtelieActive || isEstudioActive)
-                ? 'scale-[0.085]'
+                ? 'scale-[0.55]'
                 : presenceMode && !(isAtelieActive || isEstudioActive) ? 'scale-[0.75] md:scale-100' : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]'
             }`}>
               <div 
@@ -5305,7 +5383,7 @@ ${data.transcription}`, {
               grandes (>15") ainda pendente de decisão do Fe. */}
           {secondaryContextNode && (
             <>
-              <div className="hidden md:flex fixed top-24 bottom-32 left-20 right-[calc(50%+0.75rem)] z-40 pointer-events-auto flex-col animate-fade-in">
+              <div className="hidden md:flex fixed top-24 bottom-36 left-20 right-[calc(50%+1.25rem)] z-40 pointer-events-auto flex-col animate-fade-in">
                 <SecondaryChatPane
                   contextNode={activeContextNode}
                   areaIcon={getAreaIcon({ id: activeContextNode.areaId, name: dynamicAreas.find(a => a.id === activeContextNode.areaId)?.name || '' })}
@@ -5318,7 +5396,7 @@ ${data.transcription}`, {
                   onFocus={() => setFocusedPaneSide('left')}
                 />
               </div>
-              <div className="hidden md:flex fixed top-24 bottom-32 left-[calc(50%+0.75rem)] right-20 z-40 pointer-events-auto flex-col animate-fade-in">
+              <div className="hidden md:flex fixed top-24 bottom-36 left-[calc(50%+1.25rem)] right-20 z-40 pointer-events-auto flex-col animate-fade-in">
                 <SecondaryChatPane
                   contextNode={secondaryContextNode}
                   areaIcon={getAreaIcon({ id: secondaryContextNode.areaId, name: dynamicAreas.find(a => a.id === secondaryContextNode.areaId)?.name || '' })}
