@@ -120,3 +120,10 @@ reconstruir o frontend e republicar apenas o Firebase Hosting.
 Reverter somente o commit desta alteração, executar `npm run build` e publicar
 apenas o Firebase Hosting. Não altera Firestore, Functions, credenciais ou o
 relay da VPS.
+
+### Ajuste de responsividade
+
+- o primeiro checkpoint passa a ser elegível após 3s; os seguintes mantêm 10s
+  de distância mínima;
+- a Orbe preserva o estado visual de trabalho enquanto a Gemini aguarda o
+  retorno do cérebro da Lótus.

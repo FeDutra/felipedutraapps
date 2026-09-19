@@ -116,8 +116,10 @@ export class GeminiLiveClient {
   private lastNarrationCompletedAt = 0;
   private lastCheckpointSpokenAt = 0;
 
-  private static readonly FIRST_CHECKPOINT_DELAY_MS = 4_500;
-  private static readonly MIN_CHECKPOINT_GAP_MS = 12_000;
+  // Equivale ao soft timeout recomendado para conversa: presença cedo, sem
+  // virar relógio. O espaçamento longo vale apenas entre marcos posteriores.
+  private static readonly FIRST_CHECKPOINT_DELAY_MS = 3_000;
+  private static readonly MIN_CHECKPOINT_GAP_MS = 10_000;
 
   private closedByUser = false;
 

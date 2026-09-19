@@ -1748,6 +1748,7 @@ export default function LivePage() {
   );
 
   const [voiceState, setVoiceState] = React.useState<UnifiedVoiceState>('idle');
+  const [presenceWorkActive, setPresenceWorkActive] = React.useState(false);
   const [recordingElapsedSeconds, setRecordingElapsedSeconds] = React.useState(0);
 
   const voiceModeRef = React.useRef<VoiceMode>('off');
@@ -3504,6 +3505,7 @@ export default function LivePage() {
       voiceSessionControllerRef.current = null;
     }
     setPresenceMode(false);
+    setPresenceWorkActive(false);
     setVoiceMode('off');
     voiceModeRef.current = 'off';
     setVoiceState('idle');
@@ -4038,6 +4040,9 @@ ${data.transcription}`, {
         onError: (err) => {
           setVoiceError(err);
         },
+        onPresenceWorkChange: (working) => {
+          setPresenceWorkActive(working);
+        },
         onTextReceived: (userText, assistantText) => {
           // Apenas adiciona ao log do chat se necessário (geralmente handleSendMessage já cria as mensagens)
         },
@@ -4432,6 +4437,7 @@ ${data.transcription}`, {
   // Animation resolver
   const getLotusAnimClass = () => {
     if (voiceMode === 'presence') {
+      if (presenceWorkActive && voiceState !== 'speaking') return 'lotus-waiting-anim';
       if (voiceState === 'presence_listening') return 'lotus-listening-anim';
       if (voiceState === 'transcribing' || voiceState === 'submitting') return 'lotus-thinking-anim';
       if (voiceState === 'waiting_lotus') return 'lotus-waiting-anim';

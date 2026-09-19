@@ -16,6 +16,8 @@ export interface VoiceSessionConfig {
   onStateChange: (state: VoiceSessionState) => void;
   onTextReceived: (userText: string, assistantText: string) => void;
   onError: (error: string) => void;
+  /** Mantém a Orbe viva visualmente enquanto o cérebro da Lótus trabalha. */
+  onPresenceWorkChange?: (working: boolean) => void;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
   handleSendMessage: (text: string, options: { originMode: 'presence' }) => Promise<{ responseText: string } | null | void>;
   /**
@@ -566,6 +568,7 @@ export class VoiceSessionController {
       },
       onUserTurnReady: async (userText) => {
         this.log('GEMINI_LIVE_USER_TURN_READY', { userText });
+        this.config.onPresenceWorkChange?.(true);
         try {
           // handleSendMessage persiste o pedido e devolve antes do OpenClaw
           // concluir. A resposta real chega pelo listener canônico do
@@ -573,6 +576,7 @@ export class VoiceSessionController {
           await this.config.handleSendMessage(userText, { originMode: 'presence' });
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
+          this.config.onPresenceWorkChange?.(false);
           this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.');
         }
       }
@@ -592,7 +596,9 @@ export class VoiceSessionController {
 
   /** Entrega à voz um resultado já produzido pela Lótus/OpenClaw. */
   public narratePresenceResult(resultText: string) {
-    return this.geminiLiveClient?.sendResultText(resultText) ?? false;
+    const accepted = this.geminiLiveClient?.sendResultText(resultText) ?? false;
+    if (accepted) this.config.onPresenceWorkChange?.(false);
+    return accepted;
   }
 
   public isGeminiLiveActive() {
@@ -609,6 +615,7 @@ export class VoiceSessionController {
     if (this.geminiLiveClient) {
       this.geminiLiveClient.stop();
       this.geminiLiveClient = null;
+      this.config.onPresenceWorkChange?.(false);
       return;
     }
 
