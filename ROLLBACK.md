@@ -92,3 +92,14 @@ de voz e split devem ser preservadas ao reverter.
 Reverter apenas o commit final desta coreografia com `git revert <commit>`,
 executar `npm run build` e republicar somente o Firebase Hosting. Não há mudança
 em Firestore, Functions, credenciais ou runtime da VPS.
+
+### Refinamento contínuo da entrada — 19/09/2026
+
+- as orbes provisórias do Suspense e da autenticação foram removidas;
+- nascimento, foco, escala, deslocamento e dissipação usam uma única curva
+  `ease-in-out` declarada no CSS;
+- a troca entre nascimento e viagem responde ao fim real da animação, com
+  cronômetro apenas como proteção de contingência.
+
+Para reverter somente este refinamento, usar `git revert <commit-da-entrada-contínua>`,
+reconstruir o frontend e republicar apenas o Firebase Hosting.

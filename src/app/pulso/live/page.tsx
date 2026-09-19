@@ -14,12 +14,7 @@ export const viewport: Viewport = {
 export default function Page() {
   return (
     <React.Suspense fallback={
-      <div className="theme-her h-[100dvh] flex items-center justify-center overflow-hidden" aria-label="Abrindo Pulso">
-        <div className="pulso-auth-lotus" aria-hidden="true">
-          <div className="pulso-auth-lotus-halo" />
-          <div className="pulso-auth-lotus-ring" />
-        </div>
-      </div>
+      <div className="theme-her h-[100dvh] overflow-hidden" aria-label="Abrindo Pulso" />
     }>
       <LivePage />
     </React.Suspense>

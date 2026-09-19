@@ -1177,22 +1177,28 @@ export default function LivePage() {
     suppressSplitOrbClickRef.current = false;
   }, [secondaryContextId]);
 
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const travelTimer = window.setTimeout(
-      () => setOrbEntryPhase('travel'),
-      reduceMotion ? 40 : 1220
-    );
-    const settleTimer = window.setTimeout(
-      () => setOrbEntryPhase('settled'),
-      reduceMotion ? 90 : 2180
-    );
-    return () => {
-      window.clearTimeout(travelTimer);
-      window.clearTimeout(settleTimer);
-    };
+  const handleOrbBirthEnd = React.useCallback((event: React.AnimationEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target || event.animationName !== 'lotus-presence-birth') return;
+    setOrbEntryPhase(current => current === 'birth' ? 'travel' : current);
   }, []);
+
+  const handleOrbTravelEnd = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target || event.propertyName !== 'transform') return;
+    setOrbEntryPhase(current => current === 'travel' ? 'settled' : current);
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || orbEntryPhase === 'settled') return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Safety net only: the actual handoff is driven by animation/transition end.
+    const fallbackTimer = window.setTimeout(
+      () => setOrbEntryPhase(current => (
+        current === 'birth' ? 'travel' : current === 'travel' ? 'settled' : current
+      )),
+      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : 1800
+    );
+    return () => window.clearTimeout(fallbackTimer);
+  }, [orbEntryPhase]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -4866,7 +4872,9 @@ ${data.transcription}`, {
           onPointerUp={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
           onPointerCancel={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
           onContextMenu={secondaryContextNode ? handleSplitOrbContextMenu : undefined}
+          onTransitionEnd={handleOrbTravelEnd}
           data-entry-phase={orbEntryPhase}
+          data-dragging={isSplitOrbDragging ? 'true' : 'false'}
           className={`lotus-orb-presence fixed left-0 top-0 z-[65] w-64 h-64 flex items-center justify-center select-none touch-none outline-none ${
             secondaryContextNode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
           } ${orbEntryPhase !== 'settled' ? 'pointer-events-none' : 'pointer-events-auto'} ${
@@ -4874,18 +4882,16 @@ ${data.transcription}`, {
           }`}
           style={{
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
-            transition: orbEntryPhase === 'birth' || isSplitOrbDragging
-              ? 'none'
-              : isMobileMenuOpen
-                ? 'opacity 200ms ease'
-                : 'transform 840ms cubic-bezier(0.22, 1, 0.36, 1), opacity 560ms ease, filter 840ms ease',
           }}
         >
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
-          <div className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center">
-            <div className={`absolute flex items-center justify-center origin-center transition-transform duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] ${orbVisualScaleClass}`}>
+          <div
+            className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
+            onAnimationEnd={handleOrbBirthEnd}
+          >
+            <div className={`lotus-orb-scale absolute flex items-center justify-center origin-center ${orbVisualScaleClass}`}>
               <div
-                className={`w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] bg-transparent transition-all duration-1000 ease-in-out flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`}
+                className={`lotus-orb-membrane w-[422px] h-[422px] rounded-full border-[19px] border-[#fbf9f5] bg-transparent flex flex-col items-center justify-center p-8 text-center ${getLotusAnimClass()}`}
               />
               {voiceMode === 'recording_meeting' && (
                 <div className="absolute -bottom-20 flex flex-col items-center pointer-events-none">

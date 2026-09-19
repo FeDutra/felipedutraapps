@@ -16,6 +16,10 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
   difusa e escurecimento radial suave, sem disco, recorte ou borda circular visível.
 - A abertura nasce de blur e foco, pulsa uma vez e então se desloca até a posição
   de repouso da interface real.
+- O nascimento começa em escala e opacidade zero. Blur, luz, escala, opacidade,
+  deslocamento e dissipação usam uma curva simétrica `ease-in-out` declarada no
+  CSS; não há saltos de keyframe, curvas abruptas ou troca de instância entre
+  fallback, autenticação e interface.
 - O movimento em repouso continua sutil e orgânico, sem competir com o conteúdo.
 - `prefers-reduced-motion` reduz a abertura e todas as travessias a transições
   praticamente instantâneas.
@@ -24,7 +28,8 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 
 - A instância persistente vive em uma camada fixa acima das superfícies.
 - Cada composição fornece apenas uma âncora/destino; não monta outra orbe local.
-- Transições entre destinos usam a mesma curva amortecida do sistema.
+- Transições entre destinos usam a mesma curva `ease-in-out` do sistema,
+  centralizada no CSS.
 - Arraste em split move a própria instância e desativa interpolação apenas durante
   o gesto; ao encerrar, a continuidade volta a ser aplicada.
 - Novos modos e painéis devem declarar para onde a presença se desloca antes de
@@ -37,4 +42,3 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 3. Abrir e fechar split e Mesa, verificando a trajetória contínua.
 4. Confirmar que texto/conteúdo continua perceptível sob o halo, sem círculo preto.
 5. Testar `prefers-reduced-motion`.
-

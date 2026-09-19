@@ -50,12 +50,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   if (loading) {
     return (
-      <div className="theme-her min-h-screen flex items-center justify-center overflow-hidden" aria-label="Abrindo Pulso">
-        <div className="pulso-auth-lotus" aria-hidden="true">
-          <div className="pulso-auth-lotus-halo" />
-          <div className="pulso-auth-lotus-ring" />
-        </div>
-      </div>
+      <div className="theme-her min-h-screen overflow-hidden" aria-label="Abrindo Pulso" />
     );
   }
 
