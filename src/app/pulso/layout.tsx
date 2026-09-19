@@ -37,6 +37,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     const handleThemeChange = (e: any) => {
       setPulsoTheme(e.detail);
       document.body.classList.toggle('pulso-theme-black', e.detail === 'black');
+      document.documentElement.classList.toggle('pulso-theme-black-preload', e.detail === 'black');
       let metaTheme = document.querySelector('meta[name="theme-color"]');
       if (!metaTheme) {
         metaTheme = document.createElement('meta');
@@ -46,6 +47,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
       metaTheme.setAttribute('content', e.detail === 'black' ? '#0f0f0f' : '#b8283e');
     };
     document.body.classList.toggle('pulso-theme-black', saved === 'black');
+    document.documentElement.classList.toggle('pulso-theme-black-preload', saved === 'black');
     let metaTheme = document.querySelector('meta[name="theme-color"]');
     if (!metaTheme) {
       metaTheme = document.createElement('meta');

@@ -72,3 +72,23 @@ Baseline reversível: `47d9dd48` em `main`.
 Após o commit desta correção, usar `git revert <commit-da-presenca-continua>`,
 executar `npm run build` e republicar somente o Firebase Hosting. A mudança não
 altera Firestore, funções, credenciais nem runtime da VPS.
+
+---
+
+# Rollback — coreografia de abertura da Pulso (19/09/2026)
+
+Baseline reversível: `f9bf6a93` para a presença visual; alterações posteriores
+de voz e split devem ser preservadas ao reverter.
+
+## Escopo
+
+- esconder validação e hidratação atrás de uma abertura visual limpa;
+- separar nascimento, viagem e acomodação da Lótus;
+- revelar a interface durante a viagem, sem exibi-la sob a orbe no nascimento;
+- substituir a superfície circular de blur por névoa radial sem perímetro.
+
+## Reversão
+
+Reverter apenas o commit final desta coreografia com `git revert <commit>`,
+executar `npm run build` e republicar somente o Firebase Hosting. Não há mudança
+em Firestore, Functions, credenciais ou runtime da VPS.

@@ -13,7 +13,14 @@ export const viewport: Viewport = {
 
 export default function Page() {
   return (
-    <React.Suspense fallback={<div className="h-[100dvh] bg-[#111] flex items-center justify-center text-[#fbf9f5]/50 text-xs tracking-widest lowercase">sintonizando lótus live...</div>}>
+    <React.Suspense fallback={
+      <div className="theme-her h-[100dvh] flex items-center justify-center overflow-hidden" aria-label="Abrindo Pulso">
+        <div className="pulso-auth-lotus" aria-hidden="true">
+          <div className="pulso-auth-lotus-halo" />
+          <div className="pulso-auth-lotus-ring" />
+        </div>
+      </div>
+    }>
       <LivePage />
     </React.Suspense>
   );
