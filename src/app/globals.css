@@ -209,6 +209,7 @@ body {
   --coral-muted-her: rgba(251, 249, 245, 0.75);
   --coral-deep-her: #ffffff;
   --lotus-motion-ease: ease-in-out;
+  --lotus-travel-ease: cubic-bezier(0.65, 0, 0.35, 1);
   background-color: var(--background-her);
   color: var(--foreground-her);
 }
@@ -227,19 +228,38 @@ body {
   }
 }
 
+@keyframes lotus-presence-breathe {
+  0%, 50%, 100% {
+    transform: scale(1);
+    filter: blur(0) brightness(1);
+  }
+  25%, 75% {
+    transform: scale(1.022);
+    filter: blur(0) brightness(1.045);
+  }
+}
+
 .lotus-orb-visual {
-  animation: lotus-presence-birth 2300ms var(--lotus-motion-ease) both;
   will-change: transform, filter, opacity;
+}
+
+.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-visual {
+  animation: lotus-presence-birth 2300ms var(--lotus-motion-ease) both;
+}
+
+.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-visual {
+  animation: lotus-presence-breathe 2000ms var(--lotus-motion-ease) both;
 }
 
 .lotus-orb-presence {
   transition-property: transform, opacity, filter;
   transition-duration: 1500ms, 520ms, 1500ms;
-  transition-timing-function: var(--lotus-motion-ease);
+  transition-timing-function: var(--lotus-travel-ease), var(--lotus-motion-ease), var(--lotus-travel-ease);
   will-change: transform, opacity, filter;
 }
 
 .lotus-orb-presence[data-entry-phase='birth'],
+.lotus-orb-presence[data-entry-phase='breathe'],
 .lotus-orb-presence[data-dragging='true'] {
   transition: none;
 }
@@ -283,6 +303,12 @@ body {
   opacity: 0.42;
   filter: blur(42px);
   transform: scale(0.82);
+}
+
+.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-veil {
+  opacity: 0.62;
+  filter: blur(30px);
+  transform: scale(0.98);
 }
 
 .pulso-entry-curtain {

@@ -14,8 +14,9 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 - O corpo da orbe é transparente: apenas a membrana branca e sua luz são opacas.
 - Qualquer separação do conteúdo sob a orbe usa somente blur gaussiano, sombra
   difusa e escurecimento radial suave, sem disco, recorte ou borda circular visível.
-- A abertura nasce de blur e foco, pulsa uma vez e então se desloca até a posição
-  de repouso da interface real.
+- A abertura nasce de blur e foco, permanece no centro por dois segundos com
+  duas respirações curtas e então se desloca até a posição de repouso da
+  interface real. A pausa é viva, não um congelamento.
 - O nascimento começa em escala e opacidade zero. Blur, luz, escala, opacidade,
   deslocamento e dissipação usam uma curva simétrica `ease-in-out` declarada no
   CSS; não há saltos de keyframe, curvas abruptas ou troca de instância entre

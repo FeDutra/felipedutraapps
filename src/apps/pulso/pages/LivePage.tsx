@@ -964,7 +964,7 @@ export default function LivePage() {
   const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
   const [splitOrbPosition, setSplitOrbPosition] = React.useState<{ x: number; y: number } | null>(null);
   const [isSplitOrbDragging, setIsSplitOrbDragging] = React.useState(false);
-  const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'travel' | 'settled'>('birth');
+  const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'breathe' | 'travel' | 'settled'>('birth');
   const [orbHomeCenter, setOrbHomeCenter] = React.useState({ x: 512, y: 384 });
   const orbHomeAnchorRef = React.useRef<HTMLDivElement | null>(null);
   const splitOrbDragRef = React.useRef<{
@@ -1177,9 +1177,15 @@ export default function LivePage() {
     suppressSplitOrbClickRef.current = false;
   }, [secondaryContextId]);
 
-  const handleOrbBirthEnd = React.useCallback((event: React.AnimationEvent<HTMLDivElement>) => {
-    if (event.currentTarget !== event.target || event.animationName !== 'lotus-presence-birth') return;
-    setOrbEntryPhase(current => current === 'birth' ? 'travel' : current);
+  const handleOrbEntryAnimationEnd = React.useCallback((event: React.AnimationEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target) return;
+    if (event.animationName === 'lotus-presence-birth') {
+      setOrbEntryPhase(current => current === 'birth' ? 'breathe' : current);
+      return;
+    }
+    if (event.animationName === 'lotus-presence-breathe') {
+      setOrbEntryPhase(current => current === 'breathe' ? 'travel' : current);
+    }
   }, []);
 
   const handleOrbTravelEnd = React.useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
@@ -1193,9 +1199,9 @@ export default function LivePage() {
     // Safety net only: the actual handoff is driven by animation/transition end.
     const fallbackTimer = window.setTimeout(
       () => setOrbEntryPhase(current => (
-        current === 'birth' ? 'travel' : current === 'travel' ? 'settled' : current
+        current === 'birth' ? 'breathe' : current === 'breathe' ? 'travel' : current === 'travel' ? 'settled' : current
       )),
-      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : 1800
+      reduceMotion ? 80 : orbEntryPhase === 'birth' ? 2600 : orbEntryPhase === 'breathe' ? 2300 : 1800
     );
     return () => window.clearTimeout(fallbackTimer);
   }, [orbEntryPhase]);
@@ -4435,7 +4441,7 @@ ${data.transcription}`, {
   };
 
   const isWorkspaceMode = isAtelieActive || isEstudioActive;
-  const orbHasEntered = orbEntryPhase !== 'birth';
+  const orbHasEntered = orbEntryPhase === 'travel' || orbEntryPhase === 'settled';
   const orbTarget = !orbHasEntered
     ? { x: windowWidth / 2, y: windowHeight / 2 }
     : secondaryContextNode
@@ -4887,7 +4893,7 @@ ${data.transcription}`, {
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
-            onAnimationEnd={handleOrbBirthEnd}
+            onAnimationEnd={handleOrbEntryAnimationEnd}
           >
             <div className={`lotus-orb-scale absolute flex items-center justify-center origin-center ${orbVisualScaleClass}`}>
               <div
