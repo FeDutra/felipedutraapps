@@ -300,9 +300,9 @@ body {
   filter: blur(30px);
   opacity: 0.62;
   transform: scale(0.98);
-  transition: opacity 1100ms var(--lotus-motion-ease),
-    transform 1500ms var(--lotus-motion-ease),
-    filter 1500ms var(--lotus-motion-ease);
+  transition: opacity 650ms var(--lotus-motion-ease),
+    transform 800ms var(--lotus-motion-ease),
+    filter 800ms var(--lotus-motion-ease);
   will-change: opacity, transform, filter;
 }
 
