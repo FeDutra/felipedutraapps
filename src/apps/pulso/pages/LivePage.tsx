@@ -2023,19 +2023,20 @@ export default function LivePage() {
     }, null, 2);
   };
 
-  const handleHearClick = React.useCallback((msg: Message) => {
-    if (playingMsgId === msg.id) {
+  const handleSpeakText = React.useCallback((playbackId: string, text: string) => {
+    if (playingMsgId === playbackId) {
       ttsAdapter.cancel();
       setPlayingMsgId(null);
       setPlayingState('stopped');
     } else {
-      setPlayingMsgId(msg.id);
+      ttsAdapter.cancel();
+      setPlayingMsgId(playbackId);
       setPlayingState('preparing');
       ttsAdapter.speak(
-        msg.text,
+        text,
         () => {
           setPlayingMsgId(prev => {
-            if (prev === msg.id) {
+            if (prev === playbackId) {
               setPlayingState('playing');
             }
             return prev;
@@ -2043,7 +2044,7 @@ export default function LivePage() {
         },
         () => {
           setPlayingMsgId(prev => {
-            if (prev === msg.id) {
+            if (prev === playbackId) {
               setPlayingState('stopped');
               return null;
             }
@@ -2052,7 +2053,7 @@ export default function LivePage() {
         },
         () => {
           setPlayingMsgId(prev => {
-            if (prev === msg.id) {
+            if (prev === playbackId) {
               setPlayingState('preparing');
             }
             return prev;
@@ -2061,6 +2062,10 @@ export default function LivePage() {
       );
     }
   }, [playingMsgId, ttsAdapter]);
+
+  const handleHearClick = React.useCallback((msg: Message) => {
+    handleSpeakText(msg.id, msg.text);
+  }, [handleSpeakText]);
 
   const handleCopyText = React.useCallback((msg: Message) => {
     const visibleText = ttsAdapter.normalizeTextForSpeech(msg.text);
@@ -4495,6 +4500,24 @@ ${data.transcription}`, {
         ? 'scale-[0.75] md:scale-100'
         : 'scale-[0.38] md:scale-50 lg:scale-[0.55] 2xl:scale-[0.54]';
 
+  // A orbe vive acima do campo conversacional, mas nunca acima de uma
+  // superfície integral de trabalho. No mobile essas superfícies ocupam a
+  // viewport e são translúcidas; apenas baixar o z-index ainda deixaria o aro
+  // vazando visualmente por trás. Por isso a mesma instância recua com fade,
+  // sem ser desmontada, enquanto qualquer modal/drawer integral está aberto.
+  const isMobileOrbObscured = Boolean(
+    isMobileMenuOpen
+    || isHeaderMenuOpen
+    || isAttachmentMenuOpen
+    || isSidebarOpen
+    || isTtsSettingsOpen
+    || areaConfigPanelAreaId
+    || isArcaOpen
+    || previewImage
+    || previewPdf
+    || (isMesaOpen && !isMesaCollapsed)
+  );
+
 
   return (
     <div 
@@ -4917,7 +4940,7 @@ ${data.transcription}`, {
           className={`lotus-orb-presence fixed left-0 top-0 z-[65] w-64 h-64 flex items-center justify-center select-none touch-none outline-none ${
             secondaryContextNode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
           } ${orbEntryPhase !== 'settled' ? 'pointer-events-none' : 'pointer-events-auto'} ${
-            isMobileMenuOpen ? 'opacity-0 !pointer-events-none md:opacity-100' : ''
+            isMobileOrbObscured ? 'max-md:opacity-0 max-md:!pointer-events-none' : ''
           }`}
           style={{
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
@@ -5514,7 +5537,7 @@ ${data.transcription}`, {
       
           {/* Mesa Panel (Split Screen) - Global Right Half */}
           {isMesaOpen && activeMesaArtifact && (
-            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-50 transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
+            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
               windowWidth < 768 
                 ? `left-0 px-4 w-full ${isMesaCollapsed ? 'transform translate-x-full pointer-events-none' : ''}` 
                 : `w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] ${isMesaCollapsed ? 'transform translate-x-[calc(100%-12px)] md:translate-x-[calc(100%-16px)]' : ''}`
@@ -5522,13 +5545,21 @@ ${data.transcription}`, {
               <div className="w-full h-full overflow-hidden">
                 <MesaPanel
                   isOpen={isMesaOpen}
-                  onClose={() => setIsMesaOpen(false)}
+                  onClose={() => {
+                    const mesaPlaybackId = `mesa:${activeMesaArtifact.id}`;
+                    if (playingMsgId === mesaPlaybackId) {
+                      handleSpeakText(mesaPlaybackId, activeMesaArtifact.content);
+                    }
+                    setIsMesaOpen(false);
+                  }}
                   artifact={activeMesaArtifact}
                   onSave={async (id, content) => {
                     setActiveMesaArtifact(prev => prev ? { ...prev, content } : null);
                   }}
                   isCollapsed={isMesaCollapsed}
                   onToggleCollapse={() => setIsMesaCollapsed(!isMesaCollapsed)}
+                  speechState={playingMsgId === `mesa:${activeMesaArtifact.id}` ? playingState : 'stopped'}
+                  onToggleSpeech={(id, content) => handleSpeakText(`mesa:${id}`, content)}
                 />
               </div>
             </div>
@@ -5979,7 +6010,7 @@ ${data.transcription}`, {
 
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 z-50 bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col text-left md:hidden animate-fade-in"
+          className="fixed inset-0 z-[70] bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col text-left md:hidden animate-fade-in"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div 
@@ -6139,14 +6170,14 @@ ${data.transcription}`, {
 
       {(isSidebarOpen || isTtsSettingsOpen) && (
         <div 
-          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] cursor-pointer"
+          className="fixed inset-0 z-[69] bg-black/10 backdrop-blur-[2px] cursor-pointer"
           onClick={() => { setIsSidebarOpen(false); setIsTtsSettingsOpen(false); }}
         />
       )}
 
       {isSidebarOpen && (
         <div 
-          className="fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5] animate-fade-in"
+          className="fixed top-4 right-4 bottom-4 z-[70] w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5] animate-fade-in"
         >
           <div className="space-y-8">
             <div className="flex items-center justify-between border-b border-white/15 pb-4">
@@ -6256,7 +6287,7 @@ ${data.transcription}`, {
 
       {isTtsSettingsOpen && (
         <div 
-          className="fixed top-4 right-4 bottom-4 z-50 w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5] animate-fade-in"
+          className="fixed top-4 right-4 bottom-4 z-[70] w-80 md:w-96 bg-black/10 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-6 overflow-y-auto no-scrollbar flex flex-col justify-between text-left text-[#fbf9f5] animate-fade-in"
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-white/15 pb-4">

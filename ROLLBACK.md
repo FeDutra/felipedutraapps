@@ -127,3 +127,22 @@ relay da VPS.
   de distância mínima;
 - a Orbe preserva o estado visual de trabalho enquanto a Gemini aguarda o
   retorno do cérebro da Lótus.
+
+---
+
+# Rollback — camadas da Mesa e leitura por voz (20/09/2026)
+
+Baseline reversível: `dc6c012a` em `origin/main`.
+
+## Escopo
+
+- impedir a orbe de cobrir Mesa, menus, drawers e pré-visualizações integrais;
+- preservar a mesma instância da orbe, com recuo suave apenas no mobile;
+- disponibilizar na Mesa a mesma leitura TTS/Kokoro usada nas mensagens;
+- elevar superfícies modais da Pulso acima da camada reservada à orbe.
+
+## Reversão
+
+Reverter somente o commit desta alteração, executar `npm run build` e publicar
+apenas o Firebase Hosting. A mudança não altera Firestore, Functions,
+credenciais, preferências de voz nem runtime da VPS.

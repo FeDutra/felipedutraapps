@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { X, Copy, Download, Edit3, Save, Share2, ChevronRight } from 'lucide-react';
+import { X, Copy, Download, Edit3, Save, ChevronRight, Square, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export interface MesaArtifact {
@@ -18,9 +18,20 @@ interface MesaPanelProps {
   onSave?: (id: string, content: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  speechState?: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
+  onToggleSpeech?: (id: string, content: string) => void;
 }
 
-export function MesaPanel({ isOpen, onClose, artifact, onSave, isCollapsed, onToggleCollapse }: MesaPanelProps) {
+export function MesaPanel({
+  isOpen,
+  onClose,
+  artifact,
+  onSave,
+  isCollapsed,
+  onToggleCollapse,
+  speechState = 'stopped',
+  onToggleSpeech,
+}: MesaPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [isCopied, setIsCopied] = useState(false);
@@ -69,17 +80,36 @@ export function MesaPanel({ isOpen, onClose, artifact, onSave, isCollapsed, onTo
         className="h-full w-full bg-transparent backdrop-blur-xl flex flex-col relative overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-light tracking-widest text-white/50 lowercase">
+        <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <span className="text-[10px] font-light tracking-widest text-white/50 lowercase shrink-0">
               [ mesa ]
             </span>
-            <h2 className="text-sm font-light text-white tracking-wide">
+            <h2 className="text-sm font-light text-white tracking-wide truncate">
               {artifact.title}
             </h2>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {onToggleSpeech && !isEditing && (
+              <button
+                onClick={() => onToggleSpeech(artifact.id, artifact.content)}
+                className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
+                title={speechState === 'playing' ? 'Parar leitura' : speechState === 'preparing' ? 'Preparando áudio...' : 'Ouvir documento'}
+                aria-label={speechState === 'playing' ? 'Parar leitura do documento' : 'Ouvir documento'}
+              >
+                {speechState === 'playing' ? (
+                  <Square size={14} strokeWidth={1.5} />
+                ) : (
+                  <Volume2
+                    size={14}
+                    strokeWidth={1.5}
+                    className={speechState === 'preparing' ? 'animate-pulse text-white/80' : ''}
+                  />
+                )}
+              </button>
+            )}
+
             {!isEditing ? (
               <button 
                 onClick={() => setIsEditing(true)}

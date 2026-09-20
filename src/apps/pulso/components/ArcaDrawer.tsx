@@ -97,7 +97,7 @@ export default function ArcaDrawer({ isOpen, onClose, contextId }: ArcaDrawerPro
     <>
       {/* Backdrop Etereo */}
       <div 
-        className="fixed inset-0 z-50 transition-opacity duration-500 ease-in-out cursor-pointer"
+        className="fixed inset-0 z-[70] transition-opacity duration-500 ease-in-out cursor-pointer"
         style={{
           background: 'radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%)',
           backdropFilter: 'blur(2px)'
@@ -107,7 +107,7 @@ export default function ArcaDrawer({ isOpen, onClose, contextId }: ArcaDrawerPro
       
       {/* Drawer */}
       <div 
-        className="fixed top-0 right-0 h-full w-[90%] md:w-[400px] z-[60] flex flex-col pointer-events-auto transform transition-transform duration-700 ease-out translate-x-0"
+        className="fixed top-0 right-0 h-full w-[90%] md:w-[400px] z-[71] flex flex-col pointer-events-auto transform transition-transform duration-700 ease-out translate-x-0"
         style={{
           background: 'transparent',
           backdropFilter: 'blur(16px) saturate(180%)',
