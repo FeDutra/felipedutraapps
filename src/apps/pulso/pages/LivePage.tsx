@@ -5033,7 +5033,17 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
           }}
         >
-          <div className="lotus-orb-backdrop-blur absolute inset-[-58px] pointer-events-none" />
+          {/* Blur gaussiano de verdade (backdrop-filter, sem tingir de cinza) —
+              4 discos transparentes concêntricos, sem mask-image (essa
+              combinação com backdrop-filter não renderizava no device do Fe,
+              só aparecia um véu escuro plano). Onde os discos se sobrepõem
+              (centro) o blur soma e fica mais forte; na borda de fora
+              (-58px, mesmo alcance do halo antigo) só o disco mais fraco
+              atua, então cai a quase zero sem beirada visível. */}
+          <div className="absolute inset-[-58px] rounded-full backdrop-blur-sm pointer-events-none" />
+          <div className="absolute inset-[-38px] rounded-full backdrop-blur-md pointer-events-none" />
+          <div className="absolute inset-[-20px] rounded-full backdrop-blur-lg pointer-events-none" />
+          <div className="absolute inset-[-2px] rounded-full backdrop-blur-2xl pointer-events-none" />
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"

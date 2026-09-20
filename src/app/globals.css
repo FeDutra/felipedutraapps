@@ -292,16 +292,6 @@ body {
     opacity 1000ms var(--lotus-motion-ease);
 }
 
-.lotus-orb-backdrop-blur {
-  border-radius: 9999px;
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  -webkit-mask-image: radial-gradient(circle at center, black 0%, black 55%, transparent 100%);
-  mask-image: radial-gradient(circle at center, black 0%, black 55%, transparent 100%);
-  transition: opacity 650ms var(--lotus-motion-ease);
-  will-change: backdrop-filter;
-}
-
 .lotus-orb-veil {
   border-radius: 9999px;
   background: radial-gradient(
@@ -313,7 +303,11 @@ body {
     transparent 80%
   );
   filter: blur(30px);
-  opacity: 0.62;
+  /* Reduzido de 0.62 pra 0.35: com o blur gaussiano real (backdrop-filter,
+     sem tinta — ver os discos .lotus-orb-blur-* no JSX) entrando por cima,
+     esse véu só precisa dar um leve contraste de contorno. Em 0.62 ele
+     sozinho já lia como disco cinza chapado. */
+  opacity: 0.35;
   transform: scale(0.98);
   transition: opacity 650ms var(--lotus-motion-ease),
     transform 800ms var(--lotus-motion-ease),
@@ -322,25 +316,25 @@ body {
 }
 
 .lotus-orb-presence:hover .lotus-orb-veil {
-  opacity: 0.7;
+  opacity: 0.4;
   transform: scale(1.025);
 }
 
 .lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-veil {
-  opacity: 0.42;
+  opacity: 0.24;
   filter: blur(42px);
   transform: scale(0.82);
 }
 
 .lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-veil {
-  opacity: 0.62;
+  opacity: 0.35;
   filter: blur(30px);
   transform: scale(0.98);
 }
 
 .lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-veil,
 .lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-veil {
-  opacity: 0.62;
+  opacity: 0.35;
   filter: blur(30px);
   transform: scale(0.98);
   transition: none;
