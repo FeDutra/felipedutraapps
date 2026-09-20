@@ -210,7 +210,15 @@ export class GeminiLiveClient {
 
     if (msg.setupComplete) {
       console.log('[GEMINI_LIVE_SETUP_COMPLETE]');
-      await this.startMic();
+      try {
+        await this.startMic();
+      } catch (e: any) {
+        console.error('[GEMINI_LIVE_MIC_START_FAILED]', e?.message || e);
+        this.config.onError('Permissão de microfone negada ou indisponível.');
+        this.setState('error');
+        this.ws?.close(1011, 'mic start failed');
+        return;
+      }
       this.setState('listening');
       return;
     }
@@ -221,7 +229,18 @@ export class GeminiLiveClient {
       if (sc.interrupted) {
         console.log('[GEMINI_LIVE_INTERRUPTED]');
         this.flushPlayback();
+        // Um barge-in durante a narração de um checkpoint/resultado corta o
+        // turno sem nunca mandar turnComplete — sem isso, narrationInFlight
+        // ficava preso pra sempre e travava toda fala seguinte (incluindo
+        // resultados reais, que o chamador achava terem sido narrados).
+        const interruptedKind = this.narrationInFlight;
+        this.narrationInFlight = null;
+        if (interruptedKind === 'result') {
+          this.awaitingResult = false;
+        }
         this.setState('listening');
+        this.flushNarrationQueue();
+        this.scheduleDeferredCheckpoint();
         return;
       }
 
