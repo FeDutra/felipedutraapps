@@ -5582,7 +5582,13 @@ ${data.transcription}`, {
               grandes (>15") ainda pendente de decisão do Fe. */}
           {secondaryContextNode && (
             <>
-              <div className="hidden md:flex fixed top-24 bottom-36 left-20 right-[calc(50%+1.25rem)] z-40 pointer-events-auto flex-col animate-fade-in">
+              {/* left-64 (em vez de left-20) dá respiro real pro painel esquerdo
+                  não empilhar com a sidebar de áreas/sessões, que expande no
+                  hover até ~250px de largura a partir de left-6. Espelhado no
+                  right-64 do painel direito pra manter as duas metades com
+                  largura idêntica (só o gutter externo cresce, a divisão
+                  central em 50% continua igual). */}
+              <div className="hidden md:flex fixed top-24 bottom-36 left-64 right-[calc(50%+1.25rem)] z-40 pointer-events-auto flex-col animate-fade-in">
                 <SecondaryChatPane
                   contextNode={activeContextNode}
                   areaIcon={getAreaIcon({ id: activeContextNode.areaId, name: dynamicAreas.find(a => a.id === activeContextNode.areaId)?.name || '' })}
@@ -5595,7 +5601,7 @@ ${data.transcription}`, {
                   onFocus={() => setFocusedPaneSide('left')}
                 />
               </div>
-              <div className="hidden md:flex fixed top-24 bottom-36 left-[calc(50%+1.25rem)] right-20 z-40 pointer-events-auto flex-col animate-fade-in">
+              <div className="hidden md:flex fixed top-24 bottom-36 left-[calc(50%+1.25rem)] right-64 z-40 pointer-events-auto flex-col animate-fade-in">
                 <SecondaryChatPane
                   contextNode={secondaryContextNode}
                   areaIcon={getAreaIcon({ id: secondaryContextNode.areaId, name: dynamicAreas.find(a => a.id === secondaryContextNode.areaId)?.name || '' })}
