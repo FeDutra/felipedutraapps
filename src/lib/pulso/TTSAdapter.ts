@@ -22,6 +22,24 @@ export interface TTSPreferences {
 
 const STORAGE_KEY = 'pulso_tts_preferences';
 const MIGRATION_KEY = 'pulso_tts_migration_v1_kokoro_default';
+const DEFAULT_KOKORO_VOICE = 'pf_dora(0.70)+af_bella(0.30)';
+
+const isKokoroProvider = (provider: TTSProvider) => (
+  provider === 'local_kokoro'
+  || provider === 'kokoro_http'
+  || provider === 'local_kokoro_sidecar'
+);
+
+// Browser voices are human-readable labels (for example, "Google português do
+// Brasil"), while Kokoro expects compact ids such as `pf_dora` or weighted
+// blends. Never forward a browser label to the Kokoro API.
+const isKokoroVoiceExpression = (voice: string) => (
+  /^[a-z]{2}_[a-z0-9]+(?:\(\d+(?:\.\d+)?\))?(?:\+[a-z]{2}_[a-z0-9]+(?:\(\d+(?:\.\d+)?\))?)*$/i.test(voice)
+);
+
+const resolveKokoroVoice = (voice: string) => (
+  isKokoroVoiceExpression(voice) ? voice : DEFAULT_KOKORO_VOICE
+);
 
 const DEFAULT_PREFERENCES: TTSPreferences = {
   ttsProvider: 'kokoro_http',
@@ -74,10 +92,14 @@ export class TTSAdapter {
       if (!localStorage.getItem(MIGRATION_KEY)) {
         if (this.preferences.ttsProvider === 'browser_native') {
           this.preferences.ttsProvider = 'kokoro_http';
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.preferences));
         }
         localStorage.setItem(MIGRATION_KEY, '1');
       }
+
+      if (isKokoroProvider(this.preferences.ttsProvider)) {
+        this.preferences.voiceName = resolveKokoroVoice(this.preferences.voiceName);
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.preferences));
     } catch (e) {
       console.warn('Failed to load TTS preferences from localStorage:', e);
     }
@@ -91,6 +113,9 @@ export class TTSAdapter {
     const oldProvider = this.preferences.ttsProvider;
     const oldVoice = this.preferences.voiceName;
     this.preferences = { ...this.preferences, ...newPrefs };
+    if (isKokoroProvider(this.preferences.ttsProvider)) {
+      this.preferences.voiceName = resolveKokoroVoice(this.preferences.voiceName);
+    }
     
     if (persist && typeof window !== 'undefined') {
       try {
@@ -100,8 +125,8 @@ export class TTSAdapter {
       }
     }
 
-    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http' || this.preferences.ttsProvider === 'local_kokoro_sidecar';
-    const wasKokoro = oldProvider === 'local_kokoro' || oldProvider === 'kokoro_http' || oldProvider === 'local_kokoro_sidecar';
+    const isKokoro = isKokoroProvider(this.preferences.ttsProvider);
+    const wasKokoro = isKokoroProvider(oldProvider);
     
     if (isKokoro && (!wasKokoro || oldVoice !== this.preferences.voiceName)) {
       this.warmup();
@@ -109,14 +134,13 @@ export class TTSAdapter {
   }
 
   public async warmup() {
-    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http' || this.preferences.ttsProvider === 'local_kokoro_sidecar';
+    const isKokoro = isKokoroProvider(this.preferences.ttsProvider);
     if (!isKokoro) return;
 
     console.log('[PULSO_TTS_KOKORO_WARMUP_START]');
     try {
       const payloadText = this.normalizeTextForSpeech('ok');
-      const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
-      let voice = this.preferences.voiceName || defaultVoice;
+      const voice = resolveKokoroVoice(this.preferences.voiceName);
       const rate = this.preferences.rate;
 
       let endpoint = getKokoroEndpoint();
@@ -485,8 +509,7 @@ export class TTSAdapter {
   }
 
   private async getChunkAudio(chunkText: string, provider: TTSProvider, voice: string, rate: number, signal?: AbortSignal): Promise<Blob> {
-    const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
-    let actualVoice = voice || defaultVoice;
+    const actualVoice = resolveKokoroVoice(voice);
     const actualRate = rate;
     
     const cacheKey = `${provider}:${actualVoice}:${actualRate}:${chunkText}`;
@@ -614,7 +637,7 @@ export class TTSAdapter {
       endpoint 
     });
 
-    const isKokoro = this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'kokoro_http' || this.preferences.ttsProvider === 'local_kokoro_sidecar';
+    const isKokoro = isKokoroProvider(this.preferences.ttsProvider);
     
     let skipKokoro = false;
     if (this.preferences.ttsProvider === 'local_kokoro_sidecar') {
@@ -646,8 +669,7 @@ export class TTSAdapter {
       return;
     }
 
-    const defaultVoice = 'pf_dora(0.70)+af_bella(0.30)';
-    const voice = this.preferences.voiceName || defaultVoice;
+    const voice = resolveKokoroVoice(this.preferences.voiceName);
     const rate = this.preferences.rate;
     const provider = this.preferences.ttsProvider;
 
