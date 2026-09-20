@@ -294,23 +294,21 @@ body {
 
 .lotus-orb-veil {
   border-radius: 9999px;
-  /* backdrop-filter (blur de verdade do que está atrás) não estava
-     renderizando no device de teste do Fe — em dois desenhos diferentes
-     (com e sem mask-image) o resultado foi o mesmo: nada visível, texto
-     lia normal. Esse `filter: blur()` autoaplicado (não backdrop) é a
-     única técnica confirmada aparecendo de verdade nesse device, então é
-     nela que a força real do efeito mora agora — bem mais forte que antes,
-     radial, centro denso, esmaecendo a zero na borda. */
+  /* backdrop-filter (blur de verdade do que está atrás) não renderizava no
+     device de teste do Fe em discos transparentes — esse `filter: blur()`
+     autoaplicado é a técnica confirmada aparecendo de verdade nesse device.
+     Centro claro (luz da própria orbe "vazando"), difundindo radialmente
+     até esmaecer a zero na borda do halo — não mais um véu escuro. */
   background: radial-gradient(
     circle at center,
-    rgba(0, 0, 0, 0.42) 0%,
-    rgba(0, 0, 0, 0.28) 27%,
-    rgba(0, 0, 0, 0.14) 50%,
-    rgba(0, 0, 0, 0.05) 68%,
+    rgba(251, 249, 245, 0.55) 0%,
+    rgba(251, 249, 245, 0.32) 24%,
+    rgba(251, 249, 245, 0.14) 46%,
+    rgba(251, 249, 245, 0.04) 66%,
     transparent 82%
   );
-  filter: blur(55px);
-  opacity: 0.85;
+  filter: blur(70px);
+  opacity: 0.9;
   transform: scale(0.98);
   transition: opacity 650ms var(--lotus-motion-ease),
     transform 800ms var(--lotus-motion-ease),
@@ -319,26 +317,26 @@ body {
 }
 
 .lotus-orb-presence:hover .lotus-orb-veil {
-  opacity: 0.92;
+  opacity: 0.96;
   transform: scale(1.025);
 }
 
 .lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-veil {
-  opacity: 0.55;
-  filter: blur(65px);
+  opacity: 0.6;
+  filter: blur(80px);
   transform: scale(0.82);
 }
 
 .lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-veil {
-  opacity: 0.85;
-  filter: blur(55px);
+  opacity: 0.9;
+  filter: blur(70px);
   transform: scale(0.98);
 }
 
 .lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-veil,
 .lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-veil {
-  opacity: 0.85;
-  filter: blur(55px);
+  opacity: 0.9;
+  filter: blur(70px);
   transform: scale(0.98);
   transition: none;
 }

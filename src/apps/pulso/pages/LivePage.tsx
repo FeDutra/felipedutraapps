@@ -5033,19 +5033,19 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
           }}
         >
-          {/* Camada progressiva: backdrop-filter (blur de verdade do que está
-              atrás) não renderizou em dois desenhos testados no device do Fe
-              — texto ficava legível, sem nenhum desfoque. Mantida mesmo
-              assim (não atrapalha onde funcionar, valores literais grandes
-              em vez de classe Tailwind composta, pra descartar qualquer
-              questão de sintaxe), mas o efeito visível de verdade nesse
-              device é o .lotus-orb-veil logo abaixo — filter:blur()
-              autoaplicado, técnica mais antiga e confirmada renderizando,
-              agora bem mais forte. */}
-          <div className="absolute inset-[-58px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)' }} />
-          <div className="absolute inset-[-38px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(50px)', WebkitBackdropFilter: 'blur(50px)' }} />
-          <div className="absolute inset-[-20px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(80px)', WebkitBackdropFilter: 'blur(80px)' }} />
-          <div className="absolute inset-[-2px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(120px)', WebkitBackdropFilter: 'blur(120px)' }} />
+          {/* Camada progressiva: backdrop-filter puro (sem background) não
+              renderizou no device do Fe. Dessa vez pareado com um leve
+              preenchimento claro (não totalmente transparente) — em alguns
+              WebKit o backdrop-filter só compõe de verdade quando o
+              elemento também pinta algo. Mesma lógica de luz do
+              .lotus-orb-veil: mais claro/opaco perto do centro, esmaecendo
+              pra fora. Se não pegar aqui também, o efeito garantido
+              continua sendo o veil logo abaixo (filter:blur() autoaplicado,
+              técnica confirmada renderizando). */}
+          <div className="absolute inset-[-58px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)', background: 'rgba(251,249,245,0.02)' }} />
+          <div className="absolute inset-[-38px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(50px)', WebkitBackdropFilter: 'blur(50px)', background: 'rgba(251,249,245,0.05)' }} />
+          <div className="absolute inset-[-20px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(80px)', WebkitBackdropFilter: 'blur(80px)', background: 'rgba(251,249,245,0.09)' }} />
+          <div className="absolute inset-[-2px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(120px)', WebkitBackdropFilter: 'blur(120px)', background: 'rgba(251,249,245,0.14)' }} />
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
