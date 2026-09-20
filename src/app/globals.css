@@ -292,6 +292,16 @@ body {
     opacity 1000ms var(--lotus-motion-ease);
 }
 
+.lotus-orb-backdrop-blur {
+  border-radius: 9999px;
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  -webkit-mask-image: radial-gradient(circle at center, black 0%, black 55%, transparent 100%);
+  mask-image: radial-gradient(circle at center, black 0%, black 55%, transparent 100%);
+  transition: opacity 650ms var(--lotus-motion-ease);
+  will-change: backdrop-filter;
+}
+
 .lotus-orb-veil {
   border-radius: 9999px;
   background: radial-gradient(

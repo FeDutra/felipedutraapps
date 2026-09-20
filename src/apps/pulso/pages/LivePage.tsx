@@ -5033,6 +5033,7 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
           }}
         >
+          <div className="lotus-orb-backdrop-blur absolute inset-[-58px] pointer-events-none" />
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
