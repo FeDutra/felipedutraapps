@@ -1,5 +1,13 @@
 # Rollback — Modo Presença em tempo real
 
+## Split de até quatro chats — 20/09/2026
+
+- Baseline: `27f8b639bc2adcbd767cc8edd45c41e76a1823b1`
+- Escopo: foco automático do compositor, clique esquerdo substitui o painel ativo, clique direito abre novo painel até o limite de quatro.
+- Reversão: reverter o commit desta frente e publicar novamente apenas o Hosting do Firebase.
+
+---
+
 Mudança iniciada em 17/09/2026 na branch `feat/pulso-presence-realtime`.
 
 ## Escopo

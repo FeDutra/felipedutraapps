@@ -918,12 +918,10 @@ export default function LivePage() {
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
-  // Split de chats (v1, desktop): um segundo painel de conversa ao lado do
-  // principal, reaproveitando a mesma mecânica visual da Mesa (desloca o
-  // conteúdo principal e ocupa a metade direita da tela).
-  const [secondaryContextId, setSecondaryContextId] = React.useState<string | null>(null);
-  // Qual painel o input único (fixo embaixo, padrão) atinge quando envia.
-  const [focusedPaneSide, setFocusedPaneSide] = React.useState<'left' | 'right'>('left');
+  // Split desktop: o chat principal mais até três painéis adicionais.
+  // O contexto focado é sempre o destino do compositor único.
+  const [secondaryContextIds, setSecondaryContextIds] = React.useState<string[]>([]);
+  const [focusedPaneContextId, setFocusedPaneContextId] = React.useState<string | null>(null);
   const [splitOrbPosition, setSplitOrbPosition] = React.useState<{ x: number; y: number } | null>(null);
   const [isSplitOrbDragging, setIsSplitOrbDragging] = React.useState(false);
   const [orbEntryPhase, setOrbEntryPhase] = React.useState<'birth' | 'breathe' | 'align' | 'handoff' | 'travel' | 'settled'>('birth');
@@ -1124,11 +1122,16 @@ export default function LivePage() {
   // restored after Firestore sessions arrive, avoiding hydration mismatch.
   const [activeContextNode, setActiveContextNode] = React.useState<PulsoContextNode>(LOADING_PLACEHOLDER_NODE);
   const activeContextNodeRef = React.useRef(activeContextNode);
-  const secondaryContextNode = React.useMemo(
-    () => (secondaryContextId ? allContextNodes.find(n => n.contextId === secondaryContextId) || null : null),
-    [secondaryContextId, allContextNodes]
+  const secondaryContextNodes = React.useMemo(() => secondaryContextIds
+    .map(contextId => allContextNodes.find(node => node.contextId === contextId))
+    .filter((node): node is PulsoContextNode => Boolean(node && node.contextId !== activeContextNode.contextId)),
+  [secondaryContextIds, allContextNodes, activeContextNode.contextId]);
+  const splitContextNodes = React.useMemo(
+    () => [activeContextNode, ...secondaryContextNodes].slice(0, 4),
+    [activeContextNode, secondaryContextNodes]
   );
-  const sendTargetContextNode = (focusedPaneSide === 'right' && secondaryContextNode) ? secondaryContextNode : activeContextNode;
+  const hasSplitChats = secondaryContextNodes.length > 0;
+  const sendTargetContextNode = splitContextNodes.find(node => node.contextId === focusedPaneContextId) || activeContextNode;
 
   React.useEffect(() => {
     // Cada abertura do split parte do centro. A posição é livre durante essa
@@ -1137,7 +1140,7 @@ export default function LivePage() {
     setIsSplitOrbDragging(false);
     splitOrbDragRef.current = null;
     suppressSplitOrbClickRef.current = false;
-  }, [secondaryContextId]);
+  }, [hasSplitChats]);
 
   const measureOrbHomeCenter = React.useCallback(() => {
     const rect = orbHomeAnchorRef.current?.getBoundingClientRect();
@@ -1211,7 +1214,7 @@ export default function LivePage() {
     };
     frame = window.requestAnimationFrame(trackAnchor);
     return () => window.cancelAnimationFrame(frame);
-  }, [measureOrbHomeCenter, orbEntryPhase, windowWidth, windowHeight, presenceMode, secondaryContextId, isMesaOpen, isMesaCollapsed, isAtelieActive, isEstudioActive]);
+  }, [measureOrbHomeCenter, orbEntryPhase, windowWidth, windowHeight, presenceMode, hasSplitChats, isMesaOpen, isMesaCollapsed, isAtelieActive, isEstudioActive]);
 
   // Rascunho não enviado por sessão — trocar de chat, ou até fechar e
   // reabrir a aba, não pode perder o que já foi digitado em outro chat.
@@ -1282,14 +1285,14 @@ export default function LivePage() {
           const lastMsgTime = lastMsgDate ? lastMsgDate.getTime() : 0;
           const lastReadDate = safeConvertToDate(lastRead);
           const lastReadTime = lastReadDate ? lastReadDate.getTime() : 0;
-          if (node.contextId !== activeContextNode.contextId && lastMsgTime > lastReadTime) {
+          if (node.contextId !== sendTargetContextNode.contextId && lastMsgTime > lastReadTime) {
             unreads[node.contextId] = true;
           }
         }
       }
     });
     return unreads;
-  }, [allContextNodes, lastReadTimes, latestIncomingTimes, activeContextNode.contextId]);
+  }, [allContextNodes, lastReadTimes, latestIncomingTimes, sendTargetContextNode.contextId]);
 
   // Áreas com pelo menos um chat não lido, e o chat mais recente entre eles
   // — usado pro badge flutuante mobile (só o ícone da área piscando, sem
@@ -1398,7 +1401,7 @@ export default function LivePage() {
       return unsubscribe;
     }
   }, []);
-  const activeAreaId = activeContextNode.areaId;
+  const activeAreaId = sendTargetContextNode.areaId;
   const isTyping = contextTypingStates[activeContextNode?.contextId] || false;
   const currentMessages = React.useMemo(() => {
     return messages.filter(msg => {
@@ -1461,6 +1464,8 @@ export default function LivePage() {
       setSessions(list.map(session => sessionToContextNode(session)));
     }
     setActiveContextNode(newNode);
+    setSecondaryContextIds([]);
+    setFocusedPaneContextId(newNode.contextId);
     return true;
   }, [allContextNodes]);
 
@@ -1808,6 +1813,90 @@ export default function LivePage() {
 
   const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(true);
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+
+  const focusComposer = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+    });
+  }, []);
+
+  const selectChatForWriting = React.useCallback((contextNode: PulsoContextNode) => {
+    const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+    if (isMobile || !hasSplitChats) {
+      setSecondaryContextIds([]);
+      setActiveContextNode(contextNode);
+      setFocusedPaneContextId(contextNode.contextId);
+      focusComposer();
+      return;
+    }
+
+    if (splitContextNodes.some(node => node.contextId === contextNode.contextId)) {
+      setFocusedPaneContextId(contextNode.contextId);
+      focusComposer();
+      return;
+    }
+
+    const focusedId = focusedPaneContextId || activeContextNode.contextId;
+    if (focusedId === activeContextNode.contextId) {
+      setActiveContextNode(contextNode);
+    } else {
+      setSecondaryContextIds(current => current.map(id => id === focusedId ? contextNode.contextId : id));
+    }
+    setFocusedPaneContextId(contextNode.contextId);
+    focusComposer();
+  }, [activeContextNode.contextId, focusComposer, focusedPaneContextId, hasSplitChats, splitContextNodes]);
+
+  const openChatInNewPane = React.useCallback((contextId: string) => {
+    const contextNode = allContextNodes.find(node => node.contextId === contextId);
+    if (!contextNode) return;
+    const alreadyOpen = splitContextNodes.some(node => node.contextId === contextId);
+    if (alreadyOpen) {
+      setFocusedPaneContextId(contextId);
+      focusComposer();
+      return;
+    }
+    if (splitContextNodes.length >= 4) {
+      setToastMessage('limite de quatro chats abertos');
+      window.setTimeout(() => setToastMessage(null), 2400);
+      return;
+    }
+    setSecondaryContextIds(current => [...current, contextId].slice(0, 3));
+    setFocusedPaneContextId(contextId);
+    focusComposer();
+  }, [allContextNodes, focusComposer, splitContextNodes]);
+
+  const closeSplitPane = React.useCallback((contextId: string) => {
+    if (contextId === activeContextNode.contextId) {
+      const [promoted, ...remaining] = secondaryContextNodes;
+      if (!promoted) return;
+      setActiveContextNode(promoted);
+      setSecondaryContextIds(remaining.map(node => node.contextId));
+      setFocusedPaneContextId(current => current === contextId ? promoted.contextId : current);
+    } else {
+      setSecondaryContextIds(current => current.filter(id => id !== contextId));
+      setFocusedPaneContextId(current => current === contextId ? activeContextNode.contextId : current);
+    }
+    focusComposer();
+  }, [activeContextNode.contextId, focusComposer, secondaryContextNodes]);
+
+  React.useEffect(() => {
+    if (!hasSplitChats && focusedPaneContextId !== activeContextNode.contextId) {
+      setFocusedPaneContextId(activeContextNode.contextId);
+    }
+  }, [activeContextNode.contextId, focusedPaneContextId, hasSplitChats]);
+
+  React.useEffect(() => {
+    if (windowWidth >= 768 || !hasSplitChats) return;
+    setSecondaryContextIds([]);
+    setFocusedPaneContextId(activeContextNode.contextId);
+  }, [activeContextNode.contextId, hasSplitChats, windowWidth]);
+
+  React.useEffect(() => {
+    if (!sendTargetContextNode.contextId || sendTargetContextNode.contextId === 'loading') return;
+    markContextAsRead(sendTargetContextNode.contextId);
+    focusComposer();
+  }, [focusComposer, markContextAsRead, sendTargetContextNode.contextId]);
 
   // Helper to generate soft synth tones with smooth envelopes and no clicks (warm chords)
   const playSynthTone = React.useCallback((ctx: AudioContext, freqs: number[], type: OscillatorType, startTime: number, duration: number, startVolume: number) => {
@@ -4089,7 +4178,7 @@ ${data.transcription}`, {
   }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!secondaryContextNode || typeof window === 'undefined') return;
+    if (!hasSplitChats || typeof window === 'undefined') return;
     const origin = splitOrbPosition || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     splitOrbDragRef.current = {
       pointerId: event.pointerId,
@@ -4101,7 +4190,7 @@ ${data.transcription}`, {
     };
     setIsSplitOrbDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
-  }, [secondaryContextNode, splitOrbPosition]);
+  }, [hasSplitChats, splitOrbPosition]);
 
   const handleSplitOrbPointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const drag = splitOrbDragRef.current;
@@ -4128,7 +4217,7 @@ ${data.transcription}`, {
   }, []);
 
   const handleSplitOrbContextMenu = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!secondaryContextNode) return;
+    if (!hasSplitChats) return;
     event.preventDefault();
     event.stopPropagation();
     splitOrbDragRef.current = null;
@@ -4137,7 +4226,7 @@ ${data.transcription}`, {
     // null e o centro canonico do split. Mantemos a posicao derivada da
     // viewport para que resize e troca de monitor continuem corretos.
     setSplitOrbPosition(null);
-  }, [secondaryContextNode]);
+  }, [hasSplitChats]);
 
   const handleOrbClick = React.useCallback((event: React.MouseEvent) => {
     if (suppressSplitOrbClickRef.current) {
@@ -4483,7 +4572,7 @@ ${data.transcription}`, {
   const orbHasAligned = orbEntryPhase === 'align' || orbEntryPhase === 'handoff' || orbHasEntered;
   const orbTarget = !orbHasEntered
     ? { x: windowWidth / 2, y: windowHeight / 2 }
-    : secondaryContextNode
+    : hasSplitChats
       ? (splitOrbPosition || { x: windowWidth / 2, y: windowHeight / 2 })
       : isWorkspaceMode
         ? {
@@ -4494,7 +4583,7 @@ ${data.transcription}`, {
   const orbOuterScale = isWorkspaceMode && orbHasEntered ? 0.42 : 1;
   const orbVisualScaleClass = !orbHasAligned
     ? 'scale-[0.46] md:scale-[0.68]'
-    : secondaryContextNode
+    : hasSplitChats
       ? 'scale-[0.55]'
       : presenceMode && !isWorkspaceMode
         ? 'scale-[0.75] md:scale-100'
@@ -4811,9 +4900,7 @@ ${data.transcription}`, {
                     }
                   }}
                   onClickArea={() => {
-                    if (areaContexts.length > 0) {
-                      setActiveContextNode(areaContexts[0]);
-                    }
+                    if (areaContexts.length > 0) selectChatForWriting(areaContexts[0]);
                   }}
                   areaContexts={areaContexts}
                   editingContextId={editingContextId}
@@ -4821,7 +4908,7 @@ ${data.transcription}`, {
                   setEditingContextLabel={setEditingContextLabel}
                   handleRenameChat={handleRenameChat}
                   setEditingContextId={setEditingContextId}
-                  activeContextNode={activeContextNode}
+                  activeContextNode={sendTargetContextNode}
                   unreadContexts={unreadContexts}
                   handleArchiveChat={handleArchiveChat}
                   isAddingChatForThisArea={isAddingChatForThisArea}
@@ -4829,12 +4916,12 @@ ${data.transcription}`, {
                   setNewChatName={setNewChatName}
                   setAddingChatAreaId={setAddingChatAreaId}
                   setHoveredAreaId={setHoveredAreaId}
-                  setActiveContextNode={setActiveContextNode}
+                  setActiveContextNode={selectChatForWriting}
                   onCreateChat={handleCreateChat}
                   getAreaIcon={getAreaIcon}
                   onDeleteArea={handleDeleteArea}
                   onOpenAreaConfig={setAreaConfigPanelAreaId}
-                  onOpenSplitChat={setSecondaryContextId}
+                  onOpenSplitChat={openChatInNewPane}
                 />
               );
             })}
@@ -4929,16 +5016,16 @@ ${data.transcription}`, {
               togglePresenceMode();
             }
           }}
-          onPointerDown={secondaryContextNode ? handleSplitOrbPointerDown : undefined}
-          onPointerMove={secondaryContextNode ? handleSplitOrbPointerMove : undefined}
-          onPointerUp={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
-          onPointerCancel={secondaryContextNode ? handleSplitOrbPointerUp : undefined}
-          onContextMenu={secondaryContextNode ? handleSplitOrbContextMenu : undefined}
+          onPointerDown={hasSplitChats ? handleSplitOrbPointerDown : undefined}
+          onPointerMove={hasSplitChats ? handleSplitOrbPointerMove : undefined}
+          onPointerUp={hasSplitChats ? handleSplitOrbPointerUp : undefined}
+          onPointerCancel={hasSplitChats ? handleSplitOrbPointerUp : undefined}
+          onContextMenu={hasSplitChats ? handleSplitOrbContextMenu : undefined}
           onTransitionEnd={handleOrbTravelEnd}
           data-entry-phase={orbEntryPhase}
           data-dragging={isSplitOrbDragging ? 'true' : 'false'}
           className={`lotus-orb-presence fixed left-0 top-0 z-[65] w-64 h-64 flex items-center justify-center select-none touch-none outline-none ${
-            secondaryContextNode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+            hasSplitChats ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
           } ${orbEntryPhase !== 'settled' ? 'pointer-events-none' : 'pointer-events-auto'} ${
             isMobileOrbObscured ? 'max-md:opacity-0 max-md:!pointer-events-none' : ''
           }`}
@@ -4968,13 +5055,13 @@ ${data.transcription}`, {
         </div>
 
         <main
-          className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative ${secondaryContextNode ? 'pointer-events-none z-[60]' : 'pointer-events-auto z-10'} ${
+          className={`flex-1 min-h-0 overscroll-none no-scrollbar flex flex-col lg:flex-row 2xl:flex-col lg:items-center items-center justify-end lg:justify-center 2xl:justify-end mx-auto relative ${hasSplitChats ? 'pointer-events-none z-[60]' : 'pointer-events-auto z-10'} ${
             isAtelieActive || isEstudioActive
               ? 'overflow-hidden w-full h-full max-w-none mt-0 mb-0'
               : 'overflow-hidden max-w-5xl w-full mt-2 md:mt-6 mb-2 md:mb-4 pb-28'
           }`}
           style={{
-            transform: secondaryContextId
+            transform: hasSplitChats
               ? 'none'
               : (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
               ? 'translateX(calc(-22vw + 1.5rem))'
@@ -5000,7 +5087,7 @@ ${data.transcription}`, {
           <div
             ref={orbHomeAnchorRef}
             aria-hidden="true"
-            className={isWorkspaceMode || secondaryContextNode
+            className={isWorkspaceMode || hasSplitChats
               ? 'absolute left-1/2 top-1/2 w-px h-px pointer-events-none'
               : `relative w-36 h-36 md:w-64 md:h-64 shrink-0 pointer-events-none ${
                   presenceMode
@@ -5010,7 +5097,7 @@ ${data.transcription}`, {
             }
           />
 
-          {(!secondaryContextNode && (!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory))) && (
+          {(!hasSplitChats && (!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory))) && (
             <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
               
               <div 
@@ -5048,7 +5135,10 @@ ${data.transcription}`, {
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              onClick={() => setFocusedPaneSide('left')}
+              onClick={() => {
+                setFocusedPaneContextId(activeContextNode.contextId);
+                focusComposer();
+              }}
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8 transition-opacity duration-300"
             >
               {currentMessages.map((msg, msgIndex) => {
@@ -5575,42 +5665,42 @@ ${data.transcription}`, {
             </button>
           )}
 
-          {/* Split de chats (v1, desktop) — mesma identidade visual do chat
-              principal, sem moldura de widget. Um input só, fixo embaixo
-              (padrão); o foco decide pra qual painel ele escreve. Largura
-              50/50 exata dos dois lados — ver nota de exceção pra telas
-              grandes (>15") ainda pendente de decisão do Fe. */}
-          {secondaryContextNode && (
-            <>
-              {/* left-64 (em vez de left-20) dá respiro real pro painel esquerdo
-                  não empilhar com a sidebar de áreas/sessões, que expande no
-                  hover até ~250px de largura a partir de left-6. Espelhado no
-                  right-64 do painel direito pra manter as duas metades com
-                  largura idêntica (só o gutter externo cresce, a divisão
-                  central em 50% continua igual). */}
-              <div className="hidden md:flex fixed top-24 bottom-36 left-64 right-[calc(50%+1.25rem)] z-40 pointer-events-auto flex-col animate-fade-in">
-                <SecondaryChatPane
-                  contextNode={activeContextNode}
-                  areaIcon={getAreaIcon({ id: activeContextNode.areaId, name: dynamicAreas.find(a => a.id === activeContextNode.areaId)?.name || '' })}
-                  onClose={() => {
-                    setActiveContextNode(secondaryContextNode);
-                    setSecondaryContextId(null);
-                    setFocusedPaneSide('left');
-                  }}
-                  isFocused={focusedPaneSide === 'left'}
-                  onFocus={() => setFocusedPaneSide('left')}
-                />
-              </div>
-              <div className="hidden md:flex fixed top-24 bottom-36 left-[calc(50%+1.25rem)] right-64 z-40 pointer-events-auto flex-col animate-fade-in">
-                <SecondaryChatPane
-                  contextNode={secondaryContextNode}
-                  areaIcon={getAreaIcon({ id: secondaryContextNode.areaId, name: dynamicAreas.find(a => a.id === secondaryContextNode.areaId)?.name || '' })}
-                  onClose={() => { setSecondaryContextId(null); setFocusedPaneSide('left'); }}
-                  isFocused={focusedPaneSide === 'right'}
-                  onFocus={() => setFocusedPaneSide('right')}
-                />
-              </div>
-            </>
+          {/* Split desktop: painéis rigorosamente equivalentes. Dois e três
+              chats dividem a largura em partes iguais; quatro usam uma grade
+              2×2, preservando área, tipografia e respiros idênticos. */}
+          {hasSplitChats && (
+            <div
+              data-testid="pulso-split-grid"
+              data-pane-count={splitContextNodes.length}
+              className={`hidden md:grid fixed top-24 bottom-36 left-64 right-64 z-40 pointer-events-auto animate-fade-in gap-x-10 gap-y-8 ${
+                splitContextNodes.length === 4
+                  ? 'grid-cols-2 grid-rows-2'
+                  : splitContextNodes.length === 3
+                    ? 'grid-cols-3 grid-rows-1'
+                    : 'grid-cols-2 grid-rows-1'
+              }`}
+            >
+              {splitContextNodes.map(contextNode => (
+                <div
+                  key={contextNode.contextId}
+                  data-split-context-id={contextNode.contextId}
+                  data-split-focused={sendTargetContextNode.contextId === contextNode.contextId ? 'true' : 'false'}
+                  className="min-w-0 min-h-0 flex flex-col"
+                >
+                  <SecondaryChatPane
+                    contextNode={contextNode}
+                    areaIcon={getAreaIcon({ id: contextNode.areaId, name: dynamicAreas.find(a => a.id === contextNode.areaId)?.name || '' })}
+                    onClose={() => closeSplitPane(contextNode.contextId)}
+                    isFocused={sendTargetContextNode.contextId === contextNode.contextId}
+                    onFocus={() => {
+                      setFocusedPaneContextId(contextNode.contextId);
+                      markContextAsRead(contextNode.contextId);
+                      focusComposer();
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           )}
 
 <footer
@@ -5620,7 +5710,7 @@ ${data.transcription}`, {
         style={{
           // Input fica sempre no centro padrão, mesmo com o split aberto —
           // é um input só, compartilhado, não pertence a um lado específico.
-          transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !secondaryContextId)
+          transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !hasSplitChats)
             ? 'translate(calc(-50% - 22vw + 1.5rem), 0)'
             : 'translate(-50%, 0)',
           transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -5838,7 +5928,7 @@ ${data.transcription}`, {
 
           {/* Mapeamento de status físico do canal cognitivo ativo */}
           {(() => {
-            const activeSession = sessions.find(s => s.contextId === activeContextNode.contextId);
+            const activeSession = sessions.find(s => s.contextId === sendTargetContextNode.contextId);
             // Fallback 'ready': se a sessão não está no array local ainda, não bloqueia o input
             const runtimeStatus = activeSession?.runtimeStatus || 'ready';
             const errorMessage = activeSession?.errorMessage || '';
@@ -6001,7 +6091,7 @@ ${data.transcription}`, {
               <button
                 key={areaId}
                 onClick={() => {
-                  setActiveContextNode(ctx);
+                  selectChatForWriting(ctx);
                   setActiveMobileAreaId(areaId);
                 }}
                 className="text-lg font-mono pulso-unread animate-pulse bg-transparent border-none outline-none cursor-pointer flex items-center justify-center p-0 leading-none"
@@ -6091,7 +6181,7 @@ ${data.transcription}`, {
                               isContextActive={activeContextNode.contextId === ctx.contextId}
                               isUnread={!!unreadContexts[ctx.contextId]}
                               onSelect={() => {
-                                setActiveContextNode(ctx);
+                                selectChatForWriting(ctx);
                                 setIsMobileMenuOpen(false);
                               }}
                             />
