@@ -294,20 +294,23 @@ body {
 
 .lotus-orb-veil {
   border-radius: 9999px;
+  /* backdrop-filter (blur de verdade do que está atrás) não estava
+     renderizando no device de teste do Fe — em dois desenhos diferentes
+     (com e sem mask-image) o resultado foi o mesmo: nada visível, texto
+     lia normal. Esse `filter: blur()` autoaplicado (não backdrop) é a
+     única técnica confirmada aparecendo de verdade nesse device, então é
+     nela que a força real do efeito mora agora — bem mais forte que antes,
+     radial, centro denso, esmaecendo a zero na borda. */
   background: radial-gradient(
     circle at center,
-    rgba(0, 0, 0, 0.17) 0%,
-    rgba(0, 0, 0, 0.105) 27%,
-    rgba(0, 0, 0, 0.045) 50%,
-    rgba(0, 0, 0, 0.012) 68%,
-    transparent 80%
+    rgba(0, 0, 0, 0.42) 0%,
+    rgba(0, 0, 0, 0.28) 27%,
+    rgba(0, 0, 0, 0.14) 50%,
+    rgba(0, 0, 0, 0.05) 68%,
+    transparent 82%
   );
-  filter: blur(30px);
-  /* Reduzido de 0.62 pra 0.35: com o blur gaussiano real (backdrop-filter,
-     sem tinta — ver os discos .lotus-orb-blur-* no JSX) entrando por cima,
-     esse véu só precisa dar um leve contraste de contorno. Em 0.62 ele
-     sozinho já lia como disco cinza chapado. */
-  opacity: 0.35;
+  filter: blur(55px);
+  opacity: 0.85;
   transform: scale(0.98);
   transition: opacity 650ms var(--lotus-motion-ease),
     transform 800ms var(--lotus-motion-ease),
@@ -316,26 +319,26 @@ body {
 }
 
 .lotus-orb-presence:hover .lotus-orb-veil {
-  opacity: 0.4;
+  opacity: 0.92;
   transform: scale(1.025);
 }
 
 .lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-veil {
-  opacity: 0.24;
-  filter: blur(42px);
+  opacity: 0.55;
+  filter: blur(65px);
   transform: scale(0.82);
 }
 
 .lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-veil {
-  opacity: 0.35;
-  filter: blur(30px);
+  opacity: 0.85;
+  filter: blur(55px);
   transform: scale(0.98);
 }
 
 .lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-veil,
 .lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-veil {
-  opacity: 0.35;
-  filter: blur(30px);
+  opacity: 0.85;
+  filter: blur(55px);
   transform: scale(0.98);
   transition: none;
 }

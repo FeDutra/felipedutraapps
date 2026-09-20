@@ -5033,17 +5033,19 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
           }}
         >
-          {/* Blur gaussiano de verdade (backdrop-filter, sem tingir de cinza) —
-              4 discos transparentes concêntricos, sem mask-image (essa
-              combinação com backdrop-filter não renderizava no device do Fe,
-              só aparecia um véu escuro plano). Onde os discos se sobrepõem
-              (centro) o blur soma e fica mais forte; na borda de fora
-              (-58px, mesmo alcance do halo antigo) só o disco mais fraco
-              atua, então cai a quase zero sem beirada visível. */}
-          <div className="absolute inset-[-58px] rounded-full backdrop-blur-sm pointer-events-none" />
-          <div className="absolute inset-[-38px] rounded-full backdrop-blur-md pointer-events-none" />
-          <div className="absolute inset-[-20px] rounded-full backdrop-blur-lg pointer-events-none" />
-          <div className="absolute inset-[-2px] rounded-full backdrop-blur-2xl pointer-events-none" />
+          {/* Camada progressiva: backdrop-filter (blur de verdade do que está
+              atrás) não renderizou em dois desenhos testados no device do Fe
+              — texto ficava legível, sem nenhum desfoque. Mantida mesmo
+              assim (não atrapalha onde funcionar, valores literais grandes
+              em vez de classe Tailwind composta, pra descartar qualquer
+              questão de sintaxe), mas o efeito visível de verdade nesse
+              device é o .lotus-orb-veil logo abaixo — filter:blur()
+              autoaplicado, técnica mais antiga e confirmada renderizando,
+              agora bem mais forte. */}
+          <div className="absolute inset-[-58px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)' }} />
+          <div className="absolute inset-[-38px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(50px)', WebkitBackdropFilter: 'blur(50px)' }} />
+          <div className="absolute inset-[-20px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(80px)', WebkitBackdropFilter: 'blur(80px)' }} />
+          <div className="absolute inset-[-2px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(120px)', WebkitBackdropFilter: 'blur(120px)' }} />
           <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
