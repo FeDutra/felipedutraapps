@@ -262,10 +262,12 @@ body {
 }
 
 .lotus-orb-presence {
-  transition-property: transform, opacity, filter;
-  transition-duration: 1500ms, 520ms, 1500ms;
-  transition-timing-function: var(--lotus-travel-ease), var(--lotus-motion-ease), var(--lotus-travel-ease);
-  will-change: transform, opacity, filter;
+  transition-property: transform, opacity;
+  transition-duration: 1500ms, 520ms;
+  transition-timing-function: var(--lotus-travel-ease), var(--lotus-motion-ease);
+  /* A camada que posiciona a orbe não pode criar um Backdrop Root vazio.
+     A lente precisa amostrar a conversa real atrás dela. */
+  will-change: transform;
 }
 
 .lotus-orb-presence[data-entry-phase='birth'],
@@ -292,54 +294,84 @@ body {
     opacity 1000ms var(--lotus-motion-ease);
 }
 
-.lotus-orb-veil {
+.lotus-orb-lens-scale {
+  width: 422px;
+  height: 422px;
+  transition: scale 360ms var(--lotus-motion-ease);
+  will-change: scale;
+}
+
+.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens-scale,
+.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens-scale {
+  transition: none;
+}
+
+.lotus-orb-lens {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 552px;
+  height: 552px;
   border-radius: 9999px;
-  /* backdrop-filter (blur de verdade do que está atrás) não estava
-     renderizando no device de teste do Fe — em dois desenhos diferentes
-     (com e sem mask-image) o resultado foi o mesmo: nada visível, texto
-     lia normal. Esse `filter: blur()` autoaplicado (não backdrop) é a
-     única técnica confirmada aparecendo de verdade nesse device, então é
-     nela que a força real do efeito mora agora — bem mais forte que antes,
-     radial, centro denso, esmaecendo a zero na borda. */
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  /* A matéria é translúcida e clara. O texto permanece visível, mas perde
+     contraste e nitidez. Não existe placa preta/cinza por trás da orbe. */
   background: radial-gradient(
     circle at center,
-    rgba(0, 0, 0, 0.42) 0%,
-    rgba(0, 0, 0, 0.28) 27%,
-    rgba(0, 0, 0, 0.14) 50%,
-    rgba(0, 0, 0, 0.05) 68%,
-    transparent 82%
+    rgba(251, 249, 245, 0.095) 0%,
+    rgba(251, 249, 245, 0.068) 36%,
+    rgba(251, 249, 245, 0.032) 55%,
+    rgba(251, 249, 245, 0.009) 70%,
+    transparent 88%
   );
-  filter: blur(55px);
-  opacity: 0.85;
-  transform: scale(0.98);
+  -webkit-mask-image: radial-gradient(
+    circle at center,
+    #000 0%,
+    #000 42%,
+    rgba(0, 0, 0, 0.94) 53%,
+    rgba(0, 0, 0, 0.72) 64%,
+    rgba(0, 0, 0, 0.42) 74%,
+    rgba(0, 0, 0, 0.16) 84%,
+    transparent 96%
+  );
+  mask-image: radial-gradient(
+    circle at center,
+    #000 0%,
+    #000 42%,
+    rgba(0, 0, 0, 0.94) 53%,
+    rgba(0, 0, 0, 0.72) 64%,
+    rgba(0, 0, 0, 0.42) 74%,
+    rgba(0, 0, 0, 0.16) 84%,
+    transparent 96%
+  );
+  -webkit-backdrop-filter: blur(46px) saturate(90%) brightness(1.09);
+  backdrop-filter: blur(46px) saturate(90%) brightness(1.09);
+  opacity: 0.96;
   transition: opacity 650ms var(--lotus-motion-ease),
-    transform 800ms var(--lotus-motion-ease),
-    filter 800ms var(--lotus-motion-ease);
-  will-change: opacity, transform, filter;
+    transform 800ms var(--lotus-motion-ease);
+  will-change: opacity, transform, backdrop-filter;
 }
 
-.lotus-orb-presence:hover .lotus-orb-veil {
-  opacity: 0.92;
-  transform: scale(1.025);
+.lotus-orb-presence:hover .lotus-orb-lens {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.018);
 }
 
-.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-veil {
-  opacity: 0.55;
-  filter: blur(65px);
-  transform: scale(0.82);
+.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens {
+  opacity: 0.34;
+  transform: translate(-50%, -50%) scale(0.82);
 }
 
-.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-veil {
-  opacity: 0.85;
-  filter: blur(55px);
-  transform: scale(0.98);
+.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens {
+  opacity: 0.96;
+  transform: translate(-50%, -50%) scale(1);
 }
 
-.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-veil,
-.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-veil {
-  opacity: 0.85;
-  filter: blur(55px);
-  transform: scale(0.98);
+.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens,
+.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens {
+  opacity: 0.96;
+  transform: translate(-50%, -50%) scale(1);
   transition: none;
 }
 

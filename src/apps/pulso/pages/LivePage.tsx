@@ -5033,20 +5033,15 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
           }}
         >
-          {/* Camada progressiva: backdrop-filter (blur de verdade do que está
-              atrás) não renderizou em dois desenhos testados no device do Fe
-              — texto ficava legível, sem nenhum desfoque. Mantida mesmo
-              assim (não atrapalha onde funcionar, valores literais grandes
-              em vez de classe Tailwind composta, pra descartar qualquer
-              questão de sintaxe), mas o efeito visível de verdade nesse
-              device é o .lotus-orb-veil logo abaixo — filter:blur()
-              autoaplicado, técnica mais antiga e confirmada renderizando,
-              agora bem mais forte. */}
-          <div className="absolute inset-[-58px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)' }} />
-          <div className="absolute inset-[-38px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(50px)', WebkitBackdropFilter: 'blur(50px)' }} />
-          <div className="absolute inset-[-20px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(80px)', WebkitBackdropFilter: 'blur(80px)' }} />
-          <div className="absolute inset-[-2px] rounded-full pointer-events-none" style={{ backdropFilter: 'blur(120px)', WebkitBackdropFilter: 'blur(120px)' }} />
-          <div className="lotus-orb-veil absolute inset-[-46px] pointer-events-none" />
+          {/* A lente acompanha a escala real da membrana, mas permanece fora
+              da camada animada que usa `filter`. Assim ela consegue amostrar
+              a conversa real por trás da orbe, inclusive no WebKit. */}
+          <div
+            aria-hidden="true"
+            className={`lotus-orb-lens-scale absolute flex items-center justify-center origin-center pointer-events-none ${orbVisualScaleClass}`}
+          >
+            <div className="lotus-orb-lens" />
+          </div>
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
             onAnimationEnd={handleOrbEntryAnimationEnd}
