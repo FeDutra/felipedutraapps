@@ -1,5 +1,17 @@
 # Rollback — Modo Presença em tempo real
 
+## Lente radial gaussiana da orbe — 21/09/2026
+
+- Baseline: `eeb2bb667f8bc0573cc1c963837be122de8afd2a`.
+- Escopo: substituir os discos uniformes de backdrop e o véu escuro dominante
+  por uma lente radial de três quedas gaussianas contínuas, preservando a
+  membrana, a instância e a coreografia da Lótus.
+- Reversão: reverter somente o commit desta frente, executar `npm run build` e
+  republicar apenas o Firebase Hosting. Não altera Firestore, Functions,
+  credenciais nem runtime da VPS.
+
+---
+
 ## Split de até quatro chats — 20/09/2026
 
 - Baseline: `27f8b639bc2adcbd767cc8edd45c41e76a1823b1`
