@@ -32,9 +32,6 @@ Presença, split, Mesa, Ateliê, Estúdio e futuras superfícies da Pulso.
 ## Invariantes de implementação
 
 - A instância persistente vive em uma camada fixa acima das superfícies.
-- A camada-mãe da orbe não deve declarar `filter` nem `will-change: filter`
-  quando a lente usar `backdrop-filter`: isso cria um Backdrop Root vazio e
-  impede os descendentes de amostrar e desfocar o conteúdo real da conversa.
 - Cada composição fornece apenas uma âncora/destino; não monta outra orbe local.
 - A posição oficial do chat é a própria âncora histórica do layout. Durante a
   abertura, sua coordenada deve permanecer sendo medida até o ponto de saída;
