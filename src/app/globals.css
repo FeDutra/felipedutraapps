@@ -315,38 +315,44 @@ body {
   border-radius: 9999px;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  /* A matéria é translúcida e clara. O texto permanece visível, mas perde
-     contraste e nitidez. Não existe placa preta/cinza por trás da orbe. */
+  /* Lente sem cor: o blur governa a leitura e uma sombra preta mínima,
+     em multiply, devolve contraste sem criar matéria cinza ou leitosa. */
   background: radial-gradient(
     circle at center,
-    rgba(251, 249, 245, 0.095) 0%,
-    rgba(251, 249, 245, 0.068) 36%,
-    rgba(251, 249, 245, 0.032) 55%,
-    rgba(251, 249, 245, 0.009) 70%,
-    transparent 88%
+    rgba(0, 0, 0, 0.11) 0%,
+    rgba(0, 0, 0, 0.075) 38%,
+    rgba(0, 0, 0, 0.036) 61%,
+    rgba(0, 0, 0, 0.012) 78%,
+    rgba(0, 0, 0, 0.003) 91%,
+    transparent 100%
   );
+  mix-blend-mode: multiply;
   -webkit-mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 42%,
-    rgba(0, 0, 0, 0.94) 53%,
-    rgba(0, 0, 0, 0.72) 64%,
-    rgba(0, 0, 0, 0.42) 74%,
-    rgba(0, 0, 0, 0.16) 84%,
-    transparent 96%
+    #000 34%,
+    rgba(0, 0, 0, 0.94) 46%,
+    rgba(0, 0, 0, 0.78) 58%,
+    rgba(0, 0, 0, 0.56) 69%,
+    rgba(0, 0, 0, 0.34) 79%,
+    rgba(0, 0, 0, 0.16) 88%,
+    rgba(0, 0, 0, 0.05) 95%,
+    transparent 100%
   );
   mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 42%,
-    rgba(0, 0, 0, 0.94) 53%,
-    rgba(0, 0, 0, 0.72) 64%,
-    rgba(0, 0, 0, 0.42) 74%,
-    rgba(0, 0, 0, 0.16) 84%,
-    transparent 96%
+    #000 34%,
+    rgba(0, 0, 0, 0.94) 46%,
+    rgba(0, 0, 0, 0.78) 58%,
+    rgba(0, 0, 0, 0.56) 69%,
+    rgba(0, 0, 0, 0.34) 79%,
+    rgba(0, 0, 0, 0.16) 88%,
+    rgba(0, 0, 0, 0.05) 95%,
+    transparent 100%
   );
-  -webkit-backdrop-filter: blur(46px) saturate(90%) brightness(1.09);
-  backdrop-filter: blur(46px) saturate(90%) brightness(1.09);
+  -webkit-backdrop-filter: blur(52px) brightness(0.97);
+  backdrop-filter: blur(52px) brightness(0.97);
   opacity: 0.96;
   transition: opacity 650ms var(--lotus-motion-ease),
     transform 800ms var(--lotus-motion-ease);
