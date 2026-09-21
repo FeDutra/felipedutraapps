@@ -179,6 +179,23 @@ export interface OpenClawResult {
     riskLevel?: 'low' | 'medium' | 'high';
     requiresConfirmation?: boolean;
   }>;
+  /**
+   * v1.9: Botões clicáveis renderizados sob a mensagem. 'trigger_mutation'
+   * já existia (dados/Notion). 'local_command' é a ponte pro app desktop —
+   * a Lótus propõe, o clique do usuário é a confirmação humana, e só roda
+   * dentro do Tauri (nunca no navegador). Nunca auto-executa.
+   */
+  actions?: Array<{
+    label: string;
+    type: 'trigger_mutation' | 'local_command';
+    riskLevel?: 'low' | 'medium' | 'high';
+    payload?: Record<string, any> & {
+      kind?: 'shell' | 'applescript' | 'open_url';
+      command?: string;
+      script?: string;
+      url?: string;
+    };
+  }>;
   /** Firestore collections or external sources that were consulted */
   sourcesConsulted?: string[];
   /**

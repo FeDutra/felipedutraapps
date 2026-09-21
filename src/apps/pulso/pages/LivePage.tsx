@@ -5390,7 +5390,7 @@ ${data.transcription}`, {
                                 return (
                                   <button
                                     key={idx}
-                                    onClick={() => {
+                                    onClick={async () => {
                                       if (action.type === 'trigger_mutation' && action.payload) {
                                         handleExecuteProposal({
                                           ...msg,
@@ -5399,11 +5399,50 @@ ${data.transcription}`, {
                                             proposedMutation: action.payload
                                           }
                                         } as any);
+                                      } else if (action.type === 'local_command' && action.payload) {
+                                        // Ponte OpenClaw → execução local: a Lótus propõe (nunca executa
+                                        // sozinha), o clique aqui é a confirmação humana. Só roda dentro
+                                        // do app desktop — no app-code:core.rs os comandos já existem
+                                        // (execute_shell_command / execute_applescript / local_open_url).
+                                        const isTauriEnv = typeof window !== 'undefined' && (
+                                          window.location.protocol === 'tauri:' ||
+                                          !!(window as any).__TAURI__ ||
+                                          !!(window as any).__TAURI_INTERNALS__
+                                        );
+                                        if (!isTauriEnv) {
+                                          setToastMessage('essa ação só funciona no app desktop');
+                                          setTimeout(() => setToastMessage(null), 2500);
+                                          return;
+                                        }
+                                        const isRisky = action.riskLevel === 'high' || action.riskLevel === 'medium';
+                                        const preview = action.payload.command || action.payload.script || action.payload.url || '';
+                                        if (isRisky && !window.confirm(`Executar no seu Mac:\n\n${action.label}\n\n${preview}`)) {
+                                          return;
+                                        }
+                                        try {
+                                          const { invoke } = await import('@tauri-apps/api/core');
+                                          if (action.payload.kind === 'shell') {
+                                            await invoke<string>('execute_shell_command', { command: action.payload.command });
+                                          } else if (action.payload.kind === 'applescript') {
+                                            await invoke<string>('execute_applescript', { script: action.payload.script });
+                                          } else if (action.payload.kind === 'open_url') {
+                                            await invoke('local_open_url', { url: action.payload.url });
+                                          }
+                                          setToastMessage(`feito: ${action.label}`);
+                                          setTimeout(() => setToastMessage(null), 2500);
+                                        } catch (e: any) {
+                                          setToastMessage(`falhou: ${e?.message || e}`);
+                                          setTimeout(() => setToastMessage(null), 3000);
+                                        }
                                       } else {
                                         alert(`Ação acionada: ${action.label}`);
                                       }
                                     }}
-                                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-lg text-[10px] text-white/80 hover:text-white transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5"
+                                    className={`px-3 py-1.5 backdrop-blur-md rounded-lg text-[10px] transition-all select-none lowercase cursor-pointer inline-flex items-center gap-1.5 ${
+                                      action.type === 'local_command' && (action.riskLevel === 'high' || action.riskLevel === 'medium')
+                                        ? 'bg-[#b8283e]/10 hover:bg-[#b8283e]/20 border border-[#b8283e]/30 text-[#fbf9f5]/85 hover:text-white'
+                                        : 'bg-white/5 hover:bg-white/10 text-white/80 hover:text-white'
+                                    }`}
                                   >
                                     {action.label}
                                   </button>
