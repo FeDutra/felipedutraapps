@@ -262,13 +262,10 @@ body {
 }
 
 .lotus-orb-presence {
-  transition-property: transform, opacity;
-  transition-duration: 1500ms, 520ms;
-  transition-timing-function: var(--lotus-travel-ease), var(--lotus-motion-ease);
-  /* `will-change: filter` criava um Backdrop Root vazio e impedia qualquer
-     filho de borrar o conteúdo real da conversa. A posição é a única
-     propriedade que precisa de promoção antecipada nesta camada. */
-  will-change: transform;
+  transition-property: transform, opacity, filter;
+  transition-duration: 1500ms, 520ms, 1500ms;
+  transition-timing-function: var(--lotus-travel-ease), var(--lotus-motion-ease), var(--lotus-travel-ease);
+  will-change: transform, opacity, filter;
 }
 
 .lotus-orb-presence[data-entry-phase='birth'],
@@ -295,97 +292,25 @@ body {
     opacity 1000ms var(--lotus-motion-ease);
 }
 
-.lotus-orb-lens__band,
-.lotus-orb-lens__light {
-  position: absolute;
-  inset: -72px;
-  border-radius: 9999px;
-  pointer-events: none;
-  transform: scale(1) translateZ(0);
-  transition: opacity 650ms var(--lotus-motion-ease),
-    transform 800ms var(--lotus-motion-ease);
-}
-
-.lotus-orb-lens__band {
-  /* Quase invisível, mas suficiente para o WebKit compor o backdrop. */
-  background: rgba(251, 249, 245, 0.006);
-  will-change: backdrop-filter, transform;
-}
-
-.lotus-orb-lens__band--outer {
-  -webkit-mask-image: radial-gradient(circle at center,
-    #000 0%,
-    #000 42%,
-    rgba(0, 0, 0, 0.72) 61%,
-    rgba(0, 0, 0, 0.26) 79%,
-    transparent 100%);
-  mask-image: radial-gradient(circle at center,
-    #000 0%,
-    #000 42%,
-    rgba(0, 0, 0, 0.72) 61%,
-    rgba(0, 0, 0, 0.26) 79%,
-    transparent 100%);
-  -webkit-backdrop-filter: blur(18px) saturate(108%);
-  backdrop-filter: blur(18px) saturate(108%);
-}
-
-.lotus-orb-lens__band--middle {
-  -webkit-mask-image: radial-gradient(circle at center,
-    #000 0%,
-    #000 24%,
-    rgba(0, 0, 0, 0.8) 42%,
-    rgba(0, 0, 0, 0.3) 62%,
-    transparent 84%);
-  mask-image: radial-gradient(circle at center,
-    #000 0%,
-    #000 24%,
-    rgba(0, 0, 0, 0.8) 42%,
-    rgba(0, 0, 0, 0.3) 62%,
-    transparent 84%);
-  -webkit-backdrop-filter: blur(34px) saturate(110%);
-  backdrop-filter: blur(34px) saturate(110%);
-}
-
-.lotus-orb-lens__band--core {
-  -webkit-mask-image: radial-gradient(circle at center,
-    #000 0%,
-    rgba(0, 0, 0, 0.94) 18%,
-    rgba(0, 0, 0, 0.58) 34%,
-    rgba(0, 0, 0, 0.14) 51%,
-    transparent 68%);
-  mask-image: radial-gradient(circle at center,
-    #000 0%,
-    rgba(0, 0, 0, 0.94) 18%,
-    rgba(0, 0, 0, 0.58) 34%,
-    rgba(0, 0, 0, 0.14) 51%,
-    transparent 68%);
-  -webkit-backdrop-filter: blur(58px) saturate(112%);
-  backdrop-filter: blur(58px) saturate(112%);
-}
-
-.lotus-orb-lens__light {
-  background: radial-gradient(circle at center,
-    rgba(251, 249, 245, 0.04) 0%,
-    rgba(251, 249, 245, 0.022) 32%,
-    rgba(251, 249, 245, 0.007) 58%,
-    transparent 82%);
-  filter: blur(18px);
-}
-
 .lotus-orb-veil {
   border-radius: 9999px;
-  /* Escurecimento de contraste já pertencente à linguagem da Pulso. Ele é
-     deliberadamente sutil: o efeito principal vem da lente gaussiana. */
+  /* backdrop-filter (blur de verdade do que está atrás) não estava
+     renderizando no device de teste do Fe — em dois desenhos diferentes
+     (com e sem mask-image) o resultado foi o mesmo: nada visível, texto
+     lia normal. Esse `filter: blur()` autoaplicado (não backdrop) é a
+     única técnica confirmada aparecendo de verdade nesse device, então é
+     nela que a força real do efeito mora agora — bem mais forte que antes,
+     radial, centro denso, esmaecendo a zero na borda. */
   background: radial-gradient(
     circle at center,
-    rgba(0, 0, 0, 0.2) 0%,
-    rgba(0, 0, 0, 0.12) 30%,
-    rgba(0, 0, 0, 0.05) 54%,
-    rgba(0, 0, 0, 0.012) 72%,
-    transparent 88%
+    rgba(0, 0, 0, 0.42) 0%,
+    rgba(0, 0, 0, 0.28) 27%,
+    rgba(0, 0, 0, 0.14) 50%,
+    rgba(0, 0, 0, 0.05) 68%,
+    transparent 82%
   );
-  filter: blur(38px);
-  opacity: 0.56;
+  filter: blur(55px);
+  opacity: 0.85;
   transform: scale(0.98);
   transition: opacity 650ms var(--lotus-motion-ease),
     transform 800ms var(--lotus-motion-ease),
@@ -394,60 +319,28 @@ body {
 }
 
 .lotus-orb-presence:hover .lotus-orb-veil {
-  opacity: 0.62;
+  opacity: 0.92;
   transform: scale(1.025);
 }
 
-.lotus-orb-presence:hover .lotus-orb-lens__band,
-.lotus-orb-presence:hover .lotus-orb-lens__light {
-  transform: scale(1.015) translateZ(0);
-}
-
 .lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-veil {
-  opacity: 0.36;
-  filter: blur(48px);
+  opacity: 0.55;
+  filter: blur(65px);
   transform: scale(0.82);
 }
 
-.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens__band,
-.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens__light {
-  opacity: 0.42;
-  transform: scale(0.82) translateZ(0);
-}
-
 .lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-veil {
-  opacity: 0.56;
-  filter: blur(38px);
+  opacity: 0.85;
+  filter: blur(55px);
   transform: scale(0.98);
-}
-
-.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens__band,
-.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens__light {
-  opacity: 1;
-  transform: scale(1) translateZ(0);
 }
 
 .lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-veil,
 .lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-veil {
-  opacity: 0.56;
-  filter: blur(38px);
+  opacity: 0.85;
+  filter: blur(55px);
   transform: scale(0.98);
   transition: none;
-}
-
-.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens__band,
-.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens__light,
-.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens__band,
-.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens__light {
-  opacity: 1;
-  transform: scale(1) translateZ(0);
-  transition: none;
-}
-
-@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .lotus-orb-veil {
-    opacity: 0.72;
-  }
 }
 
 .pulso-entry-curtain {
