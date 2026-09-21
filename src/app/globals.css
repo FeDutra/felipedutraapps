@@ -316,70 +316,73 @@ body {
   transform: translate(-50%, -50%);
   pointer-events: none;
   /* Lente sem cor: o blur governa a leitura e uma sombra preta mínima,
-     em multiply, devolve contraste sem criar matéria cinza ou leitosa. */
+     em multiply, devolve contraste sem criar matéria cinza ou leitosa.
+     Pico de preto reduzido (Fe: "diminui um pouco o preto") e máscara
+     redesenhada com decaimento longo e contínuo até 100% — sem plateau
+     "transparent/transparent" no fim, que ainda deixava perceptível uma
+     borda dura bem no limite da lente (Fe: "o fim do radial ainda aparece
+     com linha dura. suavize."). */
   background: radial-gradient(
     circle at center,
-    rgba(0, 0, 0, 0.075) 0%,
-    rgba(0, 0, 0, 0.048) 36%,
-    rgba(0, 0, 0, 0.022) 57%,
-    rgba(0, 0, 0, 0.007) 72%,
-    rgba(0, 0, 0, 0.002) 82%,
-    transparent 90%,
-    transparent 100%
+    rgba(0, 0, 0, 0.045) 0%,
+    rgba(0, 0, 0, 0.028) 36%,
+    rgba(0, 0, 0, 0.013) 57%,
+    rgba(0, 0, 0, 0.004) 72%,
+    transparent 90%
   );
   mix-blend-mode: multiply;
   -webkit-mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 28%,
-    rgba(0, 0, 0, 0.92) 40%,
-    rgba(0, 0, 0, 0.72) 52%,
-    rgba(0, 0, 0, 0.5) 63%,
-    rgba(0, 0, 0, 0.3) 73%,
-    rgba(0, 0, 0, 0.14) 81%,
-    rgba(0, 0, 0, 0.05) 87%,
-    transparent 93%,
+    #000 22%,
+    rgba(0, 0, 0, 0.82) 34%,
+    rgba(0, 0, 0, 0.6) 46%,
+    rgba(0, 0, 0, 0.4) 57%,
+    rgba(0, 0, 0, 0.24) 67%,
+    rgba(0, 0, 0, 0.13) 76%,
+    rgba(0, 0, 0, 0.06) 84%,
+    rgba(0, 0, 0, 0.02) 92%,
     transparent 100%
   );
   mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 28%,
-    rgba(0, 0, 0, 0.92) 40%,
-    rgba(0, 0, 0, 0.72) 52%,
-    rgba(0, 0, 0, 0.5) 63%,
-    rgba(0, 0, 0, 0.3) 73%,
-    rgba(0, 0, 0, 0.14) 81%,
-    rgba(0, 0, 0, 0.05) 87%,
-    transparent 93%,
+    #000 22%,
+    rgba(0, 0, 0, 0.82) 34%,
+    rgba(0, 0, 0, 0.6) 46%,
+    rgba(0, 0, 0, 0.4) 57%,
+    rgba(0, 0, 0, 0.24) 67%,
+    rgba(0, 0, 0, 0.13) 76%,
+    rgba(0, 0, 0, 0.06) 84%,
+    rgba(0, 0, 0, 0.02) 92%,
     transparent 100%
   );
   -webkit-backdrop-filter: blur(52px) brightness(0.985);
   backdrop-filter: blur(52px) brightness(0.985);
-  opacity: 0.96;
+  opacity: 0.75;
   transition: opacity 650ms var(--lotus-motion-ease),
     transform 800ms var(--lotus-motion-ease);
   will-change: opacity, transform, backdrop-filter;
 }
 
 .lotus-orb-presence:hover .lotus-orb-lens {
-  opacity: 1;
+  opacity: 0.8;
   transform: translate(-50%, -50%) scale(1.018);
 }
 
 .lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens {
-  opacity: 0.34;
+  opacity: 0.27;
   transform: translate(-50%, -50%) scale(0.82);
 }
 
 .lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens {
-  opacity: 0.96;
+  opacity: 0.75;
   transform: translate(-50%, -50%) scale(1);
 }
 
 .lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens,
 .lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens {
-  opacity: 0.96;
+  opacity: 0.75;
   transform: translate(-50%, -50%) scale(1);
   transition: none;
 }
