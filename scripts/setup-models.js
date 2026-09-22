@@ -6,7 +6,7 @@ const RESOURCES_DIR = path.join(__dirname, '..', 'src-tauri', 'resources');
 const FILES = [
   {
     name: 'kokoro-v0_19.onnx',
-    url: 'https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx'
+    url: 'https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx'
   },
   {
     name: 'voices.bin',
@@ -18,19 +18,32 @@ const FILES = [
   }
 ];
 
-function downloadFile(url, dest) {
+function downloadFile(url, dest, redirects = 0) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
+    if (redirects > 8) {
+      reject(new Error(`Too many redirects while downloading '${url}'`));
+      return;
+    }
+
     https.get(url, (response) => {
-      if (response.statusCode === 302 || response.statusCode === 301) {
-        // Handle redirect (Hugging Face redirects resolve to LFS CDN)
-        downloadFile(response.headers.location, dest).then(resolve).catch(reject);
+      if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+        const location = response.headers.location;
+        response.resume();
+        if (!location) {
+          reject(new Error(`Redirect without location while downloading '${url}'`));
+          return;
+        }
+        const nextUrl = new URL(location, url).toString();
+        downloadFile(nextUrl, dest, redirects + 1).then(resolve).catch(reject);
         return;
       }
       if (response.statusCode !== 200) {
+        response.resume();
         reject(new Error(`Failed to get '${url}' (Status Code: ${response.statusCode})`));
         return;
       }
+
+      const file = fs.createWriteStream(dest);
       
       const totalSize = parseInt(response.headers['content-length'], 10);
       let downloadedSize = 0;
@@ -51,6 +64,11 @@ function downloadFile(url, dest) {
       file.on('finish', () => {
         file.close();
         resolve();
+      });
+      file.on('error', (err) => {
+        file.close();
+        fs.unlink(dest, () => {});
+        reject(err);
       });
     }).on('error', (err) => {
       fs.unlink(dest, () => {});
