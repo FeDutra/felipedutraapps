@@ -1,5 +1,15 @@
 # Rollback — Presença distribuída (22/09/2026)
 
+## Roteador cognitivo local e contexto quente
+
+- Escopo: inferência local de sessão antes da fila canônica, cache compacto de
+  destinos e metadados de roteamento no pedido.
+- Reversão: reverter somente o commit desta camada e refazer o build desktop.
+  A via rápida de aplicativos, o Gemini Live, a Kokoro e as sessões canônicas
+  permanecem intactos.
+- Contingência sem novo build: desativar o roteamento automático na Presença;
+  pedidos continuam na sessão que já estiver ativa.
+
 ## Sinônimos naturais da via rápida local
 
 - Escopo: remover determinantes e prefixos como `meu`, `aplicativo`, `app de`
