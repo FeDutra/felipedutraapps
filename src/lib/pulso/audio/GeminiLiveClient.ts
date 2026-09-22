@@ -122,6 +122,9 @@ export class GeminiLiveClient {
   private static readonly MIN_CHECKPOINT_GAP_MS = 10_000;
 
   private closedByUser = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 2;
 
   constructor(config: GeminiLiveConfig) {
     this.config = config;
@@ -138,13 +141,17 @@ export class GeminiLiveClient {
 
   public async start() {
     this.closedByUser = false;
+    this.reconnectAttempts = 0;
+    this.openSocket();
+  }
+
+  private openSocket() {
     this.setState('connecting');
 
     try {
       this.ws = new WebSocket(this.config.relayUrl);
     } catch (e: any) {
-      this.config.onError(e.message || 'Falha ao abrir conexão com o relay de voz.');
-      this.setState('error');
+      this.scheduleReconnect(e.message || 'Falha ao abrir conexão com o relay de voz.');
       return;
     }
 
@@ -164,11 +171,29 @@ export class GeminiLiveClient {
     this.ws.onclose = (event) => {
       console.log('[GEMINI_LIVE_WS_CLOSED]', event.code, event.reason);
       if (!this.closedByUser) {
-        this.config.onError(event.reason || 'Conexão de voz encerrada inesperadamente.');
-        this.setState('error');
+        this.teardownMic();
+        this.scheduleReconnect(event.reason || 'Conexão de voz encerrada inesperadamente.');
+        return;
       }
       this.teardownMic();
     };
+  }
+
+  private scheduleReconnect(reason: string) {
+    if (this.closedByUser) return;
+    if (this.reconnectAttempts >= GeminiLiveClient.MAX_RECONNECT_ATTEMPTS) {
+      this.config.onError(reason);
+      this.setState('error');
+      return;
+    }
+    this.reconnectAttempts += 1;
+    const delay = this.reconnectAttempts * 750;
+    console.warn('[GEMINI_LIVE_RECONNECT_SCHEDULED]', { attempt: this.reconnectAttempts, delay, reason });
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.openSocket();
+    }, delay);
   }
 
   private sendSetup() {
@@ -210,6 +235,7 @@ export class GeminiLiveClient {
 
     if (msg.setupComplete) {
       console.log('[GEMINI_LIVE_SETUP_COMPLETE]');
+      this.reconnectAttempts = 0;
       try {
         await this.startMic();
       } catch (e: any) {
@@ -522,6 +548,8 @@ export class GeminiLiveClient {
 
   public stop() {
     this.closedByUser = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     if (this.checkpointTimer) clearTimeout(this.checkpointTimer);
     this.checkpointTimer = null;
     this.deferredCheckpointText = null;

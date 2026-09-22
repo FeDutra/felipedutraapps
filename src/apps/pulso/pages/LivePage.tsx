@@ -431,6 +431,13 @@ import { SummaryCards } from '../../../components/pulso/SummaryCards';
 import { intentRouter } from '../../../lib/pulso/llm/IntentRouter';
 import { localActions } from '../../../lib/pulso/actions/localActions';
 import { VoiceSessionController, VoiceSessionState } from '../../../lib/pulso/audio/VoiceSessionController';
+import {
+  getPresenceDeviceId,
+  PresenceTransportPreference,
+  readPresenceTransportPreference,
+  shouldUseGeminiLive,
+  writePresenceTransportPreference,
+} from '../../../lib/pulso/audio/PresenceTransport';
 
 
 import { 
@@ -1664,6 +1671,7 @@ export default function LivePage() {
   const [ttsPrefs, setTtsPrefs] = React.useState<TTSPreferences>(() => ttsAdapter.getPreferences());
   const [availableVoices, setAvailableVoices] = React.useState<SpeechSynthesisVoice[]>([]);
   const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
+  const [presenceTransport, setPresenceTransport] = React.useState<PresenceTransportPreference>(() => readPresenceTransportPreference());
   const [kokoroEndpoint, setKokoroEndpoint] = React.useState(() => {
     if (typeof window !== 'undefined') {
       return safeStorageGet('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
@@ -3084,6 +3092,8 @@ export default function LivePage() {
         locale: "pt-BR" as const,
         userName: "Fê",
         interface: "pulso" as const,
+        deviceId: getPresenceDeviceId(),
+        deviceClass: isTauri ? 'desktop_local' : 'web_mobile',
         ...options?.context
       },
       contextWindow: [],
@@ -4122,7 +4132,12 @@ ${data.transcription}`, {
     if (presenceMode) {
       exitPresenceMode();
     } else {
-      if (!isSpeechRecognitionSupported()) {
+      const useGeminiLive = shouldUseGeminiLive(
+        presenceTransport,
+        typeof window !== 'undefined' ? window.location.search : ''
+      );
+
+      if (!useGeminiLive && !isSpeechRecognitionSupported()) {
         setPresenceMode(true);
         setVoiceState('error');
         setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
@@ -4137,11 +4152,6 @@ ${data.transcription}`, {
       voiceReplyRequestsRef.current.clear();
       narratedPresenceProgressRef.current.clear();
 
-      // Teste manual do modo experimental Gemini Live: abrir /pulso/live?gemini_live=1
-      // Gemini é somente a voz; ferramentas e memória seguem no OpenClaw.
-      const useGeminiLive = typeof window !== 'undefined' &&
-        new URLSearchParams(window.location.search).get('gemini_live') === '1';
-
       const controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
@@ -4151,6 +4161,10 @@ ${data.transcription}`, {
         },
         onError: (err) => {
           setVoiceError(err);
+        },
+        onTransportChange: (message) => {
+          setToastMessage(message);
+          window.setTimeout(() => setToastMessage(null), 3500);
         },
         onPresenceWorkChange: (working) => {
           setPresenceWorkActive(working);
@@ -4175,7 +4189,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;
@@ -6447,6 +6461,26 @@ ${data.transcription}`, {
             </div>
 
             <div className="space-y-3">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">conversa no modo presença</label>
+                <select
+                  value={presenceTransport}
+                  onChange={(e) => {
+                    const preference = e.target.value as PresenceTransportPreference;
+                    setPresenceTransport(preference);
+                    writePresenceTransportPreference(preference);
+                  }}
+                  className="pulso-select w-full"
+                >
+                  <option value="auto" className="bg-[#121212]">automático — tempo real com fallback local</option>
+                  <option value="gemini_live" className="bg-[#121212]">gemini live — priorizar baixa latência</option>
+                  <option value="turn_based" className="bg-[#121212]">local — openclaw + kokoro</option>
+                </select>
+                <span className="text-[8px] text-[#fbf9f5]/40 leading-relaxed block mt-1">
+                  O Gemini conduz ritmo, escuta e narração. Memória, decisões e ferramentas continuam na Lótus/OpenClaw.
+                </span>
+              </div>
+
               <div className="flex flex-col gap-0.5">
                 <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">provedor de voz</label>
                 <select

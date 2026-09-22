@@ -16,6 +16,7 @@ export interface VoiceSessionConfig {
   onStateChange: (state: VoiceSessionState) => void;
   onTextReceived: (userText: string, assistantText: string) => void;
   onError: (error: string) => void;
+  onTransportChange?: (message: string) => void;
   /** Mantém a Orbe viva visualmente enquanto o cérebro da Lótus trabalha. */
   onPresenceWorkChange?: (working: boolean) => void;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
@@ -74,14 +75,21 @@ export class VoiceSessionController {
 
   // Modo experimental Gemini Live
   private geminiLiveClient: GeminiLiveClient | null = null;
+  private fallingBackToTurnBased = false;
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
     this.ttsAdapter = new TTSAdapter();
     // O Modo Presença tem uma identidade vocal única. Não herda a voz nativa
     // ou outra preferência eventualmente escolhida para leitura de mensagens.
+    const isTauri = typeof window !== 'undefined' && (
+      window.location.protocol === 'tauri:'
+      || window.location.protocol === 'file:'
+      || !!(window as any).__TAURI__
+      || !!(window as any).__TAURI_INTERNALS__
+    );
     this.ttsAdapter.updatePreferences({
-      ttsProvider: 'kokoro_http',
+      ttsProvider: isTauri ? 'local_kokoro_sidecar' : 'kokoro_http',
       voiceName: 'pf_dora(0.70)+af_bella(0.30)',
       voiceLang: 'pt-BR',
       rate: 0.95,
@@ -213,9 +221,15 @@ export class VoiceSessionController {
     this.transition('starting');
 
     if (this.config.useGeminiLive) {
-      this.startGeminiLive();
-      return;
+      const started = this.startGeminiLive();
+      if (started) return;
     }
+
+    await this.startTurnBased(passedAudioContext);
+  }
+
+  private async startTurnBased(passedAudioContext?: AudioContext) {
+    this.config.onPresenceWorkChange?.(false);
 
     try {
       this.log('MIC_PERMISSION_REQUESTED');
@@ -540,9 +554,7 @@ export class VoiceSessionController {
 
     if (!relayUrl || !token) {
       this.log('GEMINI_LIVE_CONFIG_MISSING');
-      this.config.onError('Relay de voz Gemini Live não configurado (NEXT_PUBLIC_LIVE_VOICE_RELAY_URL/TOKEN ausentes).');
-      this.transition('error');
-      return;
+      return false;
     }
 
     this.geminiLiveClient = new GeminiLiveClient({
@@ -564,7 +576,7 @@ export class VoiceSessionController {
       },
       onError: (message) => {
         this.log('GEMINI_LIVE_ERROR', message);
-        this.config.onError(message);
+        void this.fallbackToTurnBased(message);
       },
       onUserTurnReady: async (userText) => {
         this.log('GEMINI_LIVE_USER_TURN_READY', { userText });
@@ -583,6 +595,21 @@ export class VoiceSessionController {
     });
 
     this.geminiLiveClient.start();
+    return true;
+  }
+
+  private async fallbackToTurnBased(reason: string) {
+    if (this.fallingBackToTurnBased) return;
+    this.fallingBackToTurnBased = true;
+    this.log('PRESENCE_TRANSPORT_FALLBACK', { from: 'gemini_live', to: 'turn_based', reason });
+    this.geminiLiveClient?.stop();
+    this.geminiLiveClient = null;
+    this.config.onTransportChange?.('Conversa em tempo real oscilou. Continuei no modo local.');
+    try {
+      await this.startTurnBased();
+    } finally {
+      this.fallingBackToTurnBased = false;
+    }
   }
 
   /**
