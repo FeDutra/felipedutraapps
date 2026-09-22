@@ -1,3 +1,13 @@
+# Rollback — Presença distribuída (22/09/2026)
+
+## Aplicativo e transporte
+
+- Encerre `/Applications/PULSO.app`, retenha a versão atual e restaure `/Applications/PULSO.backup-20260922-161726.app` como `/Applications/PULSO.app`.
+- Sem trocar o aplicativo, selecione `local — openclaw + kokoro` nas configurações de voz ou abra `/pulso/live?gemini_live=0`.
+- No código, reverta somente o commit da Presença distribuída; preserve os commits da Kokoro e da ponte de execução local.
+
+---
+
 # Rollback — Modo Presença em tempo real
 
 ## Padrão de execução local e correção do Kokoro desktop — 22/09/2026
