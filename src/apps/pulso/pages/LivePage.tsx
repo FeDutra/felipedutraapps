@@ -4,6 +4,7 @@ import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { listen } from '@tauri-apps/api/event';
+import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
 
 import {
   DndContext,
@@ -3525,6 +3526,71 @@ export default function LivePage() {
     });
   };
 
+  const recordLocalPresenceFastPath = React.useCallback(async (
+    input: string,
+    result: LocalPresenceFastPathResult
+  ) => {
+    const now = new Date();
+    const requestId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const currentUser = authService.getCurrentUser();
+    const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
+    const runtimeKey = activeContextNode.openclawSessionKey || `agent:main:pulso:${activeContextNode.contextId}`;
+
+    await requestsService.createRequest({
+      id: requestId,
+      requestType: 'local_interaction' as any,
+      status: 'success' as any,
+      source: 'pulso_live' as any,
+      origin: 'local_machine_agent' as any,
+      mode: 'voice' as any,
+      originMode: 'local_fast_path' as any,
+      input,
+      rawInput: input,
+      requestedBy: userRef,
+      createdAt: now,
+      requestedAt: now,
+      updatedAt: now,
+      processedAt: now,
+      processedBy: 'pulso_desktop_fast_path',
+      clientCreatedAtMs: now.getTime(),
+      conversationId: `conv_${activeContextNode.contextId}`,
+      messageId: `msg_${now.getTime()}`,
+      contextId: activeContextNode.contextId,
+      areaId: activeContextNode.areaId,
+      chatId: activeContextNode.chatId,
+      openclawSessionKey: runtimeKey,
+      runtimeSessionKey: runtimeKey,
+      archived: false,
+      priority: 'low' as any,
+      context: {
+        interface: 'pulso',
+        deviceClass: 'desktop_local',
+        deviceId: getPresenceDeviceId(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        locale: 'pt-BR',
+        userName: 'Fê',
+        localFastPath: true,
+      } as any,
+      openclawResult: {
+        responseText: result.responseText,
+        processedAt: now.toISOString(),
+        requiresHumanApproval: false,
+        riskLevel: 'low',
+        meta: {
+          localFastPath: true,
+          action: result.action,
+          target: result.target,
+          durationMs: result.durationMs,
+        },
+      } as any,
+      result: {
+        action: result.action,
+        summary: result.responseText,
+        matResult: { ok: true, local: true, durationMs: result.durationMs },
+      } as any,
+    });
+  }, [activeContextNode]);
+
   const handleRenameChat = async (contextId: string) => {
     const trimmed = editingContextLabel.trim();
     if (trimmed) {
@@ -4174,7 +4240,8 @@ ${data.transcription}`, {
         },
         handleSendMessage: async (text, options) => {
           return handleSendMessage(text, options);
-        }
+        },
+        recordLocalFastPath: recordLocalPresenceFastPath,
       });
 
       voiceSessionControllerRef.current = controller;
@@ -4189,7 +4256,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;
