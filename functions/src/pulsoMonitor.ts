@@ -273,7 +273,6 @@ let currentCronContext = "pulso-monitor";
 // ─── thresholds ──────────────────────────────────────────────────────────────
 
 const QUEUE_STUCK_MS         = 5 * 60 * 1000;   // request preso > 5 min = alerta
-const QUEUE_CRITICAL_MS      = 15 * 60 * 1000;  // preso > 15 min = crítico
 const PROCESSING_START_GRACE_MS = 10 * 60 * 1000; // tempo para o primeiro heartbeat aparecer
 const PROCESSING_HEARTBEAT_STALE_MS = 3 * 60 * 1000; // worker deveria renovar a cada ~45s
 const QUEUE_SIZE_WARN        = 10;              // fila com > 10 itens = alerta
@@ -293,40 +292,10 @@ export const pulsoHealthCheck = onSchedule(
     const now = Date.now();
     const alerts: string[] = [];
 
-    // 1. Requests presos em queued_for_openclaw
-    const queuedSnap = await db.collection(REQUESTS)
-      .where("status", "==", "queued_for_openclaw")
-      .where("archived", "==", false)
-      .get();
-
-    const stuckQueued = queuedSnap.docs.filter(d => {
-      const ms = toMs(d.data().requestedAt || d.data().createdAt);
-      return ms !== null && now - ms > QUEUE_STUCK_MS;
-    });
-
-    if (stuckQueued.length > 0) {
-      const maxAge = Math.max(...stuckQueued.map(d => {
-        const ms = toMs(d.data().requestedAt || d.data().createdAt) || now;
-        return now - ms;
-      }));
-      const severity = maxAge > QUEUE_CRITICAL_MS ? "critical" : "high";
-      alerts.push(`${stuckQueued.length} request(s) presos em queued_for_openclaw (máx ${Math.round(maxAge / 60000)} min)`);
-      await raiseAlert({
-        id:          "pulso-health-stuck-queued",
-        name:        "Pulso: Fila presa em queued_for_openclaw",
-        description: `${stuckQueued.length} request(s) presos há mais de ${Math.round(maxAge / 60000)} minutos sem avançar.\nImpacto: mensagens entram mas não saem da fila.\nAção recomendada: verificar worker / bridge / runtime OpenClaw.`,
-        severity,
-        tags:        ["queue", "worker", "openclaw"],
-        details:     { count: stuckQueued.length, maxAgeMinutes: Math.round(maxAge / 60000), samples: stuckQueued.slice(0, 3).map(d => d.id) },
-      });
-    } else {
-      await resolveAlert("pulso-health-stuck-queued", "pulsoHealthCheck");
-    }
-
-    // 2. Requests em processing_openclaw
-    // O watchdog é o único dono do alerta visível desta condição. O healthcheck
-    // apenas correlaciona heartbeat + lock e encerra o alerta legado baseado em
-    // idade bruta, evitando dois cards para o mesmo incidente.
+    // 1. Requests em processing_openclaw. Um request enfileirado no mesmo
+    // contexto de uma execução saudável está apenas esperando sua vez: o
+    // worker preserva a ordem por chat e não executa duas mensagens daquele
+    // contexto em paralelo.
     const processingSnap = await db.collection(REQUESTS)
       .where("status", "==", "processing_openclaw")
       .where("archived", "==", false)
@@ -334,9 +303,37 @@ export const pulsoHealthCheck = onSchedule(
 
     const processingHealth = processingSnap.docs.map(d => ({
       id: d.id,
+      contextId: String(d.data().contextId || ""),
       ...inspectProcessingHealth(d.data(), now),
     }));
     const stuckProcessing = processingHealth.filter(item => item.stuck);
+    const liveProcessingContexts = new Set(
+      processingHealth.filter(item => !item.stuck && item.contextId).map(item => item.contextId),
+    );
+
+    // 2. Requests antigos em queued_for_openclaw. O healthcheck só registra a
+    // classificação; o watchdog é o único dono do alerta visível de fila.
+    const queuedSnap = await db.collection(REQUESTS)
+      .where("status", "==", "queued_for_openclaw")
+      .where("archived", "==", false)
+      .get();
+
+    const stuckQueued = queuedSnap.docs.filter(d => {
+      const data = d.data();
+      const ms = toMs(data.requestedAt || data.createdAt);
+      const contextId = String(data.contextId || "");
+      return ms !== null && now - ms > QUEUE_STUCK_MS && !liveProcessingContexts.has(contextId);
+    });
+    const orderedBacklog = queuedSnap.docs.filter(d => {
+      const data = d.data();
+      const ms = toMs(data.requestedAt || data.createdAt);
+      const contextId = String(data.contextId || "");
+      return ms !== null && now - ms > QUEUE_STUCK_MS && liveProcessingContexts.has(contextId);
+    });
+
+    // Encerra os dois alertas legados duplicados. A partir daqui, somente o
+    // pulsoQueueWatchdog publica fila realmente abandonada.
+    await resolveAlert("pulso-health-stuck-queued", "pulsoHealthCheck");
     await resolveAlert("pulso-health-stuck-processing", "pulsoHealthCheck");
 
     // 3. Tamanho total da fila ativa
@@ -374,13 +371,20 @@ export const pulsoHealthCheck = onSchedule(
     await logMonitorEvent("pulsoHealthCheck", {
       alerts,
       stuckQueuedCount:     stuckQueued.length,
+      orderedBacklogCount:  orderedBacklog.length,
       stuckProcessingCount: stuckProcessing.length,
       stuckProcessing:      stuckProcessing.slice(0, 10),
       queueSize,
       healthy:              alerts.length === 0,
     });
 
-    console.log("[pulsoHealthCheck]", { alerts, queueSize, stuckQueued: stuckQueued.length, stuckProcessing: stuckProcessing.length });
+    console.log("[pulsoHealthCheck]", {
+      alerts,
+      queueSize,
+      stuckQueued: stuckQueued.length,
+      orderedBacklog: orderedBacklog.length,
+      stuckProcessing: stuckProcessing.length,
+    });
   }
 );
 
@@ -392,19 +396,44 @@ export const pulsoQueueWatchdog = onSchedule(
   async () => {
     currentCronContext = "pulsoQueueWatchdog";
     const now = Date.now();
-    // Janela aceitável para requests simples: 3 minutos
-    const acceptableWindowMs = 3 * 60 * 1000;
+    const acceptableWindowMs = QUEUE_STUCK_MS;
     const alerts: string[] = [];
 
-    // Requests em queued_for_openclaw além da janela aceitável
+    // Primeiro identifica quais contextos têm uma execução realmente viva.
+    // O worker serializa requests pelo contextId; a fila daquele mesmo chat é
+    // backlog ordenado, não abandono.
+    const processingSnap = await db.collection(REQUESTS)
+      .where("status", "==", "processing_openclaw")
+      .where("archived", "==", false)
+      .get();
+
+    const processingHealth = processingSnap.docs.map(d => ({
+      id: d.id,
+      contextId: String(d.data().contextId || ""),
+      ...inspectProcessingHealth(d.data(), now),
+    }));
+    const liveProcessingContexts = new Set(
+      processingHealth.filter(item => !item.stuck && item.contextId).map(item => item.contextId),
+    );
+
+    // Requests em queued_for_openclaw além da janela aceitável e sem uma
+    // execução saudável à frente no mesmo contexto.
     const queuedSnap = await db.collection(REQUESTS)
       .where("status", "==", "queued_for_openclaw")
       .where("archived", "==", false)
       .get();
 
     const blocked = queuedSnap.docs.filter(d => {
-      const ms = toMs(d.data().requestedAt || d.data().createdAt);
-      return ms !== null && now - ms > acceptableWindowMs;
+      const data = d.data();
+      const ms = toMs(data.requestedAt || data.createdAt);
+      const contextId = String(data.contextId || "");
+      return ms !== null && now - ms > acceptableWindowMs && !liveProcessingContexts.has(contextId);
+    });
+    const orderedBacklog = queuedSnap.docs.filter(d => {
+      const data = d.data();
+      const ms = toMs(data.requestedAt || data.createdAt);
+      const contextId = String(data.contextId || "");
+      return ms !== null && now - ms > acceptableWindowMs && liveProcessingContexts.has(contextId);
     });
 
     if (blocked.length > 0) {
@@ -418,7 +447,7 @@ export const pulsoQueueWatchdog = onSchedule(
       await raiseAlert({
         id:          "pulso-watchdog-queue-stuck",
         name:        "Pulso: Watchdog — Fila presa detectada",
-        description: `${blocked.length} request(s) em queued_for_openclaw há mais de ${acceptableWindowMs / 60000} minutos.\nCaso clássico: entrou mas não andou.\nAção: worker / bridge / runtime OpenClaw.`,
+        description: `${blocked.length} request(s) em queued_for_openclaw há mais de ${acceptableWindowMs / 60000} minutos sem execução viva à frente no mesmo contexto.\nAção: verificar worker / bridge / runtime OpenClaw.`,
         severity:    maxAge > 10 ? "critical" : "high",
         tags:        ["watchdog", "queue", "stuck"],
         details:     { blocked: blocked.length, maxAgeMinutes: maxAge, ids: blocked.slice(0, 5).map(d => d.id) },
@@ -429,15 +458,6 @@ export const pulsoQueueWatchdog = onSchedule(
 
     // Requests em processing_openclaw só são órfãos quando perdem heartbeat ou
     // claim válido. A idade total do turno não é critério de falha.
-    const processingSnap = await db.collection(REQUESTS)
-      .where("status", "==", "processing_openclaw")
-      .where("archived", "==", false)
-      .get();
-
-    const processingHealth = processingSnap.docs.map(d => ({
-      id: d.id,
-      ...inspectProcessingHealth(d.data(), now),
-    }));
     const orphanLocks = processingHealth.filter(item => item.stuck);
 
     if (orphanLocks.length > 0) {
@@ -457,11 +477,17 @@ export const pulsoQueueWatchdog = onSchedule(
     await logMonitorEvent("pulsoQueueWatchdog", {
       alerts,
       blocked: blocked.length,
+      orderedBacklog: orderedBacklog.length,
       orphanLocks: orphanLocks.length,
       healthy: alerts.length === 0,
     });
 
-    console.log("[pulsoQueueWatchdog]", { alerts, blocked: blocked.length, orphanLocks });
+    console.log("[pulsoQueueWatchdog]", {
+      alerts,
+      blocked: blocked.length,
+      orderedBacklog: orderedBacklog.length,
+      orphanLocks,
+    });
   }
 );
 
