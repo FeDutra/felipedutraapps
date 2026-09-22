@@ -439,6 +439,12 @@ import {
   shouldUseGeminiLive,
   writePresenceTransportPreference,
 } from '../../../lib/pulso/audio/PresenceTransport';
+import {
+  PresenceRoutingDecision,
+  readPresenceHotContext,
+  refreshPresenceHotContext,
+  routePresenceIntent,
+} from '../../../lib/pulso/presence/PresenceCognitiveRouter';
 
 
 import { 
@@ -3039,6 +3045,7 @@ export default function LivePage() {
       contextId?: string;
       chatId?: string;
       openclawSessionKey?: string;
+      presenceRouting?: PresenceRoutingDecision;
       attachments?: Array<{ id: string; name: string; type: string; mimeType: string; url: string; sizeBytes: number }>;
       requestId?: string;
     }
@@ -3055,10 +3062,27 @@ export default function LivePage() {
     const reqId = options?.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     // Routing
-    const routeResult = routeInputToArea(rawMsg, state?.allAreas || [], {
-      currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
-      activeAreaId: activeAreaId || undefined
-    });
+    const routeResult = options?.presenceRouting
+      ? {
+          areaRef: options.areaId,
+          routing: {
+            rawInput: rawMsg,
+            cleanInput: normalizeTranscript(rawMsg),
+            sessionTarget: options.presenceRouting.target.label,
+            intentType: 'conversation_command',
+            shouldSendToLotus: true,
+            shouldCreateSideNotes: false,
+            contextHints: options.presenceRouting.matchedTerms,
+            routerVersion: options.presenceRouting.routerVersion,
+            confidence: options.presenceRouting.confidence,
+            reason: options.presenceRouting.reason,
+            localDecisionDurationMs: options.presenceRouting.durationMs,
+          },
+        }
+      : routeInputToArea(rawMsg, state?.allAreas || [], {
+          currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
+          activeAreaId: activeAreaId || undefined
+        });
 
     const isTauri = typeof window !== 'undefined' && (
       window.location.protocol === 'tauri:' ||
@@ -3367,6 +3391,7 @@ export default function LivePage() {
     originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting';
     displayText?: string;
     targetContextNode?: PulsoContextNode;
+    presenceRouting?: PresenceRoutingDecision;
   }) => {
     if (isTyping || isSubmittingRef.current) {
       console.warn('Blocked duplicate send: message already processing or submitting.');
@@ -3472,11 +3497,29 @@ export default function LivePage() {
       areaId: sendingNode.areaId,
       contextId: sendingNode.contextId,
       chatId: sendingNode.chatId,
+      openclawSessionKey: sendingNode.openclawSessionKey,
       attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
       requestId: preGeneratedReqId,
-      context: contextStatesMap[sendingNode.contextId]?.strongState ? {
-        reusableContext: contextStatesMap[sendingNode.contextId].strongState
-      } : undefined
+      presenceRouting: options?.presenceRouting,
+      context: {
+        ...(contextStatesMap[sendingNode.contextId]?.strongState
+          ? { reusableContext: contextStatesMap[sendingNode.contextId].strongState }
+          : {}),
+        ...(options?.presenceRouting
+          ? {
+              presenceRouting: {
+                targetContextId: options.presenceRouting.target.contextId,
+                targetAreaId: options.presenceRouting.target.areaId,
+                switched: options.presenceRouting.switched,
+                confidence: options.presenceRouting.confidence,
+                reason: options.presenceRouting.reason,
+                matchedTerms: options.presenceRouting.matchedTerms,
+                routerVersion: options.presenceRouting.routerVersion,
+                durationMs: options.presenceRouting.durationMs,
+              },
+            }
+          : {}),
+      }
     }).then(async (newRequest) => {
       // t2: Moment request vira queued_for_openclaw in Firestore
       if (latencyMapRef.current[newRequest.id]) {
@@ -3590,6 +3633,40 @@ export default function LivePage() {
       } as any,
     });
   }, [activeContextNode]);
+
+  const routePresenceInput = React.useCallback((input: string) => {
+    const areas = state?.allAreas || [];
+    const decision = routePresenceIntent({
+      utterance: input,
+      activeContext: activeContextNode,
+      sessions,
+      areas,
+      hotContext: readPresenceHotContext(),
+    });
+
+    refreshPresenceHotContext(sessions, areas, {
+      contextId: decision.target.contextId,
+      areaId: decision.target.areaId,
+      confidence: decision.confidence,
+      at: Date.now(),
+    });
+
+    if (decision.switched) {
+      setActiveContextNode(decision.target);
+      void sessionsService.touchSession(decision.target.contextId);
+    }
+
+    console.log('[PULSO_PRESENCE_LOCAL_ROUTING]', {
+      input,
+      targetContextId: decision.target.contextId,
+      switched: decision.switched,
+      confidence: decision.confidence,
+      reason: decision.reason,
+      durationMs: decision.durationMs,
+    });
+
+    return decision;
+  }, [activeContextNode, sessions, state?.allAreas]);
 
   const handleRenameChat = async (contextId: string) => {
     const trimmed = editingContextLabel.trim();
@@ -4242,6 +4319,7 @@ ${data.transcription}`, {
           return handleSendMessage(text, options);
         },
         recordLocalFastPath: recordLocalPresenceFastPath,
+        routePresenceIntent: routePresenceInput,
       });
 
       voiceSessionControllerRef.current = controller;
@@ -4256,7 +4334,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;

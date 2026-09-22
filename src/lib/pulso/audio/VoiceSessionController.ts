@@ -2,6 +2,7 @@ import { TTSAdapter } from '../TTSAdapter';
 import { GeminiLiveClient, GeminiLiveState } from './GeminiLiveClient';
 import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
+import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
 
 export type VoiceSessionState =
   | 'idle'
@@ -22,8 +23,13 @@ export interface VoiceSessionConfig {
   /** Mantém a Orbe viva visualmente enquanto o cérebro da Lótus trabalha. */
   onPresenceWorkChange?: (working: boolean) => void;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
-  handleSendMessage: (text: string, options: { originMode: 'presence' }) => Promise<{ responseText: string } | null | void>;
+  handleSendMessage: (text: string, options: {
+    originMode: 'presence';
+    targetContextNode?: PresenceRoutingDecision['target'];
+    presenceRouting?: PresenceRoutingDecision;
+  }) => Promise<{ responseText: string } | null | void>;
   recordLocalFastPath?: (text: string, result: LocalPresenceFastPathResult) => Promise<void>;
+  routePresenceIntent?: (text: string) => Promise<PresenceRoutingDecision> | PresenceRoutingDecision;
   /**
    * Modo experimental: usa a Gemini Live API (voz-para-voz em streaming via
    * relay próprio) em vez do pipeline turn-based. A Gemini é somente a camada
@@ -497,7 +503,12 @@ export class VoiceSessionController {
         return;
       }
 
-      const res = await this.config.handleSendMessage(userText, { originMode: 'presence' });
+      const presenceRouting = await this.config.routePresenceIntent?.(userText);
+      const res = await this.config.handleSendMessage(userText, {
+        originMode: 'presence',
+        targetContextNode: presenceRouting?.target,
+        presenceRouting,
+      });
       this.log('LLM_REQUEST_FINISHED');
 
       if (res && res.responseText) {
@@ -604,7 +615,12 @@ export class VoiceSessionController {
           // handleSendMessage persiste o pedido e devolve antes do OpenClaw
           // concluir. A resposta real chega pelo listener canônico do
           // Firestore; LivePage então chama narratePresenceResult().
-          await this.config.handleSendMessage(userText, { originMode: 'presence' });
+          const presenceRouting = await this.config.routePresenceIntent?.(userText);
+          await this.config.handleSendMessage(userText, {
+            originMode: 'presence',
+            targetContextNode: presenceRouting?.target,
+            presenceRouting,
+          });
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
           this.config.onPresenceWorkChange?.(false);
