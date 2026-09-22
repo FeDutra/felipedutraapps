@@ -1,5 +1,6 @@
 import { TTSAdapter } from '../TTSAdapter';
 import { GeminiLiveClient, GeminiLiveState } from './GeminiLiveClient';
+import { getGeminiLiveConfig } from './PresenceTransport';
 
 export type VoiceSessionState =
   | 'idle'
@@ -549,8 +550,7 @@ export class VoiceSessionController {
   // ---- Modo experimental Gemini Live ----
 
   private startGeminiLive() {
-    const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL;
-    const token = process.env.NEXT_PUBLIC_LIVE_VOICE_TOKEN;
+    const { relayUrl, token } = getGeminiLiveConfig();
 
     if (!relayUrl || !token) {
       this.log('GEMINI_LIVE_CONFIG_MISSING');

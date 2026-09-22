@@ -3,11 +3,22 @@ export type PresenceTransportPreference = 'auto' | 'gemini_live' | 'turn_based';
 export const PRESENCE_TRANSPORT_STORAGE_KEY = 'pulso_presence_transport';
 const PRESENCE_DEVICE_ID_STORAGE_KEY = 'pulso_presence_device_id';
 
+// NEXT_PUBLIC values are normally inlined by Next during the web build. The
+// Tauri static bundle can lose that replacement at runtime even when the same
+// build works in the browser. Keep the public relay contract deterministic in
+// the desktop artifact; the Gemini API key remains only on the relay.
+const DEFAULT_LIVE_VOICE_RELAY_URL = 'wss://72-62-105-195.nip.io/live-voice/live';
+const DEFAULT_LIVE_VOICE_TOKEN = '5f44c1b490e70a358fbc789ec3862ff7db119d36c845626fc7cc743ccc49a3d1';
+
+export function getGeminiLiveConfig() {
+  const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL || DEFAULT_LIVE_VOICE_RELAY_URL;
+  const token = process.env.NEXT_PUBLIC_LIVE_VOICE_TOKEN || DEFAULT_LIVE_VOICE_TOKEN;
+  return { relayUrl, token };
+}
+
 export function hasGeminiLiveConfig() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL
-    && process.env.NEXT_PUBLIC_LIVE_VOICE_TOKEN
-  );
+  const { relayUrl, token } = getGeminiLiveConfig();
+  return Boolean(relayUrl && token);
 }
 
 export function readPresenceTransportPreference(): PresenceTransportPreference {
