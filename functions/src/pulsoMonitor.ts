@@ -145,6 +145,54 @@ function toMs(ts: any): number | null {
   return null;
 }
 
+type ProcessingHealth = {
+  stuck: boolean;
+  reason: string;
+  ageMinutes: number | null;
+  heartbeatAgeSeconds: number | null;
+  lockExpiresAt: string | null;
+};
+
+/**
+ * A duração total de um request não prova travamento: execuções legítimas podem
+ * durar horas. O sinal operacional é o heartbeat renovado pelo worker e a
+ * validade do claim/lock. Só usamos uma janela de graça para o início, antes do
+ * primeiro heartbeat aparecer.
+ */
+function inspectProcessingHealth(data: any, now: number): ProcessingHealth {
+  const startedMs = toMs(data.startedAt || data.workerClaimedAt || data.requestedAt || data.createdAt);
+  const heartbeatMs = toMs(data.workerMeta?.longJobHeartbeatAt);
+  const lockExpiresMs = toMs(data.lockExpiresAt);
+  const ageMs = startedMs === null ? null : Math.max(0, now - startedMs);
+  const heartbeatAgeMs = heartbeatMs === null ? null : Math.max(0, now - heartbeatMs);
+
+  const base = {
+    ageMinutes: ageMs === null ? null : Math.round(ageMs / 60000),
+    heartbeatAgeSeconds: heartbeatAgeMs === null ? null : Math.round(heartbeatAgeMs / 1000),
+    lockExpiresAt: lockExpiresMs === null ? null : new Date(lockExpiresMs).toISOString(),
+  };
+
+  if (data.workerMeta?.longJobAlive === false) {
+    return { ...base, stuck: true, reason: "worker_reported_not_alive" };
+  }
+  if (lockExpiresMs !== null && lockExpiresMs <= now) {
+    return { ...base, stuck: true, reason: "lock_expired" };
+  }
+  if (heartbeatAgeMs !== null && heartbeatAgeMs <= PROCESSING_HEARTBEAT_STALE_MS) {
+    return { ...base, stuck: false, reason: "heartbeat_fresh" };
+  }
+  if (ageMs !== null && ageMs <= PROCESSING_START_GRACE_MS) {
+    return { ...base, stuck: false, reason: "startup_grace" };
+  }
+  if (heartbeatAgeMs !== null) {
+    return { ...base, stuck: true, reason: "heartbeat_stale" };
+  }
+  if (!data.lockOwner || lockExpiresMs === null) {
+    return { ...base, stuck: true, reason: "claim_or_lock_missing" };
+  }
+  return { ...base, stuck: true, reason: "heartbeat_missing_after_grace" };
+}
+
 async function raiseAlert(opts: {
   id: string;
   name: string;
@@ -226,8 +274,8 @@ let currentCronContext = "pulso-monitor";
 
 const QUEUE_STUCK_MS         = 5 * 60 * 1000;   // request preso > 5 min = alerta
 const QUEUE_CRITICAL_MS      = 15 * 60 * 1000;  // preso > 15 min = crítico
-const ORPHAN_LOCK_LOG_MS     = 5 * 60 * 1000;   // lock > 5 min = registrado no log (ação continua)
-const ORPHAN_LOCK_ALERT_MS   = 12 * 60 * 1000;  // lock > 12 min (2+ checagens seguidas) = publica no chat ALERTAS
+const PROCESSING_START_GRACE_MS = 10 * 60 * 1000; // tempo para o primeiro heartbeat aparecer
+const PROCESSING_HEARTBEAT_STALE_MS = 3 * 60 * 1000; // worker deveria renovar a cada ~45s
 const QUEUE_SIZE_WARN        = 10;              // fila com > 10 itens = alerta
 const QUEUE_SIZE_CRITICAL    = 30;              // fila > 30 = crítico
 const LATENCY_WARN_MS        = 10_000;          // acima de 10s = amarelo
@@ -243,7 +291,6 @@ export const pulsoHealthCheck = onSchedule(
   async () => {
     currentCronContext = "pulsoHealthCheck";
     const now = Date.now();
-    const fiveMinAgo = new Date(now - 5 * 60 * 1000);
     const alerts: string[] = [];
 
     // 1. Requests presos em queued_for_openclaw
@@ -276,35 +323,21 @@ export const pulsoHealthCheck = onSchedule(
       await resolveAlert("pulso-health-stuck-queued", "pulsoHealthCheck");
     }
 
-    // 2. Requests presos em processing_openclaw
+    // 2. Requests em processing_openclaw
+    // O watchdog é o único dono do alerta visível desta condição. O healthcheck
+    // apenas correlaciona heartbeat + lock e encerra o alerta legado baseado em
+    // idade bruta, evitando dois cards para o mesmo incidente.
     const processingSnap = await db.collection(REQUESTS)
       .where("status", "==", "processing_openclaw")
       .where("archived", "==", false)
       .get();
 
-    const stuckProcessing = processingSnap.docs.filter(d => {
-      const ms = toMs(d.data().startedAt || d.data().updatedAt || d.data().requestedAt);
-      return ms !== null && now - ms > QUEUE_STUCK_MS;
-    });
-
-    if (stuckProcessing.length > 0) {
-      const maxAge = Math.max(...stuckProcessing.map(d => {
-        const ms = toMs(d.data().startedAt || d.data().updatedAt || d.data().requestedAt) || now;
-        return now - ms;
-      }));
-      const severity = maxAge > QUEUE_CRITICAL_MS ? "critical" : "high";
-      alerts.push(`${stuckProcessing.length} request(s) presos em processing_openclaw`);
-      await raiseAlert({
-        id:          "pulso-health-stuck-processing",
-        name:        "Pulso: Request preso em processing_openclaw",
-        description: `${stuckProcessing.length} request(s) presos em processamento há mais de ${Math.round(maxAge / 60000)} minutos.\nImpacto: LLM/worker iniciou mas não retornou.\nAção recomendada: verificar runtime OpenClaw / timeout do bridge.`,
-        severity,
-        tags:        ["processing", "openclaw", "timeout"],
-        details:     { count: stuckProcessing.length, maxAgeMinutes: Math.round(maxAge / 60000), samples: stuckProcessing.slice(0, 3).map(d => d.id) },
-      });
-    } else {
-      await resolveAlert("pulso-health-stuck-processing", "pulsoHealthCheck");
-    }
+    const processingHealth = processingSnap.docs.map(d => ({
+      id: d.id,
+      ...inspectProcessingHealth(d.data(), now),
+    }));
+    const stuckProcessing = processingHealth.filter(item => item.stuck);
+    await resolveAlert("pulso-health-stuck-processing", "pulsoHealthCheck");
 
     // 3. Tamanho total da fila ativa
     const activeQueueSnap = await db.collection(REQUESTS)
@@ -337,20 +370,12 @@ export const pulsoHealthCheck = onSchedule(
       await resolveAlert("pulso-health-queue-overflow", "pulsoHealthCheck");
     }
 
-    // 4. Silêncio operacional: nenhum request nos últimos 5 min (só alerta se houve atividade recente)
-    const recentSnap = await db.collection(REQUESTS)
-      .where("requestedAt", ">=", fiveMinAgo)
-      .where("status", "==", "success")
-      .limit(1)
-      .get();
-
-    // (Silêncio não é necessariamente um problema — apenas log)
-
     // Log do run
     await logMonitorEvent("pulsoHealthCheck", {
       alerts,
       stuckQueuedCount:     stuckQueued.length,
       stuckProcessingCount: stuckProcessing.length,
+      stuckProcessing:      stuckProcessing.slice(0, 10),
       queueSize,
       healthy:              alerts.length === 0,
     });
@@ -360,7 +385,7 @@ export const pulsoHealthCheck = onSchedule(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CRON 2 — Watchdog de Fila Presa (a cada 2 minutos)
+// CRON 2 — Watchdog de Fila Presa (a cada 5 minutos)
 // ═══════════════════════════════════════════════════════════════════════════════
 export const pulsoQueueWatchdog = onSchedule(
   { schedule: "every 5 minutes", region: "us-central1", timeoutSeconds: 30 },
@@ -402,34 +427,28 @@ export const pulsoQueueWatchdog = onSchedule(
       await resolveAlert("pulso-watchdog-queue-stuck", "pulsoQueueWatchdog");
     }
 
-    // Locks em processing_openclaw sem atualização.
-    // Sessões legítimas (Bash longo, espera de confirmação humana em AskUserQuestion/secrets)
-    // rotineiramente passam de 5 min sem estar mortas — por isso a detecção continua em 5 min
-    // (log/ação), mas só publicamos no chat ALERTAS quando o lock persiste além de 12 min,
-    // ou seja, sobrevive a pelo menos duas checagens seguidas do watchdog.
+    // Requests em processing_openclaw só são órfãos quando perdem heartbeat ou
+    // claim válido. A idade total do turno não é critério de falha.
     const processingSnap = await db.collection(REQUESTS)
       .where("status", "==", "processing_openclaw")
       .where("archived", "==", false)
       .get();
 
-    const orphanLocks = processingSnap.docs.filter(d => {
-      const ms = toMs(d.data().updatedAt || d.data().startedAt || d.data().requestedAt);
-      return ms !== null && now - ms > ORPHAN_LOCK_LOG_MS;
-    });
-    const orphanLocksSustained = processingSnap.docs.filter(d => {
-      const ms = toMs(d.data().updatedAt || d.data().startedAt || d.data().requestedAt);
-      return ms !== null && now - ms > ORPHAN_LOCK_ALERT_MS;
-    });
+    const processingHealth = processingSnap.docs.map(d => ({
+      id: d.id,
+      ...inspectProcessingHealth(d.data(), now),
+    }));
+    const orphanLocks = processingHealth.filter(item => item.stuck);
 
-    if (orphanLocksSustained.length > 0) {
-      alerts.push(`Lock órfão: ${orphanLocksSustained.length} request(s) travados em processing há mais de ${ORPHAN_LOCK_ALERT_MS / 60000} min`);
+    if (orphanLocks.length > 0) {
+      alerts.push(`Execução órfã: ${orphanLocks.length} request(s) sem heartbeat/lock válido`);
       await raiseAlert({
         id:          "pulso-watchdog-orphan-lock",
-        name:        "Pulso: Watchdog — Lock órfão em processing",
-        description: `${orphanLocksSustained.length} request(s) presos em processing_openclaw há mais de ${ORPHAN_LOCK_ALERT_MS / 60000} min sem atualização de estado, em pelo menos duas checagens seguidas do watchdog.\nO worker pode ter morrido durante o processamento.`,
+        name:        "Pulso: Watchdog — Execução órfã em processing",
+        description: `${orphanLocks.length} request(s) em processing_openclaw perderam o heartbeat do worker ou o lock válido.\nA duração total do turno não é usada como prova de travamento.`,
         severity:    "high",
         tags:        ["watchdog", "lock", "orphan"],
-        details:     { orphanLocks: orphanLocksSustained.length, ids: orphanLocksSustained.slice(0, 5).map(d => d.id) },
+        details:     { orphanLocks: orphanLocks.length, samples: orphanLocks.slice(0, 5) },
       });
     } else {
       await resolveAlert("pulso-watchdog-orphan-lock", "pulsoQueueWatchdog");
@@ -439,11 +458,10 @@ export const pulsoQueueWatchdog = onSchedule(
       alerts,
       blocked: blocked.length,
       orphanLocks: orphanLocks.length,
-      orphanLocksSustained: orphanLocksSustained.length,
       healthy: alerts.length === 0,
     });
 
-    console.log("[pulsoQueueWatchdog]", { alerts, blocked: blocked.length, orphanLocks: orphanLocks.length, orphanLocksSustained: orphanLocksSustained.length });
+    console.log("[pulsoQueueWatchdog]", { alerts, blocked: blocked.length, orphanLocks });
   }
 );
 
