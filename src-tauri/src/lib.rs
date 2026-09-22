@@ -87,7 +87,13 @@ pub fn run() {
 
       println!("Starting Kokoro sidecar with model: {:?}", model_path);
 
-      match app.shell().sidecar("kokoro_runner") {
+      if !model_path.exists() || !voices_path.exists() {
+        eprintln!(
+          "Kokoro sidecar resources missing: model_exists={}, voices_exists={}",
+          model_path.exists(),
+          voices_path.exists()
+        );
+      } else { match app.shell().sidecar("kokoro_runner") {
         Ok(sidecar_command) => {
           let command = sidecar_command.args([model_path.to_str().unwrap(), voices_path.to_str().unwrap()]);
           match command.spawn() {
@@ -96,7 +102,7 @@ pub fn run() {
           }
         },
         Err(e) => eprintln!("Failed to create kokoro sidecar command: {}", e),
-      }
+      }}
 
       // O microsserviço Node.js do WhatsApp agora roda externamente (via PM2)
       // para garantir persistência independentemente do ciclo de vida da interface.

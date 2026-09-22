@@ -16,3 +16,28 @@ A PULSO não é um software tradicional de dashboard; ela é um **organismo vivo
 *   **Movimento e Vida**: Elementos não aparecem; eles emergem ou se dissipam como luz/fumaça. Ações ativas devem ter pulsações lentas de brilho e sombras difusas (`drop-shadow` de luz) em vez de contornos ativos ou mudanças de tamanho.
 *   **Quebra de Padrão**: Se uma solução de design for parecida com a que o mercado corporativo/tech normalmente adota, ela está errada para a PULSO. Faça de outro jeito.
 <!-- END:pulso-visual-guideline -->
+
+<!-- BEGIN:pulso-local-execution-standard -->
+## Execução local e Presença (Aplica-se a toda versão da PULSO)
+
+Antes de alterar ou publicar a PULSO, leia
+`docs/contexto/pulso-local-execution-standard-v1.md` quando a mudança tocar
+desktop, voz, ações locais, WhatsApp, Notion, Antigravity, arquivos ou apps.
+
+Regras invariantes:
+
+* A PULSO é a superfície humana; OpenClaw/Lótus coordena; o iMac é executor
+  local opcional. A PULSO deve continuar útil quando o Mac estiver desligado.
+* Detecte e prove capacidades em runtime. Nunca presuma que nó, app, sidecar,
+  Screen Recording, Accessibility ou Automation estão disponíveis.
+* Prefira API, MCP, CLI e arquivos. Mouse e teclado exigem uma janela de uso
+  exclusivo anunciada ao Fê e não podem sequestrar a tela silenciosamente.
+* Ações mecânicas locais não precisam de modelo; interpretação, decisão e
+  crítica continuam no orquestrador. Não mova o cérebro para o Mac apenas para
+  economizar tokens.
+* Gemini Live é a camada de conversa imediata do modo Presença; OpenClaw é o
+  cérebro canônico. Kokoro é TTS do fluxo turn-based e precisa de fallback
+  explícito entre sidecar local, Kokoro VPS e voz nativa.
+* Toda release desktop valida nó offline/online, permissões reais, sidecars,
+  fallback de voz e uma prova local reversível. Registre o que não foi testado.
+<!-- END:pulso-local-execution-standard -->

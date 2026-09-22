@@ -35,6 +35,9 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      - name: Prepare Kokoro desktop resources
+        run: npm run pulso:setup
+
       - name: Build Tauri app (macOS, x86_64)
         run: npm run pulso:app:build -- --target x86_64-apple-darwin
         env:
