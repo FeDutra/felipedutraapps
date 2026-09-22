@@ -12,14 +12,23 @@ export function hasGeminiLiveConfig() {
 
 export function readPresenceTransportPreference(): PresenceTransportPreference {
   if (typeof window === 'undefined') return 'auto';
-  const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
-  if (saved === 'gemini_live' || saved === 'turn_based' || saved === 'auto') return saved;
+  try {
+    const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
+    if (saved === 'gemini_live' || saved === 'turn_based' || saved === 'auto') return saved;
+  } catch {
+    // Some desktop WebViews can deny storage while the custom asset origin is
+    // being initialized. Presence must still open with its safe default.
+  }
   return 'auto';
 }
 
 export function writePresenceTransportPreference(preference: PresenceTransportPreference) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, preference);
+  try {
+    window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, preference);
+  } catch {
+    // The preference is an optimization, never a startup requirement.
+  }
 }
 
 export function shouldUseGeminiLive(preference: PresenceTransportPreference, search = '') {
@@ -32,9 +41,17 @@ export function shouldUseGeminiLive(preference: PresenceTransportPreference, sea
 
 export function getPresenceDeviceId() {
   if (typeof window === 'undefined') return 'server';
-  const existing = window.localStorage.getItem(PRESENCE_DEVICE_ID_STORAGE_KEY);
-  if (existing) return existing;
+  try {
+    const existing = window.localStorage.getItem(PRESENCE_DEVICE_ID_STORAGE_KEY);
+    if (existing) return existing;
+  } catch {
+    // Continue with an ephemeral identifier when persistence is unavailable.
+  }
   const generated = globalThis.crypto?.randomUUID?.() || `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  window.localStorage.setItem(PRESENCE_DEVICE_ID_STORAGE_KEY, generated);
+  try {
+    window.localStorage.setItem(PRESENCE_DEVICE_ID_STORAGE_KEY, generated);
+  } catch {
+    // Ephemeral is sufficient for observability; continuity is session-based.
+  }
   return generated;
 }
