@@ -35,12 +35,19 @@ function normalize(input: string) {
     .trim();
 }
 
+function normalizeRequestedApp(input: string) {
+  return input
+    .replace(/^(?:(?:o|a|meu|minha)\s+)*/g, '')
+    .replace(/^(?:(?:aplicativo|aplicacao|app|programa)(?:\s+de)?\s+)/g, '')
+    .trim();
+}
+
 function resolveOpenApp(input: string) {
   const normalized = normalize(input);
-  const match = normalized.match(/^(?:lotus\s+)?(?:abre|abra|abrir|pode abrir)(?:\s+(?:pra mim|para mim))?\s+(?:(?:o|a|meu|minha)\s+)?(.+?)(?:\s+(?:pra mim|para mim|por favor))?$/);
+  const match = normalized.match(/^(?:lotus\s+)?(?:abre|abra|abrir|pode abrir)(?:\s+(?:pra mim|para mim))?\s+(.+?)(?:\s+(?:pra mim|para mim|por favor))?$/);
   if (!match) return null;
 
-  const requested = match[1].trim();
+  const requested = normalizeRequestedApp(match[1]);
   return APP_ALIASES.find(app => app.aliases.includes(requested)) || null;
 }
 
