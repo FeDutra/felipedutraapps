@@ -11,10 +11,6 @@ const FILES = [
   {
     name: 'voices.bin',
     url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin'
-  },
-  {
-    name: 'voices.json',
-    url: 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices.json'
   }
 ];
 
@@ -96,6 +92,12 @@ async function main() {
         process.exit(1);
       }
     }
+  }
+
+  const voicesJson = path.join(RESOURCES_DIR, 'voices.json');
+  if (!fs.existsSync(voicesJson)) {
+    console.error('[ERROR] Tracked resource voices.json is missing. Restore it from the repository.');
+    process.exit(1);
   }
   console.log("All model files are set up in src-tauri/resources!");
 }
