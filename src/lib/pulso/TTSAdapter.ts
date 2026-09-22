@@ -22,7 +22,9 @@ export interface TTSPreferences {
 
 const STORAGE_KEY = 'pulso_tts_preferences';
 const MIGRATION_KEY = 'pulso_tts_migration_v1_kokoro_default';
+const DESKTOP_SIDECAR_MIGRATION_KEY = 'pulso_tts_migration_v2_desktop_sidecar';
 const DEFAULT_KOKORO_VOICE = 'pf_dora(0.70)+af_bella(0.30)';
+const KOKORO_REMOTE_ENDPOINT = 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
 
 const isKokoroProvider = (provider: TTSProvider) => (
   provider === 'local_kokoro'
@@ -53,17 +55,17 @@ const DEFAULT_PREFERENCES: TTSPreferences = {
 
 const getKokoroEndpoint = () => {
   if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('pulso_tts_kokoro_endpoint');
+    if (custom) return custom;
+
     // Detect if we are running in a remote web browser (not local desktop/app)
     const isRemoteWeb = window.location.hostname !== 'localhost' && 
                         window.location.hostname !== '127.0.0.1' && 
                         !window.location.protocol.startsWith('tauri');
     
-    if (isRemoteWeb) {
-      return 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
+    if (isRemoteWeb || isTauriApp()) {
+      return KOKORO_REMOTE_ENDPOINT;
     }
-
-    const custom = localStorage.getItem('pulso_tts_kokoro_endpoint');
-    if (custom) return custom;
   }
   return process.env.NEXT_PUBLIC_KOKORO_ENDPOINT || 'http://127.0.0.1:8880/v1/audio/speech';
 };
@@ -94,6 +96,15 @@ export class TTSAdapter {
           this.preferences.ttsProvider = 'kokoro_http';
         }
         localStorage.setItem(MIGRATION_KEY, '1');
+      }
+
+      // No desktop empacotado, o sidecar é a primeira rota. Se ele falhar, a
+      // geração cai para o Kokoro VPS antes de considerar voz nativa.
+      if (isTauriApp() && !localStorage.getItem(DESKTOP_SIDECAR_MIGRATION_KEY)) {
+        if (this.preferences.ttsProvider === 'kokoro_http') {
+          this.preferences.ttsProvider = 'local_kokoro_sidecar';
+        }
+        localStorage.setItem(DESKTOP_SIDECAR_MIGRATION_KEY, '1');
       }
 
       if (isKokoroProvider(this.preferences.ttsProvider)) {
@@ -519,37 +530,61 @@ export class TTSAdapter {
     }
 
     if (provider === 'local_kokoro_sidecar') {
-      const response = await fetch('http://127.0.0.1:14321', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: chunkText,
-          voice: actualVoice,
-          speed: actualRate,
-          lang: 'pt-br'
-        }),
-        signal
-      });
+      try {
+        const response = await fetch('http://127.0.0.1:14321', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: chunkText,
+            voice: actualVoice,
+            speed: actualRate,
+            lang: 'pt-br'
+          }),
+          signal
+        });
 
-      if (!response.ok) {
-        throw new Error(`Kokoro sidecar returned status ${response.status}`);
-      }
+        if (!response.ok) {
+          throw new Error(`Kokoro sidecar returned status ${response.status}`);
+        }
 
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(`Kokoro sidecar error: ${data.error}`);
-      }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(`Kokoro sidecar error: ${data.error}`);
+        }
 
-      const base64Wav = data.audio;
-      const byteCharacters = atob(base64Wav);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+        const base64Wav = data.audio;
+        const byteCharacters = atob(base64Wav);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'audio/wav' });
+        this.audioCache.set(cacheKey, blob);
+        return blob;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        console.warn('[PULSO_TTS_LOCAL_SIDECAR_FAILED_FALLBACK_VPS]', error);
+
+        const response = await fetch(KOKORO_REMOTE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'kokoro',
+            input: chunkText,
+            voice: actualVoice,
+            response_format: 'mp3',
+            speed: actualRate
+          }),
+          signal
+        });
+        if (!response.ok) {
+          throw new Error(`Kokoro VPS fallback returned status ${response.status}`);
+        }
+        const blob = await response.blob();
+        this.audioCache.set(cacheKey, blob);
+        return blob;
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'audio/wav' });
-      this.audioCache.set(cacheKey, blob);
-      return blob;
     }
 
     let endpoint = getKokoroEndpoint();

@@ -1,5 +1,17 @@
 # Rollback — Modo Presença em tempo real
 
+## Padrão de execução local e correção do Kokoro desktop — 22/09/2026
+
+- Baseline: `6489705d2f2bd2852f6d06765fb69a4a74923073` em `main`.
+- Escopo: contrato durável do nó local, gate de release, recursos Kokoro no CI,
+  seleção do sidecar no desktop e fallback sidecar → VPS.
+- Reversão: reverter apenas o commit desta frente e refazer o build desktop.
+  Isso não remove nem altera o nó OpenClaw já instalado no iMac.
+- Contingência sem novo build: selecionar `kokoro_http` no app e usar o endpoint
+  público da VPS; a web continua independente do sidecar local.
+
+---
+
 ## Split de até quatro chats — 20/09/2026
 
 - Baseline: `27f8b639bc2adcbd767cc8edd45c41e76a1823b1`
