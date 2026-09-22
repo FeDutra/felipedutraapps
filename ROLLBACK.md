@@ -1,5 +1,12 @@
 # Rollback — Presença distribuída (22/09/2026)
 
+## Sinônimos naturais da via rápida local
+
+- Escopo: remover determinantes e prefixos como `meu`, `aplicativo`, `app de`
+  e `programa` antes de resolver o nome exato do aplicativo permitido.
+- Reversão: reverter somente o commit dos sinônimos; a via rápida original e
+  o restante da Presença permanecem intactos.
+
 ## Aplicativo e transporte
 
 - Encerre `/Applications/PULSO.app`, retenha a versão atual e restaure `/Applications/PULSO.backup-20260922-161726.app` como `/Applications/PULSO.app`.
