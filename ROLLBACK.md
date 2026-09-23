@@ -4,6 +4,10 @@
   no iMac e preservada como `PULSO.failed-orb-glass-20260923-093847.app`.
   A instalação ativa voltou ao backup anterior enquanto a lente curta e a
   âncora de saída do split são corrigidas.
+- Segunda contenção: a lente curta em forma de disco também foi reprovada e
+  preservada como `PULSO.failed-orb-basic-20260923-100604.app`. A correção
+  seguinte mantém o centro totalmente transparente e aplica a matéria da
+  MESA somente como aura externa, com máscara radial até zero.
 - Correção posterior da Orbe: o vidro contextual foi retirado da árvore
   transformada da Orbe e promovido a uma superfície irmã, porque o WebKit
   não amostrava o split pelo `backdrop-filter` anterior. Para reverter apenas

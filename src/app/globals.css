@@ -297,27 +297,30 @@ body {
 .lotus-orb-context-glass {
   border-radius: 9999px;
   pointer-events: none;
-  /* A mesma matéria da sobreposição global, limitada a uma margem curta
-     em torno da Orbe. Sem placa colorida e sem um segundo tempo de arrasto. */
-  background: rgba(12, 12, 12, 0.42);
+  /* A MESA usa fundo transparente + backdrop-blur-xl. Aqui essa mesma
+     matéria existe só do lado de fora da linha branca: uma aura, não um
+     disco. A máscara nasce na borda externa da Orbe e morre em zero. */
+  background: transparent;
   -webkit-mask-image: radial-gradient(
     circle at center,
-    #000 0%,
-    #000 72%,
-    rgba(0, 0, 0, 0.72) 82%,
-    rgba(0, 0, 0, 0.28) 91%,
+    transparent 0%,
+    transparent 83.5%,
+    rgba(0, 0, 0, 0.58) 84.5%,
+    rgba(0, 0, 0, 0.34) 91%,
+    rgba(0, 0, 0, 0.12) 96%,
     transparent 100%
   );
   mask-image: radial-gradient(
     circle at center,
-    #000 0%,
-    #000 72%,
-    rgba(0, 0, 0, 0.72) 82%,
-    rgba(0, 0, 0, 0.28) 91%,
+    transparent 0%,
+    transparent 83.5%,
+    rgba(0, 0, 0, 0.58) 84.5%,
+    rgba(0, 0, 0, 0.34) 91%,
+    rgba(0, 0, 0, 0.12) 96%,
     transparent 100%
   );
-  -webkit-backdrop-filter: blur(32px) saturate(125%);
-  backdrop-filter: blur(32px) saturate(125%);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
   transition: transform 1500ms var(--lotus-travel-ease);
   will-change: transform;
 }
