@@ -1,3 +1,16 @@
+# Rollback — Presença + MESA contextual (23/09/2026)
+
+- Escopo: destino geral de área, orçamento de um checkpoint por turno, abertura
+  automática de resultados relevantes na MESA e fechamento local por voz.
+- Reversão de código: reverter o commit desta frente e refazer o aplicativo
+  Intel. A Presença distribuída, a Kokoro e a via rápida de aplicativos ficam.
+- Reversão de dados: arquivar a sessão `despertar_geral` caso ela tenha sido
+  criada no Firestore; nenhum histórico existente é movido ou apagado.
+- Reversão no iMac: encerrar `/Applications/PULSO.app` e restaurar o backup
+  `PULSO.backup-before-presence-mesa-*.app` preservado na instalação.
+
+---
+
 # Rollback — Presença distribuída (22/09/2026)
 
 ## Roteador cognitivo local e contexto quente

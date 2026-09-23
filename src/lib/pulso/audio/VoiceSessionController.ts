@@ -29,6 +29,7 @@ export interface VoiceSessionConfig {
     presenceRouting?: PresenceRoutingDecision;
   }) => Promise<{ responseText: string } | null | void>;
   recordLocalFastPath?: (text: string, result: LocalPresenceFastPathResult) => Promise<void>;
+  handlePresenceUiIntent?: (text: string) => Promise<LocalPresenceFastPathResult> | LocalPresenceFastPathResult;
   routePresenceIntent?: (text: string) => Promise<PresenceRoutingDecision> | PresenceRoutingDecision;
   /**
    * Modo experimental: usa a Gemini Live API (voz-para-voz em streaming via
@@ -105,6 +106,16 @@ export class VoiceSessionController {
       pitch: 1,
       volume: 1
     }, false);
+  }
+
+  private async executeImmediatePresenceAction(userText: string) {
+    const uiResult = await this.config.handlePresenceUiIntent?.(userText);
+    const result = uiResult?.handled ? uiResult : await executeLocalPresenceFastPath(userText);
+    if (!result.handled || !result.responseText) return null;
+
+    this.log('PRESENCE_LOCAL_FAST_PATH_COMPLETED', result);
+    await this.config.recordLocalFastPath?.(userText, result);
+    return result;
   }
 
   private transition(newState: VoiceSessionState) {
@@ -495,10 +506,8 @@ export class VoiceSessionController {
       this.log('LLM_REQUEST_STARTED');
       this.playSoundCue('sent');
 
-      const localResult = await executeLocalPresenceFastPath(userText);
-      if (localResult.handled && localResult.responseText) {
-        this.log('PRESENCE_LOCAL_FAST_PATH_COMPLETED', localResult);
-        await this.config.recordLocalFastPath?.(userText, localResult);
+      const localResult = await this.executeImmediatePresenceAction(userText);
+      if (localResult?.handled && localResult.responseText) {
         await this.speakAssistant(localResult.responseText);
         return;
       }
@@ -603,10 +612,8 @@ export class VoiceSessionController {
         this.log('GEMINI_LIVE_USER_TURN_READY', { userText });
         this.config.onPresenceWorkChange?.(true);
         try {
-          const localResult = await executeLocalPresenceFastPath(userText);
-          if (localResult.handled && localResult.responseText) {
-            this.log('PRESENCE_LOCAL_FAST_PATH_COMPLETED', localResult);
-            await this.config.recordLocalFastPath?.(userText, localResult);
+          const localResult = await this.executeImmediatePresenceAction(userText);
+          if (localResult?.handled && localResult.responseText) {
             this.config.onPresenceWorkChange?.(false);
             this.geminiLiveClient?.sendResultText(localResult.responseText);
             return;

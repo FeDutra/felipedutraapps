@@ -445,6 +445,11 @@ import {
   refreshPresenceHotContext,
   routePresenceIntent,
 } from '../../../lib/pulso/presence/PresenceCognitiveRouter';
+import {
+  createPresenceMesaArtifact,
+  isMesaDismissUtterance,
+  shouldOpenPresenceMesa,
+} from '../../../lib/pulso/presence/PresenceResultSurface';
 
 
 import { 
@@ -493,7 +498,7 @@ import { onSnapshot, collection, query, where, doc, setDoc, updateDoc, getDocs, 
 import { db, storage } from '../../../shared/lib/firebase/client';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
-import { PulsoContextNode, Session } from '../types/pulso.types';
+import { Area, PulsoContextNode, Session } from '../types/pulso.types';
 import { sessionsService } from '../services/sessionsService';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
@@ -2041,6 +2046,7 @@ export default function LivePage() {
   // Atualizações podem reaparecer em cada snapshot do Firestore. Esta memória
   // local impede a mesma frase de ser narrada repetidamente na voz.
   const narratedPresenceProgressRef = React.useRef<Set<string>>(new Set());
+  const presentedPresenceResultsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -2678,6 +2684,29 @@ export default function LivePage() {
               const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
               const presenceController = voiceSessionControllerRef.current;
               const useGeminiNarration = presenceController?.isGeminiLiveActive() ?? false;
+
+              if (
+                status === 'success'
+                && hasRealResponse
+                && isPresenceActive
+                && isRecent
+                && !presentedPresenceResultsRef.current.has(originRequestId)
+                && shouldOpenPresenceMesa(responseText)
+              ) {
+                const responseSession = sessionsRef.current.find(session => session.contextId === req.contextId);
+                const responseArea = (state?.allAreas || []).find((area: Area) => area.id === req.areaId);
+                setActiveMesaArtifact(createPresenceMesaArtifact({
+                  requestId: originRequestId,
+                  resultText: responseText,
+                  contextId: req.contextId || undefined,
+                  areaName: responseArea?.name,
+                  sessionLabel: responseSession?.label,
+                }));
+                setIsMesaCollapsed(false);
+                setIsMesaOpen(true);
+                presentedPresenceResultsRef.current.add(originRequestId);
+                console.log('[PULSO_PRESENCE_MESA_OPENED]', { requestId: originRequestId, contextId: req.contextId });
+              }
               
               if (!isPresenceActive || !isRecent) {
                 if (!spokenRequestsRef.current.has(req.id)) {
@@ -3668,6 +3697,20 @@ export default function LivePage() {
     return decision;
   }, [activeContextNode, sessions, state?.allAreas]);
 
+  const handlePresenceUiIntent = React.useCallback((input: string): LocalPresenceFastPathResult => {
+    if (!isMesaOpen || !isMesaDismissUtterance(input)) return { handled: false };
+
+    setIsMesaOpen(false);
+    setIsMesaCollapsed(false);
+    return {
+      handled: true,
+      action: 'close_mesa',
+      target: activeMesaArtifact?.id || 'mesa',
+      responseText: 'Fechei a MESA.',
+      durationMs: 0,
+    };
+  }, [activeMesaArtifact?.id, isMesaOpen]);
+
   const handleRenameChat = async (contextId: string) => {
     const trimmed = editingContextLabel.trim();
     if (trimmed) {
@@ -4294,6 +4337,7 @@ ${data.transcription}`, {
       spokenRequestsRef.current.clear();
       voiceReplyRequestsRef.current.clear();
       narratedPresenceProgressRef.current.clear();
+      presentedPresenceResultsRef.current.clear();
 
       const controller = new VoiceSessionController({
         activeContextNode,
@@ -4319,6 +4363,7 @@ ${data.transcription}`, {
           return handleSendMessage(text, options);
         },
         recordLocalFastPath: recordLocalPresenceFastPath,
+        handlePresenceUiIntent,
         routePresenceIntent: routePresenceInput,
       });
 
@@ -4334,7 +4379,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath, routePresenceInput]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;
