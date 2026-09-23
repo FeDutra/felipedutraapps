@@ -5234,6 +5234,22 @@ ${data.transcription}`, {
         </div>
       </div>
 
+        {/* O vidro da Orbe fica fora da arvore transformada da propria
+            Orbe. No WebKit/Tauri, backdrop-filter dentro daquele transform
+            nao amostra os paineis do split. Esta superficie irma acompanha
+            as mesmas coordenadas sem criar um Backdrop Root intermediario. */}
+        <div
+          aria-hidden="true"
+          className="lotus-orb-context-glass fixed z-[64] pointer-events-none"
+          data-entry-phase={orbEntryPhase}
+          style={{
+            left: `${orbTarget.x - (588 * orbOuterScale) / 2}px`,
+            top: `${orbTarget.y - (588 * orbOuterScale) / 2}px`,
+            width: `${588 * orbOuterScale}px`,
+            height: `${588 * orbOuterScale}px`,
+          }}
+        />
+
         <div
           role="button"
           tabIndex={0}
@@ -5262,15 +5278,6 @@ ${data.transcription}`, {
             transform: `translate3d(${orbTarget.x - 128}px, ${orbTarget.y - 128}px, 0) scale(${orbOuterScale})`,
           }}
         >
-          {/* A lente acompanha a escala real da membrana, mas permanece fora
-              da camada animada que usa `filter`. Assim ela consegue amostrar
-              a conversa real por trás da orbe, inclusive no WebKit. */}
-          <div
-            aria-hidden="true"
-            className={`lotus-orb-lens-scale absolute flex items-center justify-center origin-center pointer-events-none ${orbVisualScaleClass}`}
-          >
-            <div className="lotus-orb-lens" />
-          </div>
           <div
             className="lotus-orb-visual absolute inset-0 flex items-center justify-center origin-center"
             onAnimationEnd={handleOrbEntryAnimationEnd}

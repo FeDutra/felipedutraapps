@@ -294,96 +294,57 @@ body {
     opacity 1000ms var(--lotus-motion-ease);
 }
 
-.lotus-orb-lens-scale {
-  width: 422px;
-  height: 422px;
-  transition: scale 360ms var(--lotus-motion-ease);
-  will-change: scale;
-}
-
-.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens-scale,
-.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens-scale {
-  transition: none;
-}
-
-.lotus-orb-lens {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 588px;
-  height: 588px;
+.lotus-orb-context-glass {
   border-radius: 9999px;
-  transform: translate(-50%, -50%);
   pointer-events: none;
-  /* Lente sem cor: o blur governa a leitura e uma sombra preta mínima,
-     em multiply, devolve contraste sem criar matéria cinza ou leitosa.
-     Pico de preto reduzido (Fe: "diminui um pouco o preto") e máscara
-     redesenhada com decaimento longo e contínuo até 100% — sem plateau
-     "transparent/transparent" no fim, que ainda deixava perceptível uma
-     borda dura bem no limite da lente (Fe: "o fim do radial ainda aparece
-     com linha dura. suavize."). */
+  /* Mesma matéria da MESA: vidro escuro de baixa opacidade e blur real.
+     A máscara radial leva a matéria a zero antes da borda física, sem
+     outline, disco cinza ou término duro. */
   background: radial-gradient(
     circle at center,
-    rgba(0, 0, 0, 0.045) 0%,
-    rgba(0, 0, 0, 0.028) 36%,
-    rgba(0, 0, 0, 0.013) 57%,
-    rgba(0, 0, 0, 0.004) 72%,
-    transparent 90%
+    rgba(12, 12, 12, 0.34) 0%,
+    rgba(12, 12, 12, 0.26) 38%,
+    rgba(12, 12, 12, 0.14) 62%,
+    rgba(12, 12, 12, 0.04) 80%,
+    transparent 94%
   );
-  mix-blend-mode: multiply;
   -webkit-mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 22%,
-    rgba(0, 0, 0, 0.82) 34%,
-    rgba(0, 0, 0, 0.6) 46%,
-    rgba(0, 0, 0, 0.4) 57%,
-    rgba(0, 0, 0, 0.24) 67%,
-    rgba(0, 0, 0, 0.13) 76%,
-    rgba(0, 0, 0, 0.06) 84%,
-    rgba(0, 0, 0, 0.02) 92%,
+    #000 30%,
+    rgba(0, 0, 0, 0.82) 48%,
+    rgba(0, 0, 0, 0.52) 64%,
+    rgba(0, 0, 0, 0.24) 78%,
+    rgba(0, 0, 0, 0.08) 89%,
     transparent 100%
   );
   mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 22%,
-    rgba(0, 0, 0, 0.82) 34%,
-    rgba(0, 0, 0, 0.6) 46%,
-    rgba(0, 0, 0, 0.4) 57%,
-    rgba(0, 0, 0, 0.24) 67%,
-    rgba(0, 0, 0, 0.13) 76%,
-    rgba(0, 0, 0, 0.06) 84%,
-    rgba(0, 0, 0, 0.02) 92%,
+    #000 30%,
+    rgba(0, 0, 0, 0.82) 48%,
+    rgba(0, 0, 0, 0.52) 64%,
+    rgba(0, 0, 0, 0.24) 78%,
+    rgba(0, 0, 0, 0.08) 89%,
     transparent 100%
   );
-  -webkit-backdrop-filter: blur(85px) brightness(0.985);
-  backdrop-filter: blur(85px) brightness(0.985);
-  opacity: 0.75;
-  transition: opacity 650ms var(--lotus-motion-ease),
-    transform 800ms var(--lotus-motion-ease);
-  will-change: opacity, transform, backdrop-filter;
+  -webkit-backdrop-filter: blur(34px) saturate(122%) brightness(0.88);
+  backdrop-filter: blur(34px) saturate(122%) brightness(0.88);
+  opacity: 0.92;
+  transition: left 1500ms var(--lotus-travel-ease),
+    top 1500ms var(--lotus-travel-ease),
+    width 1500ms var(--lotus-travel-ease),
+    height 1500ms var(--lotus-travel-ease),
+    opacity 650ms var(--lotus-motion-ease);
+  will-change: left, top, width, height, opacity, backdrop-filter;
 }
 
-.lotus-orb-presence:hover .lotus-orb-lens {
-  opacity: 0.8;
-  transform: translate(-50%, -50%) scale(1.018);
+.lotus-orb-context-glass[data-entry-phase='birth'] {
+  opacity: 0.26;
 }
 
-.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens {
-  opacity: 0.27;
-  transform: translate(-50%, -50%) scale(0.82);
-}
-
-.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens {
-  opacity: 0.75;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens,
-.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens {
-  opacity: 0.75;
-  transform: translate(-50%, -50%) scale(1);
+.lotus-orb-context-glass[data-entry-phase='handoff'],
+.lotus-orb-context-glass[data-entry-phase='travel'] {
   transition: none;
 }
 

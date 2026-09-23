@@ -1,5 +1,11 @@
 # Rollback — consistência visual da PULSO (23/09/2026)
 
+- Correção posterior da Orbe: o vidro contextual foi retirado da árvore
+  transformada da Orbe e promovido a uma superfície irmã, porque o WebKit
+  não amostrava o split pelo `backdrop-filter` anterior. Para reverter apenas
+  esse ajuste, reverta o commit da correção da Orbe e refaça o build Intel;
+  a release visual anterior permanece recuperável no iMac em
+  `/Applications/PULSO.backup-visual-20260923-085132.app`.
 - Base reversível: branch `fix/pulso-visual-consistency-20260923`, criada sobre `main` em `b7b98317` e integrada, antes das alterações, com `feat/pulso-presence-edge-20260922` (`4da2739d`).
 - Reversão: reinstalar o último artefato aprovado da execução associada ao commit `4da2739d` ou retornar o frontend para esse commit; nenhum dado de usuário é migrado por esta mudança.
 - Escopo: vidro suave de sobreposição, renderer compartilhado entre chat/split, limites responsivos, centralização da Presença e âncoras de leitura.
