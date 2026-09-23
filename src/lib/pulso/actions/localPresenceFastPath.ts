@@ -2,7 +2,7 @@ import { localActions } from './localActions';
 
 export interface LocalPresenceFastPathResult {
   handled: boolean;
-  action?: 'open_app';
+  action?: 'open_app' | 'close_mesa';
   target?: string;
   responseText?: string;
   durationMs?: number;

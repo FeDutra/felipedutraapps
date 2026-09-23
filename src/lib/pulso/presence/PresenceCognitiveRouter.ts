@@ -1,6 +1,6 @@
 import type { Area, PulsoContextNode } from '../../../apps/pulso/types/pulso.types';
 
-export const PRESENCE_ROUTER_VERSION = '1.0.0-local-hot-context';
+export const PRESENCE_ROUTER_VERSION = '1.1.0-area-overview';
 
 const HOT_CONTEXT_KEY = 'pulso.presence.hot-context.v1';
 const ROUTE_CONFIDENCE_THRESHOLD = 0.78;
@@ -8,8 +8,9 @@ const MAX_RECENT_ROUTES = 24;
 
 const STOP_WORDS = new Set([
   'a', 'ao', 'aos', 'as', 'com', 'da', 'das', 'de', 'do', 'dos', 'e', 'em',
-  'me', 'meu', 'minha', 'o', 'os', 'para', 'por', 'pra', 'pro', 'que', 'um',
-  'uma', 'ver', 've', 'olha', 'olhada', 'lotus',
+  'me', 'meu', 'minha', 'mim', 'o', 'os', 'para', 'por', 'pra', 'pro', 'que',
+  'um', 'uma', 'ver', 've', 'olha', 'olhada', 'lotus', 'como', 'esta', 'ta',
+  'estao', 'anda', 'andando', 'situacao',
 ]);
 
 const SESSION_ALIASES: Record<string, string[]> = {
@@ -141,9 +142,9 @@ function phrasesForSession(session: PulsoContextNode) {
   return Array.from(new Set([
     normalize(session.label),
     normalize(session.subareaId || ''),
-    ...normalize(session.contextId).split(' '),
+    normalize(session.contextId),
     ...(SESSION_ALIASES[session.contextId] || []).map(normalize),
-  ].filter(Boolean)));
+  ].filter(phrase => Boolean(phrase) && !STOP_WORDS.has(phrase))));
 }
 
 function areaScore(input: string, area: Area) {
@@ -153,27 +154,66 @@ function areaScore(input: string, area: Area) {
   return { score: matches.length > 0 ? 3 + Math.min(matches.length, 3) : 0, matches };
 }
 
+function findAreaOverviewSession(area: Area, sessions: PulsoContextNode[]) {
+  const candidates = sessions.filter(session => !session.archived && session.areaId === area.id);
+  const areaName = normalize(area.name);
+  const genericNames = new Set([
+    areaName,
+    `${areaName} geral`,
+    `geral ${areaName}`,
+    `${areaName} cockpit`,
+    `cockpit ${areaName}`,
+    'geral',
+    'cockpit',
+    'visao geral',
+  ]);
+
+  return candidates.find(session => genericNames.has(normalize(session.label)))
+    || candidates.find(session => /(?:^|_)(?:geral|cockpit|overview)$/.test(normalize(session.contextId).replace(/\s+/g, '_')))
+    || candidates.find(session => session.isDefault)
+    || null;
+}
+
 export function routePresenceIntent(input: PresenceRoutingInput): PresenceRoutingDecision {
   const startedAt = performance.now();
   const utterance = normalize(input.utterance);
   const inputTokens = new Set(meaningfulTokens(utterance));
-  const candidates = input.sessions.filter(session => !session.archived);
+  const allCandidates = input.sessions.filter(session => !session.archived);
   const hotContext = input.hotContext ?? safeReadStorage();
   const recentRank = new Map((hotContext?.recentRoutes || []).map((route, index) => [route.contextId, index]));
 
+  const matchedAreas = input.areas
+    .map(area => ({ area, ...areaScore(utterance, area) }))
+    .filter(match => match.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const explicitArea = matchedAreas.length > 0 && (matchedAreas.length === 1 || matchedAreas[0].score > matchedAreas[1].score)
+    ? matchedAreas[0]
+    : null;
+  // Uma área explicitamente nomeada delimita a busca. Sem isso, "Despertar"
+  // também concorria com sessões antigas em Trabalho e uma palavra fraca
+  // como "mim" conseguia sequestrar o turno para um projeto qualquer.
+  const candidates = explicitArea
+    ? allCandidates.filter(session => session.areaId === explicitArea.area.id)
+    : allCandidates;
+
   const scored = candidates.map(session => {
     let score = 0;
+    let sessionScore = 0;
     const matchedTerms = new Set<string>();
 
     for (const phrase of phrasesForSession(session)) {
       if (phrase.length > 2 && utterance.includes(phrase)) {
-        score += phrase.includes(' ') ? 8 : 6;
+        const phraseScore = phrase.includes(' ') ? 8 : 6;
+        score += phraseScore;
+        sessionScore += phraseScore;
         matchedTerms.add(phrase);
       } else {
         const tokens = meaningfulTokens(phrase);
         const overlap = tokens.filter(token => inputTokens.has(token));
         if (overlap.length > 0) {
-          score += overlap.length * 2;
+          const overlapScore = overlap.length * 2;
+          score += overlapScore;
+          sessionScore += overlapScore;
           overlap.forEach(token => matchedTerms.add(token));
         }
       }
@@ -190,8 +230,42 @@ export function routePresenceIntent(input: PresenceRoutingInput): PresenceRoutin
     if (rank !== undefined && score > 0) score += Math.max(0.25, 1.25 - rank * 0.15);
     if (session.contextId === input.activeContext.contextId) score += 0.5;
 
-    return { session, score, matchedTerms: Array.from(matchedTerms) };
+    return { session, score, sessionScore, matchedTerms: Array.from(matchedTerms) };
   }).sort((a, b) => b.score - a.score);
+
+  if (explicitArea) {
+    const strongestSessionSignal = scored[0]?.sessionScore || 0;
+    if (strongestSessionSignal < 4) {
+      const overview = findAreaOverviewSession(explicitArea.area, allCandidates);
+      if (overview) {
+        const durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
+        return {
+          target: overview,
+          switched: overview.contextId !== input.activeContext.contextId,
+          confidence: 0.96,
+          reason: `consulta ampla direcionada ao cockpit da área ${explicitArea.area.name}`,
+          matchedTerms: explicitArea.matches,
+          routerVersion: PRESENCE_ROUTER_VERSION,
+          decidedAtMs: Date.now(),
+          durationMs,
+        };
+      }
+
+      if (input.activeContext.areaId === explicitArea.area.id) {
+        const durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
+        return {
+          target: input.activeContext,
+          switched: false,
+          confidence: 0.72,
+          reason: `área reconhecida sem cockpit canônico; preservada a sessão ativa da área`,
+          matchedTerms: explicitArea.matches,
+          routerVersion: PRESENCE_ROUTER_VERSION,
+          decidedAtMs: Date.now(),
+          durationMs,
+        };
+      }
+    }
+  }
 
   const first = scored[0];
   const second = scored[1];
@@ -219,4 +293,3 @@ export function routePresenceIntent(input: PresenceRoutingInput): PresenceRoutin
     durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
   };
 }
-

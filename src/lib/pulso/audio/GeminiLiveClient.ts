@@ -115,10 +115,11 @@ export class GeminiLiveClient {
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null;
   private lastNarrationCompletedAt = 0;
   private lastCheckpointSpokenAt = 0;
+  private checkpointSpokenThisTurn = false;
 
   // Equivale ao soft timeout recomendado para conversa: presença cedo, sem
   // virar relógio. O espaçamento longo vale apenas entre marcos posteriores.
-  private static readonly FIRST_CHECKPOINT_DELAY_MS = 3_000;
+  private static readonly FIRST_CHECKPOINT_DELAY_MS = 12_000;
   private static readonly MIN_CHECKPOINT_GAP_MS = 10_000;
 
   private closedByUser = false;
@@ -308,6 +309,8 @@ export class GeminiLiveClient {
           this.pendingUserTranscript = '';
           if (userText && !isPurelySocialTurn(userText)) {
             this.awaitingResult = true;
+            this.checkpointSpokenThisTurn = false;
+            this.lastCheckpointSpokenAt = 0;
             this.config.onUserTurnReady?.(userText);
           }
         }
@@ -447,6 +450,7 @@ export class GeminiLiveClient {
    */
   private scheduleDeferredCheckpoint() {
     if (!this.deferredCheckpointText || !this.awaitingResult) return;
+    if (this.checkpointSpokenThisTurn) return;
     if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
     // A confirmação inicial ainda está tocando: guarda o marco e só calcula
     // sua janela depois da fala terminar de fato.
@@ -465,9 +469,11 @@ export class GeminiLiveClient {
       const text = this.deferredCheckpointText;
       this.deferredCheckpointText = null;
       if (!text || !this.awaitingResult) return;
+      if (this.checkpointSpokenThisTurn) return;
       if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
       this.narrationQueue.push({ kind: 'checkpoint', text });
       this.lastCheckpointSpokenAt = Date.now();
+      this.checkpointSpokenThisTurn = true;
       this.flushNarrationQueue();
     }, delay);
   }
@@ -531,6 +537,7 @@ export class GeminiLiveClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     const text = this.normalizeCheckpoint(checkpointText);
     if (!text || !this.awaitingResult) return false;
+    if (this.checkpointSpokenThisTurn) return false;
 
     const queuedCheckpoint = this.narrationQueue.find(item => item.kind === 'checkpoint');
     if (queuedCheckpoint) {
