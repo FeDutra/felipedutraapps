@@ -573,6 +573,29 @@ body {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.05) 5%, black 25%, black 92%, transparent 100%);
 }
 
+/* Uma única matéria para superfícies que precisam passar por cima do
+   conteúdo: transparência escura mínima, blur real e término sem outline.
+   A borda física desaparece antes do fim da máscara. */
+.pulso-overlay-glass {
+  background: rgba(12, 12, 12, 0.42);
+  -webkit-backdrop-filter: blur(32px) saturate(125%);
+  backdrop-filter: blur(32px) saturate(125%);
+}
+
+.pulso-footer-glass {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(12, 12, 12, 0.08) 24%,
+    rgba(12, 12, 12, 0.32) 58%,
+    rgba(12, 12, 12, 0.56) 100%
+  );
+  -webkit-backdrop-filter: blur(24px) saturate(118%);
+  backdrop-filter: blur(24px) saturate(118%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.12) 18%, #000 62%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.12) 18%, #000 62%, #000 100%);
+}
+
 @keyframes watermark-breathe {
   0%, 100% {
     transform: scale(1);

@@ -4,6 +4,7 @@ import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { listen } from '@tauri-apps/api/event';
+import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
 
 import {
   DndContext,
@@ -431,6 +432,24 @@ import { SummaryCards } from '../../../components/pulso/SummaryCards';
 import { intentRouter } from '../../../lib/pulso/llm/IntentRouter';
 import { localActions } from '../../../lib/pulso/actions/localActions';
 import { VoiceSessionController, VoiceSessionState } from '../../../lib/pulso/audio/VoiceSessionController';
+import {
+  getPresenceDeviceId,
+  PresenceTransportPreference,
+  readPresenceTransportPreference,
+  shouldUseGeminiLive,
+  writePresenceTransportPreference,
+} from '../../../lib/pulso/audio/PresenceTransport';
+import {
+  PresenceRoutingDecision,
+  readPresenceHotContext,
+  refreshPresenceHotContext,
+  routePresenceIntent,
+} from '../../../lib/pulso/presence/PresenceCognitiveRouter';
+import {
+  createPresenceMesaArtifact,
+  isMesaDismissUtterance,
+  shouldOpenPresenceMesa,
+} from '../../../lib/pulso/presence/PresenceResultSurface';
 
 
 import { 
@@ -479,7 +498,7 @@ import { onSnapshot, collection, query, where, doc, setDoc, updateDoc, getDocs, 
 import { db, storage } from '../../../shared/lib/firebase/client';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { firestorePaths } from '../services/firestorePaths';
-import { PulsoContextNode, Session } from '../types/pulso.types';
+import { Area, PulsoContextNode, Session } from '../types/pulso.types';
 import { sessionsService } from '../services/sessionsService';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
@@ -1664,6 +1683,7 @@ export default function LivePage() {
   const [ttsPrefs, setTtsPrefs] = React.useState<TTSPreferences>(() => ttsAdapter.getPreferences());
   const [availableVoices, setAvailableVoices] = React.useState<SpeechSynthesisVoice[]>([]);
   const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
+  const [presenceTransport, setPresenceTransport] = React.useState<PresenceTransportPreference>(() => readPresenceTransportPreference());
   const [kokoroEndpoint, setKokoroEndpoint] = React.useState(() => {
     if (typeof window !== 'undefined') {
       return safeStorageGet('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
@@ -1813,6 +1833,8 @@ export default function LivePage() {
 
   const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(true);
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+  const pendingMainScrollRef = React.useRef<{ contextId: string; unreadAfter?: number } | null>(null);
+  const renderedContextRef = React.useRef<string | null>(null);
 
   const focusComposer = React.useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -1821,7 +1843,16 @@ export default function LivePage() {
     });
   }, []);
 
+  const prepareChatScroll = React.useCallback((contextId: string) => {
+    const lastRead = lastReadTimes[contextId];
+    pendingMainScrollRef.current = {
+      contextId,
+      unreadAfter: unreadContexts[contextId] && lastRead ? safeGetTime(lastRead) : undefined,
+    };
+  }, [lastReadTimes, unreadContexts]);
+
   const selectChatForWriting = React.useCallback((contextNode: PulsoContextNode) => {
+    prepareChatScroll(contextNode.contextId);
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
     if (isMobile || !hasSplitChats) {
       setSecondaryContextIds([]);
@@ -1845,11 +1876,12 @@ export default function LivePage() {
     }
     setFocusedPaneContextId(contextNode.contextId);
     focusComposer();
-  }, [activeContextNode.contextId, focusComposer, focusedPaneContextId, hasSplitChats, splitContextNodes]);
+  }, [activeContextNode.contextId, focusComposer, focusedPaneContextId, hasSplitChats, prepareChatScroll, splitContextNodes]);
 
   const openChatInNewPane = React.useCallback((contextId: string) => {
     const contextNode = allContextNodes.find(node => node.contextId === contextId);
     if (!contextNode) return;
+    prepareChatScroll(contextId);
     const alreadyOpen = splitContextNodes.some(node => node.contextId === contextId);
     if (alreadyOpen) {
       setFocusedPaneContextId(contextId);
@@ -1864,7 +1896,7 @@ export default function LivePage() {
     setSecondaryContextIds(current => [...current, contextId].slice(0, 3));
     setFocusedPaneContextId(contextId);
     focusComposer();
-  }, [allContextNodes, focusComposer, splitContextNodes]);
+  }, [allContextNodes, focusComposer, prepareChatScroll, splitContextNodes]);
 
   const closeSplitPane = React.useCallback((contextId: string) => {
     if (contextId === activeContextNode.contextId) {
@@ -2026,6 +2058,7 @@ export default function LivePage() {
   // Atualizações podem reaparecer em cada snapshot do Firestore. Esta memória
   // local impede a mesma frase de ser narrada repetidamente na voz.
   const narratedPresenceProgressRef = React.useRef<Set<string>>(new Set());
+  const presentedPresenceResultsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -2044,8 +2077,7 @@ export default function LivePage() {
   const scrollToBottom = React.useCallback((smooth = true) => {
     if (scrollContainerRef.current) {
       const container = scrollContainerRef.current;
-      container.scrollTop = container.scrollHeight;
-      chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+      container.scrollTo({ top: container.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     }
   }, []);
 
@@ -2310,33 +2342,42 @@ export default function LivePage() {
       setSubmittingExecutionId(null);
     }
   };
-  // Unified robust scroll-to-bottom controller.
-  // Fires when the active session changes (switching chats) or new messages arrive.
-  // Uses requestAnimationFrame so we scroll AFTER the browser has painted the new content.
+  // Reading anchor contract: an unread chat opens at the beginning of its first
+  // unread Lótus message. A previously read chat opens at the latest message.
   React.useEffect(() => {
     if (currentMessages.length === 0) return;
+    const contextChanged = renderedContextRef.current !== activeContextNode.contextId;
+    renderedContextRef.current = activeContextNode.contextId;
+    const pending = pendingMainScrollRef.current?.contextId === activeContextNode.contextId
+      ? pendingMainScrollRef.current
+      : null;
 
-    // Immediate jump (no animation) to ensure the correct position before paint
-    scrollToBottom(false);
-
-    // Then cascade with smooth passes to catch async content (images, lazy markdown, typing bubble)
-    let raf: number;
-    const scheduleRaf = () => {
-      raf = requestAnimationFrame(() => scrollToBottom(false));
+    const applyAnchor = () => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      if (contextChanged && pending?.unreadAfter) {
+        const candidates = Array.from(container.querySelectorAll<HTMLElement>('[data-lotus-message="true"][data-message-time]'));
+        const target = candidates.find(node => Number(node.dataset.messageTime || 0) > pending.unreadAfter!);
+        if (target) {
+          target.scrollIntoView({ block: 'start', behavior: 'auto' });
+          pendingMainScrollRef.current = null;
+          return;
+        }
+      }
+      scrollToBottom(false);
+      pendingMainScrollRef.current = null;
     };
-    scheduleRaf();
 
-    const t1 = setTimeout(() => scrollToBottom(true), 80);
-    const t2 = setTimeout(() => scrollToBottom(true), 300);
-    const t3 = setTimeout(() => scrollToBottom(true), 700);
-    const t4 = setTimeout(() => scrollToBottom(true), 1500);
+    let raf = requestAnimationFrame(applyAnchor);
+    const t1 = setTimeout(applyAnchor, 100);
+    const t2 = setTimeout(applyAnchor, 450);
+    const t3 = setTimeout(applyAnchor, 1100);
 
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
-      clearTimeout(t4);
     };
   }, [currentMessages.length, isTyping, activeContextNode.contextId, scrollToBottom]);
 
@@ -2663,6 +2704,29 @@ export default function LivePage() {
               const isRecent = reqTimeMs > presenceSessionStartTimeRef.current;
               const presenceController = voiceSessionControllerRef.current;
               const useGeminiNarration = presenceController?.isGeminiLiveActive() ?? false;
+
+              if (
+                status === 'success'
+                && hasRealResponse
+                && isPresenceActive
+                && isRecent
+                && !presentedPresenceResultsRef.current.has(originRequestId)
+                && shouldOpenPresenceMesa(responseText)
+              ) {
+                const responseSession = sessionsRef.current.find(session => session.contextId === req.contextId);
+                const responseArea = (state?.allAreas || []).find((area: Area) => area.id === req.areaId);
+                setActiveMesaArtifact(createPresenceMesaArtifact({
+                  requestId: originRequestId,
+                  resultText: responseText,
+                  contextId: req.contextId || undefined,
+                  areaName: responseArea?.name,
+                  sessionLabel: responseSession?.label,
+                }));
+                setIsMesaCollapsed(false);
+                setIsMesaOpen(true);
+                presentedPresenceResultsRef.current.add(originRequestId);
+                console.log('[PULSO_PRESENCE_MESA_OPENED]', { requestId: originRequestId, contextId: req.contextId });
+              }
               
               if (!isPresenceActive || !isRecent) {
                 if (!spokenRequestsRef.current.has(req.id)) {
@@ -3030,6 +3094,7 @@ export default function LivePage() {
       contextId?: string;
       chatId?: string;
       openclawSessionKey?: string;
+      presenceRouting?: PresenceRoutingDecision;
       attachments?: Array<{ id: string; name: string; type: string; mimeType: string; url: string; sizeBytes: number }>;
       requestId?: string;
     }
@@ -3046,10 +3111,27 @@ export default function LivePage() {
     const reqId = options?.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     // Routing
-    const routeResult = routeInputToArea(rawMsg, state?.allAreas || [], {
-      currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
-      activeAreaId: activeAreaId || undefined
-    });
+    const routeResult = options?.presenceRouting
+      ? {
+          areaRef: options.areaId,
+          routing: {
+            rawInput: rawMsg,
+            cleanInput: normalizeTranscript(rawMsg),
+            sessionTarget: options.presenceRouting.target.label,
+            intentType: 'conversation_command',
+            shouldSendToLotus: true,
+            shouldCreateSideNotes: false,
+            contextHints: options.presenceRouting.matchedTerms,
+            routerVersion: options.presenceRouting.routerVersion,
+            confidence: options.presenceRouting.confidence,
+            reason: options.presenceRouting.reason,
+            localDecisionDurationMs: options.presenceRouting.durationMs,
+          },
+        }
+      : routeInputToArea(rawMsg, state?.allAreas || [], {
+          currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
+          activeAreaId: activeAreaId || undefined
+        });
 
     const isTauri = typeof window !== 'undefined' && (
       window.location.protocol === 'tauri:' ||
@@ -3084,6 +3166,8 @@ export default function LivePage() {
         locale: "pt-BR" as const,
         userName: "Fê",
         interface: "pulso" as const,
+        deviceId: getPresenceDeviceId(),
+        deviceClass: isTauri ? 'desktop_local' : 'web_mobile',
         ...options?.context
       },
       contextWindow: [],
@@ -3356,6 +3440,7 @@ export default function LivePage() {
     originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting';
     displayText?: string;
     targetContextNode?: PulsoContextNode;
+    presenceRouting?: PresenceRoutingDecision;
   }) => {
     if (isTyping || isSubmittingRef.current) {
       console.warn('Blocked duplicate send: message already processing or submitting.');
@@ -3461,11 +3546,29 @@ export default function LivePage() {
       areaId: sendingNode.areaId,
       contextId: sendingNode.contextId,
       chatId: sendingNode.chatId,
+      openclawSessionKey: sendingNode.openclawSessionKey,
       attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
       requestId: preGeneratedReqId,
-      context: contextStatesMap[sendingNode.contextId]?.strongState ? {
-        reusableContext: contextStatesMap[sendingNode.contextId].strongState
-      } : undefined
+      presenceRouting: options?.presenceRouting,
+      context: {
+        ...(contextStatesMap[sendingNode.contextId]?.strongState
+          ? { reusableContext: contextStatesMap[sendingNode.contextId].strongState }
+          : {}),
+        ...(options?.presenceRouting
+          ? {
+              presenceRouting: {
+                targetContextId: options.presenceRouting.target.contextId,
+                targetAreaId: options.presenceRouting.target.areaId,
+                switched: options.presenceRouting.switched,
+                confidence: options.presenceRouting.confidence,
+                reason: options.presenceRouting.reason,
+                matchedTerms: options.presenceRouting.matchedTerms,
+                routerVersion: options.presenceRouting.routerVersion,
+                durationMs: options.presenceRouting.durationMs,
+              },
+            }
+          : {}),
+      }
     }).then(async (newRequest) => {
       // t2: Moment request vira queued_for_openclaw in Firestore
       if (latencyMapRef.current[newRequest.id]) {
@@ -3514,6 +3617,119 @@ export default function LivePage() {
       setContextTyping(sendingContextId, false);
     });
   };
+
+  const recordLocalPresenceFastPath = React.useCallback(async (
+    input: string,
+    result: LocalPresenceFastPathResult
+  ) => {
+    const now = new Date();
+    const requestId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const currentUser = authService.getCurrentUser();
+    const userRef = currentUser?.email || currentUser?.displayName || 'felipe_dutra';
+    const runtimeKey = activeContextNode.openclawSessionKey || `agent:main:pulso:${activeContextNode.contextId}`;
+
+    await requestsService.createRequest({
+      id: requestId,
+      requestType: 'local_interaction' as any,
+      status: 'success' as any,
+      source: 'pulso_live' as any,
+      origin: 'local_machine_agent' as any,
+      mode: 'voice' as any,
+      originMode: 'local_fast_path' as any,
+      input,
+      rawInput: input,
+      requestedBy: userRef,
+      createdAt: now,
+      requestedAt: now,
+      updatedAt: now,
+      processedAt: now,
+      processedBy: 'pulso_desktop_fast_path',
+      clientCreatedAtMs: now.getTime(),
+      conversationId: `conv_${activeContextNode.contextId}`,
+      messageId: `msg_${now.getTime()}`,
+      contextId: activeContextNode.contextId,
+      areaId: activeContextNode.areaId,
+      chatId: activeContextNode.chatId,
+      openclawSessionKey: runtimeKey,
+      runtimeSessionKey: runtimeKey,
+      archived: false,
+      priority: 'low' as any,
+      context: {
+        interface: 'pulso',
+        deviceClass: 'desktop_local',
+        deviceId: getPresenceDeviceId(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        locale: 'pt-BR',
+        userName: 'Fê',
+        localFastPath: true,
+      } as any,
+      openclawResult: {
+        responseText: result.responseText,
+        processedAt: now.toISOString(),
+        requiresHumanApproval: false,
+        riskLevel: 'low',
+        meta: {
+          localFastPath: true,
+          action: result.action,
+          target: result.target,
+          durationMs: result.durationMs,
+        },
+      } as any,
+      result: {
+        action: result.action,
+        summary: result.responseText,
+        matResult: { ok: true, local: true, durationMs: result.durationMs },
+      } as any,
+    });
+  }, [activeContextNode]);
+
+  const routePresenceInput = React.useCallback((input: string) => {
+    const areas = state?.allAreas || [];
+    const decision = routePresenceIntent({
+      utterance: input,
+      activeContext: activeContextNode,
+      sessions,
+      areas,
+      hotContext: readPresenceHotContext(),
+    });
+
+    refreshPresenceHotContext(sessions, areas, {
+      contextId: decision.target.contextId,
+      areaId: decision.target.areaId,
+      confidence: decision.confidence,
+      at: Date.now(),
+    });
+
+    if (decision.switched) {
+      setActiveContextNode(decision.target);
+      void sessionsService.touchSession(decision.target.contextId);
+    }
+
+    console.log('[PULSO_PRESENCE_LOCAL_ROUTING]', {
+      input,
+      targetContextId: decision.target.contextId,
+      switched: decision.switched,
+      confidence: decision.confidence,
+      reason: decision.reason,
+      durationMs: decision.durationMs,
+    });
+
+    return decision;
+  }, [activeContextNode, sessions, state?.allAreas]);
+
+  const handlePresenceUiIntent = React.useCallback((input: string): LocalPresenceFastPathResult => {
+    if (!isMesaOpen || !isMesaDismissUtterance(input)) return { handled: false };
+
+    setIsMesaOpen(false);
+    setIsMesaCollapsed(false);
+    return {
+      handled: true,
+      action: 'close_mesa',
+      target: activeMesaArtifact?.id || 'mesa',
+      responseText: 'Fechei a MESA.',
+      durationMs: 0,
+    };
+  }, [activeMesaArtifact?.id, isMesaOpen]);
 
   const handleRenameChat = async (contextId: string) => {
     const trimmed = editingContextLabel.trim();
@@ -4122,7 +4338,12 @@ ${data.transcription}`, {
     if (presenceMode) {
       exitPresenceMode();
     } else {
-      if (!isSpeechRecognitionSupported()) {
+      const useGeminiLive = shouldUseGeminiLive(
+        presenceTransport,
+        typeof window !== 'undefined' ? window.location.search : ''
+      );
+
+      if (!useGeminiLive && !isSpeechRecognitionSupported()) {
         setPresenceMode(true);
         setVoiceState('error');
         setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
@@ -4136,11 +4357,7 @@ ${data.transcription}`, {
       spokenRequestsRef.current.clear();
       voiceReplyRequestsRef.current.clear();
       narratedPresenceProgressRef.current.clear();
-
-      // Teste manual do modo experimental Gemini Live: abrir /pulso/live?gemini_live=1
-      // Gemini é somente a voz; ferramentas e memória seguem no OpenClaw.
-      const useGeminiLive = typeof window !== 'undefined' &&
-        new URLSearchParams(window.location.search).get('gemini_live') === '1';
+      presentedPresenceResultsRef.current.clear();
 
       const controller = new VoiceSessionController({
         activeContextNode,
@@ -4152,6 +4369,10 @@ ${data.transcription}`, {
         onError: (err) => {
           setVoiceError(err);
         },
+        onTransportChange: (message) => {
+          setToastMessage(message);
+          window.setTimeout(() => setToastMessage(null), 3500);
+        },
         onPresenceWorkChange: (working) => {
           setPresenceWorkActive(working);
         },
@@ -4160,7 +4381,10 @@ ${data.transcription}`, {
         },
         handleSendMessage: async (text, options) => {
           return handleSendMessage(text, options);
-        }
+        },
+        recordLocalFastPath: recordLocalPresenceFastPath,
+        handlePresenceUiIntent,
+        routePresenceIntent: routePresenceInput,
       });
 
       voiceSessionControllerRef.current = controller;
@@ -4175,7 +4399,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;
@@ -4579,6 +4803,11 @@ ${data.transcription}`, {
             x: windowWidth < 768 ? windowWidth / 2 : Math.min(windowWidth - 72, windowWidth / 2 + Math.min(300, windowWidth * 0.22)),
             y: windowHeight - (windowWidth < 768 ? 86 : 76),
           }
+        : presenceMode
+          ? {
+              x: isMesaOpen && !isMesaCollapsed && windowWidth >= 768 ? windowWidth * 0.27 : windowWidth / 2,
+              y: windowHeight / 2,
+            }
         : orbHomeCenter;
   const orbOuterScale = isWorkspaceMode && orbHasEntered ? 0.42 : 1;
   const orbVisualScaleClass = !orbHasAligned
@@ -4774,7 +5003,7 @@ ${data.transcription}`, {
             
             {isHeaderMenuOpen && !contextSurfaceVariant && typeof document !== 'undefined' && createPortal(
               <div
-                className="fixed inset-0 z-[70] bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-end text-left animate-fade-in"
+                className="pulso-overlay-glass fixed inset-0 z-[70] px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-end text-left animate-fade-in"
                 onClick={() => setIsHeaderMenuOpen(false)}
               >
                 <div className="flex flex-col gap-7 w-full max-w-[220px]" onClick={(e) => e.stopPropagation()}>
@@ -5095,13 +5324,9 @@ ${data.transcription}`, {
           <div
             ref={orbHomeAnchorRef}
             aria-hidden="true"
-            className={isWorkspaceMode || hasSplitChats
+            className={isWorkspaceMode || hasSplitChats || presenceMode
               ? 'absolute left-1/2 top-1/2 w-px h-px pointer-events-none'
-              : `relative w-36 h-36 md:w-64 md:h-64 shrink-0 pointer-events-none ${
-                  presenceMode
-                    ? 'translate-y-[15vh] md:translate-y-[25vh] lg:translate-y-0 lg:translate-x-[15vw] 2xl:translate-x-0 2xl:translate-y-[25vh]'
-                    : 'mt-10 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
-                }`
+              : 'relative w-36 h-36 md:w-64 md:h-64 shrink-0 pointer-events-none mt-10 mb-2 md:mt-auto md:mb-12 lg:mt-0 lg:mb-0 lg:mr-10 2xl:mt-auto 2xl:mb-auto 2xl:mr-0 translate-y-0 md:translate-y-[-5vh] lg:translate-y-0 2xl:translate-y-0'
             }
           />
 
@@ -5209,7 +5434,17 @@ ${data.transcription}`, {
                                     ? 'bg-[#fbf9f5]/55 animate-pulse'
                                     : 'bg-[#fbf9f5]/20'
                                 }`} />
-                                <span>{update.text}</span>
+                                <div className="min-w-0 max-w-full overflow-hidden">
+                                  <MessageRenderer
+                                    text={update.text}
+                                    sender="lotus"
+                                    contextId={update.contextId || activeContextNode.contextId}
+                                    onOpenArtifact={(artifact) => {
+                                      setActiveMesaArtifact(artifact);
+                                      setIsMesaOpen(true);
+                                    }}
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -5223,9 +5458,11 @@ ${data.transcription}`, {
                 return (
                   <div 
                     key={msg.id} 
-                    className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
+                    data-lotus-message={isLotus ? 'true' : 'false'}
+                    data-message-time={safeGetTime(msg.timestamp)}
+                    className={`flex w-full min-w-0 ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
                   >
-                    <div className="max-w-[85%] space-y-1">
+                    <div className="min-w-0 max-w-[85%] space-y-1">
                       <span className={`block text-[9px] tracking-widest lowercase select-none ${
                         isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
                       }`}>
@@ -5245,40 +5482,16 @@ ${data.transcription}`, {
                       )}
                       {/* Text body & blocks renderer */}
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
-                        <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
-                          {(() => {
-                            const docRegex = /<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i;
-                            const docMatch = msg.text.match(docRegex);
-                            let displayText = msg.text;
-                            let artifactData = null;
-                            if (docMatch) {
-                              artifactData = { id: docMatch[1], title: docMatch[2], content: docMatch[3].trim(), contextId: msg.contextId || undefined };
-                              displayText = msg.text.replace(docRegex, '').trim();
-                            }
-                            
-                            return (
-                              <div className="flex flex-col gap-3">
-                                {displayText && <MessageRenderer text={displayText} sender={msg.sender} />}
-                                {artifactData && (
-                                  <button
-                                    onClick={() => {
-                                      setActiveMesaArtifact(artifactData);
-                                      setIsMesaOpen(true);
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all w-fit cursor-pointer outline-none group text-left"
-                                  >
-                                    <div className="p-2 bg-black/40 rounded-lg group-hover:bg-black/60 transition-colors">
-                                      <FileText size={16} className="text-white/70" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Abrir Mesa</span>
-                                      <span className="text-sm font-medium text-white">{artifactData.title}</span>
-                                    </div>
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
+                        <div className="min-w-0 max-w-full overflow-hidden text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
+                          <MessageRenderer
+                            text={msg.text}
+                            sender={msg.sender}
+                            contextId={msg.contextId || undefined}
+                            onOpenArtifact={(artifact) => {
+                              setActiveMesaArtifact(artifact);
+                              setIsMesaOpen(true);
+                            }}
+                          />
                         </div>
                       )}
 
@@ -5719,7 +5932,7 @@ ${data.transcription}`, {
             <div
               data-testid="pulso-split-grid"
               data-pane-count={splitContextNodes.length}
-              className={`hidden md:grid fixed top-24 bottom-36 left-64 right-64 z-40 pointer-events-auto animate-fade-in gap-x-10 gap-y-8 ${
+              className={`hidden md:grid fixed top-20 bottom-52 left-64 right-64 z-40 pointer-events-auto animate-fade-in gap-x-10 gap-y-8 ${
                 splitContextNodes.length === 4
                   ? 'grid-cols-2 grid-rows-2'
                   : splitContextNodes.length === 3
@@ -5739,6 +5952,13 @@ ${data.transcription}`, {
                     areaIcon={getAreaIcon({ id: contextNode.areaId, name: dynamicAreas.find(a => a.id === contextNode.areaId)?.name || '' })}
                     onClose={() => closeSplitPane(contextNode.contextId)}
                     isFocused={sendTargetContextNode.contextId === contextNode.contextId}
+                    unreadAfter={unreadContexts[contextNode.contextId] && lastReadTimes[contextNode.contextId]
+                      ? safeGetTime(lastReadTimes[contextNode.contextId])
+                      : undefined}
+                    onOpenArtifact={(artifact) => {
+                      setActiveMesaArtifact(artifact);
+                      setIsMesaOpen(true);
+                    }}
                     onFocus={() => {
                       setFocusedPaneContextId(contextNode.contextId);
                       markContextAsRead(contextNode.contextId);
@@ -5748,6 +5968,10 @@ ${data.transcription}`, {
                 </div>
               ))}
             </div>
+          )}
+
+          {!presenceMode && (
+            <div aria-hidden="true" className="pulso-footer-glass fixed bottom-0 left-1/2 z-20 h-56 w-[min(100%,52rem)] -translate-x-1/2 pointer-events-none" />
           )}
 
 <footer
@@ -5929,7 +6153,7 @@ ${data.transcription}`, {
             
             {isAttachmentMenuOpen && typeof document !== 'undefined' && createPortal(
               <div
-                className="fixed inset-0 z-[70] bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-end text-left animate-fade-in"
+                className="pulso-overlay-glass fixed inset-0 z-[70] px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-end text-left animate-fade-in"
                 onClick={() => setIsAttachmentMenuOpen(false)}
               >
                 <div className="flex flex-col gap-7 w-full max-w-[200px]" onClick={(e) => e.stopPropagation()}>
@@ -6153,7 +6377,7 @@ ${data.transcription}`, {
 
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 z-[70] bg-[#0c0c0c]/76 backdrop-blur-xl px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col text-left md:hidden animate-fade-in"
+          className="pulso-overlay-glass fixed inset-0 z-[70] px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col text-left md:hidden animate-fade-in"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div 
@@ -6447,6 +6671,26 @@ ${data.transcription}`, {
             </div>
 
             <div className="space-y-3">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">conversa no modo presença</label>
+                <select
+                  value={presenceTransport}
+                  onChange={(e) => {
+                    const preference = e.target.value as PresenceTransportPreference;
+                    setPresenceTransport(preference);
+                    writePresenceTransportPreference(preference);
+                  }}
+                  className="pulso-select w-full"
+                >
+                  <option value="auto" className="bg-[#121212]">automático — tempo real com fallback local</option>
+                  <option value="gemini_live" className="bg-[#121212]">gemini live — priorizar baixa latência</option>
+                  <option value="turn_based" className="bg-[#121212]">local — openclaw + kokoro</option>
+                </select>
+                <span className="text-[8px] text-[#fbf9f5]/40 leading-relaxed block mt-1">
+                  O Gemini conduz ritmo, escuta e narração. Memória, decisões e ferramentas continuam na Lótus/OpenClaw.
+                </span>
+              </div>
+
               <div className="flex flex-col gap-0.5">
                 <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">provedor de voz</label>
                 <select

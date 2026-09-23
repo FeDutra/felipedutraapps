@@ -1,4 +1,64 @@
+# Rollback — consistência visual da PULSO (23/09/2026)
+
+- Base reversível: branch `fix/pulso-visual-consistency-20260923`, criada sobre `main` em `b7b98317` e integrada, antes das alterações, com `feat/pulso-presence-edge-20260922` (`4da2739d`).
+- Reversão: reinstalar o último artefato aprovado da execução associada ao commit `4da2739d` ou retornar o frontend para esse commit; nenhum dado de usuário é migrado por esta mudança.
+- Escopo: vidro suave de sobreposição, renderer compartilhado entre chat/split, limites responsivos, centralização da Presença e âncoras de leitura.
+
+---
+
+# Rollback — Presença + MESA contextual (23/09/2026)
+
+- Escopo: destino geral de área, orçamento de um checkpoint por turno, abertura
+  automática de resultados relevantes na MESA e fechamento local por voz.
+- Reversão de código: reverter o commit desta frente e refazer o aplicativo
+  Intel. A Presença distribuída, a Kokoro e a via rápida de aplicativos ficam.
+- Reversão de dados: arquivar a sessão `despertar_geral` caso ela tenha sido
+  criada no Firestore; nenhum histórico existente é movido ou apagado.
+- Reversão no iMac: encerrar `/Applications/PULSO.app` e restaurar o backup
+  `PULSO.backup-before-presence-mesa-*.app` preservado na instalação.
+
+---
+
+# Rollback — Presença distribuída (22/09/2026)
+
+## Roteador cognitivo local e contexto quente
+
+- Escopo: inferência local de sessão antes da fila canônica, cache compacto de
+  destinos e metadados de roteamento no pedido.
+- Reversão: reverter somente o commit desta camada e refazer o build desktop.
+  A via rápida de aplicativos, o Gemini Live, a Kokoro e as sessões canônicas
+  permanecem intactos.
+- Contingência sem novo build: desativar o roteamento automático na Presença;
+  pedidos continuam na sessão que já estiver ativa.
+
+## Sinônimos naturais da via rápida local
+
+- Escopo: remover determinantes e prefixos como `meu`, `aplicativo`, `app de`
+  e `programa` antes de resolver o nome exato do aplicativo permitido.
+- Reversão: reverter somente o commit dos sinônimos; a via rápida original e
+  o restante da Presença permanecem intactos.
+
+## Aplicativo e transporte
+
+- Encerre `/Applications/PULSO.app`, retenha a versão atual e restaure `/Applications/PULSO.backup-20260922-161726.app` como `/Applications/PULSO.app`.
+- Sem trocar o aplicativo, selecione `local — openclaw + kokoro` nas configurações de voz ou abra `/pulso/live?gemini_live=0`.
+- No código, reverta somente o commit da Presença distribuída; preserve os commits da Kokoro e da ponte de execução local.
+
+---
+
 # Rollback — Modo Presença em tempo real
+
+## Padrão de execução local e correção do Kokoro desktop — 22/09/2026
+
+- Baseline: `6489705d2f2bd2852f6d06765fb69a4a74923073` em `main`.
+- Escopo: contrato durável do nó local, gate de release, recursos Kokoro no CI,
+  seleção do sidecar no desktop e fallback sidecar → VPS.
+- Reversão: reverter apenas o commit desta frente e refazer o build desktop.
+  Isso não remove nem altera o nó OpenClaw já instalado no iMac.
+- Contingência sem novo build: selecionar `kokoro_http` no app e usar o endpoint
+  público da VPS; a web continua independente do sidecar local.
+
+---
 
 ## Split de até quatro chats — 20/09/2026
 
@@ -154,3 +214,8 @@ Baseline reversível: `dc6c012a` em `origin/main`.
 Reverter somente o commit desta alteração, executar `npm run build` e publicar
 apenas o Firebase Hosting. A mudança não altera Firestore, Functions,
 credenciais, preferências de voz nem runtime da VPS.
+# 23/09/2026 — consistência visual da PULSO
+
+- Base reversível: branch `fix/pulso-visual-consistency-20260923`, criada sobre `main` em `b7b98317` e integrada, antes das alterações, com `feat/pulso-presence-edge-20260922` (`4da2739d`).
+- Reversão: reinstalar o último artefato aprovado da execução associada ao commit `4da2739d` ou retornar o frontend para esse commit; nenhum dado de usuário é migrado por esta mudança.
+- Escopo: vidro suave de sobreposição, renderer compartilhado entre chat/split, limites responsivos, centralização da Presença e âncoras de leitura.

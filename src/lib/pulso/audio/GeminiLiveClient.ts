@@ -115,13 +115,17 @@ export class GeminiLiveClient {
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null;
   private lastNarrationCompletedAt = 0;
   private lastCheckpointSpokenAt = 0;
+  private checkpointSpokenThisTurn = false;
 
   // Equivale ao soft timeout recomendado para conversa: presença cedo, sem
   // virar relógio. O espaçamento longo vale apenas entre marcos posteriores.
-  private static readonly FIRST_CHECKPOINT_DELAY_MS = 3_000;
+  private static readonly FIRST_CHECKPOINT_DELAY_MS = 12_000;
   private static readonly MIN_CHECKPOINT_GAP_MS = 10_000;
 
   private closedByUser = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 2;
 
   constructor(config: GeminiLiveConfig) {
     this.config = config;
@@ -138,13 +142,17 @@ export class GeminiLiveClient {
 
   public async start() {
     this.closedByUser = false;
+    this.reconnectAttempts = 0;
+    this.openSocket();
+  }
+
+  private openSocket() {
     this.setState('connecting');
 
     try {
       this.ws = new WebSocket(this.config.relayUrl);
     } catch (e: any) {
-      this.config.onError(e.message || 'Falha ao abrir conexão com o relay de voz.');
-      this.setState('error');
+      this.scheduleReconnect(e.message || 'Falha ao abrir conexão com o relay de voz.');
       return;
     }
 
@@ -164,11 +172,29 @@ export class GeminiLiveClient {
     this.ws.onclose = (event) => {
       console.log('[GEMINI_LIVE_WS_CLOSED]', event.code, event.reason);
       if (!this.closedByUser) {
-        this.config.onError(event.reason || 'Conexão de voz encerrada inesperadamente.');
-        this.setState('error');
+        this.teardownMic();
+        this.scheduleReconnect(event.reason || 'Conexão de voz encerrada inesperadamente.');
+        return;
       }
       this.teardownMic();
     };
+  }
+
+  private scheduleReconnect(reason: string) {
+    if (this.closedByUser) return;
+    if (this.reconnectAttempts >= GeminiLiveClient.MAX_RECONNECT_ATTEMPTS) {
+      this.config.onError(reason);
+      this.setState('error');
+      return;
+    }
+    this.reconnectAttempts += 1;
+    const delay = this.reconnectAttempts * 750;
+    console.warn('[GEMINI_LIVE_RECONNECT_SCHEDULED]', { attempt: this.reconnectAttempts, delay, reason });
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.openSocket();
+    }, delay);
   }
 
   private sendSetup() {
@@ -210,6 +236,7 @@ export class GeminiLiveClient {
 
     if (msg.setupComplete) {
       console.log('[GEMINI_LIVE_SETUP_COMPLETE]');
+      this.reconnectAttempts = 0;
       try {
         await this.startMic();
       } catch (e: any) {
@@ -282,6 +309,8 @@ export class GeminiLiveClient {
           this.pendingUserTranscript = '';
           if (userText && !isPurelySocialTurn(userText)) {
             this.awaitingResult = true;
+            this.checkpointSpokenThisTurn = false;
+            this.lastCheckpointSpokenAt = 0;
             this.config.onUserTurnReady?.(userText);
           }
         }
@@ -421,6 +450,7 @@ export class GeminiLiveClient {
    */
   private scheduleDeferredCheckpoint() {
     if (!this.deferredCheckpointText || !this.awaitingResult) return;
+    if (this.checkpointSpokenThisTurn) return;
     if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
     // A confirmação inicial ainda está tocando: guarda o marco e só calcula
     // sua janela depois da fala terminar de fato.
@@ -439,9 +469,11 @@ export class GeminiLiveClient {
       const text = this.deferredCheckpointText;
       this.deferredCheckpointText = null;
       if (!text || !this.awaitingResult) return;
+      if (this.checkpointSpokenThisTurn) return;
       if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
       this.narrationQueue.push({ kind: 'checkpoint', text });
       this.lastCheckpointSpokenAt = Date.now();
+      this.checkpointSpokenThisTurn = true;
       this.flushNarrationQueue();
     }, delay);
   }
@@ -505,6 +537,7 @@ export class GeminiLiveClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     const text = this.normalizeCheckpoint(checkpointText);
     if (!text || !this.awaitingResult) return false;
+    if (this.checkpointSpokenThisTurn) return false;
 
     const queuedCheckpoint = this.narrationQueue.find(item => item.kind === 'checkpoint');
     if (queuedCheckpoint) {
@@ -522,6 +555,8 @@ export class GeminiLiveClient {
 
   public stop() {
     this.closedByUser = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     if (this.checkpointTimer) clearTimeout(this.checkpointTimer);
     this.checkpointTimer = null;
     this.deferredCheckpointText = null;

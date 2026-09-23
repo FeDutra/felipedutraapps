@@ -56,6 +56,20 @@ interface Block {
   language?: string;
 }
 
+export interface PulsoArtifact {
+  id: string;
+  title: string;
+  content: string;
+  contextId?: string;
+}
+
+interface MessageRendererProps {
+  text: string;
+  sender: string;
+  contextId?: string;
+  onOpenArtifact?: (artifact: PulsoArtifact) => void;
+}
+
 // Safe date conversion helper
 const safeConvertToDate = (dateInput: any): Date | null => {
   if (!dateInput) return null;
@@ -435,16 +449,23 @@ const parseBlocks = (text: string): Block[] => {
 };
 
 // Main Message Renderer Component
-export const MessageRenderer = ({ text, sender }: { text: string; sender: string }) => {
+export const MessageRenderer = ({ text, sender, contextId, onOpenArtifact }: MessageRendererProps) => {
   if (sender === 'system') {
     return <span className="text-xs text-[#fbf9f5]/55 italic block">{text}</span>;
   }
+
+  const docRegex = /<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i;
+  const docMatch = text.match(docRegex);
+  const artifact: PulsoArtifact | null = docMatch
+    ? { id: docMatch[1], title: docMatch[2], content: docMatch[3].trim(), contextId }
+    : null;
+  const displayText = docMatch ? text.replace(docRegex, '').trim() : text;
   
-  const blocks = parseBlocks(text);
-  const detectedUrls = extractUrls(text);
+  const blocks = parseBlocks(displayText);
+  const detectedUrls = extractUrls(displayText);
   
   return (
-    <div className="w-full space-y-2">
+    <div className="w-full min-w-0 max-w-full space-y-2 overflow-hidden">
       <div className="space-y-3">
         {blocks.map((block, idx) => {
           if (block.type === 'table') {
@@ -461,6 +482,24 @@ export const MessageRenderer = ({ text, sender }: { text: string; sender: string
       </div>
       
       {detectedUrls.length > 0 && <LinkButtonRenderer urls={detectedUrls} />}
+      {artifact && onOpenArtifact && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenArtifact(artifact);
+          }}
+          className="mt-3 flex max-w-full items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all w-fit cursor-pointer outline-none group text-left"
+        >
+          <div className="p-2 bg-black/40 rounded-lg group-hover:bg-black/60 transition-colors shrink-0">
+            <FileText size={16} className="text-white/70" />
+          </div>
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Abrir Mesa</span>
+            <span className="text-sm font-medium text-white truncate">{artifact.title}</span>
+          </div>
+        </button>
+      )}
     </div>
   );
 };

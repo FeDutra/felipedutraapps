@@ -5,7 +5,7 @@ import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
 import { X } from 'lucide-react';
 import type { PulsoContextNode } from '../types/pulso.types';
-import { MessageRenderer } from './chat/MessageRenderer';
+import { MessageRenderer, type PulsoArtifact } from './chat/MessageRenderer';
 
 interface PaneMessage {
   id: string;
@@ -21,16 +21,23 @@ interface SecondaryChatPaneProps {
   onClose: () => void;
   isFocused: boolean;
   onFocus: () => void;
+  unreadAfter?: number;
+  onOpenArtifact: (artifact: PulsoArtifact) => void;
 }
 
 // Mesma identidade visual do chat principal — sem moldura, sem cabeçalho de
 // widget, sem input próprio. É a mesma sessão, só ao lado. O input
 // permanece único, fixo embaixo ao centro; o foco decide pra qual painel ele
 // escreve.
-export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, areaIcon, onClose, isFocused, onFocus }) => {
+export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, areaIcon, onClose, isFocused, onFocus, unreadAfter, onOpenArtifact }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const hasAppliedInitialScrollRef = React.useRef(false);
+
+  React.useEffect(() => {
+    hasAppliedInitialScrollRef.current = false;
+  }, [contextNode.contextId]);
 
   React.useEffect(() => {
     if (!db) return;
@@ -80,9 +87,29 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
     return () => unsubscribe();
   }, [contextNode.contextId]);
 
-  React.useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages.length]);
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || messages.length === 0) return;
+
+    if (!hasAppliedInitialScrollRef.current) {
+      hasAppliedInitialScrollRef.current = true;
+      const candidates = unreadAfter
+        ? Array.from(container.querySelectorAll<HTMLElement>('[data-lotus-message="true"][data-message-time]'))
+        : [];
+      const target = candidates.find(node => Number(node.dataset.messageTime || 0) > unreadAfter! );
+      if (target) {
+        target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      } else {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+      }
+      return;
+    }
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 160) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages.length, unreadAfter]);
 
   return (
     <div
@@ -107,22 +134,29 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
         </button>
       </div>
 
-      <div ref={scrollRef} className="absolute inset-0 overflow-y-auto no-scrollbar chat-fade-mask px-6 py-6 pt-12 space-y-8">
+      <div ref={scrollRef} className="absolute inset-0 min-w-0 overflow-y-auto overflow-x-hidden no-scrollbar chat-fade-mask px-5 py-5 pt-11 pb-16 space-y-8">
         {messages.map((msg) => msg.isProgressUpdate ? (
           <div key={msg.id} className="flex w-full justify-start animate-fade-in py-1">
             <div className="w-full max-w-[85%] border-l border-white/10 pl-3 flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
               <span className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-[#fbf9f5]/30" />
-              <span>{msg.text}</span>
+              <div className="min-w-0 max-w-full overflow-hidden">
+                <MessageRenderer text={msg.text} sender="lotus" contextId={contextNode.contextId} onOpenArtifact={onOpenArtifact} />
+              </div>
             </div>
           </div>
         ) : (
-          <div key={msg.id} className={`flex w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
-            <div className="max-w-[85%] space-y-1">
+          <div
+            key={msg.id}
+            data-lotus-message={msg.sender === 'lotus' ? 'true' : 'false'}
+            data-message-time={msg.timestamp.getTime()}
+            className={`flex w-full min-w-0 ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}
+          >
+            <div className="min-w-0 max-w-[88%] space-y-1">
               <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
                 {msg.sender === 'lotus' ? 'lótus' : 'fê'}
               </span>
-              <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
-                <MessageRenderer text={msg.text} sender={msg.sender} />
+              <div className="min-w-0 max-w-full overflow-hidden text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
+                <MessageRenderer text={msg.text} sender={msg.sender} contextId={contextNode.contextId} onOpenArtifact={onOpenArtifact} />
               </div>
             </div>
           </div>

@@ -1,5 +1,8 @@
 import { TTSAdapter } from '../TTSAdapter';
 import { GeminiLiveClient, GeminiLiveState } from './GeminiLiveClient';
+import { getGeminiLiveConfig } from './PresenceTransport';
+import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
+import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
 
 export type VoiceSessionState =
   | 'idle'
@@ -16,10 +19,18 @@ export interface VoiceSessionConfig {
   onStateChange: (state: VoiceSessionState) => void;
   onTextReceived: (userText: string, assistantText: string) => void;
   onError: (error: string) => void;
+  onTransportChange?: (message: string) => void;
   /** Mantém a Orbe viva visualmente enquanto o cérebro da Lótus trabalha. */
   onPresenceWorkChange?: (working: boolean) => void;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
-  handleSendMessage: (text: string, options: { originMode: 'presence' }) => Promise<{ responseText: string } | null | void>;
+  handleSendMessage: (text: string, options: {
+    originMode: 'presence';
+    targetContextNode?: PresenceRoutingDecision['target'];
+    presenceRouting?: PresenceRoutingDecision;
+  }) => Promise<{ responseText: string } | null | void>;
+  recordLocalFastPath?: (text: string, result: LocalPresenceFastPathResult) => Promise<void>;
+  handlePresenceUiIntent?: (text: string) => Promise<LocalPresenceFastPathResult> | LocalPresenceFastPathResult;
+  routePresenceIntent?: (text: string) => Promise<PresenceRoutingDecision> | PresenceRoutingDecision;
   /**
    * Modo experimental: usa a Gemini Live API (voz-para-voz em streaming via
    * relay próprio) em vez do pipeline turn-based. A Gemini é somente a camada
@@ -74,20 +85,37 @@ export class VoiceSessionController {
 
   // Modo experimental Gemini Live
   private geminiLiveClient: GeminiLiveClient | null = null;
+  private fallingBackToTurnBased = false;
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
     this.ttsAdapter = new TTSAdapter();
     // O Modo Presença tem uma identidade vocal única. Não herda a voz nativa
     // ou outra preferência eventualmente escolhida para leitura de mensagens.
+    const isTauri = typeof window !== 'undefined' && (
+      window.location.protocol === 'tauri:'
+      || window.location.protocol === 'file:'
+      || !!(window as any).__TAURI__
+      || !!(window as any).__TAURI_INTERNALS__
+    );
     this.ttsAdapter.updatePreferences({
-      ttsProvider: 'kokoro_http',
+      ttsProvider: isTauri ? 'local_kokoro_sidecar' : 'kokoro_http',
       voiceName: 'pf_dora(0.70)+af_bella(0.30)',
       voiceLang: 'pt-BR',
       rate: 0.95,
       pitch: 1,
       volume: 1
     }, false);
+  }
+
+  private async executeImmediatePresenceAction(userText: string) {
+    const uiResult = await this.config.handlePresenceUiIntent?.(userText);
+    const result = uiResult?.handled ? uiResult : await executeLocalPresenceFastPath(userText);
+    if (!result.handled || !result.responseText) return null;
+
+    this.log('PRESENCE_LOCAL_FAST_PATH_COMPLETED', result);
+    await this.config.recordLocalFastPath?.(userText, result);
+    return result;
   }
 
   private transition(newState: VoiceSessionState) {
@@ -213,9 +241,15 @@ export class VoiceSessionController {
     this.transition('starting');
 
     if (this.config.useGeminiLive) {
-      this.startGeminiLive();
-      return;
+      const started = this.startGeminiLive();
+      if (started) return;
     }
+
+    await this.startTurnBased(passedAudioContext);
+  }
+
+  private async startTurnBased(passedAudioContext?: AudioContext) {
+    this.config.onPresenceWorkChange?.(false);
 
     try {
       this.log('MIC_PERMISSION_REQUESTED');
@@ -472,7 +506,18 @@ export class VoiceSessionController {
       this.log('LLM_REQUEST_STARTED');
       this.playSoundCue('sent');
 
-      const res = await this.config.handleSendMessage(userText, { originMode: 'presence' });
+      const localResult = await this.executeImmediatePresenceAction(userText);
+      if (localResult?.handled && localResult.responseText) {
+        await this.speakAssistant(localResult.responseText);
+        return;
+      }
+
+      const presenceRouting = await this.config.routePresenceIntent?.(userText);
+      const res = await this.config.handleSendMessage(userText, {
+        originMode: 'presence',
+        targetContextNode: presenceRouting?.target,
+        presenceRouting,
+      });
       this.log('LLM_REQUEST_FINISHED');
 
       if (res && res.responseText) {
@@ -535,14 +580,11 @@ export class VoiceSessionController {
   // ---- Modo experimental Gemini Live ----
 
   private startGeminiLive() {
-    const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL;
-    const token = process.env.NEXT_PUBLIC_LIVE_VOICE_TOKEN;
+    const { relayUrl, token } = getGeminiLiveConfig();
 
     if (!relayUrl || !token) {
       this.log('GEMINI_LIVE_CONFIG_MISSING');
-      this.config.onError('Relay de voz Gemini Live não configurado (NEXT_PUBLIC_LIVE_VOICE_RELAY_URL/TOKEN ausentes).');
-      this.transition('error');
-      return;
+      return false;
     }
 
     this.geminiLiveClient = new GeminiLiveClient({
@@ -564,16 +606,28 @@ export class VoiceSessionController {
       },
       onError: (message) => {
         this.log('GEMINI_LIVE_ERROR', message);
-        this.config.onError(message);
+        void this.fallbackToTurnBased(message);
       },
       onUserTurnReady: async (userText) => {
         this.log('GEMINI_LIVE_USER_TURN_READY', { userText });
         this.config.onPresenceWorkChange?.(true);
         try {
+          const localResult = await this.executeImmediatePresenceAction(userText);
+          if (localResult?.handled && localResult.responseText) {
+            this.config.onPresenceWorkChange?.(false);
+            this.geminiLiveClient?.sendResultText(localResult.responseText);
+            return;
+          }
+
           // handleSendMessage persiste o pedido e devolve antes do OpenClaw
           // concluir. A resposta real chega pelo listener canônico do
           // Firestore; LivePage então chama narratePresenceResult().
-          await this.config.handleSendMessage(userText, { originMode: 'presence' });
+          const presenceRouting = await this.config.routePresenceIntent?.(userText);
+          await this.config.handleSendMessage(userText, {
+            originMode: 'presence',
+            targetContextNode: presenceRouting?.target,
+            presenceRouting,
+          });
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
           this.config.onPresenceWorkChange?.(false);
@@ -583,6 +637,21 @@ export class VoiceSessionController {
     });
 
     this.geminiLiveClient.start();
+    return true;
+  }
+
+  private async fallbackToTurnBased(reason: string) {
+    if (this.fallingBackToTurnBased) return;
+    this.fallingBackToTurnBased = true;
+    this.log('PRESENCE_TRANSPORT_FALLBACK', { from: 'gemini_live', to: 'turn_based', reason });
+    this.geminiLiveClient?.stop();
+    this.geminiLiveClient = null;
+    this.config.onTransportChange?.('Conversa em tempo real oscilou. Continuei no modo local.');
+    try {
+      await this.startTurnBased();
+    } finally {
+      this.fallingBackToTurnBased = false;
+    }
   }
 
   /**
