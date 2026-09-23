@@ -1,5 +1,9 @@
 # Rollback — consistência visual da PULSO (23/09/2026)
 
+- Contenção após reprovação visual: a release `a7d8da50` foi retirada do uso
+  no iMac e preservada como `PULSO.failed-orb-glass-20260923-093847.app`.
+  A instalação ativa voltou ao backup anterior enquanto a lente curta e a
+  âncora de saída do split são corrigidas.
 - Correção posterior da Orbe: o vidro contextual foi retirado da árvore
   transformada da Orbe e promovido a uma superfície irmã, porque o WebKit
   não amostrava o split pelo `backdrop-filter` anterior. Para reverter apenas

@@ -2379,7 +2379,7 @@ export default function LivePage() {
       clearTimeout(t2);
       clearTimeout(t3);
     };
-  }, [currentMessages.length, isTyping, activeContextNode.contextId, scrollToBottom]);
+  }, [currentMessages.length, isTyping, activeContextNode.contextId, hasSplitChats, scrollToBottom]);
 
   React.useEffect(() => {
     scrollToBottom(false);
@@ -5234,21 +5234,19 @@ ${data.transcription}`, {
         </div>
       </div>
 
-        {/* O vidro da Orbe fica fora da arvore transformada da propria
-            Orbe. No WebKit/Tauri, backdrop-filter dentro daquele transform
-            nao amostra os paineis do split. Esta superficie irma acompanha
-            as mesmas coordenadas sem criar um Backdrop Root intermediario. */}
-        <div
-          aria-hidden="true"
-          className="lotus-orb-context-glass fixed z-[64] pointer-events-none"
-          data-entry-phase={orbEntryPhase}
-          style={{
-            left: `${orbTarget.x - (588 * orbOuterScale) / 2}px`,
-            top: `${orbTarget.y - (588 * orbOuterScale) / 2}px`,
-            width: `${588 * orbOuterScale}px`,
-            height: `${588 * orbOuterScale}px`,
-          }}
-        />
+        {/* No split, uma lente curta usa a mesma matéria da MESA. Ela recebe
+            exatamente o mesmo alvo e o mesmo estado de drag da Orbe, sem
+            interpolação independente nem uma área gigante de backdrop. */}
+        {hasSplitChats && (
+          <div
+            aria-hidden="true"
+            className="lotus-orb-context-glass fixed left-0 top-0 z-[64] h-[276px] w-[276px] pointer-events-none"
+            data-dragging={isSplitOrbDragging ? 'true' : 'false'}
+            style={{
+              transform: `translate3d(${orbTarget.x - 138}px, ${orbTarget.y - 138}px, 0) scale(${orbOuterScale})`,
+            }}
+          />
+        )}
 
         <div
           role="button"

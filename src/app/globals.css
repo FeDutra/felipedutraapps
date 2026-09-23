@@ -297,54 +297,32 @@ body {
 .lotus-orb-context-glass {
   border-radius: 9999px;
   pointer-events: none;
-  /* Mesma matéria da MESA: vidro escuro de baixa opacidade e blur real.
-     A máscara radial leva a matéria a zero antes da borda física, sem
-     outline, disco cinza ou término duro. */
-  background: radial-gradient(
-    circle at center,
-    rgba(12, 12, 12, 0.34) 0%,
-    rgba(12, 12, 12, 0.26) 38%,
-    rgba(12, 12, 12, 0.14) 62%,
-    rgba(12, 12, 12, 0.04) 80%,
-    transparent 94%
-  );
+  /* A mesma matéria da sobreposição global, limitada a uma margem curta
+     em torno da Orbe. Sem placa colorida e sem um segundo tempo de arrasto. */
+  background: rgba(12, 12, 12, 0.42);
   -webkit-mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 30%,
-    rgba(0, 0, 0, 0.82) 48%,
-    rgba(0, 0, 0, 0.52) 64%,
-    rgba(0, 0, 0, 0.24) 78%,
-    rgba(0, 0, 0, 0.08) 89%,
+    #000 72%,
+    rgba(0, 0, 0, 0.72) 82%,
+    rgba(0, 0, 0, 0.28) 91%,
     transparent 100%
   );
   mask-image: radial-gradient(
     circle at center,
     #000 0%,
-    #000 30%,
-    rgba(0, 0, 0, 0.82) 48%,
-    rgba(0, 0, 0, 0.52) 64%,
-    rgba(0, 0, 0, 0.24) 78%,
-    rgba(0, 0, 0, 0.08) 89%,
+    #000 72%,
+    rgba(0, 0, 0, 0.72) 82%,
+    rgba(0, 0, 0, 0.28) 91%,
     transparent 100%
   );
-  -webkit-backdrop-filter: blur(34px) saturate(122%) brightness(0.88);
-  backdrop-filter: blur(34px) saturate(122%) brightness(0.88);
-  opacity: 0.92;
-  transition: left 1500ms var(--lotus-travel-ease),
-    top 1500ms var(--lotus-travel-ease),
-    width 1500ms var(--lotus-travel-ease),
-    height 1500ms var(--lotus-travel-ease),
-    opacity 650ms var(--lotus-motion-ease);
-  will-change: left, top, width, height, opacity, backdrop-filter;
+  -webkit-backdrop-filter: blur(32px) saturate(125%);
+  backdrop-filter: blur(32px) saturate(125%);
+  transition: transform 1500ms var(--lotus-travel-ease);
+  will-change: transform;
 }
 
-.lotus-orb-context-glass[data-entry-phase='birth'] {
-  opacity: 0.26;
-}
-
-.lotus-orb-context-glass[data-entry-phase='handoff'],
-.lotus-orb-context-glass[data-entry-phase='travel'] {
+.lotus-orb-context-glass[data-dragging='true'] {
   transition: none;
 }
 
