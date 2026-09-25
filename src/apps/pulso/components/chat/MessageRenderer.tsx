@@ -446,7 +446,10 @@ const parseBlocks = (text: string): Block[] => {
 };
 
 // Main Message Renderer Component
-export const MessageRenderer = ({ text, sender }: { text: string; sender: string }) => {
+// Historical messages are intentionally immutable. Memoizing the markdown
+// renderer prevents typing in the composer (which updates LivePage state) from
+// reparsing every long answer in the active conversation on each keystroke.
+export const MessageRenderer = React.memo(({ text, sender }: { text: string; sender: string }) => {
   if (sender === 'system') {
     return <span className="text-xs text-[#fbf9f5]/55 italic block">{text}</span>;
   }
@@ -474,7 +477,7 @@ export const MessageRenderer = ({ text, sender }: { text: string; sender: string
       {detectedUrls.length > 0 && <LinkButtonRenderer urls={detectedUrls} />}
     </div>
   );
-};
+});
 
 // Actions bar rendering component
 interface MessageActionsProps {

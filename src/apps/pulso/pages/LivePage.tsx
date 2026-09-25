@@ -1410,6 +1410,36 @@ export default function LivePage() {
     });
   }, [messages, activeContextNode.contextId]);
 
+  // Progress used to scan the whole conversation three times for every
+  // progress item during render (findIndex + filter + some). A long chat with
+  // relay updates therefore became quadratic precisely while the composer was
+  // updating. Build this index once per message change instead.
+  const progressGroups = React.useMemo(() => {
+    const groups = new Map<string, { firstId: string; updates: Message[]; hasFinalResponse: boolean }>();
+    const completedRequestIds = new Set(
+      currentMessages
+        .filter(message => !message.isProgressUpdate && message.sender === 'lotus' && message.requestId)
+        .map(message => message.requestId as string)
+    );
+
+    currentMessages.forEach(message => {
+      if (!message.isProgressUpdate) return;
+      const key = message.originRequestId || message.id;
+      const group = groups.get(key);
+      if (group) {
+        group.updates.push(message);
+      } else {
+        groups.set(key, {
+          firstId: message.id,
+          updates: [message],
+          hasFinalResponse: Boolean(message.originRequestId && completedRequestIds.has(message.originRequestId)),
+        });
+      }
+    });
+
+    return groups;
+  }, [currentMessages]);
+
   const [expandedProgressGroups, setExpandedProgressGroups] = React.useState<Record<string, boolean>>({});
 
   const setContextTyping = (contextId: string, typing: boolean) => {
@@ -5151,27 +5181,14 @@ ${data.transcription}`, {
               }}
               className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8 transition-opacity duration-300"
             >
-              {currentMessages.map((msg, msgIndex) => {
+              {currentMessages.map((msg) => {
                 if (msg.isProgressUpdate) {
                   const progressGroupKey = msg.originRequestId || msg.id;
-                  const firstGroupIndex = currentMessages.findIndex(candidate =>
-                    candidate.isProgressUpdate &&
-                    (candidate.originRequestId || candidate.id) === progressGroupKey
-                  );
+                  const group = progressGroups.get(progressGroupKey);
+                  if (!group || msg.id !== group.firstId) return null;
 
-                  if (msgIndex !== firstGroupIndex) return null;
-
-                  const groupUpdates = currentMessages.filter(candidate =>
-                    candidate.isProgressUpdate &&
-                    (candidate.originRequestId || candidate.id) === progressGroupKey
-                  );
-                  const hasFinalResponse = Boolean(
-                    msg.originRequestId && currentMessages.some(candidate =>
-                      !candidate.isProgressUpdate &&
-                      candidate.sender === 'lotus' &&
-                      candidate.requestId === msg.originRequestId
-                    )
-                  );
+                  const groupUpdates = group.updates;
+                  const hasFinalResponse = group.hasFinalResponse;
                   const isExpanded = expandedProgressGroups[progressGroupKey] ?? !hasFinalResponse;
 
                   return (
