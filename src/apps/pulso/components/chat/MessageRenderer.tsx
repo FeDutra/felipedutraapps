@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Zap, 
   Clock, 
@@ -97,60 +99,69 @@ export const formatMessageTimestamp = (dateInput: any): string => {
   return `${day} ${month} · ${timeStr}`;
 };
 
-// Extracts unique URLs from text
-export const extractUrls = (text: string): string[] => {
-  const URL_REGEX = /(https?:\/\/[^\s]+)/g;
-  const matches = text.match(URL_REGEX) || [];
-  return Array.from(new Set(matches.map(u => u.trim())));
+const normalizeDetectedUrl = (candidate: string): string | null => {
+  let url = candidate.trim().replace(/[>*_~`]+$/g, '');
+
+  while (/[.,!?;:]$/.test(url)) {
+    url = url.slice(0, -1);
+  }
+
+  const removeUnbalancedClosing = (opening: string, closing: string) => {
+    while (
+      url.endsWith(closing) &&
+      url.split(closing).length > url.split(opening).length
+    ) {
+      url = url.slice(0, -1);
+    }
+  };
+
+  removeUnbalancedClosing('(', ')');
+  removeUnbalancedClosing('[', ']');
+
+  try {
+    return new URL(url).toString();
+  } catch {
+    return null;
+  }
 };
 
-// Formats normal text line, replacing bold formatting and raw links
+// Extracts unique valid URLs from plain text and Markdown link destinations.
+export const extractUrls = (text: string): string[] => {
+  const URL_REGEX = /https?:\/\/[^\s<]+/g;
+  const matches = text.match(URL_REGEX) || [];
+  return Array.from(
+    new Set(matches.map(normalizeDetectedUrl).filter((url): url is string => Boolean(url)))
+  );
+};
+
+// Formats inline Markdown while preserving the compact visual rhythm of chat lines.
 const formatTextLine = (text: string) => {
   if (!text) return null;
-  
-  const URL_REGEX = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(URL_REGEX);
-  
-  return parts.map((part, index) => {
-    const isUrl = part.match(URL_REGEX);
-    if (isUrl) {
-      const url = part.trim();
-      let label = 'link';
-      try {
-        const parsedUrl = new URL(url);
-        const host = parsedUrl.hostname.replace('www.', '');
-        if (host.includes('notion.so')) label = 'notion';
-        else if (host.includes('drive.google.com') || host.includes('docs.google.com')) label = 'google drive';
-        else if (host.includes('meet.google.com') || host.includes('zoom.us') || host.includes('teams.microsoft.com')) label = 'reunião';
-        else label = host;
-      } catch {}
-      
-      return (
-        <a
-          key={index}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="text-white underline font-normal hover:text-white/80 transition-colors mx-0.5 inline-flex items-center gap-0.5"
-        >
-          {label}
-        </a>
-      );
-    }
-    
-    const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
-    return boldParts.map((bp, bpIdx) => {
-      if (bp.startsWith('**') && bp.endsWith('**')) {
-        return (
-          <strong key={`${index}-${bpIdx}`} className="font-bold text-white">
-            {bp.slice(2, -2)}
-          </strong>
-        );
-      }
-      return bp;
-    });
-  });
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <>{children}</>,
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+            className="text-white underline font-normal hover:text-white/80 transition-colors"
+          >
+            {children}
+          </a>
+        ),
+        strong: ({ children }) => (
+          <strong className="font-bold text-white">{children}</strong>
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
 };
 
 // Renders blocks of text, separating paragraphs
