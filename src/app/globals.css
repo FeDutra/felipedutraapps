@@ -307,84 +307,9 @@ body {
 }
 
 .lotus-orb-lens {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 588px;
-  height: 588px;
-  border-radius: 9999px;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  /* Lente sem cor: o blur governa a leitura e uma sombra preta mínima,
-     em multiply, devolve contraste sem criar matéria cinza ou leitosa.
-     Pico de preto reduzido (Fe: "diminui um pouco o preto") e máscara
-     redesenhada com decaimento longo e contínuo até 100% — sem plateau
-     "transparent/transparent" no fim, que ainda deixava perceptível uma
-     borda dura bem no limite da lente (Fe: "o fim do radial ainda aparece
-     com linha dura. suavize."). */
-  background: radial-gradient(
-    circle at center,
-    rgba(0, 0, 0, 0.045) 0%,
-    rgba(0, 0, 0, 0.028) 36%,
-    rgba(0, 0, 0, 0.013) 57%,
-    rgba(0, 0, 0, 0.004) 72%,
-    transparent 90%
-  );
-  mix-blend-mode: multiply;
-  -webkit-mask-image: radial-gradient(
-    circle at center,
-    #000 0%,
-    #000 22%,
-    rgba(0, 0, 0, 0.82) 34%,
-    rgba(0, 0, 0, 0.6) 46%,
-    rgba(0, 0, 0, 0.4) 57%,
-    rgba(0, 0, 0, 0.24) 67%,
-    rgba(0, 0, 0, 0.13) 76%,
-    rgba(0, 0, 0, 0.06) 84%,
-    rgba(0, 0, 0, 0.02) 92%,
-    transparent 100%
-  );
-  mask-image: radial-gradient(
-    circle at center,
-    #000 0%,
-    #000 22%,
-    rgba(0, 0, 0, 0.82) 34%,
-    rgba(0, 0, 0, 0.6) 46%,
-    rgba(0, 0, 0, 0.4) 57%,
-    rgba(0, 0, 0, 0.24) 67%,
-    rgba(0, 0, 0, 0.13) 76%,
-    rgba(0, 0, 0, 0.06) 84%,
-    rgba(0, 0, 0, 0.02) 92%,
-    transparent 100%
-  );
-  -webkit-backdrop-filter: blur(85px) brightness(0.985);
-  backdrop-filter: blur(85px) brightness(0.985);
-  opacity: 0.75;
-  transition: opacity 650ms var(--lotus-motion-ease),
-    transform 800ms var(--lotus-motion-ease);
-  will-change: opacity, transform, backdrop-filter;
-}
-
-.lotus-orb-presence:hover .lotus-orb-lens {
-  opacity: 0.8;
-  transform: translate(-50%, -50%) scale(1.018);
-}
-
-.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens {
-  opacity: 0.27;
-  transform: translate(-50%, -50%) scale(0.82);
-}
-
-.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens {
-  opacity: 0.75;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens,
-.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens {
-  opacity: 0.75;
-  transform: translate(-50%, -50%) scale(1);
-  transition: none;
+  /* Glass/aura is intentionally paused. A large masked backdrop blur is
+     expensive in WebKit and must not sit beneath the persistent Orbe. */
+  display: none;
 }
 
 .pulso-entry-curtain {
@@ -402,86 +327,58 @@ body {
 
 @keyframes organic-breathe {
   0%, 100% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1) rotate(0deg);
-    filter: drop-shadow(0 0 19px rgba(251, 249, 245, 0.2));
   }
   33% {
-    border-radius: 54% 46% 52% 48% / 48% 53% 47% 52%;
     transform: scale(1.02) rotate(1.5deg);
-    filter: drop-shadow(0 0 34px rgba(251, 249, 245, 0.3));
   }
   66% {
-    border-radius: 47% 53% 48% 52% / 53% 47% 53% 47%;
     transform: scale(0.98) rotate(-1.5deg);
-    filter: drop-shadow(0 0 24px rgba(251, 249, 245, 0.25));
   }
 }
 
 @keyframes organic-listen {
   0%, 100% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.03) rotate(0deg);
-    filter: drop-shadow(0 0 36px rgba(251, 249, 245, 0.35));
   }
   25% {
-    border-radius: 58% 42% 62% 38% / 45% 55% 45% 55%;
     transform: scale(1.09) rotate(3deg);
-    filter: drop-shadow(0 0 60px rgba(251, 249, 245, 0.5));
   }
   50% {
-    border-radius: 42% 58% 38% 62% / 55% 45% 55% 45%;
     transform: scale(1.01) rotate(-3deg);
   }
   75% {
-    border-radius: 46% 54% 53% 47% / 48% 52% 48% 52%;
     transform: scale(1.06) rotate(2deg);
   }
 }
 
 @keyframes organic-think {
   0% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.02) rotate(0deg);
-    filter: drop-shadow(0 0 29px rgba(251, 249, 245, 0.3));
   }
   50% {
-    border-radius: 45% 55% 48% 52% / 52% 45% 55% 48%;
     transform: scale(0.96) rotate(180deg);
-    filter: drop-shadow(0 0 48px rgba(251, 249, 245, 0.45));
   }
   100% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.02) rotate(360deg);
-    filter: drop-shadow(0 0 29px rgba(251, 249, 245, 0.3));
   }
 }
 
 @keyframes organic-speak {
   0%, 100% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(1.02) translateY(0);
-    filter: drop-shadow(0 0 29px rgba(251, 249, 245, 0.3));
   }
   50% {
-    border-radius: 55% 45% 53% 47% / 49% 56% 44% 51%;
     transform: scale(1.1) translateY(-3px);
-    filter: drop-shadow(0 0 62px rgba(251, 249, 245, 0.55));
   }
 }
 
 @keyframes organic-busy {
   0%, 100% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(0.85);
-    filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.15));
-    border-color: rgba(245, 158, 11, 0.4);
   }
   50% {
-    border-radius: 52% 48% 51% 49% / 49% 51% 49% 51%;
     transform: scale(0.82);
-    filter: drop-shadow(0 0 35px rgba(245, 158, 11, 0.35));
-    border-color: rgba(245, 158, 11, 0.75);
   }
 }
 
@@ -489,67 +386,75 @@ body {
   animation: organic-busy 3.5s ease-in-out infinite;
   transform-origin: center;
   border-width: 19px !important;
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  filter: drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
+  will-change: transform;
 }
 
 .lotus-idle-anim {
   animation: organic-breathe 7s ease-in-out infinite;
   transform-origin: center;
+  filter: drop-shadow(0 0 26px rgba(251, 249, 245, 0.25));
+  will-change: transform;
 }
 
 .lotus-listening-anim {
   animation: organic-listen 2.5s ease-in-out infinite;
   transform-origin: center;
+  filter: drop-shadow(0 0 44px rgba(251, 249, 245, 0.42));
+  will-change: transform;
 }
 
 .lotus-thinking-anim {
   animation: organic-think 4.5s ease-in-out infinite;
   transform-origin: center;
+  filter: drop-shadow(0 0 38px rgba(251, 249, 245, 0.36));
+  will-change: transform;
 }
 
 .lotus-responding-anim {
   animation: organic-speak 1.6s ease-in-out infinite;
   transform-origin: center;
+  filter: drop-shadow(0 0 44px rgba(251, 249, 245, 0.42));
+  will-change: transform;
 }
 
 @keyframes organic-wait {
   0%, 100% {
-    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
     transform: scale(0.99) rotate(0deg);
-    filter: drop-shadow(0 0 12px rgba(251, 249, 245, 0.15));
   }
   50% {
-    border-radius: 49% 51% 50% 50% / 51% 49% 50% 50%;
     transform: scale(0.97) rotate(180deg);
-    filter: drop-shadow(0 0 20px rgba(251, 249, 245, 0.25));
   }
 }
 
 .lotus-waiting-anim {
   animation: organic-wait 9s ease-in-out infinite;
   transform-origin: center;
+  filter: drop-shadow(0 0 16px rgba(251, 249, 245, 0.2));
+  will-change: transform;
 }
 
 @keyframes organic-error {
   0%, 100% {
     transform: scale(1);
     opacity: 0.95;
-    filter: drop-shadow(0 0 15px rgba(251, 249, 245, 0.15));
   }
   20%, 60% {
     transform: scale(0.99) translateX(-1.5px);
     opacity: 0.75;
-    filter: drop-shadow(0 0 10px rgba(255, 100, 100, 0.25));
   }
   40%, 80% {
     transform: scale(0.99) translateX(1.5px);
     opacity: 0.75;
-    filter: drop-shadow(0 0 10px rgba(255, 100, 100, 0.25));
   }
 }
 
 .lotus-error-anim {
   animation: organic-error 1.8s ease-in-out infinite;
   transform-origin: center;
+  filter: drop-shadow(0 0 12px rgba(255, 100, 100, 0.22));
+  will-change: transform, opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
