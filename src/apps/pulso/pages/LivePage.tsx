@@ -5078,12 +5078,14 @@ ${data.transcription}`, {
           }}
         >
 
-          {/* Atelie Workspace Container nested within main */}
-          <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
-            isAtelieActive ? 'opacity-100 filter-none pointer-events-auto' : 'opacity-0 blur-md pointer-events-none'
-          }`}>
-            <AtelieWorkspace activeContextNode={activeContextNode} isActive={isAtelieActive} />
-          </div>
+          {/* The Ateliê owns a 60 fps canvas pipeline. Keeping it merely
+              invisible still runs pixel reads/writes beneath the chat, so it
+              must only exist while the workspace is actually open. */}
+          {isAtelieActive && (
+            <div className="absolute inset-0 w-full h-full z-0 overflow-hidden opacity-100 filter-none pointer-events-auto">
+              <AtelieWorkspace activeContextNode={activeContextNode} isActive />
+            </div>
+          )}
 
           {/* Estudio Workspace Container nested within main */}
           <div className={`absolute inset-0 w-full h-full z-0 overflow-hidden pulso-transition ${
