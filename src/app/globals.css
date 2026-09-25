@@ -387,35 +387,30 @@ body {
   transform-origin: center;
   border-width: 19px !important;
   border-color: rgba(245, 158, 11, 0.6) !important;
-  filter: drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
   will-change: transform;
 }
 
 .lotus-idle-anim {
   animation: organic-breathe 7s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 26px rgba(251, 249, 245, 0.25));
   will-change: transform;
 }
 
 .lotus-listening-anim {
   animation: organic-listen 2.5s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 44px rgba(251, 249, 245, 0.42));
   will-change: transform;
 }
 
 .lotus-thinking-anim {
   animation: organic-think 4.5s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 38px rgba(251, 249, 245, 0.36));
   will-change: transform;
 }
 
 .lotus-responding-anim {
   animation: organic-speak 1.6s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 44px rgba(251, 249, 245, 0.42));
   will-change: transform;
 }
 
@@ -431,7 +426,6 @@ body {
 .lotus-waiting-anim {
   animation: organic-wait 9s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 16px rgba(251, 249, 245, 0.2));
   will-change: transform;
 }
 
@@ -453,7 +447,6 @@ body {
 .lotus-error-anim {
   animation: organic-error 1.8s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 12px rgba(255, 100, 100, 0.22));
   will-change: transform, opacity;
 }
 
