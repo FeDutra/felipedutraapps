@@ -391,9 +391,10 @@ body {
 }
 
 .lotus-idle-anim {
-  animation: organic-breathe 7s ease-in-out infinite;
+  /* Idle is deliberately still. Even transform-only infinite keyframes keep
+     WebKit's render timer hot on Intel Macs; movement resumes only for an
+     actual interaction state. */
   transform-origin: center;
-  will-change: transform;
 }
 
 .lotus-listening-anim {
