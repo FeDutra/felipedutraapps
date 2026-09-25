@@ -484,7 +484,9 @@ body {
 }
 
 .watermark-layout-anim {
-  animation: watermark-breathe 15s ease-in-out infinite;
+  /* O fundo permanece estático: a animação ociosa mantinha o timer de
+     composição do WebKit ativo continuamente nos Macs Intel. */
+  opacity: 0.02;
 }
 
 
