@@ -5,6 +5,15 @@ export interface PresenceMesaArtifact {
   contextId?: string;
 }
 
+// `pulso-doc` is the only documented artifact tag. Accept the one-letter
+// transposition below solely to recover a malformed assistant response instead
+// of exposing its XML-like markup in a human conversation.
+const MESA_DOC_TAG = 'pul(?:s|so)-doc';
+const MESA_DOC_REGEX = new RegExp(
+  `<${MESA_DOC_TAG}\\s+id="([^"]+)"\\s+title="([^"]+)">([\\s\\S]*?)<\\/${MESA_DOC_TAG}>`,
+  'i',
+);
+
 function normalize(value: string) {
   return value
     .toLocaleLowerCase('pt-BR')
@@ -31,7 +40,7 @@ export function isMesaDismissUtterance(input: string) {
 export function shouldOpenPresenceMesa(resultText: string) {
   const text = resultText.trim();
   if (!text) return false;
-  if (/<pulso-doc\b/i.test(text)) return true;
+  if (new RegExp(`<${MESA_DOC_TAG}\\b`, 'i').test(text)) return true;
   if (text.length >= 520) return true;
 
   const structuralSignals = [
@@ -52,7 +61,7 @@ export function createPresenceMesaArtifact(args: {
   areaName?: string;
   sessionLabel?: string;
 }): PresenceMesaArtifact {
-  const docMatch = args.resultText.match(/<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i);
+  const docMatch = args.resultText.match(MESA_DOC_REGEX);
   if (docMatch) {
     return {
       id: docMatch[1],

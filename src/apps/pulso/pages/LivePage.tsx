@@ -5470,7 +5470,10 @@ ${data.transcription}`, {
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
                         <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
                           {(() => {
-                            const docRegex = /<pulso-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pulso-doc>/i;
+                            // `pulso-doc` is canonical. The second spelling is a
+                            // recovery path for legacy/malformed assistant output,
+                            // so raw tags never become visible in the chat.
+                            const docRegex = /<pul(?:s|so)-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pul(?:s|so)-doc>/i;
                             const docMatch = msg.text.match(docRegex);
                             let displayText = msg.text;
                             let artifactData = null;
