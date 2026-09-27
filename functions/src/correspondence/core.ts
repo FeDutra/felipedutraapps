@@ -105,13 +105,31 @@ export function isCooldownActive(
 
 /**
  * Checks if the request is originated from allowed origins.
+ * Allowed: felipedutra.com, www.felipedutra.com, and dev localhost.
  */
 export const ALLOWED_ORIGINS = [
   "https://felipedutra.com",
   "https://www.felipedutra.com"
 ];
 
+const DEV_LOCALHOST_REGEX = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 export function isAllowedOrigin(origin?: string | null): boolean {
-  if (!origin) return false;
-  return ALLOWED_ORIGINS.includes(origin.toLowerCase().trim());
+  if (!origin || typeof origin !== "string") return false;
+  const lower = origin.toLowerCase().trim();
+  if (ALLOWED_ORIGINS.includes(lower)) return true;
+  return DEV_LOCALHOST_REGEX.test(lower);
+}
+
+/**
+ * Direct Cloud Function URL used by default because felipedutra.com is a static site without proxy.
+ */
+export const DEFAULT_CORRESPONDENCE_BASE_URL =
+  "https://us-central1-felipedutraapps.cloudfunctions.net/correspondenceApi";
+
+export function getCorrespondenceBaseUrl(): string {
+  return (
+    process.env.CORRESPONDENCE_BASE_URL ||
+    DEFAULT_CORRESPONDENCE_BASE_URL
+  );
 }

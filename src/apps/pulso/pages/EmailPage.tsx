@@ -60,11 +60,10 @@ export default function EmailPage() {
           </span>
         </div>
         <h1 className="text-xl sm:text-2xl font-light tracking-tight text-white">
-          Canal Soberano de Cartas & Ensaios
+          Correspondência
         </h1>
         <p className="text-xs text-[#fbf9f5]/45 max-w-2xl font-light leading-relaxed">
-          Monitoramento ritualístico de inscrições, confirmações duplas e entregas via Resend.
-          Privacidade ponta-a-ponta com identificação criptográfica por SHA-256.
+          Inscrições, confirmações e falhas de envio.
         </p>
       </div>
 

@@ -10,7 +10,9 @@ import {
   sanitizeName,
   sanitizeSource,
   isCooldownActive,
-  isAllowedOrigin
+  isAllowedOrigin,
+  getCorrespondenceBaseUrl,
+  DEFAULT_CORRESPONDENCE_BASE_URL
 } from "./core.ts";
 import {
   buildConfirmationEmail,
@@ -165,11 +167,49 @@ describe("Correspondence Core Pure Functions", () => {
       assert.equal(isAllowedOrigin("https://www.felipedutra.com"), true);
     });
 
+    test("allows dev localhost origins", () => {
+      assert.equal(isAllowedOrigin("http://localhost:3000"), true);
+      assert.equal(isAllowedOrigin("http://localhost:5173"), true);
+      assert.equal(isAllowedOrigin("http://localhost"), true);
+      assert.equal(isAllowedOrigin("http://127.0.0.1:3000"), true);
+      assert.equal(isAllowedOrigin("http://127.0.0.1"), true);
+    });
+
     test("rejects unauthorized domains", () => {
       assert.equal(isAllowedOrigin("https://evil.com"), false);
       assert.equal(isAllowedOrigin("http://felipedutra.com"), false); // HTTP not HTTPS
       assert.equal(isAllowedOrigin("https://sub.felipedutra.com"), false);
       assert.equal(isAllowedOrigin(null), false);
+      assert.equal(isAllowedOrigin(""), false);
+    });
+  });
+
+  describe("getCorrespondenceBaseUrl", () => {
+    test("defaults to direct Cloud Function url without proxy", () => {
+      const originalEnv = process.env.CORRESPONDENCE_BASE_URL;
+      delete process.env.CORRESPONDENCE_BASE_URL;
+      try {
+        assert.equal(
+          getCorrespondenceBaseUrl(),
+          "https://us-central1-felipedutraapps.cloudfunctions.net/correspondenceApi"
+        );
+      } finally {
+        if (originalEnv) process.env.CORRESPONDENCE_BASE_URL = originalEnv;
+      }
+    });
+
+    test("respects environment variable override when set", () => {
+      const originalEnv = process.env.CORRESPONDENCE_BASE_URL;
+      process.env.CORRESPONDENCE_BASE_URL = "https://custom.example.com/api";
+      try {
+        assert.equal(getCorrespondenceBaseUrl(), "https://custom.example.com/api");
+      } finally {
+        if (originalEnv) {
+          process.env.CORRESPONDENCE_BASE_URL = originalEnv;
+        } else {
+          delete process.env.CORRESPONDENCE_BASE_URL;
+        }
+      }
     });
   });
 });
@@ -179,8 +219,8 @@ describe("Email Templates & HTML Generation", () => {
     assert.equal(escapeHtml('<script>"test" & \'more\'</script>'), "&lt;script&gt;&quot;test&quot; &amp; &#039;more&#039;&lt;/script&gt;");
   });
 
-  test("buildConfirmationEmail contains confirmation link and PULSO layout", () => {
-    const confirmUrl = "https://felipedutra.com/api/correspondence?mode=confirm&token=abc123token";
+  test("buildConfirmationEmail contains required minimal text without invented biography", () => {
+    const confirmUrl = "https://us-central1-felipedutraapps.cloudfunctions.net/correspondenceApi?mode=confirm&token=abc123token";
     const mail = buildConfirmationEmail({
       name: "Felipe",
       confirmUrl
@@ -189,21 +229,37 @@ describe("Email Templates & HTML Generation", () => {
     assert.equal(mail.subject, "confirme sua inscrição · correspondência");
     assert.ok(mail.html.includes(escapeHtml(confirmUrl)));
     assert.ok(mail.html.includes("Olá, Felipe."));
-    assert.ok(mail.html.includes("P U L S O"));
+    assert.ok(mail.html.includes("Você pediu para receber a correspondência de fe."));
+    assert.ok(mail.text.includes("Você pediu para receber a correspondência de fe."));
     assert.ok(mail.text.includes(confirmUrl));
+    assert.ok(mail.text.includes("fe · felipedutra.com"));
+
+    // Verify absence of forbidden strings
+    assert.equal(mail.html.includes("Fê Dutra"), false);
+    assert.equal(mail.text.includes("Fê Dutra"), false);
+    assert.equal(mail.html.includes("eu leio"), false);
+    assert.equal(mail.text.includes("eu leio"), false);
   });
 
-  test("buildWelcomeEmail contains unsubscribe link and signoff", () => {
-    const unsubscribeUrl = "https://felipedutra.com/api/correspondence?mode=unsubscribe&token=unsub789";
+  test("buildWelcomeEmail contains required minimal welcome text without invented biography", () => {
+    const unsubscribeUrl = "https://us-central1-felipedutraapps.cloudfunctions.net/correspondenceApi?mode=unsubscribe&token=unsub789";
     const mail = buildWelcomeEmail({
       name: "Leitor",
       unsubscribeUrl
     });
 
-    assert.equal(mail.subject, "boas-vindas à correspondência");
+    assert.equal(mail.subject, "inscrição confirmada · correspondência");
     assert.ok(mail.html.includes(escapeHtml(unsubscribeUrl)));
-    assert.ok(mail.html.includes("Fê Dutra"));
+    assert.ok(mail.html.includes("Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui."));
+    assert.ok(mail.text.includes("Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui."));
     assert.ok(mail.html.includes("Cancelar recebimento"));
     assert.ok(mail.text.includes(unsubscribeUrl));
+    assert.ok(mail.text.includes("fe · felipedutra.com"));
+
+    // Verify absence of forbidden strings
+    assert.equal(mail.html.includes("Fê Dutra"), false);
+    assert.equal(mail.text.includes("Fê Dutra"), false);
+    assert.equal(mail.html.includes("eu leio"), false);
+    assert.equal(mail.text.includes("eu leio"), false);
   });
 });

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ALLOWED_ORIGINS = void 0;
+exports.DEFAULT_CORRESPONDENCE_BASE_URL = exports.ALLOWED_ORIGINS = void 0;
 exports.normalizeEmail = normalizeEmail;
 exports.validateEmail = validateEmail;
 exports.hashEmail = hashEmail;
@@ -44,6 +44,7 @@ exports.sanitizeName = sanitizeName;
 exports.sanitizeSource = sanitizeSource;
 exports.isCooldownActive = isCooldownActive;
 exports.isAllowedOrigin = isAllowedOrigin;
+exports.getCorrespondenceBaseUrl = getCorrespondenceBaseUrl;
 const crypto = __importStar(require("node:crypto"));
 /**
  * Standard email normalization: trim, lowercase, strip zero-width characters.
@@ -146,14 +147,27 @@ function isCooldownActive(lastActionAt, cooldownMs = 120000, now = new Date()) {
 }
 /**
  * Checks if the request is originated from allowed origins.
+ * Allowed: felipedutra.com, www.felipedutra.com, and dev localhost.
  */
 exports.ALLOWED_ORIGINS = [
     "https://felipedutra.com",
     "https://www.felipedutra.com"
 ];
+const DEV_LOCALHOST_REGEX = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 function isAllowedOrigin(origin) {
-    if (!origin)
+    if (!origin || typeof origin !== "string")
         return false;
-    return exports.ALLOWED_ORIGINS.includes(origin.toLowerCase().trim());
+    const lower = origin.toLowerCase().trim();
+    if (exports.ALLOWED_ORIGINS.includes(lower))
+        return true;
+    return DEV_LOCALHOST_REGEX.test(lower);
+}
+/**
+ * Direct Cloud Function URL used by default because felipedutra.com is a static site without proxy.
+ */
+exports.DEFAULT_CORRESPONDENCE_BASE_URL = "https://us-central1-felipedutraapps.cloudfunctions.net/correspondenceApi";
+function getCorrespondenceBaseUrl() {
+    return (process.env.CORRESPONDENCE_BASE_URL ||
+        exports.DEFAULT_CORRESPONDENCE_BASE_URL);
 }
 //# sourceMappingURL=core.js.map
