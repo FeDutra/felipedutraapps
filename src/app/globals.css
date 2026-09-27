@@ -218,12 +218,10 @@ body {
 @keyframes lotus-presence-birth {
   0% {
     opacity: 0;
-    filter: blur(58px);
     transform: scale(0);
   }
   100% {
     opacity: 1;
-    filter: blur(0);
     transform: scale(1);
   }
 }
@@ -231,11 +229,9 @@ body {
 @keyframes lotus-presence-breathe {
   0%, 50%, 100% {
     transform: scale(1);
-    filter: blur(0) brightness(1);
   }
   25%, 75% {
     transform: scale(1.022);
-    filter: blur(0) brightness(1.045);
   }
 }
 
@@ -246,7 +242,7 @@ body {
 }
 
 .lotus-orb-visual {
-  will-change: transform, filter, opacity;
+  will-change: transform, opacity;
 }
 
 .lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-visual {
@@ -290,7 +286,6 @@ body {
 
 .lotus-orb-membrane {
   transition: border-color 1000ms var(--lotus-motion-ease),
-    filter 1000ms var(--lotus-motion-ease),
     opacity 1000ms var(--lotus-motion-ease);
 }
 
@@ -307,9 +302,39 @@ body {
 }
 
 .lotus-orb-lens {
-  /* Glass/aura is intentionally paused. A large masked backdrop blur is
-     expensive in WebKit and must not sit beneath the persistent Orbe. */
-  display: none;
+  /* The lens is deliberately short: it begins outside the membrane and
+     dissolves before its physical edge. It is never the old 588px disc.
+     No fill, ring or opaque plate — only a small reduction of contrast in
+     the material directly behind the Lótus. */
+  width: 464px;
+  height: 464px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.045) 0%, rgba(0, 0, 0, 0.022) 56%, transparent 77%);
+  backdrop-filter: blur(12px) saturate(82%);
+  -webkit-backdrop-filter: blur(12px) saturate(82%);
+  mask-image: radial-gradient(circle, #000 0%, #000 55%, rgba(0, 0, 0, 0.48) 67%, transparent 82%);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, #000 55%, rgba(0, 0, 0, 0.48) 67%, transparent 82%);
+  transition: opacity 180ms ease-out;
+}
+
+/* The glass only settles after the same instance has arrived. During birth,
+   travel and drag it disappears instead of trying to interpolate a separate
+   geometry. That keeps it spatially truthful and protects typing/scrolling. */
+.lotus-orb-presence[data-entry-phase='settled'][data-dragging='false'] .lotus-orb-lens {
+  opacity: 1;
+}
+
+.lotus-orb-presence[data-dragging='true'] .lotus-orb-lens,
+.lotus-orb-presence[data-entry-phase='birth'] .lotus-orb-lens,
+.lotus-orb-presence[data-entry-phase='breathe'] .lotus-orb-lens,
+.lotus-orb-presence[data-entry-phase='align'] .lotus-orb-lens,
+.lotus-orb-presence[data-entry-phase='handoff'] .lotus-orb-lens,
+.lotus-orb-presence[data-entry-phase='travel'] .lotus-orb-lens {
+  opacity: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .pulso-entry-curtain {
