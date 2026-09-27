@@ -2,6 +2,7 @@
   "name": "functions",
   "scripts": {
     "build": "tsc",
+    "test": "node --test --experimental-strip-types src/correspondence/correspondence.test.ts",
     "deploy": "firebase deploy --only functions"
   },
   "engines": {

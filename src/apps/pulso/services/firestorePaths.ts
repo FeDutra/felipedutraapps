@@ -65,6 +65,10 @@ export const firestorePaths = {
   sessions: () => `${BASE_PATH}/pulso_sessions`,
   session: (id: string) => `${BASE_PATH}/pulso_sessions/${id}`,
 
+  /** PULSO Correspondência */
+  correspondenceSubscribers: () => `${BASE_PATH}/correspondence_subscribers`,
+  correspondenceSubscriber: (id: string) => `${BASE_PATH}/correspondence_subscribers/${id}`,
+
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`
 };
