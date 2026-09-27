@@ -12,7 +12,8 @@ import {
   sanitizeSource,
   isCooldownActive,
   isAllowedOrigin,
-  ALLOWED_ORIGINS
+  ALLOWED_ORIGINS,
+  getCorrespondenceBaseUrl
 } from "./core";
 import {
   buildConfirmationEmail,
@@ -24,6 +25,8 @@ import type {
   SubscribeRequestBody
 } from "./types";
 
+export { getCorrespondenceBaseUrl };
+
 export const resendApiKey = defineSecret("RESEND_API_KEY");
 
 const WORKSPACE_ID = "felipe_dutra";
@@ -34,37 +37,44 @@ const GENERIC_SUBSCRIBE_RESPONSE = {
   message: "Inscrição processada com sucesso. Se o e-mail for válido, você receberá uma confirmação em breve."
 };
 
-function getCorrespondenceBaseUrl(): string {
-  return (
-    process.env.CORRESPONDENCE_BASE_URL ||
-    "https://felipedutra.com/api/correspondence"
-  );
-}
-
 export const correspondenceApi = onRequest(
   {
     region: "us-central1",
     secrets: [resendApiKey]
   },
   async (req, res) => {
-    // ── 1. CORS & Preflight ──────────────────────────────────────────────────
+    // ── 1. Origin & CORS Handling ──────────────────────────────────────────
     const origin = req.headers.origin;
 
-    if (origin) {
-      if (isAllowedOrigin(origin)) {
+    if (req.method === "OPTIONS") {
+      if (origin && isAllowedOrigin(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
         res.setHeader("Access-Control-Max-Age", "86400");
-      } else if (req.method === "OPTIONS" || req.method === "POST") {
-        // Reject cross-origin requests from unauthorized origins
+        res.status(204).end();
+        return;
+      }
+      res.status(403).json({ error: "Origin not allowed" });
+      return;
+    }
+
+    if (req.method === "POST") {
+      // POST requires authorized Origin: reject absence or invalid origin
+      if (!origin || !isAllowedOrigin(origin)) {
         res.status(403).json({ error: "Origin not allowed" });
         return;
       }
-    }
-
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Methods", "POST");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    } else if (req.method === "GET") {
+      // GET of links (confirm / unsubscribe) can proceed without Origin
+      if (origin && isAllowedOrigin(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+      }
+    } else {
+      res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
@@ -132,38 +142,43 @@ export const correspondenceApi = onRequest(
 
           console.log("[correspondence] Subscriber confirmed successfully:", docSnap.id.slice(0, 8));
 
-          // Send welcome auto-response email asynchronously
+          // Send welcome auto-response email and await delivery + Firestore update before redirect
           const unsubUrl = `${getCorrespondenceBaseUrl()}?mode=unsubscribe&token=${unsubRawToken}`;
           const welcomeMail = buildWelcomeEmail({
             name: data.name,
             unsubscribeUrl: unsubUrl
           });
 
-          sendEmailWithResend({
-            apiKey,
-            to: data.email,
-            subject: welcomeMail.subject,
-            html: welcomeMail.html,
-            text: welcomeMail.text
-          })
-            .then(async (sendResult) => {
-              if (sendResult.success) {
-                await docSnap.ref.update({
-                  lastDeliveryStatus: "welcome_sent",
-                  lastDeliveryAt: FieldValue.serverTimestamp()
-                });
-              } else {
-                console.error("[correspondence] Failed to send welcome email for doc:", docSnap.id.slice(0, 8), sendResult.errorCode);
-                await docSnap.ref.update({
-                  lastDeliveryStatus: "failed",
-                  lastDeliveryAt: FieldValue.serverTimestamp(),
-                  errorCode: sendResult.errorCode || "WELCOME_DELIVERY_FAILED"
-                });
-              }
-            })
-            .catch((err) => {
-              console.error("[correspondence] Unexpected welcome delivery error:", err?.message);
+          try {
+            const sendResult = await sendEmailWithResend({
+              apiKey,
+              to: data.email,
+              subject: welcomeMail.subject,
+              html: welcomeMail.html,
+              text: welcomeMail.text
             });
+
+            if (sendResult.success) {
+              await docSnap.ref.update({
+                lastDeliveryStatus: "welcome_sent",
+                lastDeliveryAt: FieldValue.serverTimestamp()
+              });
+            } else {
+              console.error("[correspondence] Failed to send welcome email for doc:", docSnap.id.slice(0, 8), sendResult.errorCode);
+              await docSnap.ref.update({
+                lastDeliveryStatus: "failed",
+                lastDeliveryAt: FieldValue.serverTimestamp(),
+                errorCode: sendResult.errorCode || "WELCOME_DELIVERY_FAILED"
+              });
+            }
+          } catch (err: any) {
+            console.error("[correspondence] Unexpected welcome delivery error:", err?.message);
+            await docSnap.ref.update({
+              lastDeliveryStatus: "failed",
+              lastDeliveryAt: FieldValue.serverTimestamp(),
+              errorCode: "WELCOME_DELIVERY_EXCEPTION"
+            });
+          }
 
           res.redirect("https://felipedutra.com/?correspondence=confirmed#correspondencia");
           return;

@@ -1,6 +1,6 @@
 # PULSO // Correspondência · Setup, Operação & Arquitetura
 
-Guia operacional da infraestrutura soberana de correspondência de Fê Dutra (`felipedutra.com`), cobrindo backend Cloud Functions v2 (`correspondenceApi`), painel interno na PULSO (`/pulso/email`), segurança de tokens, deploy, rollback e roadmap de extensão.
+Guia operacional da infraestrutura de correspondência de fe (`felipedutra.com`), cobrindo backend Cloud Functions v2 (`correspondenceApi`), painel interno na PULSO (`/pulso/email`), segurança de tokens, deploy, rollback e roadmap de extensão.
 
 ---
 
@@ -8,12 +8,12 @@ Guia operacional da infraestrutura soberana de correspondência de Fê Dutra (`f
 
 ```mermaid
 flowchart TD
-    Site["Superfície Pública<br/>felipedutra.com"] -- "POST JSON /api/correspondence<br/>{ action: 'subscribe', email, consent, ... }" --> CF["Cloud Function v2<br/>correspondenceApi (us-central1)"]
+    Site["Superfície Pública<br/>felipedutra.com"] -- "POST JSON correspondenceApi<br/>{ action: 'subscribe', email, consent, ... }" --> CF["Cloud Function v2<br/>correspondenceApi (us-central1)"]
     CF -- "SHA-256(email) docId<br/>Token Hash (SHA-256)" --> FS[("Firestore<br/>workspaces/felipe_dutra/<br/>correspondence_subscribers")]
     CF -- "POST /emails<br/>(Bearer RESEND_API_KEY)" --> Resend["Resend API"]
     Resend -- "E-mail de Confirmação (48h)" --> User["Assinante"]
-    User -- "GET /api/correspondence?mode=confirm&token=..." --> CF
-    CF -- "status: active<br/>token: invalidado<br/>welcome_queued" --> FS
+    User -- "GET correspondenceApi?mode=confirm&token=..." --> CF
+    CF -- "status: active<br/>token: invalidado<br/>welcome_sent (aguardado antes do redirect)" --> FS
     CF -- "E-mail de Boas-Vindas + Link Descadastro" --> Resend
     CF -- "302 Redirect" --> SiteConf["felipedutra.com/?correspondence=confirmed#correspondencia"]
     Pulso["Painel PULSO<br/>/pulso/email (AuthGate)"] -- "Leitura Direta Autenticada" --> FS
@@ -57,9 +57,10 @@ flowchart TD
    - Cooldown de 120 segundos contra submissões repetidas de um mesmo e-mail, prevenindo flood e desperdício de cota no Resend.
 4. **Honeypot Silencioso**:
    - O campo `honeypot` no payload descarta bots imediatamente retornando 200 OK sem tocar no banco ou na API de envio.
-5. **CORS Restrito**:
-   - Apenas `https://felipedutra.com` e `https://www.felipedutra.com` são autorizados.
-   - Requisições cross-origin com origens não autorizadas são rejeitadas com 403.
+5. **CORS e Origin Rigorosos**:
+   - `POST` exige header `Origin` autorizado (`https://felipedutra.com`, `https://www.felipedutra.com` e origens de desenvolvimento local como `http://localhost:*` e `http://127.0.0.1:*`).
+   - Requisições `POST` sem `Origin` ou com origem não autorizada são sumariamente rejeitadas com 403.
+   - Requisições `GET` de links (confirmação e descadastro clicados em clientes de e-mail) prosseguem sem exigência de `Origin`.
    - Preflight `OPTIONS` implementado com cache de 24h (`Max-Age: 86400`).
 6. **Ofuscação de Logs**:
    - Nenhuma linha de log expõe e-mail cru ou tokens. Apenas os 8 primeiros caracteres do hash do documento são impressos (`docSnap.id.slice(0, 8)`).
@@ -79,7 +80,7 @@ firebase functions:secrets:set RESEND_API_KEY
 ### Variáveis de Ambiente Opcionais (Cloud Functions)
 - `CORRESPONDENCE_FROM_EMAIL`: Remetente padrão (default: `fe · correspondência <contato@felipedutra.com>`).
 - `CORRESPONDENCE_REPLY_TO`: Endereço de resposta (default: `contato@felipedutra.com`).
-- `CORRESPONDENCE_BASE_URL`: URL base para geração de links (default: `https://felipedutra.com/api/correspondence`).
+- `CORRESPONDENCE_BASE_URL`: URL base para links (default direto: `https://us-central1-felipedutraapps.cloudfunctions.net/correspondenceApi`, já que felipedutra.com é site estático sem proxy).
 
 ---
 

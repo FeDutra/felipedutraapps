@@ -26,7 +26,7 @@ function emailLayout(content, footerLinks) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark only">
-  <title>Correspondência · Fê Dutra</title>
+  <title>correspondência · fe</title>
   <style>
     body {
       margin: 0;
@@ -85,7 +85,7 @@ function emailLayout(content, footerLinks) {
       text-decoration: underline;
     }
     .signoff {
-      margin-top: 40px;
+      margin-top: 36px;
       font-size: 14px;
       color: #d1ceca;
     }
@@ -119,8 +119,7 @@ function emailLayout(content, footerLinks) {
     <div class="footer">
       ${footerLinks}
       <div style="margin-top: 16px;">
-        felipe dutra · ensaios, presença e tecnologia viva<br>
-        felipedutra.com
+        fe · felipedutra.com
       </div>
     </div>
   </div>
@@ -136,23 +135,20 @@ function buildConfirmationEmail(data) {
     const content = `
     <p>${greeting}</p>
     <p>
-      Você solicitou o recebimento da correspondência de Fê Dutra — ensaios lentos sobre presença, arquitetura de sistemas vivos, arte e consciência tecnológica.
-    </p>
-    <p>
-      Para confirmar seu endereço e ativar este canal direto, clique no botão abaixo:
+      Você pediu para receber a correspondência de fe.
     </p>
     <div>
       <a href="${escapeHtml(confirmUrl)}" class="btn-action" target="_blank" rel="noopener noreferrer">
-        Confirmar Inscrição ✦
+        Confirmar Inscrição
       </a>
     </div>
     <div class="alt-link">
-      Se o botão acima não funcionar, acesse este link:<br>
+      Se o botão não funcionar, use este link:<br>
       <a href="${escapeHtml(confirmUrl)}">${escapeHtml(confirmUrl)}</a>
     </div>
     <p style="margin-top: 32px; font-size: 13px; color: #8f8b85;">
-      Este link é de uso único e expira em 48 horas.<br>
-      Se não foi você quem solicitou, basta ignorar esta mensagem — nada mais será enviado.
+      O link expira em 48 horas.<br>
+      Se não foi você que solicitou, ignore esta mensagem.
     </p>
   `;
     const footer = `
@@ -160,16 +156,16 @@ function buildConfirmationEmail(data) {
   `;
     const text = `${data.name ? `Olá, ${data.name}.` : "Olá."}
 
-Você solicitou o recebimento da correspondência de Fê Dutra — ensaios lentos sobre presença, tecnologia, arte e sistemas vivos.
+Você pediu para receber a correspondência de fe.
 
-Para confirmar seu endereço e ativar o canal, acesse o link abaixo:
+Para confirmar sua inscrição, use este link:
 ${confirmUrl}
 
-Este link é de uso único e expira em 48 horas.
+O link expira em 48 horas.
 Se não foi você que solicitou, ignore esta mensagem.
 
 --
-Fê Dutra · felipedutra.com`;
+fe · felipedutra.com`;
     return {
         subject: "confirme sua inscrição · correspondência",
         html: emailLayout(content, footer),
@@ -185,45 +181,28 @@ function buildWelcomeEmail(data) {
     const content = `
     <p>${greeting}</p>
     <p>
-      Sua inscrição na correspondência está confirmada.
-    </p>
-    <p>
-      Esta correspondência é uma cadência lenta. Não há calendários industriais, fórmulas de engajamento nem automações de pressão.
-    </p>
-    <p>
-      Cada texto enviado aqui nasce de experiências reais de criação, notas de campo sobre inteligência artificial e presença orgânica, e questionamentos sobre como permanecemos humanos no mundo em aceleração.
-    </p>
-    <p>
-      Sinta-se sempre livre para responder a este e-mail. Eu leio cada resposta pessoalmente.
+      Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui.
     </p>
     <div class="signoff">
-      com calma e presença,<br>
-      <strong>Fê Dutra</strong>
+      fe
     </div>
   `;
     const footer = `
-    <a href="${escapeHtml(unsubscribeUrl)}">Cancelar recebimento (descadastrar)</a>
+    <a href="${escapeHtml(unsubscribeUrl)}">Cancelar recebimento</a>
   `;
     const text = `${data.name ? `Olá, ${data.name}.` : "Olá."}
 
-Sua inscrição na correspondência está confirmada.
+Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui.
 
-Esta correspondência é uma cadência lenta. Não há calendários industriais, fórmulas de engajamento nem automações de pressão.
-
-Cada texto enviado aqui nasce de experiências reais de criação, notas de campo sobre inteligência artificial e presença orgânica, e questionamentos sobre como permanecemos humanos no mundo em aceleração.
-
-Sinta-se livre para responder diretamente a este e-mail. Eu leio cada resposta pessoalmente.
-
-Com calma e presença,
-Fê Dutra
+fe
 
 --
 Para cancelar o recebimento:
 ${unsubscribeUrl}
 
-Fê Dutra · felipedutra.com`;
+fe · felipedutra.com`;
     return {
-        subject: "boas-vindas à correspondência",
+        subject: "inscrição confirmada · correspondência",
         html: emailLayout(content, footer),
         text
     };

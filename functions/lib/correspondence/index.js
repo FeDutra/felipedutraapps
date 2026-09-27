@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.correspondenceApi = exports.resendApiKey = void 0;
+exports.correspondenceApi = exports.resendApiKey = exports.getCorrespondenceBaseUrl = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const firestore_1 = require("firebase-admin/firestore");
 const core_1 = require("./core");
+Object.defineProperty(exports, "getCorrespondenceBaseUrl", { enumerable: true, get: function () { return core_1.getCorrespondenceBaseUrl; } });
 const templates_1 = require("./templates");
 const mailer_1 = require("./mailer");
 exports.resendApiKey = (0, params_1.defineSecret)("RESEND_API_KEY");
@@ -14,31 +15,42 @@ const GENERIC_SUBSCRIBE_RESPONSE = {
     status: "ok",
     message: "Inscrição processada com sucesso. Se o e-mail for válido, você receberá uma confirmação em breve."
 };
-function getCorrespondenceBaseUrl() {
-    return (process.env.CORRESPONDENCE_BASE_URL ||
-        "https://felipedutra.com/api/correspondence");
-}
 exports.correspondenceApi = (0, https_1.onRequest)({
     region: "us-central1",
     secrets: [exports.resendApiKey]
 }, async (req, res) => {
-    // ── 1. CORS & Preflight ──────────────────────────────────────────────────
+    // ── 1. Origin & CORS Handling ──────────────────────────────────────────
     const origin = req.headers.origin;
-    if (origin) {
-        if ((0, core_1.isAllowedOrigin)(origin)) {
+    if (req.method === "OPTIONS") {
+        if (origin && (0, core_1.isAllowedOrigin)(origin)) {
             res.setHeader("Access-Control-Allow-Origin", origin);
             res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
             res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
             res.setHeader("Access-Control-Max-Age", "86400");
+            res.status(204).end();
+            return;
         }
-        else if (req.method === "OPTIONS" || req.method === "POST") {
-            // Reject cross-origin requests from unauthorized origins
+        res.status(403).json({ error: "Origin not allowed" });
+        return;
+    }
+    if (req.method === "POST") {
+        // POST requires authorized Origin: reject absence or invalid origin
+        if (!origin || !(0, core_1.isAllowedOrigin)(origin)) {
             res.status(403).json({ error: "Origin not allowed" });
             return;
         }
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Methods", "POST");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     }
-    if (req.method === "OPTIONS") {
-        res.status(204).end();
+    else if (req.method === "GET") {
+        // GET of links (confirm / unsubscribe) can proceed without Origin
+        if (origin && (0, core_1.isAllowedOrigin)(origin)) {
+            res.setHeader("Access-Control-Allow-Origin", origin);
+        }
+    }
+    else {
+        res.status(405).json({ error: "Method not allowed" });
         return;
     }
     const db = (0, firestore_1.getFirestore)();
@@ -94,20 +106,20 @@ exports.correspondenceApi = (0, https_1.onRequest)({
                     errorCode: null
                 });
                 console.log("[correspondence] Subscriber confirmed successfully:", docSnap.id.slice(0, 8));
-                // Send welcome auto-response email asynchronously
-                const unsubUrl = `${getCorrespondenceBaseUrl()}?mode=unsubscribe&token=${unsubRawToken}`;
+                // Send welcome auto-response email and await delivery + Firestore update before redirect
+                const unsubUrl = `${(0, core_1.getCorrespondenceBaseUrl)()}?mode=unsubscribe&token=${unsubRawToken}`;
                 const welcomeMail = (0, templates_1.buildWelcomeEmail)({
                     name: data.name,
                     unsubscribeUrl: unsubUrl
                 });
-                (0, mailer_1.sendEmailWithResend)({
-                    apiKey,
-                    to: data.email,
-                    subject: welcomeMail.subject,
-                    html: welcomeMail.html,
-                    text: welcomeMail.text
-                })
-                    .then(async (sendResult) => {
+                try {
+                    const sendResult = await (0, mailer_1.sendEmailWithResend)({
+                        apiKey,
+                        to: data.email,
+                        subject: welcomeMail.subject,
+                        html: welcomeMail.html,
+                        text: welcomeMail.text
+                    });
                     if (sendResult.success) {
                         await docSnap.ref.update({
                             lastDeliveryStatus: "welcome_sent",
@@ -122,10 +134,15 @@ exports.correspondenceApi = (0, https_1.onRequest)({
                             errorCode: sendResult.errorCode || "WELCOME_DELIVERY_FAILED"
                         });
                     }
-                })
-                    .catch((err) => {
+                }
+                catch (err) {
                     console.error("[correspondence] Unexpected welcome delivery error:", err?.message);
-                });
+                    await docSnap.ref.update({
+                        lastDeliveryStatus: "failed",
+                        lastDeliveryAt: firestore_1.FieldValue.serverTimestamp(),
+                        errorCode: "WELCOME_DELIVERY_EXCEPTION"
+                    });
+                }
                 res.redirect("https://felipedutra.com/?correspondence=confirmed#correspondencia");
                 return;
             }
@@ -247,7 +264,7 @@ exports.correspondenceApi = (0, https_1.onRequest)({
             }
             await subscriberRef.set(subscriberData, { merge: true });
             // Dispatch confirmation email
-            const confirmUrl = `${getCorrespondenceBaseUrl()}?mode=confirm&token=${rawToken}`;
+            const confirmUrl = `${(0, core_1.getCorrespondenceBaseUrl)()}?mode=confirm&token=${rawToken}`;
             const confirmationMail = (0, templates_1.buildConfirmationEmail)({
                 name: name || undefined,
                 confirmUrl
