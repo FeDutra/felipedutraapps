@@ -38,6 +38,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const crypto = __importStar(require("node:crypto"));
 const core_1 = require("./core");
+const core_2 = require("../correspondence/core");
 const WORKSPACE_ID = "felipe_dutra";
 const CONVERSATIONS_COLLECTION = `workspaces/${WORKSPACE_ID}/public_conversations`;
 const REQUESTS_COLLECTION = `workspaces/${WORKSPACE_ID}/pulso_requests`;
@@ -104,9 +105,9 @@ exports.publicConversationApi = (0, https_1.onRequest)({
         const conversationId = req.query.conversationId;
         const sessionToken = req.query.sessionToken;
         const requestId = req.query.requestId;
-        if (action !== "status" || !conversationId || !sessionToken || !requestId) {
+        if (!conversationId || !sessionToken || !["status", "history"].includes(action || "")) {
             res.status(400).json({
-                error: "Requisição inválida. Parâmetros action=status, conversationId, sessionToken e requestId são obrigatórios."
+                error: "Requisição inválida. Ação e credenciais da conversa são obrigatórias."
             });
             return;
         }
@@ -121,6 +122,41 @@ exports.publicConversationApi = (0, https_1.onRequest)({
             // Constant-time token verification
             if (!(0, core_1.verifySessionToken)(sessionToken, convData.tokenHash)) {
                 res.status(403).json({ error: "Token de sessão inválido." });
+                return;
+            }
+            if (action === "history") {
+                const ownershipSnap = await convRef
+                    .collection("requests")
+                    .orderBy("createdAt", "asc")
+                    .limit(50)
+                    .get();
+                const requestRefs = ownershipSnap.docs.map((doc) => db.collection(REQUESTS_COLLECTION).doc(doc.id));
+                const requestSnaps = requestRefs.length > 0
+                    ? await db.getAll(...requestRefs)
+                    : [];
+                const messages = requestSnaps
+                    .filter((doc) => doc.exists)
+                    .map((doc) => {
+                    const data = doc.data();
+                    const userText = (0, core_1.validateAndSanitizeMessage)(data.input || data.rawInput || "");
+                    const responseText = (0, core_1.extractSanitizedResponseText)(data);
+                    return {
+                        requestId: doc.id,
+                        userText: userText.valid ? userText.message : "",
+                        status: (0, core_1.mapWorkerStatus)(data.status),
+                        ...(responseText ? { responseText } : {})
+                    };
+                })
+                    .filter((entry) => entry.userText.length > 0);
+                res.status(200).json({
+                    status: "success",
+                    visitorName: convData.visitorName || null,
+                    messages
+                });
+                return;
+            }
+            if (!requestId) {
+                res.status(400).json({ error: "Identificador da solicitação é obrigatório." });
                 return;
             }
             // Verify request belongs to conversation
@@ -181,9 +217,18 @@ exports.publicConversationApi = (0, https_1.onRequest)({
         }
         const message = messageValidation.message;
         const visitorName = (0, core_1.sanitizeDisplayName)(body.name);
+        const visitorEmail = (0, core_2.normalizeEmail)(body.email || "");
         const hasConversationId = typeof body.conversationId === "string" && body.conversationId.trim().length > 0;
         // ── New Conversation ───────────────────────────────────────────────────
         if (!hasConversationId) {
+            if (!visitorName) {
+                res.status(400).json({ error: "Seu nome é obrigatório para iniciar a conversa." });
+                return;
+            }
+            if (!(0, core_2.validateEmail)(visitorEmail)) {
+                res.status(400).json({ error: "Informe um e-mail válido para iniciar a conversa." });
+                return;
+            }
             const conversationId = (0, core_1.generateConversationId)();
             const sessionToken = (0, core_1.generateSessionToken)();
             const tokenHash = (0, core_1.hashSessionToken)(sessionToken);
@@ -208,7 +253,8 @@ exports.publicConversationApi = (0, https_1.onRequest)({
                     totalMessages: 1,
                     status: "active",
                     latestRequestId: requestId,
-                    visitorName: visitorName || null
+                    visitorName,
+                    visitorEmail
                 });
                 // 2. Queue conversation command into pulso_requests
                 batch.set(reqRef, {

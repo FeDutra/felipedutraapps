@@ -19,8 +19,10 @@ import {
 } from "./core";
 import type {
   MessageRequestBody,
-  PublicConversationDoc
+  PublicConversationDoc,
+  PublicConversationHistoryEntry
 } from "./types";
+import { normalizeEmail, validateEmail } from "../correspondence/core";
 
 const WORKSPACE_ID = "felipe_dutra";
 const CONVERSATIONS_COLLECTION = `workspaces/${WORKSPACE_ID}/public_conversations`;
@@ -95,9 +97,9 @@ export const publicConversationApi = onRequest(
       const sessionToken = req.query.sessionToken as string | undefined;
       const requestId = req.query.requestId as string | undefined;
 
-      if (action !== "status" || !conversationId || !sessionToken || !requestId) {
+      if (!conversationId || !sessionToken || !["status", "history"].includes(action || "")) {
         res.status(400).json({
-          error: "Requisição inválida. Parâmetros action=status, conversationId, sessionToken e requestId são obrigatórios."
+          error: "Requisição inválida. Ação e credenciais da conversa são obrigatórias."
         });
         return;
       }
@@ -116,6 +118,48 @@ export const publicConversationApi = onRequest(
         // Constant-time token verification
         if (!verifySessionToken(sessionToken, convData.tokenHash)) {
           res.status(403).json({ error: "Token de sessão inválido." });
+          return;
+        }
+
+        if (action === "history") {
+          const ownershipSnap = await convRef
+            .collection("requests")
+            .orderBy("createdAt", "asc")
+            .limit(50)
+            .get();
+
+          const requestRefs = ownershipSnap.docs.map((doc) =>
+            db.collection(REQUESTS_COLLECTION).doc(doc.id)
+          );
+          const requestSnaps = requestRefs.length > 0
+            ? await db.getAll(...requestRefs)
+            : [];
+
+          const messages: PublicConversationHistoryEntry[] = requestSnaps
+            .filter((doc) => doc.exists)
+            .map((doc) => {
+              const data = doc.data()!;
+              const userText = validateAndSanitizeMessage(data.input || data.rawInput || "");
+              const responseText = extractSanitizedResponseText(data);
+              return {
+                requestId: doc.id,
+                userText: userText.valid ? userText.message : "",
+                status: mapWorkerStatus(data.status),
+                ...(responseText ? { responseText } : {})
+              };
+            })
+            .filter((entry) => entry.userText.length > 0);
+
+          res.status(200).json({
+            status: "success",
+            visitorName: convData.visitorName || null,
+            messages
+          });
+          return;
+        }
+
+        if (!requestId) {
+          res.status(400).json({ error: "Identificador da solicitação é obrigatório." });
           return;
         }
 
@@ -186,12 +230,22 @@ export const publicConversationApi = onRequest(
 
       const message = messageValidation.message;
       const visitorName = sanitizeDisplayName(body.name);
+      const visitorEmail = normalizeEmail(body.email || "");
 
       const hasConversationId =
         typeof body.conversationId === "string" && body.conversationId.trim().length > 0;
 
       // ── New Conversation ───────────────────────────────────────────────────
       if (!hasConversationId) {
+        if (!visitorName) {
+          res.status(400).json({ error: "Seu nome é obrigatório para iniciar a conversa." });
+          return;
+        }
+        if (!validateEmail(visitorEmail)) {
+          res.status(400).json({ error: "Informe um e-mail válido para iniciar a conversa." });
+          return;
+        }
+
         const conversationId = generateConversationId();
         const sessionToken = generateSessionToken();
         const tokenHash = hashSessionToken(sessionToken);
@@ -220,7 +274,8 @@ export const publicConversationApi = onRequest(
             totalMessages: 1,
             status: "active",
             latestRequestId: requestId,
-            visitorName: visitorName || null
+            visitorName,
+            visitorEmail
           });
 
           // 2. Queue conversation command into pulso_requests
