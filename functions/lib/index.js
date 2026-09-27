@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.correspondenceApi = exports.pulsoProcessMeeting = exports.pulsoActiveMessageTrigger = exports.pulsoTranscribe = exports.onPulsoRequestUpdated = exports.onPulsoRequestCreated = exports.pulsoDailyReport = exports.pulsoFrontBackendSync = exports.pulsoSessionConsistency = exports.pulsoActiveMessageCheck = exports.pulsoLatencyReport = exports.pulsoQueueWatchdog = exports.pulsoHealthCheck = exports.processOpenClawQueue = exports.pulsoRequests = exports.pulsoIngest = void 0;
+exports.publicConversationApi = exports.correspondenceApi = exports.pulsoProcessMeeting = exports.pulsoActiveMessageTrigger = exports.pulsoTranscribe = exports.onPulsoRequestUpdated = exports.onPulsoRequestCreated = exports.pulsoDailyReport = exports.pulsoFrontBackendSync = exports.pulsoSessionConsistency = exports.pulsoActiveMessageCheck = exports.pulsoLatencyReport = exports.pulsoQueueWatchdog = exports.pulsoHealthCheck = exports.processOpenClawQueue = exports.pulsoRequests = exports.pulsoIngest = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-admin/firestore");
@@ -183,4 +183,6 @@ var processMeeting_1 = require("./processMeeting");
 Object.defineProperty(exports, "pulsoProcessMeeting", { enumerable: true, get: function () { return processMeeting_1.pulsoProcessMeeting; } });
 var correspondence_1 = require("./correspondence");
 Object.defineProperty(exports, "correspondenceApi", { enumerable: true, get: function () { return correspondence_1.correspondenceApi; } });
+var publicConversation_1 = require("./publicConversation");
+Object.defineProperty(exports, "publicConversationApi", { enumerable: true, get: function () { return publicConversation_1.publicConversationApi; } });
 //# sourceMappingURL=index.js.map

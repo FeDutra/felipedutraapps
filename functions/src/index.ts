@@ -149,3 +149,4 @@ export { pulsoTranscribe } from "./transcribe";
 export { pulsoActiveMessageTrigger } from "./pulsoActiveMessageTrigger";
 export { pulsoProcessMeeting } from "./processMeeting";
 export { correspondenceApi } from "./correspondence";
+export { publicConversationApi } from "./publicConversation";
