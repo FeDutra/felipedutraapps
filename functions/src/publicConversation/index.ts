@@ -25,6 +25,7 @@ import type {
 const WORKSPACE_ID = "felipe_dutra";
 const CONVERSATIONS_COLLECTION = `workspaces/${WORKSPACE_ID}/public_conversations`;
 const REQUESTS_COLLECTION = `workspaces/${WORKSPACE_ID}/pulso_requests`;
+const SESSIONS_COLLECTION = `workspaces/${WORKSPACE_ID}/pulso_sessions`;
 
 class CustomHttpError extends Error {
   constructor(public statusCode: number, message: string) {
@@ -200,6 +201,7 @@ export const publicConversationApi = onRequest(
         const convRef = db.collection(CONVERSATIONS_COLLECTION).doc(conversationId);
         const reqRef = db.collection(REQUESTS_COLLECTION).doc(requestId);
         const ownershipRef = convRef.collection("requests").doc(requestId);
+        const sessionRef = db.collection(SESSIONS_COLLECTION).doc(deriveContextId(opaque));
 
         try {
           const nowTs = FieldValue.serverTimestamp();
@@ -263,6 +265,23 @@ export const publicConversationApi = onRequest(
             status: "queued"
           });
 
+          // The public surface always targets the known isolated agent. Mark
+          // its fresh session ready so the first visitor response does not
+          // wait behind the generic maintenance/bootstrap queue.
+          batch.set(sessionRef, {
+            id: deriveContextId(opaque),
+            chatId: conversationId,
+            areaId: null,
+            openclawSessionKey: deriveOpenClawSessionKey(opaque),
+            runtimeStatus: "ready",
+            bootstrapVersion: "public-isolated-v1",
+            fallbackAllowed: false,
+            errorMessage: null,
+            publicSurface: true,
+            createdAt: nowTs,
+            updatedAt: nowTs
+          }, { merge: true });
+
           await batch.commit();
 
           // Return sessionToken once!
@@ -293,6 +312,8 @@ export const publicConversationApi = onRequest(
       const requestId = `req_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
       const reqRef = db.collection(REQUESTS_COLLECTION).doc(requestId);
       const ownershipRef = convRef.collection("requests").doc(requestId);
+      const opaque = deriveOpaqueKey(conversationId);
+      const sessionRef = db.collection(SESSIONS_COLLECTION).doc(deriveContextId(opaque));
 
       try {
         await db.runTransaction(async (transaction) => {
@@ -328,7 +349,6 @@ export const publicConversationApi = onRequest(
           }
 
           const nowTs = FieldValue.serverTimestamp();
-          const opaque = deriveOpaqueKey(conversationId);
 
           // Update conversation document
           const updateData: Record<string, any> = {
@@ -387,6 +407,21 @@ export const publicConversationApi = onRequest(
             createdAt: nowTs,
             status: "queued"
           });
+
+          // Repair old/pending public sessions on the next authenticated
+          // message without changing the fixed isolated agent key.
+          transaction.set(sessionRef, {
+            id: deriveContextId(opaque),
+            chatId: conversationId,
+            areaId: null,
+            openclawSessionKey: deriveOpenClawSessionKey(opaque),
+            runtimeStatus: "ready",
+            bootstrapVersion: "public-isolated-v1",
+            fallbackAllowed: false,
+            errorMessage: null,
+            publicSurface: true,
+            updatedAt: nowTs
+          }, { merge: true });
         });
 
         res.status(200).json({
