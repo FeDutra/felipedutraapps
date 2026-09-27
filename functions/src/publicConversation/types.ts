@@ -3,6 +3,7 @@ export type PublicConversationStatus = "queued" | "running" | "success" | "error
 export interface MessageRequestBody {
   action: "message";
   name?: string;
+  email?: string;
   message: string;
   conversationId?: string;
   sessionToken?: string;
@@ -33,6 +34,14 @@ export interface PublicConversationDoc {
   status: "active" | "blocked";
   latestRequestId: string;
   visitorName?: string | null;
+  visitorEmail?: string | null;
+}
+
+export interface PublicConversationHistoryEntry {
+  requestId: string;
+  userText: string;
+  responseText?: string;
+  status: PublicConversationStatus;
 }
 
 export interface PublicConversationRequestOwnership {
