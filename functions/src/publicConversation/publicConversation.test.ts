@@ -279,6 +279,7 @@ describe("Public Conversation Bridge - Core Pure Functions", () => {
 
     test("maps running states to 'running'", () => {
       assert.equal(mapWorkerStatus("running"), "running");
+      assert.equal(mapWorkerStatus("processing_openclaw"), "running");
       assert.equal(mapWorkerStatus("processing_by_openclaw"), "running");
       assert.equal(mapWorkerStatus("processing_extraction"), "running");
       assert.equal(mapWorkerStatus("processing"), "running");

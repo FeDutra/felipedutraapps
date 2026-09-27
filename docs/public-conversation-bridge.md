@@ -61,6 +61,11 @@ flowchart TD
 
 ## 2. Princípios de Segurança e Privacidade
 
+As sessões desta superfície pública são registradas diretamente como `ready`
+com a chave fixa do agente isolado `lotus-conversa`. Isso evita que a primeira
+resposta dependa da fila genérica de aquecimento da PULSO; a execução continua
+passando pelo worker canônico e pelo mesmo perímetro fechado do agente público.
+
 1. **Zero Coleta de PII Involuntária**:
    - Nenhum e-mail ou identificador de dispositivo é solicitado ou armazenado.
    - O campo `name` é estritamente opcional (máx. 80 caracteres, tags HTML e caracteres de controle removidos).

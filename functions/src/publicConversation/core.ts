@@ -241,6 +241,7 @@ export function mapWorkerStatus(rawStatus?: string | null): PublicConversationSt
       return "queued";
 
     case "running":
+    case "processing_openclaw":
     case "processing_by_openclaw":
     case "processing_extraction":
     case "processing":

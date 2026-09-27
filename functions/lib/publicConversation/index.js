@@ -41,6 +41,7 @@ const core_1 = require("./core");
 const WORKSPACE_ID = "felipe_dutra";
 const CONVERSATIONS_COLLECTION = `workspaces/${WORKSPACE_ID}/public_conversations`;
 const REQUESTS_COLLECTION = `workspaces/${WORKSPACE_ID}/pulso_requests`;
+const SESSIONS_COLLECTION = `workspaces/${WORKSPACE_ID}/pulso_sessions`;
 class CustomHttpError extends Error {
     constructor(statusCode, message) {
         super(message);
@@ -191,6 +192,7 @@ exports.publicConversationApi = (0, https_1.onRequest)({
             const convRef = db.collection(CONVERSATIONS_COLLECTION).doc(conversationId);
             const reqRef = db.collection(REQUESTS_COLLECTION).doc(requestId);
             const ownershipRef = convRef.collection("requests").doc(requestId);
+            const sessionRef = db.collection(SESSIONS_COLLECTION).doc((0, core_1.deriveContextId)(opaque));
             try {
                 const nowTs = firestore_1.FieldValue.serverTimestamp();
                 const batch = db.batch();
@@ -248,6 +250,22 @@ exports.publicConversationApi = (0, https_1.onRequest)({
                     createdAt: nowTs,
                     status: "queued"
                 });
+                // The public surface always targets the known isolated agent. Mark
+                // its fresh session ready so the first visitor response does not
+                // wait behind the generic maintenance/bootstrap queue.
+                batch.set(sessionRef, {
+                    id: (0, core_1.deriveContextId)(opaque),
+                    chatId: conversationId,
+                    areaId: null,
+                    openclawSessionKey: (0, core_1.deriveOpenClawSessionKey)(opaque),
+                    runtimeStatus: "ready",
+                    bootstrapVersion: "public-isolated-v1",
+                    fallbackAllowed: false,
+                    errorMessage: null,
+                    publicSurface: true,
+                    createdAt: nowTs,
+                    updatedAt: nowTs
+                }, { merge: true });
                 await batch.commit();
                 // Return sessionToken once!
                 res.status(200).json({
@@ -275,6 +293,8 @@ exports.publicConversationApi = (0, https_1.onRequest)({
         const requestId = `req_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
         const reqRef = db.collection(REQUESTS_COLLECTION).doc(requestId);
         const ownershipRef = convRef.collection("requests").doc(requestId);
+        const opaque = (0, core_1.deriveOpaqueKey)(conversationId);
+        const sessionRef = db.collection(SESSIONS_COLLECTION).doc((0, core_1.deriveContextId)(opaque));
         try {
             await db.runTransaction(async (transaction) => {
                 const convSnap = await transaction.get(convRef);
@@ -303,7 +323,6 @@ exports.publicConversationApi = (0, https_1.onRequest)({
                     throw new CustomHttpError(429, "Limite de mensagens por hora atingido. Tente novamente mais tarde.");
                 }
                 const nowTs = firestore_1.FieldValue.serverTimestamp();
-                const opaque = (0, core_1.deriveOpaqueKey)(conversationId);
                 // Update conversation document
                 const updateData = {
                     lastMessageAt: nowTs,
@@ -357,6 +376,20 @@ exports.publicConversationApi = (0, https_1.onRequest)({
                     createdAt: nowTs,
                     status: "queued"
                 });
+                // Repair old/pending public sessions on the next authenticated
+                // message without changing the fixed isolated agent key.
+                transaction.set(sessionRef, {
+                    id: (0, core_1.deriveContextId)(opaque),
+                    chatId: conversationId,
+                    areaId: null,
+                    openclawSessionKey: (0, core_1.deriveOpenClawSessionKey)(opaque),
+                    runtimeStatus: "ready",
+                    bootstrapVersion: "public-isolated-v1",
+                    fallbackAllowed: false,
+                    errorMessage: null,
+                    publicSurface: true,
+                    updatedAt: nowTs
+                }, { merge: true });
             });
             res.status(200).json({
                 status: "queued",
