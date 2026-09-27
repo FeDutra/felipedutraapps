@@ -86,7 +86,15 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
 
   return (
     <div
-      className={`relative h-full w-full overflow-hidden transition-opacity duration-300 ${isFocused ? 'opacity-100' : 'opacity-80'}`}
+      className={`pulso-split-pane relative h-full w-full overflow-hidden transition-opacity duration-300 ${isFocused ? 'pulso-split-pane-active opacity-100' : 'opacity-80'}`}
+      data-context-id={contextNode.contextId}
+      data-focused={isFocused ? 'true' : 'false'}
+      onPointerDown={(event) => {
+        // O compositor é único. Marca o destino antes de qualquer clique
+        // interno para que o próximo caractere nunca fique associado ao painel
+        // que estava focado antes.
+        if (event.button === 0) onFocus();
+      }}
       onClick={onFocus}
     >
       <div className="absolute top-0 left-0 right-0 h-10 z-20 flex items-center justify-between px-6 pointer-events-none animate-fade-in">

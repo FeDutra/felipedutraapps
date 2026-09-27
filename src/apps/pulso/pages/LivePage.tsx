@@ -1151,6 +1151,11 @@ export default function LivePage() {
   );
   const hasSplitChats = secondaryContextNodes.length > 0;
   const sendTargetContextNode = splitContextNodes.find(node => node.contextId === focusedPaneContextId) || activeContextNode;
+  // Em split, o chat-base pode continuar montado à esquerda, mas o único
+  // destino válido do compositor é o painel focado. Todo sinal operacional
+  // que orienta escrita (inclusive COMPROMISSO) precisa seguir esta mesma
+  // identidade, nunca o contexto-base.
+  const sendTargetCommitment = contextStatesMap[sendTargetContextNode.contextId]?.strongState?.activeCommitment;
 
   React.useEffect(() => {
     // Cada abertura do split parte do centro. A posição é livre durante essa
@@ -6290,10 +6295,11 @@ ${data.transcription}`, {
           })()}
 
           {/* Indicador de Compromisso Ativo Minimalista */}
-          {contextStatesMap[activeContextNode.contextId]?.strongState?.activeCommitment?.status === 'pending' && (
+          {sendTargetCommitment?.status === 'pending' && (
             <div 
               className="flex items-center gap-1.5 px-2 py-1 text-[9px] font-mono tracking-[0.2em] text-[#fbf9f5]/30 select-none cursor-help hover:text-[#f59e0b]/60 transition-colors"
-              title={`Compromisso ativo: ${contextStatesMap[activeContextNode.contextId].strongState.activeCommitment.description}`}
+              data-commitment-context-id={sendTargetContextNode.contextId}
+              title={`Compromisso ativo em ${sendTargetContextNode.label}: ${sendTargetCommitment.description}`}
             >
               <span className="text-[#f59e0b] animate-ping text-[6px]">●</span>
               <span className="hidden md:inline max-w-[120px] truncate uppercase">compromisso</span>
