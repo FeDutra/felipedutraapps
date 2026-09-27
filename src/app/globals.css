@@ -416,10 +416,21 @@ body {
 }
 
 .lotus-idle-anim {
-  /* Idle is deliberately still. Even transform-only infinite keyframes keep
-     WebKit's render timer hot on Intel Macs; movement resumes only for an
-     actual interaction state. */
+  /* The resting Lótus must remain alive, but she cannot animate paint-heavy
+     properties on Intel WebKit. A slow transform-only breath keeps presence
+     without a filter, blur, border or canvas render loop. */
+  animation: organic-idle 16s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   transform-origin: center;
+  will-change: transform;
+}
+
+@keyframes organic-idle {
+  0%, 100% {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.012) translate3d(0, -1px, 0);
+  }
 }
 
 .lotus-listening-anim {
