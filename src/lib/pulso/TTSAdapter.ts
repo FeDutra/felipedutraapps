@@ -23,6 +23,8 @@ export interface TTSPreferences {
 const STORAGE_KEY = 'pulso_tts_preferences';
 const MIGRATION_KEY = 'pulso_tts_migration_v1_kokoro_default';
 const DESKTOP_SIDECAR_MIGRATION_KEY = 'pulso_tts_migration_v2_desktop_sidecar';
+const DESKTOP_LEGACY_NATIVE_MIGRATION_KEY = 'pulso_tts_migration_v3_desktop_no_legacy_native';
+const EXPLICIT_NATIVE_CHOICE_KEY = 'pulso_tts_browser_native_explicit';
 const DEFAULT_KOKORO_VOICE = 'pf_dora(0.70)+af_bella(0.30)';
 const KOKORO_REMOTE_ENDPOINT = 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
 
@@ -107,6 +109,21 @@ export class TTSAdapter {
         localStorage.setItem(DESKTOP_SIDECAR_MIGRATION_KEY, '1');
       }
 
+      // Builds antigos podiam persistir browser_native antes de existir o
+      // sidecar empacotado. No desktop, essa herança não deve derrotar a voz
+      // Kokoro. Respeitamos somente uma escolha nativa feita conscientemente
+      // a partir desta versão; o resto migra para o sidecar (com VPS como
+      // fallback no caminho de síntese).
+      if (isTauriApp() && !localStorage.getItem(DESKTOP_LEGACY_NATIVE_MIGRATION_KEY)) {
+        if (
+          this.preferences.ttsProvider === 'browser_native'
+          && !localStorage.getItem(EXPLICIT_NATIVE_CHOICE_KEY)
+        ) {
+          this.preferences.ttsProvider = 'local_kokoro_sidecar';
+        }
+        localStorage.setItem(DESKTOP_LEGACY_NATIVE_MIGRATION_KEY, '1');
+      }
+
       if (isKokoroProvider(this.preferences.ttsProvider)) {
         this.preferences.voiceName = resolveKokoroVoice(this.preferences.voiceName);
       }
@@ -130,6 +147,11 @@ export class TTSAdapter {
     
     if (persist && typeof window !== 'undefined') {
       try {
+        if (newPrefs.ttsProvider === 'browser_native') {
+          localStorage.setItem(EXPLICIT_NATIVE_CHOICE_KEY, '1');
+        } else if (newPrefs.ttsProvider && oldProvider === 'browser_native') {
+          localStorage.removeItem(EXPLICIT_NATIVE_CHOICE_KEY);
+        }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.preferences));
       } catch (e) {
         console.warn('Failed to save TTS preferences to localStorage:', e);
