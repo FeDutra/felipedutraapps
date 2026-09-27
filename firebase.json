@@ -54,6 +54,14 @@
         "function": "pulsoProcessMeeting"
       },
       {
+        "source": "/api/correspondence",
+        "function": "correspondenceApi"
+      },
+      {
+        "source": "/api/correspondence/**",
+        "function": "correspondenceApi"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
