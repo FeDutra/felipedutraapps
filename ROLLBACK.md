@@ -1,3 +1,19 @@
+# Rollback — confirmação de Correspondências (28/09/2026)
+
+- Escopo: manter o double opt-in existente e redirecionar confirmações válidas
+  para `https://felipedutra.com/correspondencias/obrigado/`; estados de erro,
+  expiração e descadastro ficam na landing de Correspondências.
+- A função alterada é somente `correspondenceApi`. Firestore, tokens e o segredo
+  `RESEND_API_KEY` não mudam.
+- Reversão: restaurar o commit `a9510020` para os arquivos de Correspondências,
+  recompilar somente a função e publicar com
+  `firebase deploy --only functions:correspondenceApi`.
+- A página estática de obrigado é revertida separadamente no repositório
+  `apps/fe-site`; sua remoção não desativa o double opt-in, apenas deixa o
+  redirecionamento final sem destino.
+
+---
+
 # Rollback — Presença + MESA contextual (23/09/2026)
 
 - Escopo: destino geral de área, orçamento de um checkpoint por turno, abertura

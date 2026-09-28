@@ -228,9 +228,10 @@ describe("Email Templates & HTML Generation", () => {
 
     assert.equal(mail.subject, "confirme sua inscrição · correspondência");
     assert.ok(mail.html.includes(escapeHtml(confirmUrl)));
-    assert.ok(mail.html.includes("Olá, Felipe."));
-    assert.ok(mail.html.includes("Você pediu para receber a correspondência de fe."));
-    assert.ok(mail.text.includes("Você pediu para receber a correspondência de fe."));
+    assert.ok(mail.html.includes("olá, Felipe."));
+    assert.ok(mail.html.includes("você pediu para receber correspondências."));
+    assert.ok(mail.html.includes("[ confirmar inscrição ]"));
+    assert.ok(mail.text.includes("você pediu para receber correspondências."));
     assert.ok(mail.text.includes(confirmUrl));
     assert.ok(mail.text.includes("fe · felipedutra.com"));
 
@@ -250,9 +251,9 @@ describe("Email Templates & HTML Generation", () => {
 
     assert.equal(mail.subject, "inscrição confirmada · correspondência");
     assert.ok(mail.html.includes(escapeHtml(unsubscribeUrl)));
-    assert.ok(mail.html.includes("Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui."));
-    assert.ok(mail.text.includes("Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui."));
-    assert.ok(mail.html.includes("Cancelar recebimento"));
+    assert.ok(mail.html.includes("você está inscrito. a próxima correspondência chega por aqui."));
+    assert.ok(mail.text.includes("você está inscrito. a próxima correspondência chega por aqui."));
+    assert.ok(mail.html.includes("[ sair da lista ]"));
     assert.ok(mail.text.includes(unsubscribeUrl));
     assert.ok(mail.text.includes("fe · felipedutra.com"));
 

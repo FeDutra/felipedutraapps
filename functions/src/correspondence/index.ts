@@ -31,6 +31,8 @@ export const resendApiKey = defineSecret("RESEND_API_KEY");
 
 const WORKSPACE_ID = "felipe_dutra";
 const SUBSCRIBERS_COLLECTION = `workspaces/${WORKSPACE_ID}/correspondence_subscribers`;
+const CORRESPONDENCE_URL = "https://felipedutra.com/correspondencias/";
+const CONFIRMED_URL = `${CORRESPONDENCE_URL}obrigado/`;
 
 const GENERIC_SUBSCRIBE_RESPONSE = {
   status: "ok",
@@ -87,7 +89,7 @@ export const correspondenceApi = onRequest(
       const rawToken = (req.query.token || "") as string;
 
       if (!rawToken || typeof rawToken !== "string" || rawToken.trim().length === 0) {
-        res.redirect("https://felipedutra.com/?correspondence=error#correspondencia");
+        res.redirect(`${CORRESPONDENCE_URL}?correspondence=error`);
         return;
       }
 
@@ -104,7 +106,7 @@ export const correspondenceApi = onRequest(
 
           if (snapshot.empty) {
             console.warn("[correspondence] Confirmation token not found or already used");
-            res.redirect("https://felipedutra.com/?correspondence=expired#correspondencia");
+            res.redirect(`${CORRESPONDENCE_URL}?correspondence=expired`);
             return;
           }
 
@@ -119,7 +121,7 @@ export const correspondenceApi = onRequest(
               errorCode: "TOKEN_EXPIRED",
               updatedAt: FieldValue.serverTimestamp()
             });
-            res.redirect("https://felipedutra.com/?correspondence=expired#correspondencia");
+            res.redirect(`${CORRESPONDENCE_URL}?correspondence=expired`);
             return;
           }
 
@@ -180,7 +182,7 @@ export const correspondenceApi = onRequest(
             });
           }
 
-          res.redirect("https://felipedutra.com/?correspondence=confirmed#correspondencia");
+          res.redirect(CONFIRMED_URL);
           return;
         }
 
@@ -202,7 +204,7 @@ export const correspondenceApi = onRequest(
 
           if (snapshot.empty) {
             console.warn("[correspondence] Unsubscribe token not found");
-            res.redirect("https://felipedutra.com/?correspondence=error#correspondencia");
+            res.redirect(`${CORRESPONDENCE_URL}?correspondence=error`);
             return;
           }
 
@@ -218,16 +220,16 @@ export const correspondenceApi = onRequest(
           });
 
           console.log("[correspondence] Subscriber unsubscribed successfully:", docSnap.id.slice(0, 8));
-          res.redirect("https://felipedutra.com/?correspondence=unsubscribed");
+          res.redirect(`${CORRESPONDENCE_URL}?correspondence=unsubscribed`);
           return;
         }
 
         // Unknown mode
-        res.redirect("https://felipedutra.com/?correspondence=error#correspondencia");
+        res.redirect(`${CORRESPONDENCE_URL}?correspondence=error`);
         return;
       } catch (err: any) {
         console.error("[correspondence] GET processing error:", err?.code || "INTERNAL_ERROR");
-        res.redirect("https://felipedutra.com/?correspondence=error#correspondencia");
+        res.redirect(`${CORRESPONDENCE_URL}?correspondence=error`);
         return;
       }
     }
