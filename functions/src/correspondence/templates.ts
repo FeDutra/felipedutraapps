@@ -66,15 +66,12 @@ function emailLayout(content: string, footerLinks: string): string {
       display: inline-block;
       margin: 32px 0;
       padding: 14px 28px;
-      background-color: #fbf9f5;
-      color: #0c0c0c !important;
+      color: #edebe8 !important;
       text-decoration: none;
       font-family: "SF Mono", Monaco, Inconsolata, monospace;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 400;
       letter-spacing: 0.2em;
-      text-transform: uppercase;
-      border-radius: 2px;
     }
     .alt-link {
       font-family: "SF Mono", Monaco, Inconsolata, monospace;
@@ -114,7 +111,7 @@ function emailLayout(content: string, footerLinks: string): string {
 <body>
   <div class="container">
     <div class="header">
-      P U L S O &nbsp;·&nbsp; C O R R E S P O N D Ê N C I A
+      F E &nbsp;·&nbsp; C O R R E S P O N D Ê N C I A S
     </div>
     <div class="body-text">
       ${content}
@@ -134,42 +131,42 @@ function emailLayout(content: string, footerLinks: string): string {
  * 1. Confirmation Email Template
  */
 export function buildConfirmationEmail(data: EmailTemplateData): { subject: string; html: string; text: string } {
-  const greeting = data.name ? `Olá, ${escapeHtml(data.name)}.` : "Olá.";
+  const greeting = data.name ? `olá, ${escapeHtml(data.name)}.` : "olá.";
   const confirmUrl = data.confirmUrl || "https://felipedutra.com";
 
   const content = `
     <p>${greeting}</p>
     <p>
-      Você pediu para receber a correspondência de fe.
+      você pediu para receber correspondências.
     </p>
     <div>
       <a href="${escapeHtml(confirmUrl)}" class="btn-action" target="_blank" rel="noopener noreferrer">
-        Confirmar Inscrição
+        [ confirmar inscrição ]
       </a>
     </div>
     <div class="alt-link">
-      Se o botão não funcionar, use este link:<br>
+      se o link acima não abrir, copie este endereço:<br>
       <a href="${escapeHtml(confirmUrl)}">${escapeHtml(confirmUrl)}</a>
     </div>
     <p style="margin-top: 32px; font-size: 13px; color: #8f8b85;">
-      O link expira em 48 horas.<br>
-      Se não foi você que solicitou, ignore esta mensagem.
+      o link expira em 48 horas.<br>
+      se não foi você, ignore esta mensagem.
     </p>
   `;
 
   const footer = `
-    <span>Inscrição pendente de confirmação.</span>
+    <span>inscrição pendente de confirmação.</span>
   `;
 
-  const text = `${data.name ? `Olá, ${data.name}.` : "Olá."}
+  const text = `${data.name ? `olá, ${data.name}.` : "olá."}
 
-Você pediu para receber a correspondência de fe.
+você pediu para receber correspondências.
 
-Para confirmar sua inscrição, use este link:
+confirme sua inscrição neste link:
 ${confirmUrl}
 
-O link expira em 48 horas.
-Se não foi você que solicitou, ignore esta mensagem.
+o link expira em 48 horas.
+se não foi você, ignore esta mensagem.
 
 --
 fe · felipedutra.com`;
@@ -185,13 +182,13 @@ fe · felipedutra.com`;
  * 2. Welcome Email Template (Auto-response after confirmation)
  */
 export function buildWelcomeEmail(data: EmailTemplateData): { subject: string; html: string; text: string } {
-  const greeting = data.name ? `Olá, ${escapeHtml(data.name)}.` : "Olá.";
+  const greeting = data.name ? `olá, ${escapeHtml(data.name)}.` : "olá.";
   const unsubscribeUrl = data.unsubscribeUrl || "https://felipedutra.com/?correspondence=unsubscribed";
 
   const content = `
     <p>${greeting}</p>
     <p>
-      Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui.
+      você está inscrito. a próxima correspondência chega por aqui.
     </p>
     <div class="signoff">
       fe
@@ -199,17 +196,17 @@ export function buildWelcomeEmail(data: EmailTemplateData): { subject: string; h
   `;
 
   const footer = `
-    <a href="${escapeHtml(unsubscribeUrl)}">Cancelar recebimento</a>
+    <a href="${escapeHtml(unsubscribeUrl)}">[ sair da lista ]</a>
   `;
 
-  const text = `${data.name ? `Olá, ${data.name}.` : "Olá."}
+  const text = `${data.name ? `olá, ${data.name}.` : "olá."}
 
-Sua inscrição está confirmada. Quando algo merecer circular, chega por aqui.
+você está inscrito. a próxima correspondência chega por aqui.
 
 fe
 
 --
-Para cancelar o recebimento:
+para sair da lista:
 ${unsubscribeUrl}
 
 fe · felipedutra.com`;
