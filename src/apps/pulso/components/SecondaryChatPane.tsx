@@ -23,6 +23,15 @@ interface SecondaryChatPaneProps {
   onFocus: () => void;
 }
 
+const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
+
+function toRenderableConversationText(value: unknown): string {
+  const text = typeof value === 'string' ? value : '';
+  return TECHNICAL_HISTORY_OMISSION.test(text)
+    ? 'Esta resposta ficou grande demais para ser carregada integralmente neste histórico.'
+    : text;
+}
+
 // Mesma identidade visual do chat principal — sem moldura, sem cabeçalho de
 // widget, sem input próprio. É a mesma sessão, só ao lado. O input
 // permanece único, fixo embaixo ao centro; o foco decide pra qual painel ele
@@ -57,7 +66,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
             isProgressUpdate: true,
           });
         }
-        const responseText = data.openclawResult?.responseText;
+        const responseText = toRenderableConversationText(data.openclawResult?.responseText);
         const accepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(data.status || '');
         if (accepted && responseText?.trim()) {
           const responseTimestamp = data.updatedAt?.toDate ? data.updatedAt.toDate() : timestamp;
@@ -115,21 +124,21 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
         </button>
       </div>
 
-      <div ref={scrollRef} className="absolute inset-0 overflow-y-auto no-scrollbar chat-fade-mask px-6 py-6 pt-12 space-y-8">
+      <div ref={scrollRef} className="absolute inset-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto no-scrollbar chat-fade-mask px-4 md:px-6 py-6 pt-12 space-y-8">
         {messages.map((msg) => msg.isProgressUpdate ? (
-          <div key={msg.id} className="flex w-full justify-start animate-fade-in py-1">
-            <div className="w-full max-w-[85%] border-l border-white/10 pl-3 flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
+          <div key={msg.id} className="flex min-w-0 w-full max-w-full justify-start animate-fade-in py-1">
+            <div className="min-w-0 w-full max-w-[85%] border-l border-white/10 pl-3 flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
               <span className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-[#fbf9f5]/30" />
               <span>{msg.text}</span>
             </div>
           </div>
         ) : (
-          <div key={msg.id} className={`flex w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
-            <div className="max-w-[85%] space-y-1">
+          <div key={msg.id} className={`flex min-w-0 w-full max-w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
+            <div className="min-w-0 max-w-[85%] space-y-1">
               <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
                 {msg.sender === 'lotus' ? 'lótus' : 'fê'}
               </span>
-              <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
+              <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
                 <MessageRenderer text={msg.text} sender={msg.sender} />
               </div>
             </div>

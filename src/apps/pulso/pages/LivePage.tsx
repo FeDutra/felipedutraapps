@@ -43,6 +43,20 @@ interface SortableChatItemDesktopProps {
   onOpenSplit: (e: React.MouseEvent) => void;
 }
 
+// Marcadores do Gateway são mecanismos de proteção de transporte, não
+// conteúdo conversacional. A PULSO nunca deve mostrá-los como se a Lótus os
+// tivesse dito. Quando a resposta original já não veio no payload, indicamos
+// a limitação de forma humana em vez de expor infraestrutura.
+const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
+
+function toRenderableConversationText(value: unknown): string {
+  const text = typeof value === 'string' ? value : '';
+  if (TECHNICAL_HISTORY_OMISSION.test(text)) {
+    return 'Esta resposta ficou grande demais para ser carregada integralmente neste histórico.';
+  }
+  return text;
+}
+
 function SortableChatItemDesktop({
   ctx,
   areaId,
@@ -2483,7 +2497,7 @@ export default function LivePage() {
           
           if (isConvCommand) {
             const status = req.status;
-            const responseText = req.openclawResult?.responseText ?? null;
+            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
             const hasRealResponse = responseText && responseText.trim() !== '';
             
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
@@ -2507,7 +2521,7 @@ export default function LivePage() {
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-              const errorText = req.openclawResult?.responseText || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
+              const errorText = toRenderableConversationText(req.openclawResult?.responseText) || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
                 sender: 'lotus',
@@ -2700,7 +2714,7 @@ export default function LivePage() {
 
           if (isConvCommand) {
             const status = req.status;
-            const responseText = req.openclawResult?.responseText ?? null;
+            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
             const hasRealResponse = responseText && responseText.trim() !== '';
 
             // Check if auto TTS needs to be triggered in presence mode
@@ -2851,7 +2865,7 @@ export default function LivePage() {
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-              const errorText = req.openclawResult?.responseText || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
+              const errorText = toRenderableConversationText(req.openclawResult?.responseText) || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
@@ -3008,7 +3022,7 @@ export default function LivePage() {
           snapshot.forEach((docSnap: any) => {
             const req = docSnap.data();
             const contextId = req.contextId;
-            const responseText = req.openclawResult?.responseText;
+            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
             const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
             if (!contextId || req.archived === true || !isAccepted || !responseText?.trim()) return;
 
@@ -3029,7 +3043,7 @@ export default function LivePage() {
           if (!globalIncomingReadyRef.current) {
             snapshot.forEach((docSnap: any) => {
               const req = docSnap.data();
-              const responseText = req.openclawResult?.responseText;
+              const responseText = toRenderableConversationText(req.openclawResult?.responseText);
               if (responseText?.trim()) globalIncomingSeenRef.current.add(docSnap.id);
             });
             globalIncomingReadyRef.current = true;
@@ -3041,7 +3055,7 @@ export default function LivePage() {
             const req = change.doc.data();
             const requestId = change.doc.id;
             const contextId = req.contextId;
-            const responseText = req.openclawResult?.responseText;
+            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
             const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
             if (!contextId || req.archived === true || !isAccepted || !responseText?.trim()) return;
             if (globalIncomingSeenRef.current.has(requestId)) return;
@@ -5388,7 +5402,7 @@ ${data.transcription}`, {
                 setFocusedPaneContextId(activeContextNode.contextId);
                 focusComposer();
               }}
-              className="absolute inset-0 chat-fade-mask overflow-y-auto no-scrollbar px-6 py-6 space-y-8 transition-opacity duration-300"
+              className="absolute inset-0 min-w-0 max-w-full chat-fade-mask overflow-x-hidden overflow-y-auto no-scrollbar px-4 md:px-6 py-6 space-y-8 transition-opacity duration-300"
             >
               {currentMessages.map((msg) => {
                 if (msg.isProgressUpdate) {
@@ -5403,9 +5417,9 @@ ${data.transcription}`, {
                   return (
                     <div 
                       key={msg.id} 
-                      className="flex w-full justify-start animate-fade-in py-1"
+                      className="flex min-w-0 w-full max-w-full justify-start animate-fade-in py-1"
                     >
-                      <div className="w-full max-w-[85%] border-l border-white/10 pl-3">
+                      <div className="min-w-0 w-full max-w-[85%] border-l border-white/10 pl-3">
                         <button
                           type="button"
                           onClick={() => setExpandedProgressGroups(prev => ({
@@ -5451,9 +5465,9 @@ ${data.transcription}`, {
                 return (
                   <div 
                     key={msg.id} 
-                    className={`flex w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
+                    className={`flex min-w-0 w-full max-w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
                   >
-                    <div className="max-w-[85%] space-y-1">
+                    <div className="min-w-0 max-w-[85%] space-y-1">
                       <span className={`block text-[9px] tracking-widest lowercase select-none ${
                         isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
                       }`}>
@@ -5473,12 +5487,12 @@ ${data.transcription}`, {
                       )}
                       {/* Text body & blocks renderer */}
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
-                        <div className="text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
+                        <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
                           {(() => {
                             // `pulso-doc` is canonical. The second spelling is a
                             // recovery path for legacy/malformed assistant output,
                             // so raw tags never become visible in the chat.
-                            const docRegex = /<pul(?:s|so)-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/pul(?:s|so)-doc>/i;
+                            const docRegex = /<p(?:ulso|olso)-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/p(?:ulso|olso)-doc>/i;
                             const docMatch = msg.text.match(docRegex);
                             let displayText = msg.text;
                             let artifactData = null;
