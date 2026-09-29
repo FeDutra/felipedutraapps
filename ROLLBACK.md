@@ -222,3 +222,27 @@ Baseline reversível: `dc6c012a` em `origin/main`.
 Reverter somente o commit desta alteração, executar `npm run build` e publicar
 apenas o Firebase Hosting. A mudança não altera Firestore, Functions,
 credenciais, preferências de voz nem runtime da VPS.
+
+---
+
+# Rollback — Conversas do site na PULSO (29/09/2026)
+
+Baseline: `60fbf7be` na branch `feat/pulso-site-conversations-20260929`,
+recomposta sobre `origin/main` (`0be6a108`).
+
+## Escopo
+
+- acrescentar a rota interna `/pulso/conversas` e seu item de navegação;
+- ler, dentro da PULSO autenticada, os fios já persistidos em
+  `public_conversations` e suas solicitações correspondentes em
+  `pulso_requests`;
+- registrar apenas o instante interno de leitura no documento da conversa;
+- não alterar o contrato, o agente, o token ou a interface pública do site.
+
+## Reversão
+
+Reverter somente o commit desta área, executar `npm run build` e republicar
+apenas o Firebase Hosting. A reversão visual não apaga conversas. Se a marcação
+de leitura já tiver sido usada, os campos `internalLastReadAt` e
+`internalReadBy` podem permanecer inertes nos documentos ou ser removidos em
+uma manutenção separada e explicitamente autorizada.

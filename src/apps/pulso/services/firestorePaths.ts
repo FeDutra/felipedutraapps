@@ -69,6 +69,11 @@ export const firestorePaths = {
   correspondenceSubscribers: () => `${BASE_PATH}/correspondence_subscribers`,
   correspondenceSubscriber: (id: string) => `${BASE_PATH}/correspondence_subscribers/${id}`,
 
+  /** Conversas iniciadas na presença pública de Lótus em felipedutra.com */
+  publicConversations: () => `${BASE_PATH}/public_conversations`,
+  publicConversation: (id: string) => `${BASE_PATH}/public_conversations/${id}`,
+  publicConversationRequests: (id: string) => `${BASE_PATH}/public_conversations/${id}/requests`,
+
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`
 };

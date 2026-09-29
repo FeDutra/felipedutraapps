@@ -14,4 +14,5 @@ export * from './utils/pulsoUIHelpers';
 export { default as DashboardPage } from './pages/DashboardPage';
 export { default as InboxPage } from './pages/InboxPage';
 export { default as EmailPage } from './pages/EmailPage';
+export { default as SiteConversationsPage } from './pages/SiteConversationsPage';
 export * from './pages/PlaceholderPages';
