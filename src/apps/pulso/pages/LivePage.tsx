@@ -5998,7 +5998,7 @@ ${data.transcription}`, {
           )}
 
 <footer
-        className={`fixed bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 pointer-events-auto ${
+        className={`pulso-composer-shell fixed bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 pointer-events-auto ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}
         style={{
@@ -6010,6 +6010,7 @@ ${data.transcription}`, {
           transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
+        <div className="pulso-composer-backdrop" aria-hidden="true" />
         
         {activeContextNode && (
           <div className="w-full flex items-center justify-center gap-3 mb-0.5 animate-fade-in select-none">
@@ -6135,7 +6136,7 @@ ${data.transcription}`, {
           </div>
         )}
 
-        <div className="pulso-composer-glass w-full flex items-center gap-1.5 sm:gap-3.5 border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative isolate">
+        <div className="w-full flex items-center gap-1.5 sm:gap-3.5 border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
           {(voiceState === 'recording_once' || voiceState === 'transcribing') && (
             <div 
               className="absolute inset-0 blur-md pointer-events-none"

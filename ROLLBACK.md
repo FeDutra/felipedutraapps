@@ -246,3 +246,23 @@ apenas o Firebase Hosting. A reversão visual não apaga conversas. Se a marcaç
 de leitura já tiver sido usada, os campos `internalLastReadAt` e
 `internalReadBy` podem permanecer inertes nos documentos ou ser removidos em
 uma manutenção separada e explicitamente autorizada.
+
+---
+
+# Rollback — camadas do compositor (01/10/2026)
+
+Baseline: `c7d8561d` em `origin/main`.
+
+## Escopo
+
+- separar explicitamente histórico, vidro e controles do compositor;
+- fazer o vidro acompanhar a altura total de contexto, anexos, citação e texto;
+- manter linha, contexto, texto digitado e botões acima do blur;
+- impedir clique através da área protegida para mensagens ao fundo.
+
+## Reversão
+
+Reverter somente o commit desta alteração, executar `npm run build`, publicar
+somente o Firebase Hosting e instalar o artefato Intel correspondente ao
+commit anterior. Não altera Firestore, Functions, credenciais, áudio ou
+runtime da VPS.

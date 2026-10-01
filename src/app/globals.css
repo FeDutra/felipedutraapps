@@ -335,25 +335,29 @@ body {
   opacity: 0;
 }
 
-/* O vidro acompanha a altura real do compositor e impede click-through. O
-   filtro é estático: só conteúdo/altura mudam, nunca a intensidade do blur. */
-.pulso-composer-glass {
-  background: rgba(12, 12, 12, 0.16);
-  overflow: visible;
+/* O compositor tem três planos explícitos: conversa ao fundo, vidro no meio e
+   controles acima. A lente acompanha a altura total do footer (contexto,
+   anexos, citação e textarea), em vez de pertencer apenas à linha inferior. */
+.pulso-composer-shell {
+  isolation: isolate;
 }
 
-.pulso-composer-glass::before {
-  content: "";
+.pulso-composer-backdrop {
   position: absolute;
-  inset: -26px -34px -18px;
-  z-index: -1;
-  pointer-events: none;
-  border-radius: 32px;
-  background: radial-gradient(ellipse at center, rgba(12, 12, 12, 0.34) 0%, rgba(12, 12, 12, 0.18) 58%, transparent 92%);
+  inset: -34px -38px -24px;
+  z-index: 0;
+  pointer-events: auto;
+  border-radius: 38px;
+  background: radial-gradient(ellipse at 50% 72%, rgba(12, 12, 12, 0.36) 0%, rgba(12, 12, 12, 0.2) 58%, transparent 94%);
   backdrop-filter: blur(12px) saturate(82%);
   -webkit-backdrop-filter: blur(12px) saturate(82%);
-  mask-image: radial-gradient(ellipse at center, #000 0%, #000 60%, rgba(0, 0, 0, 0.55) 77%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, #000 60%, rgba(0, 0, 0, 0.55) 77%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.2) 11%, rgba(0, 0, 0, 0.68) 25%, #000 43%, #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.2) 11%, rgba(0, 0, 0, 0.68) 25%, #000 43%, #000 100%);
+}
+
+.pulso-composer-shell > :not(.pulso-composer-backdrop) {
+  position: relative;
+  z-index: 1;
 }
 
 .pulso-entry-curtain {
