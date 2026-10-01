@@ -63,6 +63,24 @@
         ]
       },
       {
+        "source": "/pulso/downloads",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/pulso/downloads/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "**/*.html",
         "headers": [
           {
@@ -96,6 +114,10 @@
       {
         "source": "/api/correspondence/**",
         "function": "correspondenceApi"
+      },
+      {
+        "source": "/api/music-ocre-download",
+        "function": "musicOcreDownloadApi"
       },
       {
         "source": "**",

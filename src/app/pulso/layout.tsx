@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, HeartPulse, Zap, CheckSquare, Sparkles, Mail, MessageCircleMore } from 'lucide-react';
+import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, HeartPulse, Zap, CheckSquare, Sparkles, Mail, MessageCircleMore, Download } from 'lucide-react';
 import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
 import { authService } from '@/shared/services/authService';
 import { User } from 'firebase/auth';
@@ -13,6 +13,7 @@ export const PULSO_NAV_ITEMS = [
   { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
   { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
   { href: '/pulso/email', label: 'E-mail', icon: Mail },
+  { href: '/pulso/downloads', label: 'Downloads', icon: Download },
   { href: '/pulso/conversas', label: 'Conversas do site', icon: MessageCircleMore },
   { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
   { href: '/pulso/conexoes', label: 'Conexões', icon: Globe },
