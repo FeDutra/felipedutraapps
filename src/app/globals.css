@@ -349,23 +349,13 @@ body {
   pointer-events: auto;
   border-radius: 38px;
   overflow: hidden;
-  background: linear-gradient(to bottom, transparent 0%, rgba(12, 12, 12, 0.3) 18%, rgba(12, 12, 12, 0.82) 44%, rgba(12, 12, 12, 0.94) 100%);
-}
-
-/* Só a zona de encontro com a conversa usa blur real. Filtrar a altura inteira
-   do compositor fazia o WebKit recalcular uma área grande a cada quadro. O
-   corpo abaixo é material escuro translúcido: protege a leitura e mantém os
-   controles nítidos sem reabrir o loop de CPU. */
-.pulso-composer-backdrop::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 96px;
-  pointer-events: none;
-  backdrop-filter: blur(12px) saturate(82%);
-  -webkit-backdrop-filter: blur(12px) saturate(82%);
-  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.58) 34%, #000 68%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.58) 34%, #000 68%, transparent 100%);
+  /* Névoa estática com a mesma dissolução macia da lente da Orbe. Um segundo
+     backdrop-filter dinâmico fazia o WebKit do Sonoma repintar continuamente;
+     a densidade deste material impede a mistura do texto traseiro sem tocar
+     na nitidez dos controles que vivem no plano acima. */
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(12, 12, 12, 0.44) 0%, rgba(12, 12, 12, 0.2) 48%, transparent 76%),
+    linear-gradient(to bottom, transparent 0%, rgba(12, 12, 12, 0.42) 20%, rgba(12, 12, 12, 0.88) 43%, rgba(12, 12, 12, 0.96) 100%);
 }
 
 .pulso-composer-shell > :not(.pulso-composer-backdrop) {
