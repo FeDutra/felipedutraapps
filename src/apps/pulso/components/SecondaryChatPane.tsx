@@ -3,9 +3,10 @@ import React from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
-import { X } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import type { PulsoContextNode } from '../types/pulso.types';
-import { MessageRenderer } from './chat/MessageRenderer';
+import type { MesaArtifact } from './MesaPanel';
+import { PulsoMessageContent } from './chat/PulsoMessageContent';
 
 interface PaneMessage {
   id: string;
@@ -20,7 +21,8 @@ interface SecondaryChatPaneProps {
   areaIcon: React.ReactNode;
   onClose: () => void;
   isFocused: boolean;
-  onFocus: () => void;
+  onFocus: (focusComposer?: boolean) => void;
+  onOpenMesa: (artifact: MesaArtifact) => void;
 }
 
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
@@ -36,10 +38,11 @@ function toRenderableConversationText(value: unknown): string {
 // widget, sem input próprio. É a mesma sessão, só ao lado. O input
 // permanece único, fixo embaixo ao centro; o foco decide pra qual painel ele
 // escreve.
-export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, areaIcon, onClose, isFocused, onFocus }) => {
+export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, areaIcon, onClose, isFocused, onFocus, onOpenMesa }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!db) return;
@@ -102,9 +105,10 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
         // O compositor é único. Marca o destino antes de qualquer clique
         // interno para que o próximo caractere nunca fique associado ao painel
         // que estava focado antes.
-        if (event.button === 0) onFocus();
+        if (event.button !== 0) return;
+        const target = event.target as HTMLElement;
+        onFocus(!target.closest('[data-message-content], [data-message-action]'));
       }}
-      onClick={onFocus}
     >
       <div className="absolute top-0 left-0 right-0 h-10 z-20 flex items-center justify-between px-6 pointer-events-none animate-fade-in">
         <span className="flex items-center gap-2 min-w-0">
@@ -133,14 +137,34 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
             </div>
           </div>
         ) : (
-          <div key={msg.id} className={`flex min-w-0 w-full max-w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
-            <div className="min-w-0 max-w-[85%] space-y-1">
+          <div key={msg.id} className={`group/message flex min-w-0 w-full max-w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
+            <div className="min-w-0 max-w-[85%] space-y-1 select-text">
               <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
                 {msg.sender === 'lotus' ? 'lótus' : 'fê'}
               </span>
-              <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
-                <MessageRenderer text={msg.text} sender={msg.sender} />
+              <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left select-text" style={{ overflowWrap: 'anywhere' }}>
+                <PulsoMessageContent
+                  text={msg.text}
+                  sender={msg.sender}
+                  contextId={contextNode.contextId}
+                  onOpenMesa={onOpenMesa}
+                />
               </div>
+              <button
+                type="button"
+                data-message-action
+                onClick={async (event) => {
+                  event.stopPropagation();
+                  await navigator.clipboard.writeText(msg.text);
+                  setCopiedMessageId(msg.id);
+                  window.setTimeout(() => setCopiedMessageId(current => current === msg.id ? null : current), 1400);
+                }}
+                className="mt-1 inline-flex items-center gap-1 bg-transparent p-0 text-[9px] text-white/25 opacity-0 outline-none transition-all hover:text-white/65 group-hover/message:opacity-100 focus:opacity-100 cursor-pointer select-none"
+                aria-label="Copiar mensagem"
+              >
+                {copiedMessageId === msg.id ? <Check size={10} /> : <Copy size={10} />}
+                <span>{copiedMessageId === msg.id ? 'copiado' : 'copiar'}</span>
+              </button>
             </div>
           </div>
         ))}

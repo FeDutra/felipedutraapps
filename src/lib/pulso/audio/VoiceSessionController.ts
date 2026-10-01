@@ -70,6 +70,8 @@ export class VoiceSessionController {
   private audioChunks: Blob[] = [];
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private silentGainNode: GainNode | null = null;
   private silenceStart: number = 0;
   private hasSpoken: boolean = false;
   private animationFrameId: number | null = null;
@@ -283,10 +285,12 @@ export class VoiceSessionController {
       this.analyser.smoothingTimeConstant = 0.85;
       
       const source = this.audioContext.createMediaStreamSource(micStream);
+      this.sourceNode = source;
       source.connect(this.analyser);
       
       // Conectar a destino silencioso no Safari para manter grafo vivo
       const gainNode = this.audioContext.createGain();
+      this.silentGainNode = gainNode;
       gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
       this.analyser.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
@@ -704,6 +708,17 @@ export class VoiceSessionController {
       this.activeAudio.pause();
       this.activeAudio.src = '';
       this.activeAudio = null;
+    }
+    this.sourceNode?.disconnect();
+    this.sourceNode = null;
+    this.analyser?.disconnect();
+    this.analyser = null;
+    this.silentGainNode?.disconnect();
+    this.silentGainNode = null;
+    const audioContext = this.audioContext;
+    this.audioContext = null;
+    if (audioContext && audioContext.state !== 'closed') {
+      void audioContext.close();
     }
     this.ttsAdapter.cancel();
   }

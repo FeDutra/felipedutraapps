@@ -3,6 +3,7 @@ import ArcaDrawer from '../components/ArcaDrawer';
 import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
+import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
 import { listen } from '@tauri-apps/api/event';
 import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
 
@@ -433,7 +434,6 @@ import { lotusOpenClawClient } from '../services/lotusOpenClawClient';
 import { useSearchParams } from 'next/navigation';
 import { ContextSurfaceVariants } from '../components/system/ContextSurfaceVariants';
 import { 
-  MessageRenderer, 
   MessageActions, 
   formatMessageTimestamp 
 } from '../components/chat/MessageRenderer';
@@ -1991,6 +1991,13 @@ export default function LivePage() {
         console.warn('Oscillator setup failed:', err);
       }
     });
+
+    // Estes contextos existem apenas para um sinal curto. Mantê-los suspensos
+    // depois do som deixa o WebKit registrado como cliente silencioso do
+    // CoreAudio por horas.
+    window.setTimeout(() => {
+      if (ctx.state !== 'closed') void ctx.close();
+    }, Math.ceil((duration + 0.25) * 1000));
   }, []);
 
   const playPresenceSoundCue = React.useCallback((type: 'start_listening' | 'sent' | 'response_arrived' | 'speak_start' | 'error') => {
@@ -2084,6 +2091,7 @@ export default function LivePage() {
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const audioContextRef = React.useRef<AudioContext | null>(null);
   const analyserRef = React.useRef<AnalyserNode | null>(null);
+  const mediaStreamSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
   const microphoneStreamRef = React.useRef<MediaStream | null>(null);
   const audioChunksRef = React.useRef<Blob[]>([]);
   const silenceStartRef = React.useRef<number>(0);
@@ -3848,11 +3856,27 @@ export default function LivePage() {
       microphoneStreamRef.current.getTracks().forEach(track => track.stop());
       microphoneStreamRef.current = null;
     }
-    if (audioContextRef.current) {
-      if (audioContextRef.current.state === 'running') {
-        audioContextRef.current.suspend().catch(console.error);
-      }
+    // Suspender mantém o dispositivo de áudio e o processo WebKit vivos.
+    // Desmontamos o grafo inteiro para o CoreAudio realmente ficar ocioso.
+    mediaStreamSourceRef.current?.disconnect();
+    mediaStreamSourceRef.current = null;
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
+
+    const audioContext = audioContextRef.current;
+    audioContextRef.current = null;
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(console.error);
     }
+  }, []);
+
+  React.useEffect(() => () => {
+    mediaStreamSourceRef.current?.disconnect();
+    analyserRef.current?.disconnect();
+    microphoneStreamRef.current?.getTracks().forEach(track => track.stop());
+    const audioContext = audioContextRef.current;
+    audioContextRef.current = null;
+    if (audioContext && audioContext.state !== 'closed') void audioContext.close();
   }, []);
 
   const exitPresenceMode = React.useCallback(() => {
@@ -4046,6 +4070,7 @@ export default function LivePage() {
         analyserRef.current = analyser;
 
         const source = audioCtx.createMediaStreamSource(stream);
+        mediaStreamSourceRef.current = source;
         source.connect(analyser);
 
         const bufferLength = analyser.frequencyBinCount;
@@ -5488,42 +5513,15 @@ ${data.transcription}`, {
                       {/* Text body & blocks renderer */}
                       {(!msg.attachments || msg.attachments.length === 0 || msg.text !== msg.attachments.map(a => a.name).join(', ')) && msg.text && (
                         <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left" style={{ overflowWrap: 'anywhere' }}>
-                          {(() => {
-                            // `pulso-doc` is canonical. The second spelling is a
-                            // recovery path for legacy/malformed assistant output,
-                            // so raw tags never become visible in the chat.
-                            const docRegex = /<p(?:ulso|olso)-doc\s+id="([^"]+)"\s+title="([^"]+)">([\s\S]*?)<\/p(?:ulso|olso)-doc>/i;
-                            const docMatch = msg.text.match(docRegex);
-                            let displayText = msg.text;
-                            let artifactData = null;
-                            if (docMatch) {
-                              artifactData = { id: docMatch[1], title: docMatch[2], content: docMatch[3].trim(), contextId: msg.contextId || undefined };
-                              displayText = msg.text.replace(docRegex, '').trim();
-                            }
-                            
-                            return (
-                              <div className="flex flex-col gap-3">
-                                {displayText && <MessageRenderer text={displayText} sender={msg.sender} />}
-                                {artifactData && (
-                                  <button
-                                    onClick={() => {
-                                      setActiveMesaArtifact(artifactData);
-                                      setIsMesaOpen(true);
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all w-fit cursor-pointer outline-none group text-left"
-                                  >
-                                    <div className="p-2 bg-black/40 rounded-lg group-hover:bg-black/60 transition-colors">
-                                      <FileText size={16} className="text-white/70" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Abrir Mesa</span>
-                                      <span className="text-sm font-medium text-white">{artifactData.title}</span>
-                                    </div>
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
+                          <PulsoMessageContent
+                            text={msg.text}
+                            sender={msg.sender}
+                            contextId={msg.contextId || undefined}
+                            onOpenMesa={(artifact) => {
+                              setActiveMesaArtifact(artifact);
+                              setIsMesaOpen(true);
+                            }}
+                          />
                         </div>
                       )}
 
@@ -5984,10 +5982,14 @@ ${data.transcription}`, {
                     areaIcon={getAreaIcon({ id: contextNode.areaId, name: dynamicAreas.find(a => a.id === contextNode.areaId)?.name || '' })}
                     onClose={() => closeSplitPane(contextNode.contextId)}
                     isFocused={sendTargetContextNode.contextId === contextNode.contextId}
-                    onFocus={() => {
+                    onFocus={(shouldFocusComposer = true) => {
                       setFocusedPaneContextId(contextNode.contextId);
                       markContextAsRead(contextNode.contextId);
-                      focusComposer();
+                      if (shouldFocusComposer) focusComposer();
+                    }}
+                    onOpenMesa={(artifact) => {
+                      setActiveMesaArtifact(artifact);
+                      setIsMesaOpen(true);
                     }}
                   />
                 </div>
@@ -5996,7 +5998,7 @@ ${data.transcription}`, {
           )}
 
 <footer
-        className={`fixed bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 ${
+        className={`fixed bottom-0 left-1/2 w-full max-w-xl flex flex-col items-center z-30 select-none max-h-[450px] gap-3 pb-6 md:pb-8 px-4 md:px-0 pointer-events-auto ${
         presenceMode ? 'pulso-hidden-center' : 'pulso-visible'
       }`}
         style={{
@@ -6133,7 +6135,7 @@ ${data.transcription}`, {
           </div>
         )}
 
-        <div className="w-full flex items-center gap-1.5 sm:gap-3.5 bg-transparent border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative">
+        <div className="pulso-composer-glass w-full flex items-center gap-1.5 sm:gap-3.5 border-b border-white/20 focus-within:border-white transition-colors py-2 px-1 relative isolate">
           {(voiceState === 'recording_once' || voiceState === 'transcribing') && (
             <div 
               className="absolute inset-0 blur-md pointer-events-none"
@@ -6303,7 +6305,7 @@ ${data.transcription}`, {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                className="flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-40 resize-none min-h-[36px] max-h-[212px] py-1.5 overflow-y-auto no-scrollbar"
+                className="relative z-[1] flex-1 bg-transparent border-none text-sm font-light text-white placeholder:text-white/30 outline-none disabled:opacity-40 resize-none min-h-[36px] max-h-[212px] py-1.5 overflow-y-auto no-scrollbar select-text"
               />
             );
           })()}
