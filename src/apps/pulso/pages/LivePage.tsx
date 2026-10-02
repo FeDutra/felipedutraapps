@@ -6010,8 +6010,6 @@ ${data.transcription}`, {
           transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        <div className="pulso-composer-backdrop" aria-hidden="true" />
-        
         {activeContextNode && (
           <div className="w-full flex items-center justify-center gap-3 mb-0.5 animate-fade-in select-none">
             <span className="text-[9px] text-[#fbf9f5]/25 tracking-widest uppercase font-mono font-light">

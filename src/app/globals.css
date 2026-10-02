@@ -339,28 +339,14 @@ body {
    controles acima. A lente acompanha a altura total do footer (contexto,
    anexos, citação e textarea), em vez de pertencer apenas à linha inferior. */
 .pulso-composer-shell {
-  isolation: isolate;
-}
-
-.pulso-composer-backdrop {
-  position: absolute;
-  inset: -34px -38px -24px;
-  z-index: 0;
-  pointer-events: auto;
-  border-radius: 38px;
-  overflow: hidden;
-  /* Névoa estática com a mesma dissolução macia da lente da Orbe. Um segundo
-     backdrop-filter dinâmico fazia o WebKit do Sonoma repintar continuamente;
-     a densidade deste material impede a mistura do texto traseiro sem tocar
-     na nitidez dos controles que vivem no plano acima. */
+  border-radius: 38px 38px 0 0;
+  /* O background do próprio footer ocupa naturalmente o plano entre conversa
+     e controles. Evitamos uma camada absoluta extra: no WebKit do Sonoma ela
+     recompunha o footer transformado mesmo sem backdrop-filter. */
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(12, 12, 12, 0.44) 0%, rgba(12, 12, 12, 0.2) 48%, transparent 76%),
-    linear-gradient(to bottom, transparent 0%, rgba(12, 12, 12, 0.42) 20%, rgba(12, 12, 12, 0.88) 43%, rgba(12, 12, 12, 0.96) 100%);
-}
-
-.pulso-composer-shell > :not(.pulso-composer-backdrop) {
-  position: relative;
-  z-index: 1;
+    radial-gradient(ellipse at 50% 0%, rgba(12, 12, 12, 0.34) 0%, rgba(12, 12, 12, 0.14) 48%, transparent 78%),
+    linear-gradient(to bottom, rgba(12, 12, 12, 0.18) 0%, rgba(12, 12, 12, 0.76) 25%, rgba(12, 12, 12, 0.94) 54%, rgba(12, 12, 12, 0.97) 100%);
+  box-shadow: 0 -24px 38px rgba(12, 12, 12, 0.2);
 }
 
 .pulso-entry-curtain {
