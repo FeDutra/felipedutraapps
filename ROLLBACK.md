@@ -266,3 +266,16 @@ Reverter somente o commit desta alteração, executar `npm run build`, publicar
 somente o Firebase Hosting e instalar o artefato Intel correspondente ao
 commit anterior. Não altera Firestore, Functions, credenciais, áudio ou
 runtime da VPS.
+
+## Correção de empilhamento — 02/10/2026
+
+Baseline desta correção: `0ed707e6` em `origin/main`.
+
+- o material deixa de ser pintado no fundo do próprio footer;
+- uma placa de vidro isolada ocupa o plano intermediário sobre o histórico;
+- todos os filhos do compositor ficam explicitamente acima dessa placa;
+- a máscara superior preserva a finalização suave quando o campo cresce.
+
+Para reverter somente esta correção, restaurar `0ed707e6`, executar
+`npm run build`, republicar apenas o Firebase Hosting e reinstalar o artefato
+Intel correspondente. Nenhuma função, banco, credencial ou serviço é alterado.
