@@ -2,6 +2,7 @@
 import ArcaDrawer from '../components/ArcaDrawer';
 import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
+import { BrowserMesaPanel } from '../components/BrowserMesaPanel';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
 import { listen } from '@tauri-apps/api/event';
@@ -994,6 +995,9 @@ export default function LivePage() {
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
+  const [isBrowserOpen, setIsBrowserOpen] = React.useState(false);
+  const [isBrowserCollapsed, setIsBrowserCollapsed] = React.useState(false);
+  const [isBrowserExpanded, setIsBrowserExpanded] = React.useState(false);
   // Split desktop: o chat principal mais até três painéis adicionais.
   // O contexto focado é sempre o destino do compositor único.
   const [secondaryContextIds, setSecondaryContextIds] = React.useState<string[]>([]);
@@ -1021,6 +1025,22 @@ export default function LivePage() {
       setIsMesaCollapsed(false);
     }
   }, [activeMesaArtifact]);
+
+  React.useEffect(() => {
+    if (isMesaOpen) {
+      setIsBrowserOpen(false);
+      setIsBrowserExpanded(false);
+    }
+  }, [isMesaOpen]);
+
+  const openBrowserMesa = React.useCallback(() => {
+    // MESA can hold one active matter at a time. Closing the document here
+    // preserves the chat while avoiding two competing right-side surfaces.
+    setIsMesaOpen(false);
+    setIsMesaCollapsed(false);
+    setIsBrowserCollapsed(false);
+    setIsBrowserOpen(true);
+  }, []);
 
   const [isArcaOpen, setIsArcaOpen] = React.useState(false);
   const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
@@ -4961,6 +4981,7 @@ ${data.transcription}`, {
     || previewImage
     || previewPdf
     || (isMesaOpen && !isMesaCollapsed)
+    || (isBrowserOpen && !isBrowserCollapsed)
   );
 
 
@@ -5111,6 +5132,23 @@ ${data.transcription}`, {
           >
             <span>[ arca ]</span>
           </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isBrowserOpen) {
+                setIsBrowserOpen(false);
+                setIsBrowserExpanded(false);
+              } else {
+                openBrowserMesa();
+              }
+            }}
+            className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
+              isBrowserOpen ? 'text-[#d2694c] drop-shadow-[0_0_8px_rgba(210,105,76,0.45)]' : 'text-[#fbf9f5]/80 hover:text-white'
+            }`}
+            title="Abrir Navegador na MESA"
+          >
+            <span>[ navegador ]</span>
+          </button>
           
           <div className="relative" ref={headerMenuRef}>
             <button 
@@ -5168,6 +5206,12 @@ ${data.transcription}`, {
                       className="flex md:hidden items-center py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
                     >
                       <span>arca</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); openBrowserMesa(); }}
+                      className="flex md:hidden items-center py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <span>navegador</span>
                     </button>
                     <button
                       onMouseDown={() => { setIsHeaderMenuOpen(false); setIsSidebarOpen(true); }}
@@ -5427,7 +5471,7 @@ ${data.transcription}`, {
           style={{
             transform: hasSplitChats
               ? 'none'
-              : (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed)
+              : (!isAtelieActive && !isEstudioActive && (isMesaOpen && !isMesaCollapsed || isBrowserOpen && !isBrowserCollapsed && !isBrowserExpanded))
               ? 'translateX(calc(-22vw + 1.5rem))'
               : 'translateX(0)',
             transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -5464,7 +5508,7 @@ ${data.transcription}`, {
           />
 
           {(!hasSplitChats && (!(isAtelieActive || isEstudioActive) || (isAtelieActive && showAtelieChatHistory))) && (
-            <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
+            <div className={`transition-all duration-500 ${(isMesaOpen && !isMesaCollapsed || isBrowserOpen && !isBrowserCollapsed) ? 'w-full px-4 md:px-8' : 'w-[90%] md:w-[75%] lg:w-[50%] 2xl:w-[75%]'} relative border-none shadow-none overflow-hidden pulso-transition flex-1 md:flex-none min-h-[120px] md:h-[60vh] md:max-h-[60vh] 2xl:max-h-[45vh] 2xl:h-[45vh] mt-1 md:mt-2 mb-2 md:mb-4 pointer-events-auto flex flex-col gap-4 ${presenceMode ? 'pulso-hidden-center' : 'pulso-visible'}`}>
               
               <div 
                 className={`flex flex-col relative transition-all duration-300 ${
@@ -6038,6 +6082,42 @@ ${data.transcription}`, {
             </button>
           )}
 
+          {/* Navegador: uma matéria de MESA, não uma rota que sequestra a
+              conversa. O Chromium entra na casca PULSO e pode expandir só
+              quando Fe pede. */}
+          {isBrowserOpen && (
+            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
+              windowWidth < 768
+                ? `left-0 px-4 w-full ${isBrowserCollapsed ? 'transform translate-x-full pointer-events-none' : ''}`
+                : isBrowserExpanded
+                  ? `left-4 md:left-8 w-[calc(100vw-2rem)] md:w-[calc(100vw-4rem)] ${isBrowserCollapsed ? 'transform translate-x-[calc(100%-16px)]' : ''}`
+                  : `w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] ${isBrowserCollapsed ? 'transform translate-x-[calc(100%-12px)] md:translate-x-[calc(100%-16px)]' : ''}`
+            }`}>
+              <div className="h-full w-full overflow-hidden border border-[#fbf9f5]/10 shadow-[0_24px_90px_rgba(0,0,0,0.48)]">
+                <BrowserMesaPanel
+                  isOpen={isBrowserOpen}
+                  onClose={() => {
+                    setIsBrowserOpen(false);
+                    setIsBrowserCollapsed(false);
+                    setIsBrowserExpanded(false);
+                  }}
+                  onToggleCollapse={() => setIsBrowserCollapsed(!isBrowserCollapsed)}
+                  onExpandChange={setIsBrowserExpanded}
+                />
+              </div>
+            </div>
+          )}
+
+          {isBrowserOpen && isBrowserCollapsed && (
+            <button
+              onClick={() => setIsBrowserCollapsed(false)}
+              className="fixed right-0 top-1/2 -translate-y-1/2 z-[70] px-2 py-3 bg-[#d2694c] hover:bg-[#d2694c]/80 border-l border-y border-white/20 text-[9px] uppercase tracking-widest text-white rounded-l-xl cursor-pointer shadow-2xl transition-all select-none animate-fade-in flex items-center gap-1"
+            >
+              <span>‹</span>
+              <span className="writing-mode-vertical uppercase [writing-mode:vertical-lr] tracking-[0.25em]">web</span>
+            </button>
+          )}
+
           {/* Split desktop: painéis rigorosamente equivalentes. Dois e três
               chats dividem a largura em partes iguais; quatro usam uma grade
               2×2, preservando área, tipografia e respiros idênticos. */}
@@ -6091,7 +6171,7 @@ ${data.transcription}`, {
         style={{
           // Input fica sempre no centro padrão, mesmo com o split aberto —
           // é um input só, compartilhado, não pertence a um lado específico.
-          transform: (!isAtelieActive && !isEstudioActive && isMesaOpen && !isMesaCollapsed && !hasSplitChats)
+            transform: (!isAtelieActive && !isEstudioActive && (isMesaOpen && !isMesaCollapsed || isBrowserOpen && !isBrowserCollapsed && !isBrowserExpanded) && !hasSplitChats)
             ? 'translate(calc(-50% - 22vw + 1.5rem), 0)'
             : 'translate(-50%, 0)',
           transition: 'transform 700ms cubic-bezier(0.16, 1, 0.3, 1)',

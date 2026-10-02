@@ -1,20 +1,11 @@
-import React from 'react';
-import { Viewport } from 'next';
-import BrowserMesaPage from '@/apps/pulso/pages/BrowserMesaPage';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'PULSO | Navegador',
   description: 'Navegador integrado da PULSO',
 };
 
-export const viewport: Viewport = {
-  themeColor: '#0f0f0f',
-};
-
 export default function Page() {
-  return (
-    <React.Suspense fallback={<div className="h-[100dvh] bg-[#0f0f0f]" aria-label="Abrindo navegador" />}>
-      <BrowserMesaPage />
-    </React.Suspense>
-  );
+  // Navegador deixou de ser uma rota que toma a tela: ele mora na MESA.
+  redirect('/pulso/live');
 }
