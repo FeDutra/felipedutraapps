@@ -2,44 +2,51 @@
 
 import React from 'react';
 import {
-  Bookmark,
+  ChevronDown,
   ChevronRight,
   CircleDot,
-  ExternalLink,
+  Folder,
+  FolderPlus,
   Globe2,
   Maximize2,
   Minimize2,
-  Plus,
+  Search,
   ShieldCheck,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-type BrowserGroup = 'pinned' | 'working' | 'reference';
+type SpaceId = 'pulso' | 'trabalho' | 'referencias';
 
-type BrowserTab = {
+type Collection = {
   id: string;
-  title: string;
-  group: BrowserGroup;
-  active?: boolean;
+  label: string;
+  items: string[];
 };
 
-const GROUPS: Array<{ id: BrowserGroup; label: string }> = [
-  { id: 'pinned', label: 'fixadas' },
-  { id: 'working', label: 'em curso' },
-  { id: 'reference', label: 'referências' },
+const SPACES: Array<{ id: SpaceId; label: string }> = [
+  { id: 'pulso', label: 'PULSO' },
+  { id: 'trabalho', label: 'trabalho' },
+  { id: 'referencias', label: 'referências' },
 ];
 
-const INITIAL_TABS: BrowserTab[] = [
-  { id: 'pulso', title: 'PULSO', group: 'pinned', active: true },
-  { id: 'notion', title: 'Notion', group: 'pinned' },
-  { id: 'research', title: 'Pesquisa', group: 'working' },
-];
+const INITIAL_COLLECTIONS: Record<SpaceId, Collection[]> = {
+  pulso: [
+    { id: 'fixadas', label: 'fixadas', items: ['PULSO · Notion'] },
+    { id: 'em-curso', label: 'em curso', items: ['Pesquisa'] },
+  ],
+  trabalho: [
+    { id: 'projetos', label: 'projetos', items: [] },
+    { id: 'clientes', label: 'clientes', items: [] },
+  ],
+  referencias: [
+    { id: 'arquivo', label: 'arquivo', items: [] },
+  ],
+};
 
 /**
- * The remote session is intentionally a separate origin. PULSO owns the
- * surrounding context and controls; Chromium owns cookies, logins and tabs.
- * Set NEXT_PUBLIC_PULSO_BROWSER_URL in the deployed environment.
+ * O render é remoto porque o Chromium é uma sessão isolada. PULSO não lê nem
+ * compartilha seus cookies: ela organiza contexto, espaços e ações ao redor.
  */
 const BROWSER_REMOTE_URL = process.env.NEXT_PUBLIC_PULSO_BROWSER_URL || '';
 
@@ -56,23 +63,27 @@ export function BrowserMesaPanel({
   onToggleCollapse,
   onExpandChange,
 }: BrowserMesaPanelProps) {
-  const [tabs, setTabs] = React.useState<BrowserTab[]>(INITIAL_TABS);
+  const [activeSpace, setActiveSpace] = React.useState<SpaceId>('pulso');
+  const [collections, setCollections] = React.useState(INITIAL_COLLECTIONS);
   const [expanded, setExpanded] = React.useState(false);
   const [frameLoaded, setFrameLoaded] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
 
-  const activeTab = tabs.find((tab) => tab.active) || tabs[0];
-  const selectTab = (id: string) => setTabs((current) => current.map((tab) => ({ ...tab, active: tab.id === id })));
-  const addTab = () => setTabs((current) => [
-    ...current.map((tab) => ({ ...tab, active: false })),
-    { id: `tab-${Date.now()}`, title: 'nova página', group: 'working', active: true },
-  ]);
+  if (!isOpen) return null;
+
+  const addFolder = () => {
+    const label = `pasta ${collections[activeSpace].length + 1}`;
+    setCollections((current) => ({
+      ...current,
+      [activeSpace]: [...current[activeSpace], { id: `${activeSpace}-${Date.now()}`, label, items: [] }],
+    }));
+  };
+
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
     onExpandChange?.(next);
   };
-
-  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
@@ -81,85 +92,112 @@ export function BrowserMesaPanel({
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 24 }}
         transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-        className="h-full w-full flex flex-col overflow-hidden bg-[#100f0e]/95 text-[#fbf9f5]"
+        className="flex h-full w-full overflow-hidden bg-[#0b0b0c] text-[#f3f1eb]"
       >
-        <header className="shrink-0 border-b border-[#fbf9f5]/10 bg-[#171412]/70">
-          <div className="flex items-center gap-2 px-3 sm:px-5 pt-3 pb-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="text-[#d2694c] text-sm leading-none" aria-hidden="true">○</span>
-              <span className="text-[9px] font-light tracking-[0.22em] text-[#fbf9f5]/42 lowercase">mesa / navegador</span>
-              <span className="h-3 w-px bg-[#fbf9f5]/10" />
-              <span className="truncate text-[11px] font-light tracking-wide text-[#fbf9f5]/78">{activeTab?.title || 'navegador'}</span>
+        <aside className="flex w-[176px] shrink-0 flex-col border-r border-white/[0.08] bg-[#0d0d0e]">
+          <div className="flex h-12 items-center justify-between px-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm leading-none text-[#f3f1eb]" aria-hidden="true">○</span>
+              <span className="text-[10px] tracking-[0.16em] text-[#f3f1eb]/78 lowercase">navegador</span>
             </div>
-            <div className="flex items-center gap-1">
-              <button onClick={addTab} className="p-1.5 text-[#fbf9f5]/48 hover:text-[#fbf9f5] transition-colors" title="Nova página" aria-label="Nova página"><Plus size={14} strokeWidth={1.3} /></button>
-              <button onClick={toggleExpanded} className="hidden sm:inline-flex p-1.5 text-[#fbf9f5]/48 hover:text-[#fbf9f5] transition-colors" title={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'} aria-label={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'}>{expanded ? <Minimize2 size={14} strokeWidth={1.3} /> : <Maximize2 size={14} strokeWidth={1.3} />}</button>
-              {onToggleCollapse && <button onClick={onToggleCollapse} className="p-1.5 text-[#fbf9f5]/48 hover:text-[#fbf9f5] transition-colors" title="Recolher painel" aria-label="Recolher painel"><ChevronRight size={15} strokeWidth={1.3} /></button>}
-              <span className="mx-1 h-4 w-px bg-[#fbf9f5]/10" />
-              <button onClick={onClose} className="p-1.5 text-[#fbf9f5]/48 hover:text-[#fbf9f5] transition-colors" title="Fechar navegador" aria-label="Fechar navegador"><X size={15} strokeWidth={1.3} /></button>
-            </div>
+            <button
+              onClick={() => setSearchOpen((current) => !current)}
+              className="text-[#f3f1eb]/40 transition-colors hover:text-[#f3f1eb]"
+              aria-label="Pesquisar espaços e pastas"
+              title="Pesquisar"
+            >
+              <Search size={14} strokeWidth={1.35} />
+            </button>
           </div>
 
-          <div className="flex items-stretch border-t border-[#fbf9f5]/[0.07]">
-            <aside className="hidden w-32 shrink-0 border-r border-[#fbf9f5]/10 py-2 sm:block">
-              {GROUPS.map((group) => {
-                const groupTabs = tabs.filter((tab) => tab.group === group.id);
-                return (
-                  <div key={group.id} className="mb-3 last:mb-0">
-                    <div className="flex items-center justify-between px-3 pb-1 text-[8px] tracking-[0.16em] text-[#fbf9f5]/30 lowercase"><span>{group.label}</span><span>{groupTabs.length || ''}</span></div>
-                    {groupTabs.map((tab) => (
-                      <button key={tab.id} onClick={() => selectTab(tab.id)} className={`group flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors ${tab.active ? 'bg-[#d2694c]/12 text-[#fbf9f5]' : 'text-[#fbf9f5]/44 hover:bg-[#fbf9f5]/[0.035] hover:text-[#fbf9f5]/82'}`}>
-                        <CircleDot size={9} strokeWidth={1.25} className={tab.active ? 'text-[#d2694c]' : 'text-[#fbf9f5]/26'} />
-                        <span className="truncate text-[10px] font-light">{tab.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-            </aside>
-            <div className="min-w-0 flex-1 overflow-x-auto px-2 py-2">
-              <div className="flex min-w-max gap-1">
-                {tabs.map((tab) => (
-                  <button key={tab.id} onClick={() => selectTab(tab.id)} className={`flex max-w-36 items-center gap-1.5 border-b px-2.5 py-1.5 text-left transition-colors ${tab.active ? 'border-[#d2694c] bg-[#fbf9f5]/[0.06] text-[#fbf9f5]' : 'border-transparent text-[#fbf9f5]/40 hover:text-[#fbf9f5]/75'}`}>
-                    <Bookmark size={9} fill={tab.group === 'pinned' ? 'currentColor' : 'none'} strokeWidth={1.2} className={tab.group === 'pinned' ? 'text-[#d2694c]' : ''} />
-                    <span className="truncate text-[10px] font-light">{tab.title}</span>
-                  </button>
-                ))}
+          {searchOpen && (
+            <div className="px-3 pb-3">
+              <div className="flex items-center gap-2 border border-white/[0.1] px-2.5 py-2 text-[10px] text-[#f3f1eb]/38">
+                <Search size={11} strokeWidth={1.2} />
+                <span>encontrar na navegação</span>
               </div>
             </div>
-          </div>
-        </header>
+          )}
 
-        <section className="relative min-h-0 flex-1 bg-[#0a0908]">
+          <div className="border-y border-white/[0.07] py-2">
+            <p className="px-4 pb-1.5 text-[8px] tracking-[0.17em] text-[#f3f1eb]/28 lowercase">espaços</p>
+            {SPACES.map((space) => (
+              <button
+                key={space.id}
+                onClick={() => setActiveSpace(space.id)}
+                className={`flex w-full items-center gap-2 px-4 py-1.5 text-left text-[10px] transition-colors ${
+                  activeSpace === space.id
+                    ? 'bg-white/[0.055] text-[#f3f1eb]'
+                    : 'text-[#f3f1eb]/48 hover:bg-white/[0.035] hover:text-[#f3f1eb]/82'
+                }`}
+              >
+                <CircleDot size={9} strokeWidth={1.25} className={activeSpace === space.id ? 'text-[#b8283e]' : 'text-[#f3f1eb]/28'} />
+                <span className="truncate">{space.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto py-3">
+            <div className="flex items-center justify-between px-4 pb-2">
+              <p className="text-[8px] tracking-[0.17em] text-[#f3f1eb]/28 lowercase">coleções</p>
+              <button onClick={addFolder} className="text-[#f3f1eb]/34 transition-colors hover:text-[#f3f1eb]" aria-label="Criar pasta" title="Criar pasta">
+                <FolderPlus size={13} strokeWidth={1.25} />
+              </button>
+            </div>
+            {collections[activeSpace].map((collection) => (
+              <div key={collection.id} className="mb-2">
+                <div className="flex items-center gap-1.5 px-4 py-1 text-[10px] text-[#f3f1eb]/52">
+                  <ChevronDown size={11} strokeWidth={1.25} className="text-[#f3f1eb]/28" />
+                  <Folder size={11} strokeWidth={1.15} className="text-[#f3f1eb]/40" />
+                  <span className="truncate">{collection.label}</span>
+                </div>
+                {collection.items.map((item) => (
+                  <div key={item} className="flex items-center gap-2 px-8 py-1 text-[10px] text-[#f3f1eb]/43">
+                    <span className="h-1 w-1 shrink-0 rounded-full bg-[#b8283e]" />
+                    <span className="truncate">{item}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-white/[0.07] px-4 py-3">
+            <span className="flex items-center gap-2 text-[9px] text-[#f3f1eb]/34">
+              <ShieldCheck size={11} strokeWidth={1.15} /> perfil isolado
+            </span>
+          </div>
+        </aside>
+
+        <section className="relative min-w-0 flex-1 bg-[#09090a]">
+          <div className="absolute right-3 top-3 z-20 flex items-center gap-1">
+            <button onClick={toggleExpanded} className="bg-[#0b0b0c]/88 p-2 text-[#f3f1eb]/48 backdrop-blur transition-colors hover:text-[#f3f1eb]" title={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'} aria-label={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'}>
+              {expanded ? <Minimize2 size={14} strokeWidth={1.25} /> : <Maximize2 size={14} strokeWidth={1.25} />}
+            </button>
+            {onToggleCollapse && <button onClick={onToggleCollapse} className="bg-[#0b0b0c]/88 p-2 text-[#f3f1eb]/48 backdrop-blur transition-colors hover:text-[#f3f1eb]" title="Recolher painel" aria-label="Recolher painel"><ChevronRight size={14} strokeWidth={1.25} /></button>}
+            <button onClick={onClose} className="bg-[#0b0b0c]/88 p-2 text-[#f3f1eb]/48 backdrop-blur transition-colors hover:text-[#f3f1eb]" title="Fechar navegador" aria-label="Fechar navegador"><X size={14} strokeWidth={1.25} /></button>
+          </div>
+
           {BROWSER_REMOTE_URL ? (
             <>
-              {!frameLoaded && <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a0908] text-center"><div><span className="text-[#d2694c] text-base">○</span><p className="mt-3 text-[10px] tracking-[0.18em] text-[#fbf9f5]/35 lowercase">abrindo sessão isolada</p></div></div>}
+              {!frameLoaded && <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#09090a] text-center"><div><span className="text-base text-[#f3f1eb]">○</span><p className="mt-3 text-[9px] tracking-[0.18em] text-[#f3f1eb]/35 lowercase">abrindo sessão isolada</p></div></div>}
               <iframe
                 title="Navegador PULSO"
                 src={BROWSER_REMOTE_URL}
                 onLoad={() => setFrameLoaded(true)}
-                className="h-full w-full border-0 bg-[#0a0908]"
+                className="h-full w-full border-0 bg-[#09090a]"
                 allow="clipboard-read; clipboard-write; fullscreen"
               />
             </>
           ) : (
             <div className="flex h-full items-center justify-center p-8 text-center">
               <div className="max-w-sm">
-                <Globe2 size={19} strokeWidth={1.15} className="mx-auto text-[#d2694c]" />
-                <p className="mt-4 text-[10px] tracking-[0.2em] text-[#fbf9f5]/38 lowercase">sessão ainda não conectada</p>
-                <p className="mt-3 text-sm font-light leading-6 text-[#fbf9f5]/60">A PULSO já tem o lugar do navegador. A sessão remota entra aqui sem levar identidade, cookies ou decisões para fora do seu perfil.</p>
-                <span className="mt-6 inline-flex items-center gap-2 text-[10px] text-[#fbf9f5]/32"><ShieldCheck size={12} strokeWidth={1.2} />perfil isolado · ação visível</span>
+                <Globe2 size={19} strokeWidth={1.15} className="mx-auto text-[#f3f1eb]/60" />
+                <p className="mt-4 text-[9px] tracking-[0.2em] text-[#f3f1eb]/38 lowercase">sessão ainda não conectada</p>
+                <p className="mt-3 text-sm font-light leading-6 text-[#f3f1eb]/58">A PULSO organiza espaços, coleções e contexto. O Chromium permanece uma sessão isolada.</p>
               </div>
             </div>
           )}
         </section>
-
-        {BROWSER_REMOTE_URL && (
-          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[#fbf9f5]/10 bg-[#171412]/70 px-3 py-2 text-[9px] text-[#fbf9f5]/36">
-            <span className="flex min-w-0 items-center gap-1.5 truncate"><ShieldCheck size={11} strokeWidth={1.2} className="text-[#d2694c]" />sessão isolada · PULSO preserva contexto e aprovações</span>
-            <a href={BROWSER_REMOTE_URL} target="_blank" rel="noreferrer" className="shrink-0 text-[#fbf9f5]/48 hover:text-[#fbf9f5] transition-colors" title="Abrir sessão em janela própria"><ExternalLink size={12} strokeWidth={1.2} /></a>
-          </footer>
-        )}
       </motion.div>
     </AnimatePresence>
   );
