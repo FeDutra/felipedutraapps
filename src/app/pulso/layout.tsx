@@ -73,6 +73,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
   }, []);
 
   const isLivePage = cleanPathname === '/pulso/live';
+  const isBrowserMesa = cleanPathname === '/pulso/navegador';
   const isPublicAtelie = cleanPathname === '/pulso/3s';
   const isOrbLab = cleanPathname === '/pulso/orb-lab';
 
@@ -81,7 +82,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
       {/* Watermark centralizado de fundo (Lótus) */}
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 md:w-[600px] md:h-[600px] rounded-full border border-white/5 bg-white/2 pointer-events-none watermark-layout-anim -z-10" />
 
-      {isLivePage || isPublicAtelie || isOrbLab ? (
+      {isLivePage || isBrowserMesa || isPublicAtelie || isOrbLab ? (
         <main className="flex-1 min-w-0 w-full max-w-full overflow-x-hidden">
           {isPublicAtelie || isOrbLab ? children : <AuthGate>{children}</AuthGate>}
         </main>
