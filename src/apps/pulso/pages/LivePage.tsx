@@ -5143,7 +5143,7 @@ ${data.transcription}`, {
               }
             }}
             className={`hidden md:flex text-xs font-light tracking-widest transition-all duration-300 items-center gap-1.5 lowercase bg-transparent border-none outline-none cursor-pointer ${
-              isBrowserOpen ? 'text-[#d2694c] drop-shadow-[0_0_8px_rgba(210,105,76,0.45)]' : 'text-[#fbf9f5]/80 hover:text-white'
+              isBrowserOpen ? 'text-[#e53f6f] drop-shadow-[0_0_8px_rgba(229,63,111,0.35)]' : 'text-[#fbf9f5]/80 hover:text-white'
             }`}
             title="Abrir Navegador na MESA"
           >
