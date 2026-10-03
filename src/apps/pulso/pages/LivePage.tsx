@@ -3,6 +3,7 @@ import ArcaDrawer from '../components/ArcaDrawer';
 import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
 import { BrowserMesaPanel } from '../components/BrowserMesaPanel';
+import { motion } from 'framer-motion';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
 import { listen } from '@tauri-apps/api/event';
@@ -998,6 +999,7 @@ export default function LivePage() {
   const [isBrowserOpen, setIsBrowserOpen] = React.useState(false);
   const [isBrowserCollapsed, setIsBrowserCollapsed] = React.useState(false);
   const [isBrowserExpanded, setIsBrowserExpanded] = React.useState(false);
+  const [browserRequestedUrl, setBrowserRequestedUrl] = React.useState<string | null>(null);
   // Split desktop: o chat principal mais até três painéis adicionais.
   // O contexto focado é sempre o destino do compositor único.
   const [secondaryContextIds, setSecondaryContextIds] = React.useState<string[]>([]);
@@ -1041,6 +1043,26 @@ export default function LivePage() {
     setIsBrowserCollapsed(false);
     setIsBrowserOpen(true);
   }, []);
+
+  React.useEffect(() => {
+    const onBrowserNavigate = (event: Event) => {
+      const url = (event as CustomEvent<{ url?: string }>).detail?.url;
+      if (!url) return;
+      openBrowserMesa();
+      setBrowserRequestedUrl(url);
+    };
+    const onDocumentLink = (event: MouseEvent) => {
+      const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.href;
+      if (!/^https?:\/\//.test(href) || new URL(href).origin === window.location.origin) return;
+      event.preventDefault();
+      onBrowserNavigate(new CustomEvent('pulso:browser:navigate', { detail: { url: href } }));
+    };
+    window.addEventListener('pulso:browser:navigate', onBrowserNavigate as EventListener);
+    document.addEventListener('click', onDocumentLink, true);
+    return () => { window.removeEventListener('pulso:browser:navigate', onBrowserNavigate as EventListener); document.removeEventListener('click', onDocumentLink, true); };
+  }, [openBrowserMesa]);
 
   const [isArcaOpen, setIsArcaOpen] = React.useState(false);
   const [isEngineeringActive, setIsEngineeringActive] = React.useState(false);
@@ -6086,14 +6108,14 @@ ${data.transcription}`, {
               conversa. O Chromium entra na casca PULSO e pode expandir só
               quando Fe pede. */}
           {isBrowserOpen && (
-            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
+            <motion.div layout="position" transition={{ layout: { duration: 0.58, ease: [0.16, 1, 0.3, 1] } }} className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] pointer-events-auto flex flex-col ${
               windowWidth < 768
                 ? `left-0 px-4 w-full ${isBrowserCollapsed ? 'transform translate-x-full pointer-events-none' : ''}`
                 : isBrowserExpanded
                   ? `left-4 md:left-8 w-[calc(100vw-2rem)] md:w-[calc(100vw-4rem)] ${isBrowserCollapsed ? 'transform translate-x-[calc(100%-16px)]' : ''}`
                   : `w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] ${isBrowserCollapsed ? 'transform translate-x-[calc(100%-12px)] md:translate-x-[calc(100%-16px)]' : ''}`
             }`}>
-              <div className="h-full w-full overflow-hidden border border-[#fbf9f5]/10 shadow-[0_24px_90px_rgba(0,0,0,0.48)]">
+              <div className="h-full w-full overflow-visible border border-[#fbf9f5]/10 shadow-[0_24px_90px_rgba(0,0,0,0.48)]">
                 <BrowserMesaPanel
                   isOpen={isBrowserOpen}
                   onClose={() => {
@@ -6103,15 +6125,17 @@ ${data.transcription}`, {
                   }}
                   onToggleCollapse={() => setIsBrowserCollapsed(!isBrowserCollapsed)}
                   onExpandChange={setIsBrowserExpanded}
+                  requestedUrl={browserRequestedUrl}
+                  onRequestedUrlConsumed={() => setBrowserRequestedUrl(null)}
                 />
               </div>
-            </div>
+            </motion.div>
           )}
 
           {isBrowserOpen && isBrowserCollapsed && (
             <button
               onClick={() => setIsBrowserCollapsed(false)}
-              className="fixed right-0 top-1/2 -translate-y-1/2 z-[70] px-2 py-3 bg-[#d2694c] hover:bg-[#d2694c]/80 border-l border-y border-white/20 text-[9px] uppercase tracking-widest text-white rounded-l-xl cursor-pointer shadow-2xl transition-all select-none animate-fade-in flex items-center gap-1"
+              className="fixed right-0 top-1/2 -translate-y-1/2 z-[70] px-1.5 py-2.5 bg-[#b8283e] hover:bg-[#b8283e]/85 border-l border-y border-white/15 text-[8px] uppercase tracking-[0.18em] text-white rounded-l-lg cursor-pointer shadow-[0_10px_30px_rgba(0,0,0,0.34)] transition-all select-none animate-fade-in flex items-center gap-1"
             >
               <span>‹</span>
               <span className="writing-mode-vertical uppercase [writing-mode:vertical-lr] tracking-[0.25em]">web</span>

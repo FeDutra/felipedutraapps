@@ -48,9 +48,11 @@ interface BrowserMesaPanelProps {
   onClose: () => void;
   onToggleCollapse?: () => void;
   onExpandChange?: (expanded: boolean) => void;
+  requestedUrl?: string | null;
+  onRequestedUrlConsumed?: () => void;
 }
 
-export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandChange }: BrowserMesaPanelProps) {
+export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandChange, requestedUrl, onRequestedUrlConsumed }: BrowserMesaPanelProps) {
   const [activeSpace, setActiveSpace] = React.useState<SpaceId>('pulso');
   const [collections, setCollections] = React.useState(INITIAL_COLLECTIONS);
   const [expanded, setExpanded] = React.useState(false);
@@ -62,6 +64,7 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
   const [folderName, setFolderName] = React.useState('');
   const [bridgeError, setBridgeError] = React.useState<string | null>(null);
   const omniboxRef = React.useRef<HTMLInputElement>(null);
+  const [suggestionIndex, setSuggestionIndex] = React.useState(0);
 
   const request = React.useCallback(async (path: string, options?: RequestInit) => {
     if (!BROWSER_API_URL) throw new Error('sessão não configurada');
@@ -93,6 +96,30 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
     return () => window.clearInterval(timer);
   }, [isOpen, refreshPages]);
 
+  const navigate = React.useCallback(async (rawUrl: string) => {
+    await request('/v1/navigate', { method: 'POST', body: JSON.stringify({ url: rawUrl, targetId: activeTargetId }) });
+    setOmnibox('');
+    await refreshPages();
+  }, [activeTargetId, refreshPages, request]);
+
+  React.useEffect(() => {
+    if (!requestedUrl || !isOpen) return;
+    void navigate(requestedUrl).catch((error) => setBridgeError(error instanceof Error ? error.message : 'não foi possível abrir'));
+    onRequestedUrlConsumed?.();
+  }, [isOpen, navigate, onRequestedUrlConsumed, requestedUrl]);
+
+  const suggestions = React.useMemo(() => {
+    const value = omnibox.trim();
+    if (!value) return [];
+    const query = encodeURIComponent(value);
+    const candidates = [
+      { label: `abrir ${value}`, value, hint: 'endereço' },
+      { label: `buscar “${value}”`, value: `https://www.google.com/search?q=${query}`, hint: 'web' },
+      ...pages.filter((page) => `${pageLabel(page)} ${page.url}`.toLowerCase().includes(value.toLowerCase())).slice(0, 3).map((page) => ({ label: pageLabel(page), value: page.url, hint: 'em curso' })),
+    ];
+    return candidates;
+  }, [omnibox, pages]);
+
   if (!isOpen) return null;
 
   const openAddress = async (event: React.FormEvent) => {
@@ -100,9 +127,7 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
     const address = omnibox.trim();
     if (!address) return omniboxRef.current?.focus();
     try {
-      await request('/v1/navigate', { method: 'POST', body: JSON.stringify({ url: address, targetId: activeTargetId }) });
-      setOmnibox('');
-      await refreshPages();
+      await navigate(suggestions[suggestionIndex]?.value || address);
     } catch (error) { setBridgeError(error instanceof Error ? error.message : 'não foi possível abrir'); }
   };
 
@@ -110,7 +135,7 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
     try {
       await request('/v1/pages', { method: 'POST', body: JSON.stringify({}) });
       await refreshPages();
-      window.setTimeout(() => omniboxRef.current?.focus(), 80);
+      requestAnimationFrame(() => omniboxRef.current?.focus());
     } catch (error) { setBridgeError(error instanceof Error ? error.message : 'não foi possível criar página'); }
   };
 
@@ -152,7 +177,7 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
       <motion.div
         initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 24 }}
         transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-        className="flex h-full w-full overflow-hidden bg-[#0a0a0b] text-[#f3f1eb]"
+        className="relative flex h-full w-full overflow-visible bg-[#0a0a0b] text-[#f3f1eb]"
       >
         <aside className="flex w-[228px] shrink-0 flex-col border-r border-white/[0.08] bg-[#0d0d0e]">
           <div className="flex items-center justify-between px-4 pt-4 pb-3">
@@ -163,8 +188,9 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
           <form onSubmit={openAddress} className="px-3 pb-3">
             <div className="flex items-center gap-2 border border-white/[0.1] bg-white/[0.025] px-2.5 py-2 focus-within:border-white/[0.26]">
               <Search size={12} strokeWidth={1.2} className="shrink-0 text-[#f3f1eb]/36" />
-              <input ref={omniboxRef} value={omnibox} onChange={(event) => setOmnibox(event.target.value)} placeholder="pesquisar ou abrir" className="min-w-0 flex-1 bg-transparent text-[10px] text-[#f3f1eb]/80 outline-none placeholder:text-[#f3f1eb]/32" aria-label="Pesquisar ou abrir endereço" />
+              <input ref={omniboxRef} value={omnibox} onChange={(event) => { setOmnibox(event.target.value); setSuggestionIndex(0); }} onKeyDown={(event) => { if (event.key === 'ArrowDown' && suggestions.length) { event.preventDefault(); setSuggestionIndex((current) => (current + 1) % suggestions.length); } if (event.key === 'ArrowUp' && suggestions.length) { event.preventDefault(); setSuggestionIndex((current) => (current - 1 + suggestions.length) % suggestions.length); } if (event.key === 'Escape') setOmnibox(''); }} placeholder="pesquisar ou abrir" className="min-w-0 flex-1 bg-transparent text-[10px] text-[#f3f1eb]/80 outline-none placeholder:text-[#f3f1eb]/32" aria-label="Pesquisar ou abrir endereço" />
             </div>
+            {suggestions.length > 0 && <div className="relative z-40"><div className="absolute left-0 right-0 top-1 border border-white/[0.12] bg-[#111113] py-1 shadow-2xl">{suggestions.map((suggestion, index) => <button type="button" key={`${suggestion.value}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => void navigate(suggestion.value)} className={`flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-[10px] ${index === suggestionIndex ? 'bg-white/[0.08] text-white' : 'text-[#f3f1eb]/62 hover:bg-white/[0.05]'}`}><span className="min-w-0 truncate">{suggestion.label}</span><span className="shrink-0 text-[8px] tracking-[0.12em] text-[#b8283e]">{suggestion.hint}</span></button>)}</div></div>}
           </form>
 
           <div className="border-y border-white/[0.07] py-2">
@@ -183,10 +209,10 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
         </aside>
 
         <section className="relative min-w-0 flex-1 bg-[#09090a]">
-          <div className="absolute right-3 top-3 z-20 flex items-center gap-1">
-            <button onClick={toggleExpanded} className="bg-[#0b0b0c]/88 p-2 text-[#f3f1eb]/48 backdrop-blur transition-colors hover:text-[#f3f1eb]" title={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'} aria-label={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'}>{expanded ? <Minimize2 size={14} strokeWidth={1.25} /> : <Maximize2 size={14} strokeWidth={1.25} />}</button>
-            {onToggleCollapse && <button onClick={onToggleCollapse} className="bg-[#0b0b0c]/88 p-2 text-[#f3f1eb]/48 backdrop-blur transition-colors hover:text-[#f3f1eb]" title="Recolher painel" aria-label="Recolher painel"><ChevronRight size={14} strokeWidth={1.25} /></button>}
-            <button onClick={onClose} className="bg-[#0b0b0c]/88 p-2 text-[#f3f1eb]/48 backdrop-blur transition-colors hover:text-[#f3f1eb]" title="Fechar navegador" aria-label="Fechar navegador"><X size={14} strokeWidth={1.25} /></button>
+          <div className="absolute -right-[37px] top-0 z-30 flex flex-col overflow-hidden border border-white/[0.12] bg-[#0b0b0c] shadow-xl">
+            <button onClick={toggleExpanded} className="p-2 text-[#f3f1eb]/48 transition-colors hover:bg-white/[0.07] hover:text-[#f3f1eb]" title={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'} aria-label={expanded ? 'Voltar ao painel lateral' : 'Expandir navegador'}>{expanded ? <Minimize2 size={14} strokeWidth={1.25} /> : <Maximize2 size={14} strokeWidth={1.25} />}</button>
+            {onToggleCollapse && <button onClick={onToggleCollapse} className="border-t border-white/[0.08] p-2 text-[#f3f1eb]/48 transition-colors hover:bg-white/[0.07] hover:text-[#f3f1eb]" title="Recolher painel" aria-label="Recolher painel"><ChevronRight size={14} strokeWidth={1.25} /></button>}
+            <button onClick={onClose} className="border-t border-white/[0.08] p-2 text-[#f3f1eb]/48 transition-colors hover:bg-white/[0.07] hover:text-[#f3f1eb]" title="Fechar navegador" aria-label="Fechar navegador"><X size={14} strokeWidth={1.25} /></button>
           </div>
           {BROWSER_REMOTE_URL ? <>{!frameLoaded && <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#09090a] text-center"><div><span className="text-base text-[#f3f1eb]">○</span><p className="mt-3 text-[9px] tracking-[0.18em] text-[#f3f1eb]/35 lowercase">abrindo sessão isolada</p></div></div>}<iframe title="Navegador PULSO" src={BROWSER_REMOTE_URL} onLoad={() => setFrameLoaded(true)} className="h-full w-full border-0 bg-[#09090a]" allow="clipboard-read; clipboard-write; fullscreen" /></> : <div className="flex h-full items-center justify-center p-8 text-center"><div className="max-w-sm"><Globe2 size={19} strokeWidth={1.15} className="mx-auto text-[#f3f1eb]/60" /><p className="mt-4 text-[9px] tracking-[0.2em] text-[#f3f1eb]/38 lowercase">sessão ainda não conectada</p><p className="mt-3 text-sm font-light leading-6 text-[#f3f1eb]/58">A PULSO organiza espaços, coleções e contexto. O Chromium permanece uma sessão isolada.</p></div></div>}
         </section>
