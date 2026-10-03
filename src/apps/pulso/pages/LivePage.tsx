@@ -6108,7 +6108,7 @@ ${data.transcription}`, {
               conversa. O Chromium entra na casca PULSO e pode expandir só
               quando Fe pede. */}
           {isBrowserOpen && (
-            <motion.div layout="position" transition={{ layout: { duration: 0.58, ease: [0.16, 1, 0.3, 1] } }} className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] pointer-events-auto flex flex-col ${
+            <motion.div layout transition={{ layout: { duration: 0.72, ease: [0.16, 1, 0.3, 1] } }} style={{ transformOrigin: 'right center' }} className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] pointer-events-auto flex flex-col ${
               windowWidth < 768
                 ? `left-0 px-4 w-full ${isBrowserCollapsed ? 'transform translate-x-full pointer-events-none' : ''}`
                 : isBrowserExpanded
@@ -6135,7 +6135,7 @@ ${data.transcription}`, {
           {isBrowserOpen && isBrowserCollapsed && (
             <button
               onClick={() => setIsBrowserCollapsed(false)}
-              className="fixed right-0 top-1/2 -translate-y-1/2 z-[70] px-1.5 py-2.5 bg-[#b8283e] hover:bg-[#b8283e]/85 border-l border-y border-white/15 text-[8px] uppercase tracking-[0.18em] text-white rounded-l-lg cursor-pointer shadow-[0_10px_30px_rgba(0,0,0,0.34)] transition-all select-none animate-fade-in flex items-center gap-1"
+              className="fixed right-0 top-1/2 -translate-y-1/2 z-[70] px-1.5 py-2.5 bg-[#b41643] hover:bg-[#b41643]/85 text-[8px] uppercase tracking-[0.18em] text-white rounded-l-lg cursor-pointer shadow-[0_10px_30px_rgba(0,0,0,0.34)] transition-all select-none animate-fade-in flex items-center gap-1"
             >
               <span>‹</span>
               <span className="writing-mode-vertical uppercase [writing-mode:vertical-lr] tracking-[0.25em]">web</span>
