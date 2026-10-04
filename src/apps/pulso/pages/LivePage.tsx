@@ -610,6 +610,7 @@ const LOADING_PLACEHOLDER_NODE: PulsoContextNode = {
 const AREA_NAMES: Record<string, string> = {
   area_eu: "eu",
   area_trabalho: "trabalho",
+  area_guayi: "guayi",
   area_casa: "casa",
   area_familia: "família",
   area_criacao: "criação",
@@ -628,6 +629,7 @@ const AREA_NAMES: Record<string, string> = {
 const AREA_ORDER = [
   "area_eu",
   "area_trabalho",
+  "area_guayi",
   "area_casa",
   "area_familia",
   "area_criacao",
@@ -1664,6 +1666,25 @@ export default function LivePage() {
           <rect x="3" y="12" width="4.5" height="8" rx="1" />
           <rect x="9.75" y="12" width="4.5" height="8" rx="1" />
           <rect x="16.5" y="12" width="4.5" height="8" rx="1" />
+        </svg>
+      );
+    }
+    if (identifier.includes('guayi')) {
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          className="w-[1.1em] h-[1.1em] inline-block align-middle"
+          style={{ display: 'inline-block' }}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.45"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 20V10.25" />
+          <path d="M12 13.25C9.15 13.25 7.25 11.55 7.25 8.5c2.9 0 4.75 1.7 4.75 4.75Z" />
+          <path d="M12 10.75C12 7.7 13.9 6 16.75 6c0 3.05-1.9 4.75-4.75 4.75Z" />
         </svg>
       );
     }

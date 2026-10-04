@@ -1,5 +1,15 @@
 # Rollback — confirmação de Correspondências (28/09/2026)
 
+# Rollback — área GUAYI (04/10/2026)
+
+- Notion: enviar à lixeira somente a página `3ef5166d-3105-8147-be04-cfca61cc714c`.
+- Firestore: remover `pulso_areas/area_guayi` e `areaConfig/area_guayi`; devolver
+  `familia_escola_guayi`, `familia_matriculas-abertas`, `familia_presidencia` e
+  `familia_sistema-guayi` para `area_familia`. `familia_laura` não foi alterada.
+- Interface: reverter somente o commit do glifo de broto e republicar o Hosting.
+
+---
+
 - Escopo: manter o double opt-in existente e redirecionar confirmações válidas
   para `https://felipedutra.com/correspondencias/obrigado/`; estados de erro,
   expiração e descadastro ficam na landing de Correspondências.
