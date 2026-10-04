@@ -9,7 +9,6 @@ import {
   Volume2, 
   Square, 
   Copy, 
-  Code,
   Layers,
   FileText,
   Video,
@@ -486,8 +485,6 @@ interface MessageActionsProps {
   playingState: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
   onHearClick: (msg: Message) => void;
   onCopyText: (msg: Message) => void;
-  onCopyPackage: (msg: Message) => void;
-  onReply?: (msg: Message) => void;
 }
 
 export const MessageActions = ({
@@ -495,9 +492,7 @@ export const MessageActions = ({
   playingMsgId,
   playingState,
   onHearClick,
-  onCopyText,
-  onCopyPackage,
-  onReply
+  onCopyText
 }: MessageActionsProps) => {
   const isPlayingThis = playingMsgId === msg.id;
   const isPreparing = isPlayingThis && playingState === 'preparing';
@@ -527,20 +522,6 @@ export const MessageActions = ({
 
       {/* Operations Bar */}
       <div className="flex items-center gap-3">
-        {/* Reply Action */}
-        {onReply && (
-          <button
-            onClick={() => onReply(msg)}
-            className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-            title="Responder esta mensagem"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 17 4 12 9 7" />
-              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-            </svg>
-          </button>
-        )}
-
         {/* Hear Action */}
         <button
           onClick={() => onHearClick(msg)}
@@ -562,17 +543,6 @@ export const MessageActions = ({
         >
           <Copy size={11} strokeWidth={1.5} />
         </button>
-
-        {/* Copy Handoff Package Action */}
-        {msg.openclawResult && (
-          <button
-            onClick={() => onCopyPackage(msg)}
-            className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
-            title="Copiar pacote técnico JSON"
-          >
-            <Code size={11} strokeWidth={1.5} />
-          </button>
-        )}
       </div>
     </div>
   );

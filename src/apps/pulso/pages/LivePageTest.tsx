@@ -96,8 +96,7 @@ import { useSearchParams } from 'next/navigation';
 import { ContextSurfaceVariants } from '../components/system/ContextSurfaceVariants';
 import { 
   MessageRenderer, 
-  MessageActions, 
-  formatMessageTimestamp 
+  MessageActions
 } from '../components/chat/MessageRenderer';
 import { routeInputToArea } from '../../../lib/pulso/AreaRouter';
 import { normalizeTranscript } from '../../../lib/pulso/normalizeTranscript';
@@ -4817,23 +4816,15 @@ ${data.transcription}`, {
                         </div>
                       )}
 
-                      {/* User Message Timestamp + Reply button */}
+                      {/* User message actions use the same contract as Lótus. */}
                       {!isLotus && msg.sender !== 'system' && (
-                        <div className="flex items-center justify-end gap-3">
-                          <button
-                            onClick={() => setReplyTo({ id: msg.id, sender: msg.sender, text: msg.text })}
-                            className="text-[#fbf9f5]/30 hover:text-white/70 transition-colors bg-transparent border-none cursor-pointer outline-none"
-                            title="Responder"
-                          >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="9 17 4 12 9 7" />
-                              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-                            </svg>
-                          </button>
-                          <span className="text-[9px] text-[#fbf9f5]/40 select-none lowercase">
-                            {formatMessageTimestamp(msg.timestamp)}
-                          </span>
-                        </div>
+                        <MessageActions
+                          msg={msg}
+                          playingMsgId={playingMsgId}
+                          playingState={playingState}
+                          onHearClick={handleHearClick}
+                          onCopyText={handleCopyText}
+                        />
                       )}
 
                       {/* Lótus Handoff Proposals Forms / Actions if applicable */}
@@ -4883,8 +4874,6 @@ ${data.transcription}`, {
                           playingState={playingState}
                           onHearClick={handleHearClick}
                           onCopyText={handleCopyText}
-                          onCopyPackage={handleCopyPackage}
-                          onReply={(m) => setReplyTo({ id: m.id, sender: m.sender, text: m.text })}
                         />
                       )}
 

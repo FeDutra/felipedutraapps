@@ -3,17 +3,17 @@ import React from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
-import { Check, Copy, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { PulsoContextNode } from '../types/pulso.types';
 import type { MesaArtifact } from './MesaPanel';
 import { PulsoMessageContent } from './chat/PulsoMessageContent';
+import { MessageActions, type Message as RenderMessage } from './chat/MessageRenderer';
+import { MessageAttachments, type RenderableAttachment } from './chat/MessageAttachments';
 
-interface PaneMessage {
-  id: string;
+interface PaneMessage extends RenderMessage {
   sender: 'user' | 'lotus';
-  text: string;
-  timestamp: Date;
   isProgressUpdate?: boolean;
+  attachments?: RenderableAttachment[];
 }
 
 interface SecondaryChatPaneProps {
@@ -23,6 +23,10 @@ interface SecondaryChatPaneProps {
   isFocused: boolean;
   onFocus: (focusComposer?: boolean) => void;
   onOpenMesa: (artifact: MesaArtifact) => void;
+  playingMsgId: string | null;
+  playingState: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
+  onHearMessage: (message: RenderMessage) => void;
+  onCopyMessage: (message: RenderMessage) => void;
 }
 
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
@@ -38,11 +42,40 @@ function toRenderableConversationText(value: unknown): string {
 // widget, sem input próprio. É a mesma sessão, só ao lado. O input
 // permanece único, fixo embaixo ao centro; o foco decide pra qual painel ele
 // escreve.
-export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNode, areaIcon, onClose, isFocused, onFocus, onOpenMesa }) => {
+const normalizeAttachments = (value: unknown): RenderableAttachment[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((attachment): attachment is Record<string, unknown> => Boolean(
+      attachment && typeof attachment === 'object' && typeof (attachment as Record<string, unknown>).url === 'string'
+    ))
+    .map((attachment, index) => {
+      const name = String(attachment.name || attachment.fileName || `arquivo-${index + 1}`);
+      return {
+        id: String(attachment.id || `attachment-${index}-${name}`),
+        name,
+        type: typeof attachment.type === 'string' ? attachment.type : undefined,
+        mimeType: String(attachment.mimeType || attachment.mime || 'application/octet-stream'),
+        url: String(attachment.url),
+        sizeBytes: Number(attachment.sizeBytes || attachment.size || 0) || undefined,
+      };
+    });
+};
+
+export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
+  contextNode,
+  areaIcon,
+  onClose,
+  isFocused,
+  onFocus,
+  onOpenMesa,
+  playingMsgId,
+  playingState,
+  onHearMessage,
+  onCopyMessage,
+}) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
-  const [copiedMessageId, setCopiedMessageId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!db) return;
@@ -58,7 +91,13 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
         if (data.archived === true) return;
         const timestamp = data.requestedAt?.toDate ? data.requestedAt.toDate() : new Date();
         if (data.requestType !== 'active_message' && data.requestType !== 'progress_update' && (data.input || data.rawInput)) {
-          items.push({ id: `user-${docSnap.id}`, sender: 'user', text: data.input || data.rawInput, timestamp });
+          items.push({
+            id: `user-${docSnap.id}`,
+            sender: 'user',
+            text: data.input || data.rawInput,
+            timestamp,
+            attachments: normalizeAttachments(data.attachments),
+          });
         }
         if (data.requestType === 'progress_update' && (data.text || data.message)) {
           items.push({
@@ -71,9 +110,19 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
         }
         const responseText = toRenderableConversationText(data.openclawResult?.responseText);
         const accepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(data.status || '');
-        if (accepted && responseText?.trim()) {
+        const responseAttachments = normalizeAttachments(
+          data.openclawResult?.attachments || data.responseAttachments || (data.requestType === 'active_message' ? data.attachments : undefined)
+        );
+        if (accepted && (responseText?.trim() || responseAttachments.length > 0)) {
           const responseTimestamp = data.updatedAt?.toDate ? data.updatedAt.toDate() : timestamp;
-          items.push({ id: `lotus-${docSnap.id}`, sender: 'lotus', text: responseText, timestamp: responseTimestamp });
+          items.push({
+            id: `lotus-${docSnap.id}`,
+            sender: 'lotus',
+            text: responseText,
+            timestamp: responseTimestamp,
+            openclawResult: data.openclawResult,
+            attachments: responseAttachments,
+          });
         }
       });
       items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -150,21 +199,16 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({ contextNod
                   onOpenMesa={onOpenMesa}
                 />
               </div>
-              <button
-                type="button"
-                data-message-action
-                onClick={async (event) => {
-                  event.stopPropagation();
-                  await navigator.clipboard.writeText(msg.text);
-                  setCopiedMessageId(msg.id);
-                  window.setTimeout(() => setCopiedMessageId(current => current === msg.id ? null : current), 1400);
-                }}
-                className="mt-1 inline-flex items-center gap-1 bg-transparent p-0 text-[9px] text-white/25 opacity-0 outline-none transition-all hover:text-white/65 group-hover/message:opacity-100 focus:opacity-100 cursor-pointer select-none"
-                aria-label="Copiar mensagem"
-              >
-                {copiedMessageId === msg.id ? <Check size={10} /> : <Copy size={10} />}
-                <span>{copiedMessageId === msg.id ? 'copiado' : 'copiar'}</span>
-              </button>
+              <MessageAttachments attachments={msg.attachments} align={msg.sender === 'user' ? 'end' : 'start'} />
+              <div data-message-action onClick={(event) => event.stopPropagation()}>
+                <MessageActions
+                  msg={msg}
+                  playingMsgId={playingMsgId}
+                  playingState={playingState}
+                  onHearClick={onHearMessage}
+                  onCopyText={onCopyMessage}
+                />
+              </div>
             </div>
           </div>
         ))}

@@ -289,3 +289,23 @@ Baseline desta correção: `0ed707e6` em `origin/main`.
 Para reverter somente esta correção, restaurar `0ed707e6`, executar
 `npm run build`, republicar apenas o Firebase Hosting e reinstalar o artefato
 Intel correspondente. Nenhuma função, banco, credencial ou serviço é alterado.
+# Rollback — confiabilidade de chat, ações e anexos (04/10/2026)
+
+Baseline visual do desktop: `0ed707e6`. Baseline funcional do código:
+`eb607da2`.
+
+## Escopo
+
+- ordenar sessões por atividade recente somente dentro de cada área;
+- manter horário, copiar e ouvir para mensagens de Fe e Lótus, inclusive split;
+- retirar responder e pacote técnico da superfície da conversa;
+- renderizar anexos enviados pela Lótus, com prévia de imagem, áudio, vídeo e PDF;
+- preservar exatamente o CSS do compositor instalado em `0ed707e6`.
+
+## Reversão
+
+Reverter o commit desta alteração, executar `npm run build`, publicar apenas o
+Firebase Hosting e reinstalar o artefato Intel anterior. A reversão do frontend
+não remove arquivos já persistidos no Storage nem altera o runtime do relay.
+
+---

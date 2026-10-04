@@ -433,10 +433,7 @@ import { authService } from '../../../shared/services/authService';
 import { lotusOpenClawClient } from '../services/lotusOpenClawClient';
 import { useSearchParams } from 'next/navigation';
 import { ContextSurfaceVariants } from '../components/system/ContextSurfaceVariants';
-import { 
-  MessageActions, 
-  formatMessageTimestamp 
-} from '../components/chat/MessageRenderer';
+import { MessageActions } from '../components/chat/MessageRenderer';
 import { routeInputToArea } from '../../../lib/pulso/AreaRouter';
 import { normalizeTranscript } from '../../../lib/pulso/normalizeTranscript';
 import { candidateAreas } from '../scripts/seedAreas';
@@ -551,6 +548,50 @@ interface Attachment {
   fullTextDeferred?: boolean;
   extractionMode?: 'none' | 'text' | 'ocr' | 'transcription' | 'multimodal';
 }
+
+const normalizeMessageAttachments = (value: unknown, contextId?: string | null): Attachment[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((attachment): attachment is Record<string, unknown> => Boolean(
+      attachment && typeof attachment === 'object' && typeof (attachment as Record<string, unknown>).url === 'string'
+    ))
+    .map((attachment, index) => {
+      const mimeType = String(attachment.mimeType || attachment.mime || 'application/octet-stream');
+      const declaredType = String(attachment.type || '').toLowerCase();
+      const type: Attachment['type'] = declaredType === 'image' || mimeType.startsWith('image/')
+        ? 'image'
+        : declaredType === 'audio' || mimeType.startsWith('audio/')
+          ? 'audio'
+          : declaredType === 'pdf' || mimeType === 'application/pdf'
+            ? 'pdf'
+            : 'generic';
+      return {
+        ...attachment,
+        id: String(attachment.id || `attachment-${index}-${attachment.name || attachment.fileName || 'file'}`),
+        name: String(attachment.name || attachment.fileName || `arquivo-${index + 1}`),
+        type,
+        mimeType,
+        url: String(attachment.url),
+        sizeBytes: Number(attachment.sizeBytes || attachment.size || 0) || undefined,
+        createdAt: safeConvertToDate(attachment.createdAt) || new Date(),
+        contextId: String(attachment.contextId || contextId || ''),
+      };
+    });
+};
+
+const getAssistantAttachments = (value: unknown): Attachment[] => {
+  if (!value || typeof value !== 'object') return [];
+  const request = value as Record<string, unknown>;
+  const result = request.openclawResult && typeof request.openclawResult === 'object'
+    ? request.openclawResult as Record<string, unknown>
+    : null;
+  return normalizeMessageAttachments(
+    result?.attachments
+      || request.responseAttachments
+      || (request.requestType === 'active_message' ? request.attachments : undefined),
+    typeof request.contextId === 'string' ? request.contextId : null,
+  );
+};
 
 /**
  * Converts a persisted Session entity into the PulsoContextNode shape used throughout the UI.
@@ -1136,6 +1177,16 @@ export default function LivePage() {
   const pageLoadTimeRef = React.useRef(new Date());
   const [lastReadTimes, setLastReadTimes] = React.useState<Record<string, string>>({});
   const [latestIncomingTimes, setLatestIncomingTimes] = React.useState<Record<string, string>>({});
+
+  const sortContextsByRecentActivity = React.useCallback((a: PulsoContextNode, b: PulsoContextNode) => {
+    const activityTime = (node: PulsoContextNode) => {
+      const incoming = latestIncomingTimes[node.contextId];
+      return safeConvertToDate(incoming || node.lastMessageAt || node.updatedAt)?.getTime() || 0;
+    };
+    const recentDelta = activityTime(b) - activityTime(a);
+    if (recentDelta !== 0) return recentDelta;
+    return sortByOrder(a, b);
+  }, [latestIncomingTimes]);
   
   const markContextAsRead = React.useCallback((contextId: string) => {
     const nowStr = new Date().toISOString();
@@ -2528,9 +2579,10 @@ export default function LivePage() {
             const status = req.status;
             const responseText = toRenderableConversationText(req.openclawResult?.responseText);
             const hasRealResponse = responseText && responseText.trim() !== '';
+            const responseAttachments = getAssistantAttachments(req);
             
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
-            if (isAcceptedStatus && hasRealResponse) {
+            if (isAcceptedStatus && (hasRealResponse || responseAttachments.length > 0)) {
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
@@ -2546,7 +2598,8 @@ export default function LivePage() {
                 executedBy: req.executedBy || undefined,
                 createdEntityRef: req.createdEntityRef || undefined,
                 executionError: req.executionError || undefined,
-                contextId: req.contextId || null
+                contextId: req.contextId || null,
+                attachments: responseAttachments.length > 0 ? responseAttachments : undefined,
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
@@ -2745,6 +2798,7 @@ export default function LivePage() {
             const status = req.status;
             const responseText = toRenderableConversationText(req.openclawResult?.responseText);
             const hasRealResponse = responseText && responseText.trim() !== '';
+            const responseAttachments = getAssistantAttachments(req);
 
             // Check if auto TTS needs to be triggered in presence mode
             const originRequestId = req.meta?.originRequestId || req.openclawResult?.meta?.originRequestId || req.originRequestId || req.id;
@@ -2874,7 +2928,7 @@ export default function LivePage() {
             }
 
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
-            if (isAcceptedStatus && hasRealResponse) {
+            if (isAcceptedStatus && (hasRealResponse || responseAttachments.length > 0)) {
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
               chatHistory.push({
                 id: `lotus-${req.id}`,
@@ -2890,7 +2944,8 @@ export default function LivePage() {
                 executedBy: req.executedBy || undefined,
                 createdEntityRef: req.createdEntityRef || undefined,
                 executionError: req.executionError || undefined,
-                contextId: req.contextId || null
+                contextId: req.contextId || null,
+                attachments: responseAttachments.length > 0 ? responseAttachments : undefined,
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
@@ -3052,8 +3107,9 @@ export default function LivePage() {
             const req = docSnap.data();
             const contextId = req.contextId;
             const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+            const responseAttachments = getAssistantAttachments(req);
             const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
-            if (!contextId || req.archived === true || !isAccepted || !responseText?.trim()) return;
+            if (!contextId || req.archived === true || !isAccepted || (!responseText?.trim() && responseAttachments.length === 0)) return;
 
             const incomingDate = safeConvertToDate(req.updatedAt)
               || safeConvertToDate(req.openclawProcessedAt)
@@ -3073,7 +3129,7 @@ export default function LivePage() {
             snapshot.forEach((docSnap: any) => {
               const req = docSnap.data();
               const responseText = toRenderableConversationText(req.openclawResult?.responseText);
-              if (responseText?.trim()) globalIncomingSeenRef.current.add(docSnap.id);
+              if (responseText?.trim() || getAssistantAttachments(req).length > 0) globalIncomingSeenRef.current.add(docSnap.id);
             });
             globalIncomingReadyRef.current = true;
             return;
@@ -3085,8 +3141,9 @@ export default function LivePage() {
             const requestId = change.doc.id;
             const contextId = req.contextId;
             const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+            const responseAttachments = getAssistantAttachments(req);
             const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
-            if (!contextId || req.archived === true || !isAccepted || !responseText?.trim()) return;
+            if (!contextId || req.archived === true || !isAccepted || (!responseText?.trim() && responseAttachments.length === 0)) return;
             if (globalIncomingSeenRef.current.has(requestId)) return;
 
             const incomingDate = safeConvertToDate(req.updatedAt)
@@ -3108,7 +3165,7 @@ export default function LivePage() {
                 : 'livre';
               try {
                 new window.Notification(`Lótus — [${areaLabel}] ${chatLabel}`, {
-                  body: responseText,
+                  body: responseText || `📎 ${responseAttachments[0]?.name || 'Arquivo'}`,
                   tag: `incoming_${requestId}`,
                 });
               } catch (err) {
@@ -3117,7 +3174,7 @@ export default function LivePage() {
             }
 
             const isRemoteMessage = !latencyMapRef.current[requestId];
-            if (isRemoteMessage && isActive) {
+            if (isRemoteMessage && isActive && responseText?.trim()) {
               console.log('[PULSO_PRESENCE_PROACTIVE_TTS]', { requestId, text: responseText });
               playPresenceSoundCue('speak_start');
               voiceStateRef.current = 'speaking';
@@ -5180,7 +5237,7 @@ ${data.transcription}`, {
           >
             {dynamicAreas.map((area) => {
               const areaId = area.id;
-              const areaContexts = allContextNodes.filter(n => n.areaId === areaId).sort(sortByOrder);
+              const areaContexts = allContextNodes.filter(n => n.areaId === areaId).sort(sortContextsByRecentActivity);
               const isHovered = hoveredAreaId === areaId;
               const isAreaActive = activeAreaId === areaId;
               const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
@@ -5507,7 +5564,7 @@ ${data.transcription}`, {
                   );
                 }
                 const isLotus = msg.sender === 'lotus';
-                if (isLotus && !msg.text) return null;
+                if (isLotus && !msg.text && (!msg.attachments || msg.attachments.length === 0)) return null;
                 return (
                   <div 
                     key={msg.id} 
@@ -5582,6 +5639,21 @@ ${data.transcription}`, {
                                 </div>
                               );
                             }
+                            if (att.mimeType?.startsWith('video/')) {
+                              return (
+                                <div key={att.id} className="mt-1 flex w-full max-w-sm flex-col gap-1">
+                                  <video
+                                    controls
+                                    preload="metadata"
+                                    src={att.url}
+                                    className="max-h-52 w-full rounded-lg border border-white/10 bg-black/20"
+                                  />
+                                  <span className="truncate px-1 text-left text-[9px] font-light text-[#fbf9f5]/40" title={att.name}>
+                                    {att.name}
+                                  </span>
+                                </div>
+                              );
+                            }
                             if (att.type === 'pdf') {
                               return (
                                 <div 
@@ -5626,23 +5698,15 @@ ${data.transcription}`, {
                         </div>
                       )}
 
-                      {/* User Message Timestamp + Reply button */}
+                      {/* User message actions use the same contract as Lótus. */}
                       {!isLotus && msg.sender !== 'system' && (
-                        <div className="flex items-center justify-end gap-3">
-                          <button
-                            onClick={() => setReplyTo({ id: msg.id, sender: msg.sender, text: msg.text })}
-                            className="text-[#fbf9f5]/30 hover:text-white/70 transition-colors bg-transparent border-none cursor-pointer outline-none"
-                            title="Responder"
-                          >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="9 17 4 12 9 7" />
-                              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-                            </svg>
-                          </button>
-                          <span className="text-[9px] text-[#fbf9f5]/40 select-none lowercase">
-                            {formatMessageTimestamp(msg.timestamp)}
-                          </span>
-                        </div>
+                        <MessageActions
+                          msg={msg}
+                          playingMsgId={playingMsgId}
+                          playingState={playingState}
+                          onHearClick={handleHearClick}
+                          onCopyText={handleCopyText}
+                        />
                       )}
 
                       {/* Lótus Handoff Proposals Forms / Actions if applicable */}
@@ -5731,8 +5795,6 @@ ${data.transcription}`, {
                           playingState={playingState}
                           onHearClick={handleHearClick}
                           onCopyText={handleCopyText}
-                          onCopyPackage={handleCopyPackage}
-                          onReply={(m) => setReplyTo({ id: m.id, sender: m.sender, text: m.text })}
                         />
                       )}
 
@@ -6012,6 +6074,10 @@ ${data.transcription}`, {
                       setActiveMesaArtifact(artifact);
                       setIsMesaOpen(true);
                     }}
+                    playingMsgId={playingMsgId}
+                    playingState={playingState}
+                    onHearMessage={handleHearClick}
+                    onCopyMessage={handleCopyText}
                   />
                 </div>
               ))}
@@ -6444,7 +6510,7 @@ ${data.transcription}`, {
               {dynamicAreas.map((area) => {
                 const areaId = area.id;
                 const areaName = area.name || AREA_NAMES[areaId] || areaId.replace('area_', '');
-                const areaContexts = allContextNodes.filter(n => n.areaId === areaId).sort(sortByOrder);
+                const areaContexts = allContextNodes.filter(n => n.areaId === areaId).sort(sortContextsByRecentActivity);
                 const isAreaActive = activeAreaId === areaId;
                 const isExpanded = activeMobileAreaId === areaId;
                 const hasUnreadInArea = areaContexts.some(n => !!unreadContexts[n.contextId]);
