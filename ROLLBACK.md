@@ -10,6 +10,30 @@
 
 ---
 
+# Rollback — Navegador interno e âncoras de leitura (04/10/2026)
+
+Baseline: `8de4d646` em `origin/main`.
+
+## Escopo
+
+- reintegrar o Navegador PULSO lateral na MESA, com sessão Chromium isolada,
+  espaços, coleções, histórico, busca e páginas em curso;
+- preservar o endpoint privado canônico da Tailnet no build desktop;
+- aplicar o mesmo controlador de leitura ao chat solo e a todos os painéis
+  split;
+- abrir conversa lida no fim e conversa não lida no início da primeira
+  resposta nova;
+- disponibilizar “voltar para a mensagem mais recente” em cada painel.
+
+## Reversão
+
+Reverter os commits desta alteração, executar `npm run build -- --webpack`,
+publicar apenas o Firebase Hosting e reinstalar o artefato Intel anterior. A
+reversão não altera o runtime isolado do navegador, perfil, cookies, downloads,
+Firestore, relay ou Gateway OpenClaw.
+
+---
+
 - Escopo: manter o double opt-in existente e redirecionar confirmações válidas
   para `https://felipedutra.com/correspondencias/obrigado/`; estados de erro,
   expiração e descadastro ficam na landing de Correspondências.

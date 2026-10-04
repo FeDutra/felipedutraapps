@@ -6,6 +6,7 @@ import { BrowserMesaPanel } from '../components/BrowserMesaPanel';
 import { motion } from 'framer-motion';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
+import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
 import { listen } from '@tauri-apps/api/event';
 import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
 
@@ -1217,6 +1218,7 @@ export default function LivePage() {
 
 
   const pageLoadTimeRef = React.useRef(new Date());
+  const [pageLoadReadFallback] = React.useState(() => new Date().toISOString());
   const [lastReadTimes, setLastReadTimes] = React.useState<Record<string, string>>({});
   const [latestIncomingTimes, setLatestIncomingTimes] = React.useState<Record<string, string>>({});
 
@@ -2229,25 +2231,17 @@ export default function LivePage() {
     console.log('[PULSO_VOICE_STATE_CHANGED]', { state: voiceState });
   }, [voiceState]);
 
-  const chatEndRef = React.useRef<HTMLDivElement>(null);
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
-  const [showScrollButton, setShowScrollButton] = React.useState(false);
-
-  const scrollToBottom = React.useCallback((smooth = true) => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      container.scrollTop = container.scrollHeight;
-      chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
-    }
-  }, []);
-
-  const handleScroll = React.useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    const container = scrollContainerRef.current;
-    const threshold = 120;
-    const isScrolledUp = container.scrollHeight - container.scrollTop - container.clientHeight > threshold;
-    setShowScrollButton(isScrolledUp);
-  }, []);
+  const {
+    scrollRef: scrollContainerRef,
+    showReturnToLatest: showScrollButton,
+    scrollToLatest: scrollToBottom,
+    handleScroll,
+  } = useConversationReadingAnchor({
+    contextId: activeContextNode.contextId,
+    lastReadAt: lastReadTimes[activeContextNode.contextId] || pageLoadReadFallback,
+    messages: currentMessages,
+    bottomOffset: inputHeight,
+  });
 
 
 
@@ -2502,39 +2496,6 @@ export default function LivePage() {
       setSubmittingExecutionId(null);
     }
   };
-  // Unified robust scroll-to-bottom controller.
-  // Fires when the active session changes (switching chats) or new messages arrive.
-  // Uses requestAnimationFrame so we scroll AFTER the browser has painted the new content.
-  React.useEffect(() => {
-    if (currentMessages.length === 0) return;
-
-    // Immediate jump (no animation) to ensure the correct position before paint
-    scrollToBottom(false);
-
-    // Then cascade with smooth passes to catch async content (images, lazy markdown, typing bubble)
-    let raf: number;
-    const scheduleRaf = () => {
-      raf = requestAnimationFrame(() => scrollToBottom(false));
-    };
-    scheduleRaf();
-
-    const t1 = setTimeout(() => scrollToBottom(true), 80);
-    const t2 = setTimeout(() => scrollToBottom(true), 300);
-    const t3 = setTimeout(() => scrollToBottom(true), 700);
-    const t4 = setTimeout(() => scrollToBottom(true), 1500);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
-  }, [currentMessages.length, isTyping, activeContextNode.contextId, scrollToBottom]);
-
-  React.useEffect(() => {
-    scrollToBottom(false);
-  }, [inputHeight, scrollToBottom]);
   // Load database state once
   React.useEffect(() => {
     let cancelled = false;
@@ -5634,6 +5595,9 @@ ${data.transcription}`, {
                 return (
                   <div 
                     key={msg.id} 
+                    data-message-id={msg.id}
+                    data-message-sender={msg.sender}
+                    data-message-timestamp={msg.timestamp.toISOString()}
                     className={`flex min-w-0 w-full max-w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
                   >
                     <div className="min-w-0 max-w-[85%] space-y-1">
@@ -5985,7 +5949,6 @@ ${data.transcription}`, {
               </div>
             )}
 
-            <div ref={chatEndRef} />
           </div>
 
           {/* Floating button to return to bottom */}
@@ -6182,6 +6145,7 @@ ${data.transcription}`, {
                     playingState={playingState}
                     onHearMessage={handleHearClick}
                     onCopyMessage={handleCopyText}
+                    lastReadAt={lastReadTimes[contextNode.contextId] || pageLoadReadFallback}
                   />
                 </div>
               ))}

@@ -3,12 +3,13 @@ import React from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
-import { X } from 'lucide-react';
+import { ArrowDown, X } from 'lucide-react';
 import type { PulsoContextNode } from '../types/pulso.types';
 import type { MesaArtifact } from './MesaPanel';
 import { PulsoMessageContent } from './chat/PulsoMessageContent';
 import { MessageActions, type Message as RenderMessage } from './chat/MessageRenderer';
 import { MessageAttachments, type RenderableAttachment } from './chat/MessageAttachments';
+import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
 
 interface PaneMessage extends RenderMessage {
   sender: 'user' | 'lotus';
@@ -27,6 +28,7 @@ interface SecondaryChatPaneProps {
   playingState: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
   onHearMessage: (message: RenderMessage) => void;
   onCopyMessage: (message: RenderMessage) => void;
+  lastReadAt?: string | null;
 }
 
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
@@ -72,10 +74,20 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
   playingState,
   onHearMessage,
   onCopyMessage,
+  lastReadAt,
 }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const {
+    scrollRef,
+    showReturnToLatest,
+    scrollToLatest,
+    handleScroll,
+  } = useConversationReadingAnchor({
+    contextId: contextNode.contextId,
+    lastReadAt,
+    messages,
+  });
 
   React.useEffect(() => {
     if (!db) return;
@@ -141,10 +153,6 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
     return () => unsubscribe();
   }, [contextNode.contextId]);
 
-  React.useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages.length]);
-
   return (
     <div
       className={`pulso-split-pane relative h-full w-full overflow-hidden transition-opacity duration-300 ${isFocused ? 'pulso-split-pane-active opacity-100' : 'opacity-80'}`}
@@ -177,7 +185,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
         </button>
       </div>
 
-      <div ref={scrollRef} className="absolute inset-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto no-scrollbar chat-fade-mask px-4 md:px-6 py-6 pt-12 space-y-8">
+      <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto no-scrollbar chat-fade-mask px-4 md:px-6 py-6 pt-12 space-y-8">
         {messages.map((msg) => msg.isProgressUpdate ? (
           <div key={msg.id} className="flex min-w-0 w-full max-w-full justify-start animate-fade-in py-1">
             <div className="min-w-0 w-full max-w-[85%] border-l border-white/10 pl-3 flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
@@ -186,7 +194,13 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
             </div>
           </div>
         ) : (
-          <div key={msg.id} className={`group/message flex min-w-0 w-full max-w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}>
+          <div
+            key={msg.id}
+            data-message-id={msg.id}
+            data-message-sender={msg.sender}
+            data-message-timestamp={msg.timestamp.toISOString()}
+            className={`group/message flex min-w-0 w-full max-w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}
+          >
             <div className="min-w-0 max-w-[85%] space-y-1 select-text">
               <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
                 {msg.sender === 'lotus' ? 'lótus' : 'fê'}
@@ -221,6 +235,18 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
           </div>
         )}
       </div>
+      {showReturnToLatest && (
+        <button
+          type="button"
+          data-message-action
+          onClick={(event) => { event.stopPropagation(); scrollToLatest(true); }}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 p-2 bg-[#fbf9f5]/15 hover:bg-[#fbf9f5]/25 border border-[#fbf9f5]/20 backdrop-blur-md rounded-full text-white/80 hover:text-white transition-all duration-300 shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 animate-fade-in"
+          title="Voltar para a mensagem mais recente"
+          aria-label="Voltar para a mensagem mais recente"
+        >
+          <ArrowDown size={14} />
+        </button>
+      )}
     </div>
   );
 };

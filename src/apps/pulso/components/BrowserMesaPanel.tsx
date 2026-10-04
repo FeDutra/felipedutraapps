@@ -42,7 +42,13 @@ const INITIAL_COLLECTIONS: Record<SpaceId, Collection[]> = {
 
 // Uma sessão real, externa e isolada. A PULSO desenha a cartografia e comanda
 // a sessão pela ponte privada /api; ela nunca lê ou armazena cookies.
-const BROWSER_REMOTE_URL = (process.env.NEXT_PUBLIC_PULSO_BROWSER_URL || '').replace(/\/$/, '');
+// The browser runtime is intentionally private to Fe's Tailnet. CI may
+// override this endpoint, but the desktop build must retain the proven
+// canonical bridge instead of silently shipping a non-functional panel.
+const BROWSER_REMOTE_URL = (
+  process.env.NEXT_PUBLIC_PULSO_BROWSER_URL
+  || 'https://srv1499601.tailb70e29.ts.net:8443'
+).replace(/\/$/, '');
 const BROWSER_API_URL = BROWSER_REMOTE_URL ? `${BROWSER_REMOTE_URL}/api` : '';
 
 const pageLabel = (page: RemotePage) => {
@@ -106,15 +112,18 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
   const [hydrated, setHydrated] = React.useState(false);
 
   React.useEffect(() => {
-    try {
-      const savedCollections = localStorage.getItem(STATE_KEY);
-      const savedHistory = localStorage.getItem(HISTORY_KEY);
-      if (savedCollections) setCollections(restoreCollections(JSON.parse(savedCollections)));
-      if (savedHistory) setHistory(JSON.parse(savedHistory));
-    } catch {
-      // Persistência local é uma conveniência; a sessão nunca depende dela.
-    }
-    setHydrated(true);
+    const hydrate = window.setTimeout(() => {
+      try {
+        const savedCollections = localStorage.getItem(STATE_KEY);
+        const savedHistory = localStorage.getItem(HISTORY_KEY);
+        if (savedCollections) setCollections(restoreCollections(JSON.parse(savedCollections)));
+        if (savedHistory) setHistory(JSON.parse(savedHistory));
+      } catch {
+        // Persistência local é uma conveniência; a sessão nunca depende dela.
+      }
+      setHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(hydrate);
   }, []);
 
   React.useEffect(() => {
@@ -158,9 +167,12 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
 
   React.useEffect(() => {
     if (!isOpen || !BROWSER_API_URL) return undefined;
-    void refreshPages();
+    const initialRefresh = window.setTimeout(() => void refreshPages(), 0);
     const timer = window.setInterval(() => void refreshPages(), 2200);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(timer);
+    };
   }, [isOpen, refreshPages]);
 
   const navigate = React.useCallback(async (rawUrl: string) => {
@@ -173,8 +185,11 @@ export function BrowserMesaPanel({ isOpen, onClose, onToggleCollapse, onExpandCh
 
   React.useEffect(() => {
     if (!requestedUrl || !isOpen) return;
-    void navigate(requestedUrl).catch((error) => setBridgeError(error instanceof Error ? error.message : 'não foi possível abrir'));
-    onRequestedUrlConsumed?.();
+    const navigation = window.setTimeout(() => {
+      void navigate(requestedUrl).catch((error) => setBridgeError(error instanceof Error ? error.message : 'não foi possível abrir'));
+      onRequestedUrlConsumed?.();
+    }, 0);
+    return () => window.clearTimeout(navigation);
   }, [isOpen, navigate, onRequestedUrlConsumed, requestedUrl]);
 
   const suggestions = React.useMemo(() => {
