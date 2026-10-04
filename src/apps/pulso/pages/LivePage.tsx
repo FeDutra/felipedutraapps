@@ -53,6 +53,208 @@ interface SortableChatItemDesktopProps {
 // a limitação de forma humana em vez de expor infraestrutura.
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
 
+interface PulsoModelCatalogEntry {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow: number;
+  reasoning: boolean;
+  thinkingLevels: Array<{ id: string; label: string }>;
+  thinkingDefault: string;
+  tags?: string[];
+}
+
+interface SessionModelSelectorProps {
+  session: PulsoContextNode;
+  models: PulsoModelCatalogEntry[];
+  onApply: (selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number }) => Promise<void>;
+}
+
+const providerMark = (provider: string) => {
+  const normalized = provider.toLowerCase();
+  if (normalized.includes('anthropic') || normalized.includes('claude')) return 'C';
+  if (normalized.includes('gemini') || normalized.includes('google')) return 'G';
+  if (normalized.includes('openai') || normalized.includes('codex')) return 'O';
+  return provider.slice(0, 1).toUpperCase() || '·';
+};
+
+const formatTokenCount = (value: number) => {
+  if (!value) return '0';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}m`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
+  return String(value);
+};
+
+function SessionModelSelector({ session, models, onApply }: SessionModelSelectorProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [provider, setProvider] = React.useState(session.selectedModelProvider || '');
+  const [modelId, setModelId] = React.useState(session.selectedModelId || '');
+  const [thinkingLevel, setThinkingLevel] = React.useState(session.selectedThinkingLevel || '');
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const defaultModel = React.useMemo(
+    () => models.find(model => model.tags?.includes('default')) || models[0] || null,
+    [models],
+  );
+  const activeModel = React.useMemo(
+    () => models.find(model => model.id === (session.selectedModelId || modelId)
+      && (!session.selectedModelProvider || model.provider === session.selectedModelProvider)) || defaultModel,
+    [defaultModel, modelId, models, session.selectedModelId, session.selectedModelProvider],
+  );
+  const providers = React.useMemo(
+    () => Array.from(new Set(models.map(model => model.provider))),
+    [models],
+  );
+  const draftProvider = provider || activeModel?.provider || providers[0] || '';
+  const providerModels = React.useMemo(
+    () => models.filter(model => model.provider === draftProvider),
+    [draftProvider, models],
+  );
+  const draftModel = providerModels.find(model => model.id === modelId)
+    || (activeModel?.provider === draftProvider ? activeModel : null)
+    || providerModels[0]
+    || null;
+  const draftThinking = draftModel?.thinkingLevels.some(level => level.id === thinkingLevel)
+    ? thinkingLevel
+    : (draftModel?.thinkingDefault || draftModel?.thinkingLevels[0]?.id || 'off');
+  const usedTokens = session.modelTotalTokens || 0;
+  const contextTokens = session.modelContextTokens || activeModel?.contextWindow || 0;
+  const usagePct = contextTokens > 0 ? Math.min(100, Math.max(0, (usedTokens / contextTokens) * 100)) : 0;
+
+  const openSelector = () => {
+    setProvider(session.selectedModelProvider || defaultModel?.provider || '');
+    setModelId(session.selectedModelId || defaultModel?.id || '');
+    setThinkingLevel(session.selectedThinkingLevel || defaultModel?.thinkingDefault || '');
+    setIsOpen(true);
+  };
+
+  const applySelection = async () => {
+    if (!draftModel) return;
+    setIsSaving(true);
+    try {
+      await onApply({
+        provider: draftModel.provider,
+        modelId: draftModel.id,
+        modelName: draftModel.name,
+        thinkingLevel: draftThinking,
+        contextWindow: draftModel.contextWindow,
+      });
+      setIsOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => isOpen ? setIsOpen(false) : openSelector()}
+        disabled={models.length === 0}
+        className="flex items-center gap-1 px-1.5 py-1 text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none disabled:opacity-20 disabled:cursor-wait"
+        title={activeModel ? `${activeModel.name} · ${session.selectedThinkingLevel || activeModel.thinkingDefault}` : 'sincronizando modelos'}
+        aria-label="Selecionar modelo desta conversa"
+      >
+        <span className="w-4 h-4 rounded-full border border-white/15 flex items-center justify-center text-[7px] font-medium tracking-none">
+          {providerMark(activeModel?.provider || '')}
+        </span>
+        <span className="hidden lg:inline text-[8px] tracking-[0.12em] uppercase max-w-[56px] truncate">
+          {activeModel?.name.replace(/^Claude\s+|^GPT-|^Gemini\s+/i, '') || 'modelo'}
+        </span>
+        <span className="hidden xl:inline text-[7px] text-white/25 uppercase">{session.selectedThinkingLevel || activeModel?.thinkingDefault || ''}</span>
+      </button>
+
+      {isOpen && (
+        <>
+          <button
+            className="fixed inset-0 z-[68] bg-transparent border-none cursor-default"
+            onClick={() => setIsOpen(false)}
+            aria-label="Fechar seletor de modelo"
+          />
+          <div className="absolute z-[69] bottom-[calc(100%+14px)] left-0 w-[min(340px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto no-scrollbar rounded-2xl border border-white/10 bg-[#0c0c0c]/92 backdrop-blur-2xl shadow-2xl p-4 text-left">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-[8px] tracking-[0.22em] uppercase text-white/35">modelo da conversa</p>
+                <p className="text-[10px] text-white/65 mt-1 truncate max-w-[230px]">{session.label}</p>
+              </div>
+              <button onClick={() => setIsOpen(false)} className="p-1 text-white/35 hover:text-white bg-transparent border-none cursor-pointer"><X size={12} /></button>
+            </div>
+
+            <div className="flex gap-4 mb-4 overflow-x-auto no-scrollbar">
+              {providers.map(item => (
+                <button
+                  key={item}
+                  onClick={() => {
+                    const nextModel = models.find(model => model.provider === item);
+                    setProvider(item);
+                    setModelId(nextModel?.id || '');
+                    setThinkingLevel(nextModel?.thinkingDefault || '');
+                  }}
+                  className={`text-[8px] tracking-[0.14em] uppercase bg-transparent border-none cursor-pointer pb-1 transition-colors ${draftProvider === item ? 'text-white border-b border-white/60' : 'text-white/30 hover:text-white/70'}`}
+                >
+                  {item.replace('-cli', '')}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-1 mb-4">
+              {providerModels.map(model => (
+                <button
+                  key={`${model.provider}/${model.id}`}
+                  onClick={() => {
+                    setModelId(model.id);
+                    setThinkingLevel(model.thinkingDefault || model.thinkingLevels[0]?.id || 'off');
+                  }}
+                  className={`w-full flex items-center justify-between gap-3 px-2 py-2 rounded-lg bg-transparent border-none cursor-pointer text-left transition-colors ${draftModel?.id === model.id ? 'bg-white/[0.08] text-white' : 'text-white/45 hover:bg-white/[0.04] hover:text-white/80'}`}
+                >
+                  <span className="text-[10px] font-light truncate">{model.name}</span>
+                  <span className="text-[7px] tracking-[0.12em] uppercase text-white/25 shrink-0">{formatTokenCount(model.contextWindow)}</span>
+                </button>
+              ))}
+            </div>
+
+            {draftModel && draftModel.thinkingLevels.length > 0 && (
+              <div className="mb-4">
+                <p className="text-[7px] tracking-[0.18em] uppercase text-white/25 mb-2">intensidade</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {draftModel.thinkingLevels.map(level => (
+                    <button
+                      key={level.id}
+                      onClick={() => setThinkingLevel(level.id)}
+                      className={`px-2 py-1 rounded-full border text-[7px] tracking-[0.1em] uppercase cursor-pointer transition-colors ${draftThinking === level.id ? 'border-white/35 bg-white/10 text-white' : 'border-white/10 bg-transparent text-white/30 hover:text-white/65'}`}
+                    >
+                      {level.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between text-[7px] tracking-[0.12em] uppercase text-white/25 mb-1.5">
+                <span>contexto</span>
+                <span>{formatTokenCount(usedTokens)} / {formatTokenCount(contextTokens)}</span>
+              </div>
+              <div className="h-px bg-white/10 overflow-hidden">
+                <div className="h-full bg-white/45 transition-all" style={{ width: `${usagePct}%` }} />
+              </div>
+            </div>
+
+            <button
+              onClick={applySelection}
+              disabled={!draftModel || isSaving}
+              className="w-full py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] disabled:opacity-30 text-[8px] tracking-[0.18em] uppercase text-white border border-white/10 cursor-pointer transition-colors"
+            >
+              {isSaving ? 'salvando…' : 'usar nesta conversa'}
+            </button>
+            <p className="text-[7px] leading-relaxed text-white/20 mt-2.5">A mudança é validada pelo OpenClaw na próxima mensagem.</p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function toRenderableConversationText(value: unknown): string {
   const text = typeof value === 'string' ? value : '';
   if (TECHNICAL_HISTORY_OMISSION.test(text)) {
@@ -612,6 +814,14 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   lastMessageAt: session.lastMessageAt,
   updatedAt: session.updatedAt,
   order: session.order,
+  selectedModelProvider: session.selectedModelProvider,
+  selectedModelId: session.selectedModelId,
+  selectedModelName: session.selectedModelName,
+  selectedThinkingLevel: session.selectedThinkingLevel,
+  modelContextTokens: session.modelContextTokens,
+  modelTotalTokens: session.modelTotalTokens,
+  modelUsageFresh: session.modelUsageFresh,
+  modelStateUpdatedAt: session.modelStateUpdatedAt,
 });
 
 /**
@@ -993,6 +1203,7 @@ export default function LivePage() {
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   /** v2: sessions loaded from Firestore pulso_sessions (replaces customContextNodes + INITIAL_CONTEXT_NODES) */
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
+  const [modelCatalog, setModelCatalog] = React.useState<PulsoModelCatalogEntry[]>([]);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
@@ -1186,6 +1397,21 @@ export default function LivePage() {
     return () => { if (unsubscribe) unsubscribe(); };
   }, [db, loading]);
 
+  React.useEffect(() => {
+    if (!db || loading) return;
+    return onSnapshot(
+      doc(db, 'workspaces/felipe_dutra/pulso_meta/model_catalog'),
+      snapshot => {
+        const data = snapshot.data();
+        const models = Array.isArray(data?.models) ? data.models : [];
+        setModelCatalog(models.filter((model: any) => (
+          model && typeof model.id === 'string' && typeof model.provider === 'string'
+        )) as PulsoModelCatalogEntry[]);
+      },
+      error => console.warn('[PULSO_MODEL_CATALOG] subscription failed', error),
+    );
+  }, [db, loading]);
+
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1225,7 +1451,11 @@ export default function LivePage() {
   const sortContextsByRecentActivity = React.useCallback((a: PulsoContextNode, b: PulsoContextNode) => {
     const activityTime = (node: PulsoContextNode) => {
       const incoming = latestIncomingTimes[node.contextId];
-      return safeConvertToDate(incoming || node.lastMessageAt || node.updatedAt)?.getTime() || 0;
+      return Math.max(
+        safeConvertToDate(incoming)?.getTime() || 0,
+        safeConvertToDate(node.lastMessageAt)?.getTime() || 0,
+        safeConvertToDate(node.updatedAt)?.getTime() || 0,
+      );
     };
     const recentDelta = activityTime(b) - activityTime(a);
     if (recentDelta !== 0) return recentDelta;
@@ -1633,6 +1863,25 @@ export default function LivePage() {
     setFocusedPaneContextId(newNode.contextId);
     return true;
   }, [allContextNodes]);
+
+  const handleApplySessionModel = React.useCallback(async (
+    contextId: string,
+    selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number },
+  ) => {
+    if (!db) throw new Error('firestore_unavailable');
+    const patch = {
+      selectedModelProvider: selection.provider,
+      selectedModelId: selection.modelId,
+      selectedModelName: selection.modelName,
+      selectedThinkingLevel: selection.thinkingLevel,
+      modelContextTokens: selection.contextWindow,
+      modelStateUpdatedAt: new Date().toISOString(),
+    };
+    await updateDoc(doc(db, `workspaces/felipe_dutra/pulso_sessions/${contextId}`), patch);
+    setSessions(previous => previous.map(session => (
+      session.contextId === contextId ? { ...session, ...patch } : session
+    )));
+  }, [db]);
 
   const dynamicAreas = React.useMemo(() => {
     const list: Array<{ id: string; name: string; order: number }> = [];
@@ -3300,6 +3549,14 @@ export default function LivePage() {
       deliveryMode: "firestore_sync",
       originType: "user_ui"
     };
+
+    if (activeSession?.selectedModelId && activeSession.selectedModelProvider) {
+      lotusPayload.modelSelection = {
+        provider: activeSession.selectedModelProvider,
+        modelId: activeSession.selectedModelId,
+        thinkingLevel: activeSession.selectedThinkingLevel || 'medium',
+      };
+    }
 
     if (routeResult.areaRef) lotusPayload.areaRef = routeResult.areaRef;
     if (routeResult.routing) lotusPayload.routing = routeResult.routing;
@@ -6371,6 +6628,12 @@ ${data.transcription}`, {
               document.body
             )}
           </div>
+
+          <SessionModelSelector
+            session={sendTargetContextNode}
+            models={modelCatalog}
+            onApply={(selection) => handleApplySessionModel(sendTargetContextNode.contextId, selection)}
+          />
 
         {/* Quote preview bar was moved above the input row — removed from here */}
 

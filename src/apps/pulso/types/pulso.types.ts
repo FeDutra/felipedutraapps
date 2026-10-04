@@ -254,6 +254,14 @@ export interface PulsoContextNode {
   runtimeStatus?: string;
   errorMessage?: string | null;
   order?: number;
+  selectedModelProvider?: string;
+  selectedModelId?: string;
+  selectedModelName?: string;
+  selectedThinkingLevel?: string;
+  modelContextTokens?: number;
+  modelTotalTokens?: number;
+  modelUsageFresh?: boolean;
+  modelStateUpdatedAt?: string;
 }
 
 /**
@@ -292,6 +300,17 @@ export interface Session {
   errorMessage?: string | null;
   fallbackAllowed?: boolean;
   bootstrapVersion?: string;
+
+  // Seleção cognitiva por sessão. O runtime valida estes campos contra o
+  // catálogo vivo do Gateway antes de aplicá-los.
+  selectedModelProvider?: string;
+  selectedModelId?: string;
+  selectedModelName?: string;
+  selectedThinkingLevel?: string;
+  modelContextTokens?: number;
+  modelTotalTokens?: number;
+  modelUsageFresh?: boolean;
+  modelStateUpdatedAt?: string;
 }
 
 export interface PulsoRequest {
@@ -311,6 +330,11 @@ export interface PulsoRequest {
   sessionBootstrapStatus?: 'pending' | 'bootstrapping' | 'ready' | 'error' | 'disabled' | 'migrating';
   deliveryMode?: 'firestore_sync' | string;
   originType?: 'user_ui' | string;
+  modelSelection?: {
+    provider: string;
+    modelId: string;
+    thinkingLevel: string;
+  };
 
   areaRef?: string | null;
   projectRef?: string | null;

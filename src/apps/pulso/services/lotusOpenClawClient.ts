@@ -42,6 +42,11 @@ export interface LotusSendPayload {
   mediaPath?: string;
   mediaType?: string;
   mediaFileName?: string;
+  modelSelection?: {
+    provider: string;
+    modelId: string;
+    thinkingLevel: string;
+  };
 }
 
 const cleanUndefined = (obj: any): any => {
@@ -102,7 +107,8 @@ export const lotusOpenClawClient = {
       attachments: payload.attachments || null,
       mediaPath: payload.mediaPath || null,
       mediaType: payload.mediaType || null,
-      mediaFileName: payload.mediaFileName || null
+      mediaFileName: payload.mediaFileName || null,
+      modelSelection: payload.modelSelection || null,
     };
 
     const cleanPayload = cleanUndefined(reqPayload);
