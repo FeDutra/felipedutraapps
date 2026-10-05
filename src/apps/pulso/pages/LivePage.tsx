@@ -1360,7 +1360,15 @@ export default function LivePage() {
           (snapshot) => {
             const loaded: PulsoContextNode[] = [];
             snapshot.forEach((docSnap) => {
-              const data = docSnap.data() as Session;
+              const raw = docSnap.data() as Session & { documentKind?: string; models?: PulsoModelCatalogEntry[] };
+              if (raw.documentKind === 'model_catalog') {
+                const models = Array.isArray(raw.models) ? raw.models : [];
+                setModelCatalog(models.filter(model => (
+                  model && typeof model.id === 'string' && typeof model.provider === 'string'
+                )));
+                return;
+              }
+              const data = raw as Session;
               if (!data.archived) {
                 loaded.push(sessionToContextNode({ ...data, id: docSnap.id }));
               }
@@ -1396,22 +1404,6 @@ export default function LivePage() {
 
     return () => { if (unsubscribe) unsubscribe(); };
   }, [db, loading]);
-
-  React.useEffect(() => {
-    if (!db || loading) return;
-    return onSnapshot(
-      doc(db, 'workspaces/felipe_dutra/pulso_meta/model_catalog'),
-      snapshot => {
-        const data = snapshot.data();
-        const models = Array.isArray(data?.models) ? data.models : [];
-        setModelCatalog(models.filter((model: any) => (
-          model && typeof model.id === 'string' && typeof model.provider === 'string'
-        )) as PulsoModelCatalogEntry[]);
-      },
-      error => console.warn('[PULSO_MODEL_CATALOG] subscription failed', error),
-    );
-  }, [db, loading]);
-
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
