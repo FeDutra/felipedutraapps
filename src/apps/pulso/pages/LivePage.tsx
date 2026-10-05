@@ -164,14 +164,14 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
         <span className="hidden xl:inline text-[7px] text-white/25 uppercase">{session.selectedThinkingLevel || activeModel?.thinkingDefault || ''}</span>
       </button>
 
-      {isOpen && (
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <>
           <button
             className="fixed inset-0 z-[68] bg-transparent border-none cursor-default"
             onClick={() => setIsOpen(false)}
             aria-label="Fechar seletor de modelo"
           />
-          <div className="absolute z-[69] bottom-[calc(100%+14px)] left-0 w-[min(340px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto no-scrollbar rounded-2xl border border-white/10 bg-[#0c0c0c]/92 backdrop-blur-2xl shadow-2xl p-4 text-left">
+          <div className="fixed z-[69] bottom-20 left-1/2 -translate-x-1/2 w-[min(340px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto no-scrollbar rounded-2xl border border-white/10 bg-[#0c0c0c]/92 backdrop-blur-2xl shadow-2xl p-4 text-left">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-[8px] tracking-[0.22em] uppercase text-white/35">modelo da conversa</p>
@@ -249,7 +249,8 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
             </button>
             <p className="text-[7px] leading-relaxed text-white/20 mt-2.5">A mudança é validada pelo OpenClaw na próxima mensagem.</p>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
