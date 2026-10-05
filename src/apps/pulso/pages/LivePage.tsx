@@ -85,6 +85,31 @@ const formatTokenCount = (value: number) => {
   return String(value);
 };
 
+const MODEL_CATALOG_FALLBACK: PulsoModelCatalogEntry[] = [
+  {
+    id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'anthropic', contextWindow: 1_000_000,
+    contextWindows: [], contextWindowDefault: '', reasoning: true,
+    thinkingLevels: ['off', 'minimal', 'low', 'medium', 'adaptive', 'high', 'xhigh', 'max'].map(id => ({ id, label: id })),
+    thinkingDefault: 'medium', tags: ['configured'],
+  },
+  {
+    id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'gemini', contextWindow: 128_000,
+    contextWindows: [], contextWindowDefault: '', reasoning: false,
+    thinkingLevels: [{ id: 'off', label: 'off' }], thinkingDefault: 'off', tags: ['configured'],
+  },
+  ...[
+    ['gpt-6-astra', 'GPT-6-Astra', 872_000],
+    ['gpt-5.6-sol', 'GPT-5.6-Sol', 372_000],
+    ['gpt-5.6-terra', 'GPT-5.6-Terra', 372_000],
+    ['gpt-5.6-luna', 'GPT-5.6-Luna', 372_000],
+  ].map(([id, name, contextWindow]) => ({
+    id: String(id), name: String(name), provider: 'openai', contextWindow: Number(contextWindow),
+    contextWindows: [], contextWindowDefault: '', reasoning: true,
+    thinkingLevels: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => ({ id: level, label: level })),
+    thinkingDefault: 'medium', tags: id === 'gpt-5.6-sol' ? ['default', 'configured'] : [],
+  })),
+];
+
 function SessionModelSelector({ session, models, onApply }: SessionModelSelectorProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [provider, setProvider] = React.useState(session.selectedModelProvider || '');
@@ -1204,7 +1229,7 @@ export default function LivePage() {
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   /** v2: sessions loaded from Firestore pulso_sessions (replaces customContextNodes + INITIAL_CONTEXT_NODES) */
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
-  const [modelCatalog, setModelCatalog] = React.useState<PulsoModelCatalogEntry[]>([]);
+  const [modelCatalog, setModelCatalog] = React.useState<PulsoModelCatalogEntry[]>(MODEL_CATALOG_FALLBACK);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
