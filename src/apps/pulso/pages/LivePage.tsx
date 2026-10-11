@@ -58,16 +58,42 @@ interface PulsoModelCatalogEntry {
   name: string;
   provider: string;
   contextWindow: number;
+  contextWindows?: Array<{ id: string; label: string; contextWindow: number }>;
+  contextWindowDefault?: string;
   reasoning: boolean;
   thinkingLevels: Array<{ id: string; label: string }>;
   thinkingDefault: string;
   tags?: string[];
+  available?: boolean;
+  availabilityReason?: string;
+  runtimeProvider?: string;
+  lastSeenAt?: string;
+}
+
+interface PulsoProviderCatalogEntry {
+  id: string;
+  displayName?: string;
+  authProvider?: string;
+  authStatus?: string;
+  availability?: 'available' | 'unavailable' | 'unknown' | string;
+  availabilityReason?: string;
+  configured?: boolean;
+  modelCount?: number;
+  plan?: string;
+  accountEmail?: string;
+  usageUpdatedAt?: number;
+  usageWindows?: Array<{ label: string; usedPercent: number; resetAt: number }>;
+  quotaExhausted?: boolean;
+  quotaResetAt?: number;
+  profiles?: Array<{ id: string; type: string; status: string; expiresAt?: number; expiresInLabel?: string }>;
+  profileOrder?: string[];
 }
 
 interface SessionModelSelectorProps {
   session: PulsoContextNode;
   models: PulsoModelCatalogEntry[];
-  onApply: (selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number }) => Promise<void>;
+  providers: PulsoProviderCatalogEntry[];
+  onApply: (selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number; authProfileId?: string }) => Promise<void>;
 }
 
 const providerMark = (provider: string) => {
@@ -76,6 +102,15 @@ const providerMark = (provider: string) => {
   if (normalized.includes('gemini') || normalized.includes('google')) return 'G';
   if (normalized.includes('openai') || normalized.includes('codex')) return 'O';
   return provider.slice(0, 1).toUpperCase() || '·';
+};
+
+const providerLabel = (provider: string, state?: PulsoProviderCatalogEntry) => {
+  if (state?.displayName && state.displayName.toLowerCase() !== provider.toLowerCase()) return state.displayName;
+  if (provider === 'anthropic') return 'Claude';
+  if (provider === 'claude-cli') return 'Claude CLI';
+  if (provider === 'openai') return 'OpenAI';
+  if (provider === 'gemini' || provider === 'google-gemini-cli') return 'Gemini';
+  return provider;
 };
 
 const formatTokenCount = (value: number) => {
@@ -93,15 +128,25 @@ const MODEL_CATALOG_FALLBACK: PulsoModelCatalogEntry[] = [
     thinkingDefault: 'medium', tags: ['configured'],
   },
   {
+    id: 'claude-opus-5', name: 'Claude Opus 5', provider: 'anthropic', contextWindow: 1_000_000,
+    contextWindows: [], contextWindowDefault: '', reasoning: true,
+    thinkingLevels: ['off', 'minimal', 'low', 'medium', 'adaptive', 'high', 'xhigh', 'max'].map(id => ({ id, label: id })),
+    thinkingDefault: 'medium', tags: ['configured'],
+  },
+  {
     id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'gemini', contextWindow: 128_000,
     contextWindows: [], contextWindowDefault: '', reasoning: false,
     thinkingLevels: [{ id: 'off', label: 'off' }], thinkingDefault: 'off', tags: ['configured'],
   },
+  {
+    id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'gemini', contextWindow: 128_000,
+    contextWindows: [], contextWindowDefault: '', reasoning: false,
+    thinkingLevels: [{ id: 'off', label: 'off' }], thinkingDefault: 'off', tags: [],
+  },
   ...[
-    ['gpt-6-astra', 'GPT-6-Astra', 872_000],
+    ['gpt-5.4', 'GPT-5.4', 272_000],
     ['gpt-5.6-sol', 'GPT-5.6-Sol', 372_000],
     ['gpt-5.6-terra', 'GPT-5.6-Terra', 372_000],
-    ['gpt-5.6-luna', 'GPT-5.6-Luna', 372_000],
   ].map(([id, name, contextWindow]) => ({
     id: String(id), name: String(name), provider: 'openai', contextWindow: Number(contextWindow),
     contextWindows: [], contextWindowDefault: '', reasoning: true,
@@ -110,12 +155,46 @@ const MODEL_CATALOG_FALLBACK: PulsoModelCatalogEntry[] = [
   })),
 ];
 
-function SessionModelSelector({ session, models, onApply }: SessionModelSelectorProps) {
+const PROVIDER_CATALOG_FALLBACK: PulsoProviderCatalogEntry[] = [
+  { id: 'anthropic', displayName: 'Claude', configured: true, availability: 'unknown', authStatus: 'unknown', profiles: [] },
+  { id: 'gemini', displayName: 'Gemini', configured: true, availability: 'unknown', authStatus: 'static', profiles: [] },
+  { id: 'openai', displayName: 'OpenAI', configured: true, availability: 'unknown', authStatus: 'unknown', profiles: [] },
+];
+
+const formatResetAt = (value?: number) => {
+  if (!value) return 'sem previsão';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date(value));
+};
+
+const providerStatusLabel = (provider?: PulsoProviderCatalogEntry) => {
+  if (!provider) return 'sem telemetria';
+  if (provider.quotaExhausted || provider.availability === 'quota_exhausted') return 'cota esgotada';
+  if (provider.availability === 'available') return 'disponível';
+  if (provider.authStatus === 'expired') return 'autenticação expirada';
+  if (provider.availability === 'unavailable') return 'indisponível';
+  return 'verificação pendente';
+};
+
+const modelSwitchErrorLabel = (value: string) => {
+  if (value.includes('requested_provider_quota_exhausted')) return 'A cota deste provider está esgotada. Escolha outro agora ou aguarde a reinicialização indicada.';
+  if (value.includes('requested_model_unavailable')) return 'Este modelo está indisponível agora. Escolha outro provider ou aguarde o horário indicado.';
+  if (value.includes('requested_model_not_available')) return 'O modelo não pertence mais ao catálogo instalado.';
+  if (value.includes('confirmation_timeout')) return 'O OpenClaw não confirmou a troca dentro do prazo. O modelo anterior foi mantido.';
+  if (value.includes('not_confirmed')) return 'O OpenClaw recusou a troca e manteve o modelo anterior.';
+  return value;
+};
+
+function SessionModelSelector({ session, models, providers, onApply }: SessionModelSelectorProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [provider, setProvider] = React.useState(session.selectedModelProvider || '');
   const [modelId, setModelId] = React.useState(session.selectedModelId || '');
   const [thinkingLevel, setThinkingLevel] = React.useState(session.selectedThinkingLevel || '');
+  const [authProfileId, setAuthProfileId] = React.useState(session.selectedAuthProfileId || '');
   const [isSaving, setIsSaving] = React.useState(false);
+  const [switchError, setSwitchError] = React.useState('');
 
   const defaultModel = React.useMemo(
     () => models.find(model => model.tags?.includes('default')) || models[0] || null,
@@ -126,11 +205,17 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
       && (!session.selectedModelProvider || model.provider === session.selectedModelProvider)) || defaultModel,
     [defaultModel, modelId, models, session.selectedModelId, session.selectedModelProvider],
   );
-  const providers = React.useMemo(
-    () => Array.from(new Set(models.map(model => model.provider))),
-    [models],
+  const installedProviderIds = React.useMemo(
+    () => Array.from(new Set([
+      ...PROVIDER_CATALOG_FALLBACK.map(item => item.id),
+      ...providers.filter(item => item.configured !== false).map(item => item.id),
+      ...models.map(model => model.provider),
+    ])),
+    [models, providers],
   );
-  const draftProvider = provider || activeModel?.provider || providers[0] || '';
+  const draftProvider = provider || activeModel?.provider || installedProviderIds[0] || '';
+  const providerState = providers.find(item => item.id === draftProvider)
+    || PROVIDER_CATALOG_FALLBACK.find(item => item.id === draftProvider);
   const providerModels = React.useMemo(
     () => models.filter(model => model.provider === draftProvider),
     [draftProvider, models],
@@ -145,17 +230,33 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
   const usedTokens = session.modelTotalTokens || 0;
   const contextTokens = session.modelContextTokens || activeModel?.contextWindow || 0;
   const usagePct = contextTokens > 0 ? Math.min(100, Math.max(0, (usedTokens / contextTokens) * 100)) : 0;
+  const orderedProfiles = React.useMemo(() => {
+    const profiles = providerState?.profiles || [];
+    const order = providerState?.profileOrder || [];
+    return [...profiles].sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      if (ai === -1 && bi === -1) return a.id.localeCompare(b.id);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [providerState]);
+  const usableProfiles = orderedProfiles.filter(profile => !['expired', 'error', 'missing'].includes(profile.status));
 
   const openSelector = () => {
     setProvider(session.selectedModelProvider || defaultModel?.provider || '');
     setModelId(session.selectedModelId || defaultModel?.id || '');
     setThinkingLevel(session.selectedThinkingLevel || defaultModel?.thinkingDefault || '');
+    setAuthProfileId(session.selectedAuthProfileId || '');
+    setSwitchError('');
     setIsOpen(true);
   };
 
   const applySelection = async () => {
     if (!draftModel) return;
     setIsSaving(true);
+    setSwitchError('');
     try {
       await onApply({
         provider: draftModel.provider,
@@ -163,8 +264,11 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
         modelName: draftModel.name,
         thinkingLevel: draftThinking,
         contextWindow: draftModel.contextWindow,
+        authProfileId: authProfileId || undefined,
       });
       setIsOpen(false);
+    } catch (error) {
+      setSwitchError(error instanceof Error ? error.message : 'Não foi possível confirmar a troca.');
     } finally {
       setIsSaving(false);
     }
@@ -196,7 +300,7 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
             onClick={() => setIsOpen(false)}
             aria-label="Fechar seletor de modelo"
           />
-          <div className="fixed z-[69] bottom-20 left-1/2 -translate-x-1/2 w-[min(340px,calc(100vw-32px))] max-h-[70vh] overflow-y-auto no-scrollbar rounded-2xl border border-white/10 bg-[#0c0c0c]/92 backdrop-blur-2xl shadow-2xl p-4 text-left">
+          <div className="fixed z-[69] bottom-20 left-1/2 -translate-x-1/2 w-[min(380px,calc(100vw-32px))] max-h-[72vh] overflow-y-auto no-scrollbar rounded-3xl border border-white/[0.09] bg-gradient-to-br from-white/[0.055] via-black/[0.08] to-black/[0.18] backdrop-blur-2xl shadow-[0_24px_80px_rgba(0,0,0,0.34)] p-4 text-left">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-[8px] tracking-[0.22em] uppercase text-white/35">modelo da conversa</p>
@@ -205,38 +309,98 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
               <button onClick={() => setIsOpen(false)} className="p-1 text-white/35 hover:text-white bg-transparent border-none cursor-pointer"><X size={12} /></button>
             </div>
 
-            <div className="flex gap-4 mb-4 overflow-x-auto no-scrollbar">
-              {providers.map(item => (
+            <div className="flex gap-4 mb-3 overflow-x-auto no-scrollbar">
+              {installedProviderIds.map(item => {
+                const state = providers.find(providerItem => providerItem.id === item)
+                  || PROVIDER_CATALOG_FALLBACK.find(providerItem => providerItem.id === item);
+                return (
                 <button
                   key={item}
                   onClick={() => {
-                    const nextModel = models.find(model => model.provider === item);
+                    const nextModel = models.find(model => model.provider === item && model.available !== false)
+                      || models.find(model => model.provider === item);
                     setProvider(item);
                     setModelId(nextModel?.id || '');
                     setThinkingLevel(nextModel?.thinkingDefault || '');
+                    setAuthProfileId('');
+                    setSwitchError('');
                   }}
-                  className={`text-[8px] tracking-[0.14em] uppercase bg-transparent border-none cursor-pointer pb-1 transition-colors ${draftProvider === item ? 'text-white border-b border-white/60' : 'text-white/30 hover:text-white/70'}`}
+                  className={`flex items-center gap-1.5 text-[8px] tracking-[0.14em] uppercase bg-transparent border-none cursor-pointer pb-1 transition-colors ${draftProvider === item ? 'text-white border-b border-white/60' : 'text-white/30 hover:text-white/70'}`}
                 >
-                  {item.replace('-cli', '')}
+                  <span className={`w-1.5 h-1.5 rounded-full ${state?.availability === 'available' ? 'bg-emerald-400/75' : ['unavailable', 'quota_exhausted'].includes(String(state?.availability)) ? 'bg-rose-400/70' : 'bg-amber-300/55'}`} />
+                  {providerLabel(item, state)}
                 </button>
+              )})}
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[8px] tracking-[0.14em] uppercase text-white/55">{providerStatusLabel(providerState)}</span>
+                <span className="text-[7px] text-white/25 truncate">
+                  {[providerState?.plan, providerState?.accountEmail].filter(Boolean).join(' · ') || 'sem telemetria de cota'}
+                </span>
+              </div>
+              {(providerState?.usageWindows || []).map(window => (
+                <div key={window.label} className="mt-2">
+                  <div className="flex items-center justify-between text-[7px] text-white/30 uppercase tracking-[0.1em]">
+                    <span>{window.label} · {Math.max(0, 100 - window.usedPercent)}% livre</span>
+                    <span>reinicia {formatResetAt(window.resetAt)}</span>
+                  </div>
+                  <div className="mt-1 h-px bg-white/10 overflow-hidden">
+                    <div className="h-full bg-white/45" style={{ width: `${Math.max(0, 100 - window.usedPercent)}%` }} />
+                  </div>
+                </div>
               ))}
+              {!(providerState?.usageWindows || []).length && (
+                <p className="mt-1.5 text-[7px] leading-relaxed text-white/22">Cota não informada pelo provider. O provider permanece visível.</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1 mb-4">
               {providerModels.map(model => (
                 <button
                   key={`${model.provider}/${model.id}`}
+                  disabled={model.available === false}
                   onClick={() => {
                     setModelId(model.id);
                     setThinkingLevel(model.thinkingDefault || model.thinkingLevels[0]?.id || 'off');
                   }}
-                  className={`w-full flex items-center justify-between gap-3 px-2 py-2 rounded-lg bg-transparent border-none cursor-pointer text-left transition-colors ${draftModel?.id === model.id ? 'bg-white/[0.08] text-white' : 'text-white/45 hover:bg-white/[0.04] hover:text-white/80'}`}
+                  className={`w-full flex items-center justify-between gap-3 px-2 py-2 rounded-lg bg-transparent border-none text-left transition-colors disabled:cursor-not-allowed ${model.available === false ? 'text-white/18' : draftModel?.id === model.id ? 'bg-white/[0.08] text-white cursor-pointer' : 'text-white/45 hover:bg-white/[0.04] hover:text-white/80 cursor-pointer'}`}
                 >
                   <span className="text-[10px] font-light truncate">{model.name}</span>
-                  <span className="text-[7px] tracking-[0.12em] uppercase text-white/25 shrink-0">{formatTokenCount(model.contextWindow)}</span>
+                  <span className="text-[7px] tracking-[0.12em] uppercase text-white/25 shrink-0">{model.available === false ? 'indisponível' : formatTokenCount(model.contextWindow)}</span>
                 </button>
               ))}
+              {providerModels.length === 0 && (
+                <p className="px-2 py-3 text-[8px] leading-relaxed text-white/30">Provider instalado, mas nenhum modelo foi informado na última leitura.</p>
+              )}
             </div>
+
+            {orderedProfiles.length > 1 && (
+              <div className="mb-4">
+                <p className="text-[7px] tracking-[0.18em] uppercase text-white/25 mb-2">conta</p>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => setAuthProfileId('')}
+                    className={`w-full px-2 py-1.5 rounded-lg border-none text-left text-[8px] cursor-pointer ${!authProfileId ? 'bg-white/[0.08] text-white' : 'bg-transparent text-white/35'}`}
+                  >automática · primeira conta saudável</button>
+                  {orderedProfiles.map(profile => {
+                    const disabled = ['expired', 'error', 'missing'].includes(profile.status);
+                    return (
+                      <button
+                        key={profile.id}
+                        disabled={disabled}
+                        onClick={() => setAuthProfileId(profile.id)}
+                        className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border-none text-left text-[8px] ${disabled ? 'text-white/18 cursor-not-allowed' : authProfileId === profile.id ? 'bg-white/[0.08] text-white cursor-pointer' : 'bg-transparent text-white/35 hover:text-white/65 cursor-pointer'}`}
+                      >
+                        <span className="truncate">{profile.id.replace(`${draftProvider}:`, '')}</span>
+                        <span className="text-[7px] uppercase">{profile.status}{profile.expiresInLabel ? ` · ${profile.expiresInLabel}` : ''}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {draftModel && draftModel.thinkingLevels.length > 0 && (
               <div className="mb-4">
@@ -267,12 +431,16 @@ function SessionModelSelector({ session, models, onApply }: SessionModelSelector
 
             <button
               onClick={applySelection}
-              disabled={!draftModel || isSaving}
+              disabled={!draftModel || draftModel.available === false || providerState?.quotaExhausted || isSaving || (orderedProfiles.length > 0 && usableProfiles.length === 0)}
               className="w-full py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] disabled:opacity-30 text-[8px] tracking-[0.18em] uppercase text-white border border-white/10 cursor-pointer transition-colors"
             >
-              {isSaving ? 'salvando…' : 'usar nesta conversa'}
+              {isSaving ? 'confirmando no OpenClaw…' : 'usar nesta conversa'}
             </button>
-            <p className="text-[7px] leading-relaxed text-white/20 mt-2.5">A mudança é validada pelo OpenClaw na próxima mensagem.</p>
+            {switchError ? (
+              <p className="text-[7px] leading-relaxed text-rose-200/65 mt-2.5">A troca não foi aplicada: {modelSwitchErrorLabel(switchError)}</p>
+            ) : (
+              <p className="text-[7px] leading-relaxed text-white/20 mt-2.5">O painel só fecha depois que o OpenClaw confirmar o modelo ativo nesta conversa.</p>
+            )}
           </div>
         </>,
         document.body,
@@ -844,6 +1012,7 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   selectedModelId: session.selectedModelId,
   selectedModelName: session.selectedModelName,
   selectedThinkingLevel: session.selectedThinkingLevel,
+  selectedAuthProfileId: session.selectedAuthProfileId,
   modelContextTokens: session.modelContextTokens,
   modelTotalTokens: session.modelTotalTokens,
   modelUsageFresh: session.modelUsageFresh,
@@ -1230,6 +1399,7 @@ export default function LivePage() {
   /** v2: sessions loaded from Firestore pulso_sessions (replaces customContextNodes + INITIAL_CONTEXT_NODES) */
   const [sessions, setSessions] = React.useState<PulsoContextNode[]>([LOADING_PLACEHOLDER_NODE]);
   const [modelCatalog, setModelCatalog] = React.useState<PulsoModelCatalogEntry[]>(MODEL_CATALOG_FALLBACK);
+  const [providerCatalog, setProviderCatalog] = React.useState<PulsoProviderCatalogEntry[]>(PROVIDER_CATALOG_FALLBACK);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
@@ -1386,12 +1556,23 @@ export default function LivePage() {
           (snapshot) => {
             const loaded: PulsoContextNode[] = [];
             snapshot.forEach((docSnap) => {
-              const raw = docSnap.data() as Session & { documentKind?: string; models?: PulsoModelCatalogEntry[] };
+              const raw = docSnap.data() as Session & { documentKind?: string; models?: PulsoModelCatalogEntry[]; providers?: PulsoProviderCatalogEntry[] };
               if (raw.documentKind === 'model_catalog') {
                 const models = Array.isArray(raw.models) ? raw.models : [];
-                setModelCatalog(models.filter(model => (
+                const liveModels = models.filter(model => (
                   model && typeof model.id === 'string' && typeof model.provider === 'string'
-                )));
+                ));
+                setModelCatalog(previous => {
+                  const merged = new Map(previous.map(model => [`${model.provider}/${model.id}`, model]));
+                  liveModels.forEach(model => merged.set(`${model.provider}/${model.id}`, model));
+                  return Array.from(merged.values());
+                });
+                const liveProviders = Array.isArray(raw.providers) ? raw.providers : [];
+                setProviderCatalog(previous => {
+                  const merged = new Map(previous.map(provider => [provider.id, provider]));
+                  liveProviders.filter(provider => provider?.id).forEach(provider => merged.set(provider.id, provider));
+                  return Array.from(merged.values());
+                });
                 return;
               }
               const data = raw as Session;
@@ -1884,22 +2065,23 @@ export default function LivePage() {
 
   const handleApplySessionModel = React.useCallback(async (
     contextId: string,
-    selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number },
+    selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number; authProfileId?: string },
   ) => {
-    if (!db) throw new Error('firestore_unavailable');
-    const patch = {
-      selectedModelProvider: selection.provider,
-      selectedModelId: selection.modelId,
-      selectedModelName: selection.modelName,
-      selectedThinkingLevel: selection.thinkingLevel,
-      modelContextTokens: selection.contextWindow,
-      modelStateUpdatedAt: new Date().toISOString(),
-    };
-    await updateDoc(doc(db, `workspaces/felipe_dutra/pulso_sessions/${contextId}`), patch);
+    const targetSession = sessions.find(session => session.contextId === contextId);
+    if (!targetSession?.openclawSessionKey) throw new Error('Sessão sem vínculo com o OpenClaw.');
+    const request = await lotusOpenClawClient.switchSessionModel({
+      contextId,
+      areaId: targetSession.areaId,
+      chatId: targetSession.chatId,
+      openclawSessionKey: targetSession.openclawSessionKey,
+      selection,
+    });
+    const confirmed = (request.openclawResult as any)?.meta?.sessionModelState;
+    if (!confirmed?.selectedModelId) throw new Error('O OpenClaw não confirmou o modelo ativo.');
     setSessions(previous => previous.map(session => (
-      session.contextId === contextId ? { ...session, ...patch } : session
+      session.contextId === contextId ? { ...session, ...confirmed } : session
     )));
-  }, [db]);
+  }, [sessions]);
 
   const dynamicAreas = React.useMemo(() => {
     const list: Array<{ id: string; name: string; order: number }> = [];
@@ -3573,6 +3755,7 @@ export default function LivePage() {
         provider: activeSession.selectedModelProvider,
         modelId: activeSession.selectedModelId,
         thinkingLevel: activeSession.selectedThinkingLevel || 'medium',
+        authProfileId: activeSession.selectedAuthProfileId || undefined,
       };
     }
 
@@ -6650,6 +6833,7 @@ ${data.transcription}`, {
           <SessionModelSelector
             session={sendTargetContextNode}
             models={modelCatalog}
+            providers={providerCatalog}
             onApply={(selection) => handleApplySessionModel(sendTargetContextNode.contextId, selection)}
           />
 

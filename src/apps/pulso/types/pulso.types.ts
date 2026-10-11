@@ -258,6 +258,7 @@ export interface PulsoContextNode {
   selectedModelId?: string;
   selectedModelName?: string;
   selectedThinkingLevel?: string;
+  selectedAuthProfileId?: string;
   modelContextTokens?: number;
   modelTotalTokens?: number;
   modelUsageFresh?: boolean;
@@ -307,6 +308,7 @@ export interface Session {
   selectedModelId?: string;
   selectedModelName?: string;
   selectedThinkingLevel?: string;
+  selectedAuthProfileId?: string;
   modelContextTokens?: number;
   modelTotalTokens?: number;
   modelUsageFresh?: boolean;

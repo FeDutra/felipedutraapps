@@ -7,6 +7,9 @@ import { PulsoRequest, RequestStatus, UserApproval } from "../types/pulso.types"
  */
 
 export const requestsService = {
+  getRequest: async (id: string) => {
+    return pulsoRepository.getRequest(id);
+  },
   /**
    * Creates a new operational request
    */
@@ -336,4 +339,3 @@ export const requestsService = {
     return createdTask;
   }
 };
-

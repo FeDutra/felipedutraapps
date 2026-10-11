@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "felipedutraapps",
     "public": "out",
     "cleanUrls": true,
     "ignore": [

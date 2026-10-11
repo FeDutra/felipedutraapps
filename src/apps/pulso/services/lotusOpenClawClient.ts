@@ -46,6 +46,22 @@ export interface LotusSendPayload {
     provider: string;
     modelId: string;
     thinkingLevel: string;
+    authProfileId?: string;
+  };
+}
+
+export interface SessionModelSwitchPayload {
+  contextId: string;
+  areaId?: string;
+  chatId?: string;
+  openclawSessionKey: string;
+  selection: {
+    provider: string;
+    modelId: string;
+    modelName: string;
+    thinkingLevel: string;
+    contextWindow: number;
+    authProfileId?: string;
   };
 }
 
@@ -62,6 +78,59 @@ const cleanUndefined = (obj: any): any => {
 };
 
 export const lotusOpenClawClient = {
+  switchSessionModel: async (payload: SessionModelSwitchPayload) => {
+    const requestId = `model_switch_${payload.contextId}_${Date.now()}`;
+    const request = await requestsService.createRequest(cleanUndefined({
+      id: requestId,
+      requestType: 'session_model_switch',
+      operation: 'session_model_switch',
+      status: 'queued_for_openclaw',
+      source: 'pulso_live',
+      origin: 'lotus_live',
+      mode: 'text',
+      input: '',
+      rawInput: '',
+      requestedBy: 'fe',
+      createdAt: new Date(),
+      requestedAt: new Date(),
+      updatedAt: new Date(),
+      conversationId: `conv_${payload.contextId}`,
+      messageId: requestId,
+      approvalMode: 'allow_read_only',
+      context: {
+        userName: 'Fê',
+        locale: 'pt-BR',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo',
+        interface: 'pulso',
+        currentRoute: typeof window !== 'undefined' ? window.location.pathname : '/pulso/live',
+      },
+      contextWindow: [],
+      archived: false,
+      priority: 'high',
+      areaId: payload.areaId || null,
+      contextId: payload.contextId,
+      chatId: payload.chatId || 'default',
+      openclawSessionKey: payload.openclawSessionKey,
+      runtimeSessionKey: payload.openclawSessionKey,
+      modelSelection: payload.selection,
+    }));
+
+    const persistedId = request?.id || requestId;
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const current = await requestsService.getRequest(persistedId);
+      const status = String(current?.status || '');
+      if (status === 'success' || status === 'completed') return current;
+      if (status === 'failed' || status === 'error') {
+        const result = current?.openclawResult as { error?: string; errors?: string[] } | undefined;
+        const reason = result?.error || result?.errors?.[0] || (current as { error?: string } | null)?.error || 'model_switch_failed';
+        throw new Error(String(reason));
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    throw new Error('model_switch_confirmation_timeout');
+  },
+
   queueRequest: async (payload: LotusSendPayload) => {
     const hasAttachments = payload.attachments && payload.attachments.length > 0;
 
