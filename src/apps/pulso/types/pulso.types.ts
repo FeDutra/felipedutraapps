@@ -250,6 +250,7 @@ export interface PulsoContextNode {
   archived?: boolean;
   isDefault?: boolean;
   lastMessageAt?: Date;
+  lastActivatedAt?: Date;
   updatedAt?: Date;
   runtimeStatus?: string;
   errorMessage?: string | null;
@@ -294,6 +295,8 @@ export interface Session {
   isDefault?: boolean;
   /** ISO timestamp of last message activity */
   lastMessageAt?: Date;
+  /** Last time the session was explicitly opened/focused by the user */
+  lastActivatedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   archived?: boolean;

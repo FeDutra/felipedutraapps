@@ -65,8 +65,17 @@ export const sessionsService = {
    * message. Unread state is driven exclusively by real Lótus responses.
    */
   touchSession: async (id: string): Promise<void> => {
+    const now = new Date();
     await pulsoRepository.updateSession(id, {
-      updatedAt: new Date(),
+      updatedAt: now,
+      lastActivatedAt: now,
     }).catch(err => console.warn('[sessionsService] touchSession failed:', err));
+  },
+
+  /** Records an explicit open/focus without fabricating message activity. */
+  activateSession: async (id: string): Promise<void> => {
+    await pulsoRepository.updateSession(id, {
+      lastActivatedAt: new Date(),
+    }).catch(err => console.warn('[sessionsService] activateSession failed:', err));
   },
 };

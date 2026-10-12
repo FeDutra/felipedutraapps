@@ -1075,6 +1075,7 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   archived: session.archived ?? false,
   isDefault: session.isDefault ?? false,
   lastMessageAt: session.lastMessageAt,
+  lastActivatedAt: session.lastActivatedAt,
   updatedAt: session.updatedAt,
   order: session.order,
   selectedModelProvider: session.selectedModelProvider,
@@ -1722,11 +1723,12 @@ export default function LivePage() {
   const sortContextsByRecentActivity = React.useCallback((a: PulsoContextNode, b: PulsoContextNode) => {
     const activityTime = (node: PulsoContextNode) => {
       const incoming = latestIncomingTimes[node.contextId];
-      return Math.max(
+      const realActivity = Math.max(
         safeConvertToDate(incoming)?.getTime() || 0,
+        safeConvertToDate(node.lastActivatedAt)?.getTime() || 0,
         safeConvertToDate(node.lastMessageAt)?.getTime() || 0,
-        safeConvertToDate(node.updatedAt)?.getTime() || 0,
       );
+      return realActivity || safeConvertToDate(node.updatedAt)?.getTime() || 0;
     };
     const recentDelta = activityTime(b) - activityTime(a);
     if (recentDelta !== 0) return recentDelta;
@@ -1967,8 +1969,8 @@ export default function LivePage() {
     }
     // Fallback: most recently active session
     const sortedByLatest = [...sessions].sort((a, b) => {
-      const dateA = safeConvertToDate(a.lastMessageAt) || safeConvertToDate(a.updatedAt);
-      const dateB = safeConvertToDate(b.lastMessageAt) || safeConvertToDate(b.updatedAt);
+      const dateA = safeConvertToDate(a.lastActivatedAt) || safeConvertToDate(a.lastMessageAt) || safeConvertToDate(a.updatedAt);
+      const dateB = safeConvertToDate(b.lastActivatedAt) || safeConvertToDate(b.lastMessageAt) || safeConvertToDate(b.updatedAt);
       const timeA = dateA ? dateA.getTime() : 0;
       const timeB = dateB ? dateB.getTime() : 0;
       return timeB - timeA;
@@ -2527,7 +2529,17 @@ export default function LivePage() {
     });
   }, []);
 
+  const recordSessionActivation = React.useCallback((contextId: string) => {
+    if (!contextId || contextId === 'loading') return;
+    const activatedAt = new Date();
+    setSessions(current => current.map(session => (
+      session.contextId === contextId ? { ...session, lastActivatedAt: activatedAt } : session
+    )));
+    void sessionsService.activateSession(contextId);
+  }, []);
+
   const selectChatForWriting = React.useCallback((contextNode: PulsoContextNode) => {
+    recordSessionActivation(contextNode.contextId);
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
     if (isMobile || !hasSplitChats) {
       setSecondaryContextIds([]);
@@ -2551,11 +2563,12 @@ export default function LivePage() {
     }
     setFocusedPaneContextId(contextNode.contextId);
     focusComposer();
-  }, [activeContextNode.contextId, focusComposer, focusedPaneContextId, hasSplitChats, splitContextNodes]);
+  }, [activeContextNode.contextId, focusComposer, focusedPaneContextId, hasSplitChats, recordSessionActivation, splitContextNodes]);
 
   const openChatInNewPane = React.useCallback((contextId: string) => {
     const contextNode = allContextNodes.find(node => node.contextId === contextId);
     if (!contextNode) return;
+    recordSessionActivation(contextId);
     const alreadyOpen = splitContextNodes.some(node => node.contextId === contextId);
     if (alreadyOpen) {
       setFocusedPaneContextId(contextId);
@@ -2570,7 +2583,7 @@ export default function LivePage() {
     setSecondaryContextIds(current => [...current, contextId].slice(0, 3));
     setFocusedPaneContextId(contextId);
     focusComposer();
-  }, [allContextNodes, focusComposer, splitContextNodes]);
+  }, [allContextNodes, focusComposer, recordSessionActivation, splitContextNodes]);
 
   const closeSplitPane = React.useCallback((contextId: string) => {
     if (contextId === activeContextNode.contextId) {
