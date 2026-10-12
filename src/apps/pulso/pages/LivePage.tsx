@@ -2529,8 +2529,16 @@ export default function LivePage() {
     });
   }, []);
 
+  // A seleção pode chegar por mais de uma superfície (linha, painel dividido,
+  // foco do compositor). Persistir cada foco repetido cria um timestamp novo,
+  // dispara o snapshot global de sessões e repinta toda a LivePage. No WebKit
+  // isso mantém as camadas animadas/filtradas em composição mesmo sem uma troca
+  // real de conversa. A recência só muda quando o destino muda de fato.
+  const lastActivatedContextIdRef = React.useRef<string | null>(null);
   const recordSessionActivation = React.useCallback((contextId: string) => {
     if (!contextId || contextId === 'loading') return;
+    if (lastActivatedContextIdRef.current === contextId) return;
+    lastActivatedContextIdRef.current = contextId;
     const activatedAt = new Date();
     setSessions(current => current.map(session => (
       session.contextId === contextId ? { ...session, lastActivatedAt: activatedAt } : session
