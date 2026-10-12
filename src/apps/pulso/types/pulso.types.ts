@@ -259,6 +259,9 @@ export interface PulsoContextNode {
   selectedModelName?: string;
   selectedThinkingLevel?: string;
   selectedAuthProfileId?: string;
+  selectedResolvedAuthProfileId?: string;
+  selectedAuthProfileSource?: string;
+  selectedAuthSelectionMode?: 'automatic' | 'explicit';
   modelContextTokens?: number;
   modelTotalTokens?: number;
   modelUsageFresh?: boolean;
@@ -309,6 +312,9 @@ export interface Session {
   selectedModelName?: string;
   selectedThinkingLevel?: string;
   selectedAuthProfileId?: string;
+  selectedResolvedAuthProfileId?: string;
+  selectedAuthProfileSource?: string;
+  selectedAuthSelectionMode?: 'automatic' | 'explicit';
   modelContextTokens?: number;
   modelTotalTokens?: number;
   modelUsageFresh?: boolean;

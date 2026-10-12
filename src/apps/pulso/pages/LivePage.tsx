@@ -80,13 +80,30 @@ interface PulsoProviderCatalogEntry {
   configured?: boolean;
   modelCount?: number;
   plan?: string;
-  accountEmail?: string;
+  usageScope?: 'provider' | 'profile' | string;
+  usageLabel?: string;
+  usageAccountEmail?: string;
   usageUpdatedAt?: number;
   usageWindows?: Array<{ label: string; usedPercent: number; resetAt: number }>;
   quotaExhausted?: boolean;
   quotaResetAt?: number;
-  profiles?: Array<{ id: string; type: string; status: string; expiresAt?: number; expiresInLabel?: string }>;
+  profiles?: Array<{
+    id: string;
+    type: string;
+    status: string;
+    expiresAt?: number;
+    expiresInLabel?: string;
+    displayName?: string;
+    email?: string;
+    label?: string;
+    cooldownUntil?: number;
+    disabledUntil?: number;
+    cooldownReason?: string;
+    disabledReason?: string;
+    recoveryHint?: string;
+  }>;
   profileOrder?: string[];
+  resolvedAutomaticProfileId?: string;
 }
 
 interface SessionModelSelectorProps {
@@ -179,12 +196,30 @@ const providerStatusLabel = (provider?: PulsoProviderCatalogEntry) => {
 };
 
 const modelSwitchErrorLabel = (value: string) => {
+  if (value.includes('requested_auth_profile_not_confirmed')) return 'O OpenClaw não confirmou a conta escolhida. A conta anterior foi mantida.';
   if (value.includes('requested_provider_quota_exhausted')) return 'A cota deste provider está esgotada. Escolha outro agora ou aguarde a reinicialização indicada.';
   if (value.includes('requested_model_unavailable')) return 'Este modelo está indisponível agora. Escolha outro provider ou aguarde o horário indicado.';
   if (value.includes('requested_model_not_available')) return 'O modelo não pertence mais ao catálogo instalado.';
   if (value.includes('confirmation_timeout')) return 'O OpenClaw não confirmou a troca dentro do prazo. O modelo anterior foi mantido.';
   if (value.includes('not_confirmed')) return 'O OpenClaw recusou a troca e manteve o modelo anterior.';
   return value;
+};
+
+type PulsoProfileEntry = NonNullable<PulsoProviderCatalogEntry['profiles']>[number];
+
+const profileDisplayName = (profile?: PulsoProfileEntry) => {
+  if (!profile) return 'conta não identificada';
+  if (profile.displayName) return profile.displayName;
+  if (profile.email) return profile.email;
+  const shortId = profile.id.replace(/^[^:]+:/, '');
+  return shortId.startsWith('setup-') ? 'conta OpenAI' : shortId;
+};
+
+const profileSecondaryLabel = (profile?: PulsoProfileEntry) => {
+  if (!profile) return '';
+  if (profile.email) return profile.email;
+  if (profile.type === 'api_key') return 'chave de API';
+  return profile.type === 'oauth' ? 'OAuth' : profile.type;
 };
 
 function SessionModelSelector({ session, models, providers, onApply }: SessionModelSelectorProps) {
@@ -243,6 +278,14 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
     });
   }, [providerState]);
   const usableProfiles = orderedProfiles.filter(profile => !['expired', 'error', 'missing'].includes(profile.status));
+  const confirmedProfileId = session.selectedResolvedAuthProfileId
+    || session.selectedAuthProfileId
+    || providerState?.resolvedAutomaticProfileId
+    || '';
+  const confirmedProfile = orderedProfiles.find(profile => profile.id === confirmedProfileId);
+  const automaticProfile = orderedProfiles.find(profile => profile.id === providerState?.resolvedAutomaticProfileId);
+  const authSelectionMode = session.selectedAuthSelectionMode
+    || (session.selectedAuthProfileId ? 'explicit' : 'automatic');
 
   const openSelector = () => {
     setProvider(session.selectedModelProvider || defaultModel?.provider || '');
@@ -337,9 +380,17 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[8px] tracking-[0.14em] uppercase text-white/55">{providerStatusLabel(providerState)}</span>
                 <span className="text-[7px] text-white/25 truncate">
-                  {[providerState?.plan, providerState?.accountEmail].filter(Boolean).join(' · ') || 'sem telemetria de cota'}
+                  {providerState?.usageLabel || 'sem telemetria de cota'}
                 </span>
               </div>
+              {providerState?.plan && (
+                <p className="mt-1.5 text-[7px] text-white/25">
+                  {providerState.plan}
+                  {providerState.usageScope === 'provider' && providerState.usageAccountEmail
+                    ? ` · consulta via ${providerState.usageAccountEmail}`
+                    : ''}
+                </p>
+              )}
               {(providerState?.usageWindows || []).map(window => (
                 <div key={window.label} className="mt-2">
                   <div className="flex items-center justify-between text-[7px] text-white/30 uppercase tracking-[0.1em]">
@@ -378,14 +429,27 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
 
             {orderedProfiles.length > 1 && (
               <div className="mb-4">
-                <p className="text-[7px] tracking-[0.18em] uppercase text-white/25 mb-2">conta</p>
+                <div className="mb-2 flex items-end justify-between gap-3">
+                  <p className="text-[7px] tracking-[0.18em] uppercase text-white/25">conta</p>
+                  <p className="text-[7px] text-white/30 text-right">
+                    ativa: <span className="text-white/65">{profileDisplayName(confirmedProfile)}</span>
+                    <span className="text-white/20"> · {authSelectionMode === 'explicit' ? 'fixada' : 'automática'}</span>
+                  </p>
+                </div>
                 <div className="flex flex-col gap-1">
                   <button
                     onClick={() => setAuthProfileId('')}
                     className={`w-full px-2 py-1.5 rounded-lg border-none text-left text-[8px] cursor-pointer ${!authProfileId ? 'bg-white/[0.08] text-white' : 'bg-transparent text-white/35'}`}
-                  >automática · primeira conta saudável</button>
+                  >
+                    <span className="block">automática</span>
+                    <span className="mt-0.5 block text-[7px] text-white/28">
+                      resolução atual: {profileDisplayName(automaticProfile)}
+                      {profileSecondaryLabel(automaticProfile) ? ` · ${profileSecondaryLabel(automaticProfile)}` : ''}
+                    </span>
+                  </button>
                   {orderedProfiles.map(profile => {
                     const disabled = ['expired', 'error', 'missing'].includes(profile.status);
+                    const isConfirmed = profile.id === confirmedProfileId;
                     return (
                       <button
                         key={profile.id}
@@ -393,8 +457,13 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
                         onClick={() => setAuthProfileId(profile.id)}
                         className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border-none text-left text-[8px] ${disabled ? 'text-white/18 cursor-not-allowed' : authProfileId === profile.id ? 'bg-white/[0.08] text-white cursor-pointer' : 'bg-transparent text-white/35 hover:text-white/65 cursor-pointer'}`}
                       >
-                        <span className="truncate">{profile.id.replace(`${draftProvider}:`, '')}</span>
-                        <span className="text-[7px] uppercase">{profile.status}{profile.expiresInLabel ? ` · ${profile.expiresInLabel}` : ''}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate">{profileDisplayName(profile)}</span>
+                          <span className="mt-0.5 block truncate text-[7px] text-white/24">{profileSecondaryLabel(profile)}</span>
+                        </span>
+                        <span className="shrink-0 text-right text-[7px] uppercase">
+                          {isConfirmed ? 'ativa · ' : ''}{profile.status}{profile.expiresInLabel ? ` · ${profile.expiresInLabel}` : ''}
+                        </span>
                       </button>
                     );
                   })}
@@ -1013,6 +1082,9 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   selectedModelName: session.selectedModelName,
   selectedThinkingLevel: session.selectedThinkingLevel,
   selectedAuthProfileId: session.selectedAuthProfileId,
+  selectedResolvedAuthProfileId: session.selectedResolvedAuthProfileId,
+  selectedAuthProfileSource: session.selectedAuthProfileSource,
+  selectedAuthSelectionMode: session.selectedAuthSelectionMode,
   modelContextTokens: session.modelContextTokens,
   modelTotalTokens: session.modelTotalTokens,
   modelUsageFresh: session.modelUsageFresh,
