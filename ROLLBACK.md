@@ -1,3 +1,27 @@
+# Release Tauri — seletor de contas e recência de sessões (12/10/2026)
+
+- Fonte: `8d25116ed1de50212e733d5b5d495f77e4b09c65` em `main`.
+- GitHub Actions: run `38282999181` (`Build Tauri App`, job `build-macos`, sucesso).
+- Artefato: `pulso-macos-build`; DMG `PULSO_0.1.0_x64.dmg`.
+- SHA-256 do DMG: `6e70821a6a6ca148e5331d2a549d8231ae6e7b7e26aef55ed0b57b35bb474057`.
+- Arquitetura instalada: `x86_64` para `app` e `kokoro_runner`.
+- SHA-256 do executável principal: `643ce0f36d7d7b248943ae176640c0a0fadea9983924078df7603efb73a52d19`.
+- SHA-256 do sidecar Kokoro: `820035a374d753195b983c2dc6efb193a1f5b2c488424908e16df8b5ad81f1a3`.
+- SHA-256 do modelo Kokoro: `ebef42457f7efee9b60b4f1d5aec7692f2925923948a0d7a2a49d2c9edf57e49`.
+- SHA-256 de `voices.bin`: `bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d`.
+- SHA-256 de `voices.json`: `ff3f0e5cf156088d4847f277e43c49e3248b798b47027d01afd75d78065744df`.
+- Instalação anterior preservada em `/Applications/PULSO.rollback-20261012T173533Z.app`.
+- Observação de confiança: o bundle CI não possui assinatura de código/notarização; a proveniência foi validada por run, SHA da fonte e hashes do artefato instalado.
+
+## Reversão no iMac
+
+1. Encerrar apenas `PULSO.app` e seus processos `kokoro_runner`.
+2. Mover `/Applications/PULSO.app` para um caminho de contingência datado.
+3. Restaurar `/Applications/PULSO.rollback-20261012T173533Z.app` como `/Applications/PULSO.app`.
+4. Reabrir a PULSO e confirmar processo `x86_64`, porta Kokoro `127.0.0.1:14321` e sessão ativa.
+
+---
+
 # Rollback — confirmação de Correspondências (28/09/2026)
 
 # Rollback — área GUAYI (04/10/2026)
