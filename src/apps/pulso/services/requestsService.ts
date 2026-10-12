@@ -7,8 +7,8 @@ import { PulsoRequest, RequestStatus, UserApproval } from "../types/pulso.types"
  */
 
 export const requestsService = {
-  getRequest: async (id: string) => {
-    return pulsoRepository.getRequest(id);
+  getRequest: async (id: string, options?: { server?: boolean }) => {
+    return pulsoRepository.getRequest(id, options);
   },
   /**
    * Creates a new operational request

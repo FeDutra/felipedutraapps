@@ -2,6 +2,7 @@ import {
   collection, 
   getDocs, 
   getDoc, 
+  getDocFromServer,
   doc, 
   setDoc, 
   updateDoc, 
@@ -601,9 +602,12 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return this.toData<PulsoRequest>(snap);
   }
 
-  async getRequest(id: string): Promise<PulsoRequest | undefined> {
+  async getRequest(id: string, options?: { server?: boolean }): Promise<PulsoRequest | undefined> {
     const ref = doc(db!, firestorePaths.request(id));
-    const snap = await getDoc(ref);
+    // Model/account switching needs the authoritative worker result. In the
+    // Tauri WebView, getDoc may keep returning the locally queued request even
+    // after the runtime adapter has completed it on the server.
+    const snap = options?.server ? await getDocFromServer(ref) : await getDoc(ref);
     if (!snap.exists()) return undefined;
     return this.toData<PulsoRequest>(snap);
   }
@@ -654,4 +658,3 @@ export class FirestorePulsoRepository implements IPulsoRepository {
     return this.updateSession(id, { archived: true, archivedAt: new Date() });
   }
 }
-

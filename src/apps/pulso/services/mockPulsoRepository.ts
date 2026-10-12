@@ -302,7 +302,7 @@ export class MockPulsoRepository implements IPulsoRepository {
     return data as any;
   }
 
-  async getRequest(id: string): Promise<PulsoRequest | undefined> {
+  async getRequest(id: string, _options?: { server?: boolean }): Promise<PulsoRequest | undefined> {
     const all = await this.getRequests();
     return all.find(r => r.id === id);
   }
@@ -357,4 +357,3 @@ export class MockPulsoRepository implements IPulsoRepository {
     return this.updateSession(id, { archived: true, archivedAt: new Date() });
   }
 }
-

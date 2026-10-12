@@ -289,10 +289,13 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
   const activeProviderId = session.selectedModelProvider || activeModel?.provider || '';
   const isViewingActiveProvider = draftProvider === activeProviderId;
   const draftProfile = orderedProfiles.find(profile => profile.id === authProfileId);
-  const panelProfile = isViewingActiveProvider
-    ? confirmedProfile
-    : (draftProfile || automaticProfile);
-  const panelProfileCaption = isViewingActiveProvider ? 'conta ativa' : 'conta a aplicar';
+  const isDraftProfileDifferent = authProfileId !== (session.selectedAuthProfileId || '');
+  const panelProfile = draftProfile
+    || (isDraftProfileDifferent ? automaticProfile : confirmedProfile)
+    || automaticProfile;
+  const panelProfileCaption = isDraftProfileDifferent || !isViewingActiveProvider
+    ? 'conta a aplicar'
+    : 'conta ativa';
 
   const openSelector = () => {
     setProvider(session.selectedModelProvider || defaultModel?.provider || '');
@@ -459,6 +462,7 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
                 </div>
                 <div className="flex flex-col gap-1">
                   <button
+                    type="button"
                     onClick={() => setAuthProfileId('')}
                     className={`w-full px-2 py-1.5 rounded-lg border-none text-left text-[8px] cursor-pointer ${!authProfileId ? 'bg-white/[0.08] text-white' : 'bg-transparent text-white/35'}`}
                   >
@@ -474,6 +478,7 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
                     return (
                       <button
                         key={profile.id}
+                        type="button"
                         disabled={disabled}
                         onClick={() => setAuthProfileId(profile.id)}
                         className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border-none text-left text-[8px] ${disabled ? 'text-white/18 cursor-not-allowed' : authProfileId === profile.id ? 'bg-white/[0.08] text-white cursor-pointer' : 'bg-transparent text-white/35 hover:text-white/65 cursor-pointer'}`}
@@ -483,6 +488,7 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
                           <span className="mt-0.5 block truncate text-[7px] text-white/24">{profileSecondaryLabel(profile)}</span>
                         </span>
                         <span className="shrink-0 text-right text-[7px] uppercase">
+                          {authProfileId === profile.id && !isConfirmed ? 'selecionada · ' : ''}
                           {isConfirmed ? 'ativa · ' : ''}{profile.status}{profile.expiresInLabel ? ` · ${profile.expiresInLabel}` : ''}
                         </span>
                       </button>

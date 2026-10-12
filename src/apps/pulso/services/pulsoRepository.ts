@@ -99,7 +99,7 @@ export interface IPulsoRepository {
   getPendingRequests(): Promise<PulsoRequest[]>;
   saveRequest(request: Partial<PulsoRequest>): Promise<PulsoRequest>;
   updateRequest(id: string, data: Partial<PulsoRequest>): Promise<PulsoRequest>;
-  getRequest(id: string): Promise<PulsoRequest | undefined>;
+  getRequest(id: string, options?: { server?: boolean }): Promise<PulsoRequest | undefined>;
 
   // Sessions (v2)
   getSessions(): Promise<Session[]>;

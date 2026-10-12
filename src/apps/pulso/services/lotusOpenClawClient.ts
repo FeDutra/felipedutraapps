@@ -118,7 +118,7 @@ export const lotusOpenClawClient = {
     const persistedId = request?.id || requestId;
     const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
-      const current = await requestsService.getRequest(persistedId);
+      const current = await requestsService.getRequest(persistedId, { server: true }).catch(() => undefined);
       const status = String(current?.status || '');
       if (status === 'success' || status === 'completed') return current;
       if (status === 'failed' || status === 'error') {
