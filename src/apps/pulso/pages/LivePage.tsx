@@ -286,6 +286,13 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
   const automaticProfile = orderedProfiles.find(profile => profile.id === providerState?.resolvedAutomaticProfileId);
   const authSelectionMode = session.selectedAuthSelectionMode
     || (session.selectedAuthProfileId ? 'explicit' : 'automatic');
+  const activeProviderId = session.selectedModelProvider || activeModel?.provider || '';
+  const isViewingActiveProvider = draftProvider === activeProviderId;
+  const draftProfile = orderedProfiles.find(profile => profile.id === authProfileId);
+  const panelProfile = isViewingActiveProvider
+    ? confirmedProfile
+    : (draftProfile || automaticProfile);
+  const panelProfileCaption = isViewingActiveProvider ? 'conta ativa' : 'conta a aplicar';
 
   const openSelector = () => {
     setProvider(session.selectedModelProvider || defaultModel?.provider || '');
@@ -379,16 +386,30 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
             <div className="mb-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[8px] tracking-[0.14em] uppercase text-white/55">{providerStatusLabel(providerState)}</span>
-                <span className="text-[7px] text-white/25 truncate">
-                  {providerState?.usageLabel || 'sem telemetria de cota'}
+                <span className="text-[7px] tracking-[0.12em] uppercase text-white/25">
+                  {panelProfileCaption}
                 </span>
+              </div>
+              <p className="mt-1.5 text-[9px] text-white/60">
+                {profileDisplayName(panelProfile)}
+                {profileSecondaryLabel(panelProfile) ? ` · ${profileSecondaryLabel(panelProfile)}` : ''}
+              </p>
+              <div className="mt-2.5 border-t border-white/[0.06] pt-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[7px] tracking-[0.12em] uppercase text-white/25">cota geral do provider</span>
+                  <span className="text-[7px] text-white/25 truncate">
+                    {providerState?.usageLabel || 'sem telemetria'}
+                  </span>
+                </div>
+                {providerState?.usageScope === 'provider' && providerState.usageAccountEmail && (
+                  <p className="mt-1 text-[7px] text-white/20">
+                    fonte da telemetria: {providerState.usageAccountEmail} · não identifica a conta ativa
+                  </p>
+                )}
               </div>
               {providerState?.plan && (
                 <p className="mt-1.5 text-[7px] text-white/25">
                   {providerState.plan}
-                  {providerState.usageScope === 'provider' && providerState.usageAccountEmail
-                    ? ` · consulta via ${providerState.usageAccountEmail}`
-                    : ''}
                 </p>
               )}
               {(providerState?.usageWindows || []).map(window => (
@@ -1635,17 +1656,11 @@ export default function LivePage() {
                 const liveModels = models.filter(model => (
                   model && typeof model.id === 'string' && typeof model.provider === 'string'
                 ));
-                setModelCatalog(previous => {
-                  const merged = new Map(previous.map(model => [`${model.provider}/${model.id}`, model]));
-                  liveModels.forEach(model => merged.set(`${model.provider}/${model.id}`, model));
-                  return Array.from(merged.values());
-                });
+                // O catálogo vivo é autoritativo. Mesclar com o estado anterior
+                // mantinha modelos removidos/indisponíveis clicáveis no seletor.
+                setModelCatalog(liveModels);
                 const liveProviders = Array.isArray(raw.providers) ? raw.providers : [];
-                setProviderCatalog(previous => {
-                  const merged = new Map(previous.map(provider => [provider.id, provider]));
-                  liveProviders.filter(provider => provider?.id).forEach(provider => merged.set(provider.id, provider));
-                  return Array.from(merged.values());
-                });
+                setProviderCatalog(liveProviders.filter(provider => provider?.id));
                 return;
               }
               const data = raw as Session;
@@ -3843,14 +3858,9 @@ export default function LivePage() {
       originType: "user_ui"
     };
 
-    if (activeSession?.selectedModelId && activeSession.selectedModelProvider) {
-      lotusPayload.modelSelection = {
-        provider: activeSession.selectedModelProvider,
-        modelId: activeSession.selectedModelId,
-        thinkingLevel: activeSession.selectedThinkingLevel || 'medium',
-        authProfileId: activeSession.selectedAuthProfileId || undefined,
-      };
-    }
+    // Modelo e conta são persistidos pelo seletor diretamente na sessão do
+    // OpenClaw. Reenviar esse estado em cada mensagem podia reaplicar um
+    // snapshot antigo do cliente e desfazer uma troca recém-confirmada.
 
     if (routeResult.areaRef) lotusPayload.areaRef = routeResult.areaRef;
     if (routeResult.routing) lotusPayload.routing = routeResult.routing;
