@@ -3,6 +3,7 @@ import { GeminiLiveClient, GeminiLiveState } from './GeminiLiveClient';
 import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
+import { isTauriDesktopRuntime, isTauriRuntime } from '../runtime';
 
 export type VoiceSessionState =
   | 'idle'
@@ -94,12 +95,7 @@ export class VoiceSessionController {
     this.ttsAdapter = new TTSAdapter();
     // O Modo Presença tem uma identidade vocal única. Não herda a voz nativa
     // ou outra preferência eventualmente escolhida para leitura de mensagens.
-    const isTauri = typeof window !== 'undefined' && (
-      window.location.protocol === 'tauri:'
-      || window.location.protocol === 'file:'
-      || !!(window as any).__TAURI__
-      || !!(window as any).__TAURI_INTERNALS__
-    );
+    const isTauri = isTauriDesktopRuntime();
     this.ttsAdapter.updatePreferences({
       ttsProvider: isTauri ? 'local_kokoro_sidecar' : 'kokoro_http',
       voiceName: 'pf_dora(0.70)+af_bella(0.30)',
@@ -475,11 +471,7 @@ export class VoiceSessionController {
     this.log('STT_REQUEST_STARTED');
     
     try {
-      const isTauriEnv = typeof window !== 'undefined' && (
-        window.location.protocol === 'tauri:' ||
-        !!(window as any).__TAURI__ ||
-        !!(window as any).__TAURI_INTERNALS__
-      );
+      const isTauriEnv = isTauriRuntime();
 
       const endpointUrl = isTauriEnv 
         ? 'https://felipedutraapps.web.app/api/pulso/transcribe' 

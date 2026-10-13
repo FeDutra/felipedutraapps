@@ -1,5 +1,6 @@
 import { PulsoLLMClient, ChatMessage, ToolDefinition } from './client';
 import { localActions } from '../actions/localActions';
+import { isTauriDesktopRuntime } from '../runtime';
 
 const AGENT_SYSTEM_PROMPT = `Você é a Lótus, a inteligência central viva e assistente operacional do Fê (Felipe Dutra). Habitando a PULSO (Mac local, Groq/Llama).
 
@@ -771,7 +772,7 @@ class AgentOrchestrator {
     const lowerMessage = userMessage.toLowerCase();
     const hasTriggerWord = triggerWords.some(word => lowerMessage.includes(word));
 
-    const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ !== undefined;
+    const isTauri = isTauriDesktopRuntime();
 
     if (hasTriggerWord) {
       if (isTauri) {

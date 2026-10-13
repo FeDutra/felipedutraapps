@@ -9,6 +9,7 @@ import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
 import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
 import { listen } from '@tauri-apps/api/event';
 import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
+import { getPulsoRuntimeLabel, isTauriDesktopRuntime, isTauriRuntime } from '@/lib/pulso/runtime';
 
 import {
   DndContext,
@@ -3814,12 +3815,9 @@ export default function LivePage() {
           activeAreaId: activeAreaId || undefined
         });
 
-    const isTauri = typeof window !== 'undefined' && (
-      window.location.protocol === 'tauri:' ||
-      window.location.protocol === 'file:' ||
-      !!(window as any).__TAURI__ ||
-      !!(window as any).__TAURI_INTERNALS__
-    );
+    const isTauri = isTauriRuntime();
+    const isTauriDesktop = isTauriDesktopRuntime();
+    const runtimeLabel = getPulsoRuntimeLabel();
 
     const activeSession = sessions.find(s => s.contextId === (options?.contextId || activeContextNode.contextId));
     const bootstrapStatus = activeSession?.runtimeStatus || 'pending';
@@ -3848,7 +3846,7 @@ export default function LivePage() {
         userName: "Fê",
         interface: "pulso" as const,
         deviceId: getPresenceDeviceId(),
-        deviceClass: isTauri ? 'desktop_local' : 'web_mobile',
+        deviceClass: isTauriDesktop ? 'desktop_local' : 'web_mobile',
         ...options?.context
       },
       contextWindow: [],
@@ -3885,12 +3883,12 @@ export default function LivePage() {
         documentId: newRequest.id,
         requestType: newRequest.requestType,
         status: newRequest.status,
-        runtime: isTauri ? 'tauri' : 'web'
+        runtime: runtimeLabel
       });
       if (typeof window !== 'undefined') {
         (window as any).lastPulsoSubmit = {
           lastSubmitInput: cleanMsg,
-          runtime: isTauri ? 'tauri' : 'web',
+          runtime: runtimeLabel,
           firestorePath: `workspaces/felipe_dutra/pulso_requests`,
           documentId: newRequest.id,
           payload: lotusPayload,
@@ -3907,7 +3905,7 @@ export default function LivePage() {
       if (typeof window !== 'undefined') {
         (window as any).lastPulsoSubmit = {
           lastSubmitInput: cleanMsg,
-          runtime: isTauri ? 'tauri' : 'web',
+          runtime: runtimeLabel,
           firestorePath: `workspaces/felipe_dutra/pulso_requests`,
           error: err?.message || String(err)
         };
@@ -4557,11 +4555,7 @@ export default function LivePage() {
       voiceStateRef.current = 'transcribing';
       setVoiceState('transcribing');
       
-      const isTauriEnv = typeof window !== 'undefined' && (
-        window.location.protocol === 'tauri:' ||
-        !!(window as any).__TAURI__ ||
-        !!(window as any).__TAURI_INTERNALS__
-      );
+      const isTauriEnv = isTauriRuntime();
 
       const endpointUrl = isTauriEnv 
         ? 'https://felipedutraapps.web.app/api/pulso/transcribe' 
@@ -6329,11 +6323,7 @@ ${data.transcription}`, {
                                         // sozinha), o clique aqui é a confirmação humana. Só roda dentro
                                         // do app desktop — no app-code:core.rs os comandos já existem
                                         // (execute_shell_command / execute_applescript / local_open_url).
-                                        const isTauriEnv = typeof window !== 'undefined' && (
-                                          window.location.protocol === 'tauri:' ||
-                                          !!(window as any).__TAURI__ ||
-                                          !!(window as any).__TAURI_INTERNALS__
-                                        );
+                                        const isTauriEnv = isTauriDesktopRuntime();
                                         if (!isTauriEnv) {
                                           setToastMessage('essa ação só funciona no app desktop');
                                           setTimeout(() => setToastMessage(null), 2500);
@@ -7456,7 +7446,9 @@ ${data.transcription}`, {
                   className="pulso-select w-full"
                 >
                   <option value="browser_native" className="bg-[#121212]">nativo do navegador</option>
-                  <option value="local_kokoro_sidecar" className="bg-[#121212]">sidecar nativo (pf_dora)</option>
+                  {isTauriDesktopRuntime() && (
+                    <option value="local_kokoro_sidecar" className="bg-[#121212]">sidecar nativo (pf_dora)</option>
+                  )}
                   <option value="kokoro_http" className="bg-[#121212]">kokoro http (oficial)</option>
                   <option value="local_kokoro" className="bg-[#121212]">kokoro-fastapi (beta)</option>
                   <option value="cloud_google" disabled className="bg-[#121212]">google cloud tts (indisponível)</option>
