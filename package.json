@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "tauri": "tauri",
     "pulso:web": "next dev -p 3001",
     "pulso:desktop": "tauri dev",
     "pulso:whatsapp": "node src-tauri/whatsapp-service/index.js",
