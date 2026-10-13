@@ -27,6 +27,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
 
       - name: Install frontend dependencies
         run: npm ci
@@ -68,7 +69,9 @@ jobs:
             echo 'O IPA contém a interface errada do antigo cliente iOS.' >&2
             exit 1
           fi
-          grep -R -a -m1 'Central Viva do Ecossistema' "$APP"
+          LIVE_HTML="$(find "$APP" -type f -path '*/pulso/live/index.html' -print -quit)"
+          test -n "$LIVE_HTML"
+          grep -a -q '/pulso/live' "$LIVE_HTML" || grep -a -q 'PULSO' "$LIVE_HTML"
           shasum -a 256 "$IPA" | tee pulso-ios-canary.sha256
           cp "$IPA" PULSO-Tauri-Web-16ff1cfb.ipa
 
