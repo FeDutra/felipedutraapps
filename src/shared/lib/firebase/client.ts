@@ -1,5 +1,10 @@
 import { getApps, initializeApp, getApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  getAuth,
+  initializeAuth,
+  Auth,
+} from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
@@ -29,7 +34,35 @@ const firebaseApp: FirebaseApp = getApps().length === 0
 /**
  * Mandatory Firebase service instances
  */
-const auth: Auth = getAuth(firebaseApp);
+const isTauriRuntime = typeof window !== "undefined" && (
+  window.location.protocol === "tauri:" ||
+  window.location.protocol === "file:" ||
+  !!(window as any).__TAURI__ ||
+  !!(window as any).__TAURI_INTERNALS__
+);
+
+/**
+ * WKWebView may leave Firebase Auth waiting indefinitely while its default
+ * IndexedDB persistence settles. Tauri only needs a durable local session, so
+ * prefer localStorage-backed persistence there. Keep the browser defaults on
+ * the web, where popup/redirect auth has already been validated.
+ */
+const auth: Auth = (() => {
+  if (!isTauriRuntime) return getAuth(firebaseApp);
+
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: browserLocalPersistence,
+    });
+  } catch (error: any) {
+    // Hot reloads and duplicate client modules can reach an already-created
+    // Auth instance. Reuse it rather than turning startup into a hard failure.
+    if (error?.code === "auth/already-initialized") {
+      return getAuth(firebaseApp);
+    }
+    throw error;
+  }
+})();
 const db: Firestore = getFirestore(firebaseApp);
 const storage: FirebaseStorage = getStorage(firebaseApp);
 

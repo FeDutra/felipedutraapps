@@ -127,7 +127,7 @@ const LoginScreen = () => {
       await authService.signInWithEmail(email, password);
     } catch (error: any) {
       console.error("Email login failed:", error);
-      setErrorMsg("Credenciais inválidas ou erro de autenticação.");
+      setErrorMsg(error?.message || "Credenciais inválidas ou erro de autenticação.");
     } finally {
       setSigningIn(false);
     }
