@@ -4,6 +4,7 @@ import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
 import { encodePcmWav } from './pcmWav';
+import { isTauriDesktopRuntime, isTauriRuntime } from '../runtime';
 
 export type VoiceSessionState =
   | 'idle'
@@ -101,7 +102,7 @@ export class VoiceSessionController {
     this.ttsAdapter = new TTSAdapter();
     // O Modo Presença tem uma identidade vocal única. Não herda a voz nativa
     // ou outra preferência eventualmente escolhida para leitura de mensagens.
-    const isTauri = this.isTauriRuntime();
+    const isTauri = isTauriDesktopRuntime();
     this.ttsAdapter.updatePreferences({
       ttsProvider: isTauri ? 'local_kokoro_sidecar' : 'kokoro_http',
       voiceName: 'pf_dora(0.70)+af_bella(0.30)',
@@ -110,15 +111,6 @@ export class VoiceSessionController {
       pitch: 1,
       volume: 1
     }, false);
-  }
-
-  private isTauriRuntime() {
-    return typeof window !== 'undefined' && (
-      window.location.protocol === 'tauri:'
-      || window.location.protocol === 'file:'
-      || !!(window as any).__TAURI__
-      || !!(window as any).__TAURI_INTERNALS__
-    );
   }
 
   /**
@@ -313,7 +305,7 @@ export class VoiceSessionController {
       this.analyser.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
 
-      if (this.isTauriRuntime() && typeof this.audioContext.createScriptProcessor === 'function') {
+      if (isTauriRuntime() && typeof this.audioContext.createScriptProcessor === 'function') {
         this.pcmSampleRate = this.audioContext.sampleRate;
         this.pcmProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
         this.pcmProcessor.onaudioprocess = (event) => {
@@ -374,7 +366,7 @@ export class VoiceSessionController {
     this.mediaRecorder.onstop = async () => {
       const blobMime = this.mediaRecorder?.mimeType || mimeType || 'application/octet-stream';
       const pcmChunks = this.pcmChunks;
-      const audioBlob = this.isTauriRuntime() && pcmChunks.length > 0
+      const audioBlob = isTauriRuntime() && pcmChunks.length > 0
         ? encodePcmWav(pcmChunks, this.pcmSampleRate)
         : new Blob(this.audioChunks, { type: blobMime });
       this.audioChunks = [];
@@ -511,11 +503,14 @@ export class VoiceSessionController {
     this.log('STT_REQUEST_STARTED');
     
     try {
-      const isTauriEnv = this.isTauriRuntime();
+      const isTauriEnv = isTauriRuntime();
+      const isTauriDesktop = isTauriDesktopRuntime();
 
-      const endpointUrl = isTauriEnv
+      const endpointUrl = isTauriDesktop
         ? 'http://127.0.0.1:14323/transcribe'
-        : '/api/pulso/transcribe';
+        : isTauriEnv
+          ? 'https://felipedutraapps.web.app/api/pulso/transcribe'
+          : '/api/pulso/transcribe';
       // plugin-http atravessa a fronteira nativa do Tauri sem depender do
       // CORS do WKWebView. No navegador comum, preservamos o fetch padrão.
       const requestFetch: typeof fetch = isTauriEnv

@@ -1,14 +1,6 @@
 export type TTSProvider = 'browser_native' | 'local_kokoro_sidecar' | 'local_kokoro' | 'kokoro_http' | 'cloud_google';
 
-const isTauriApp = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.location.protocol === 'tauri:' ||
-    window.location.protocol === 'file:' ||
-    !!(window as any).__TAURI__ ||
-    !!(window as any).__TAURI_INTERNALS__
-  );
-};
+import { isTauriDesktopRuntime, isTauriRuntime } from './runtime';
 
 export interface TTSPreferences {
   ttsProvider: TTSProvider;
@@ -65,7 +57,7 @@ const getKokoroEndpoint = () => {
                         window.location.hostname !== '127.0.0.1' && 
                         !window.location.protocol.startsWith('tauri');
     
-    if (isRemoteWeb || isTauriApp()) {
+    if (isRemoteWeb || isTauriRuntime()) {
       return KOKORO_REMOTE_ENDPOINT;
     }
   }
@@ -102,7 +94,7 @@ export class TTSAdapter {
 
       // No desktop empacotado, o sidecar é a primeira rota. Se ele falhar, a
       // geração cai para o Kokoro VPS antes de considerar voz nativa.
-      if (isTauriApp() && !localStorage.getItem(DESKTOP_SIDECAR_MIGRATION_KEY)) {
+      if (isTauriDesktopRuntime() && !localStorage.getItem(DESKTOP_SIDECAR_MIGRATION_KEY)) {
         if (this.preferences.ttsProvider === 'kokoro_http') {
           this.preferences.ttsProvider = 'local_kokoro_sidecar';
         }
@@ -114,7 +106,7 @@ export class TTSAdapter {
       // Kokoro. Respeitamos somente uma escolha nativa feita conscientemente
       // a partir desta versão; o resto migra para o sidecar (com VPS como
       // fallback no caminho de síntese).
-      if (isTauriApp() && !localStorage.getItem(DESKTOP_LEGACY_NATIVE_MIGRATION_KEY)) {
+      if (isTauriDesktopRuntime() && !localStorage.getItem(DESKTOP_LEGACY_NATIVE_MIGRATION_KEY)) {
         if (
           this.preferences.ttsProvider === 'browser_native'
           && !localStorage.getItem(EXPLICIT_NATIVE_CHOICE_KEY)
@@ -675,7 +667,7 @@ export class TTSAdapter {
 
     if (onPreparing) onPreparing();
 
-    const isTauri = isTauriApp();
+    const isTauri = isTauriDesktopRuntime();
     const isRemoteWeb = typeof window !== 'undefined' && 
       window.location.hostname !== 'localhost' && 
       window.location.hostname !== '127.0.0.1' &&
