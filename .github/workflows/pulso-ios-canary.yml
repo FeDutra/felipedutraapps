@@ -40,7 +40,7 @@ jobs:
           grep -F 'com.felipedutraapps.pulso.ios.canary' src-tauri/tauri.ios.conf.json
           grep -F 'browserLocalPersistence' src/shared/lib/firebase/client.ts
           grep -F 'A autenticação demorou mais do que o esperado' src/shared/services/authService.ts
-          if grep -R -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' src src-tauri --exclude-dir=target --exclude='*.md'; then
+          if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' src src-tauri --exclude-dir=target --exclude='*.md'; then
             echo 'A interface errada do antigo cliente iOS apareceu na fonte.' >&2
             exit 1
           fi
@@ -67,7 +67,7 @@ jobs:
           test "$BUNDLE_NAME" = 'PULSO'
           test -z "$DISPLAY_NAME" || test "$DISPLAY_NAME" = 'PULSO'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.0.2026101302'
-          if grep -R -a -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' "$APP"; then
+          if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' "$APP"; then
             echo 'O IPA contém a interface errada do antigo cliente iOS.' >&2
             exit 1
           fi
