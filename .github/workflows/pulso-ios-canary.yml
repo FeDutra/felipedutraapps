@@ -1,6 +1,9 @@
 name: Build PULSO iOS Canary
 
 on:
+  push:
+    branches:
+      - pulso/ios-tauri-canary-20261013
   workflow_dispatch:
 
 jobs:
