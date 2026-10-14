@@ -22,7 +22,7 @@ export function hasGeminiLiveConfig() {
 }
 
 export function readPresenceTransportPreference(): PresenceTransportPreference {
-  if (typeof window === 'undefined') return 'auto';
+  if (typeof window === 'undefined') return 'turn_based';
   try {
     const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
     if (saved === 'gemini_live' || saved === 'turn_based' || saved === 'auto') return saved;
@@ -30,7 +30,10 @@ export function readPresenceTransportPreference(): PresenceTransportPreference {
     // Some desktop WebViews can deny storage while the custom asset origin is
     // being initialized. Presence must still open with its safe default.
   }
-  return 'auto';
+  // Gemini Live is experimental and must never become the active route merely
+  // because its relay is configured. The canonical presence path is the
+  // turn-based OpenClaw/Lótus pipeline with local Kokoro playback.
+  return 'turn_based';
 }
 
 export function writePresenceTransportPreference(preference: PresenceTransportPreference) {
@@ -46,8 +49,7 @@ export function shouldUseGeminiLive(preference: PresenceTransportPreference, sea
   const override = new URLSearchParams(search).get('gemini_live');
   if (override === '0') return false;
   if (override === '1') return hasGeminiLiveConfig();
-  if (preference === 'turn_based') return false;
-  return hasGeminiLiveConfig();
+  return preference === 'gemini_live' && hasGeminiLiveConfig();
 }
 
 export function getPresenceDeviceId() {

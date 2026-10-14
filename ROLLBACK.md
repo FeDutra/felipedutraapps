@@ -26,6 +26,34 @@
 
 ---
 
+# Rollback — Gemini Live fora da rota ativa de Presença (14/10/2026)
+
+Baseline de código: `1e3fda30` em `origin/main`.
+
+## Escopo
+
+- tornar `turn_based` o padrão seguro do modo Presença;
+- usar Gemini Live somente quando escolhido explicitamente como
+  `gemini_live` ou por `?gemini_live=1`;
+- restaurar no iMac o pipeline canônico Lótus/OpenClaw com reprodução pelo
+  sidecar Kokoro local;
+- não alterar relay, credenciais, Firestore, Functions ou o bundle instalado.
+
+## Estado local preservado
+
+Antes da troca, o banco LocalStorage do app no iMac foi copiado para:
+
+`/Users/fe/Library/Caches/PULSO/presence-transport-backup-20261014T132258Z`
+
+## Reversão
+
+Para reverter o código, restaurar `1e3fda30` ou reverter apenas o commit desta
+alteração. Para reverter somente o iMac, fechar o PULSO e restaurar os arquivos
+`localstorage.sqlite3*` do diretório de backup acima. Depois, abrir novamente o
+app. Isso devolve `pulso_presence_transport` ao valor anterior (`auto`).
+
+---
+
 # Preparação Hermes local para Presença (14/10/2026)
 
 - Baseline do Hermes: `v0.21.6`, perfil único `default`, gateway parado e sem
