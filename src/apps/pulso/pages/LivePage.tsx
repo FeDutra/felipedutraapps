@@ -4193,7 +4193,11 @@ export default function LivePage() {
     // à interface do chat e não pode descartar um turno já transcrito. Esse
     // descarte deixava o VoiceSessionController parado em `thinking`, sem
     // pedido no Firestore e sem voltar a ouvir.
-    if (originMode !== 'presence' && (isTyping || isSubmittingRef.current)) {
+    // Voz é a entrada principal do Fe. Um turno já capturado/transcrito não
+    // pode ser descartado porque a interface ainda está exibindo outro turno
+    // como ocupado. A trava de duplicidade vale apenas para envio manual de
+    // texto; as entradas de voz seguem com requestId próprio e são enfileiradas.
+    if (originMode === 'text' && (isTyping || isSubmittingRef.current)) {
       console.warn('Blocked duplicate send: message already processing or submitting.');
       return;
     }
@@ -4630,7 +4634,13 @@ export default function LivePage() {
     const tauri = isTauriRuntime();
     const markRecording = async (status: string) => {
       if (!tauri || !recordingId) return;
-      await invoke('voice_recording_mark', { recordingId, status });
+      try {
+        await invoke('voice_recording_mark', { recordingId, status });
+      } catch (error) {
+        // O journal existe para recuperar a voz. Nunca pode impedir a voz de
+        // ser transcrita ou entregue se o áudio durável já está disponível.
+        console.error('[PULSO_RECORDING_MARK_FAILED]', { recordingId, status, error });
+      }
     };
 
     try {
@@ -4647,22 +4657,36 @@ export default function LivePage() {
 
       const transcriptionAbort = new AbortController();
       const transcriptionTimeout = window.setTimeout(() => transcriptionAbort.abort(), 3 * 60 * 1000);
-      let response: Response;
+      let response: Response | null = null;
+      let lastTranscriptionError: unknown = null;
       try {
-        response = await requestFetch(endpointUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': recordingId ? 'application/json' : (blob.type || 'audio/webm'),
-          },
-          body: recordingId ? JSON.stringify({ recordingId }) : blob,
-          signal: transcriptionAbort.signal,
-        });
+        // O objeto durável torna um retry seguro: ambos os pedidos apontam para
+        // o mesmo recordingId e não criam mensagens. Um espasmo do loopback
+        // não deve fazer o usuário perder um turno inteiro.
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            response = await requestFetch(endpointUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': recordingId ? 'application/json' : (blob.type || 'audio/webm'),
+              },
+              body: recordingId ? JSON.stringify({ recordingId }) : blob,
+              signal: transcriptionAbort.signal,
+            });
+            if (response.ok || attempt === 2) break;
+            lastTranscriptionError = new Error(`Falha no STT (${response.status})`);
+          } catch (error) {
+            lastTranscriptionError = error;
+            if (attempt === 2) throw error;
+          }
+          await new Promise(resolve => window.setTimeout(resolve, 350));
+        }
       } finally {
         window.clearTimeout(transcriptionTimeout);
       }
 
-      if (!response.ok) {
-        throw new Error('Falha na transcrição');
+      if (!response?.ok) {
+        throw lastTranscriptionError || new Error('Falha na transcrição');
       }
 
       const data = await response.json();
@@ -4689,8 +4713,18 @@ export default function LivePage() {
            voiceModeRef.current = 'off';
            await markRecording('message_queued');
            const result = await handleSendMessage(newText, { originMode: 'recording_once' });
-           if (result?.requestId) await markRecording('committed');
-           else await markRecording('failed');
+           if (result?.requestId) {
+             await markRecording('committed');
+           } else {
+             // Se a entrega falhar, devolve a transcrição ao compositor. O
+             // usuário pode reenviar sem falar tudo outra vez, e o WAV segue
+             // preservado para recuperação.
+             setInputMessage(newText);
+             currentTextRef.current = newText;
+             inputMessageRef.current = newText;
+             setVoiceError('A transcrição foi recuperada, mas o envio falhou. O texto voltou para a caixa e o áudio continua salvo.');
+             await markRecording('failed');
+           }
            return;
          }
 
@@ -4729,9 +4763,7 @@ export default function LivePage() {
       }
     } catch (err) {
       console.error('[PULSO_TRANSCRIBE_ERROR]', err);
-      await markRecording('failed').catch((markError) => {
-        console.error('[PULSO_RECORDING_MARK_FAILED]', markError);
-      });
+      await markRecording('failed');
       setVoiceState('error');
       const location = recordingArtifactPathRef.current
         ? ` O áudio está salvo em ${recordingArtifactPathRef.current}.`

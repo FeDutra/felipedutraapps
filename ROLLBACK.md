@@ -1,3 +1,26 @@
+# Rollback — voz comum não bloqueável pela camada de recuperação (14/10/2026)
+
+- Baseline instalada: `ad37d3e4` em `main`.
+- Motivo: o áudio era preservado, porém um erro de journal ou a trava global de
+  `isTyping` ainda podia abortar a transcrição/entrega de um turno de voz já
+  capturado.
+- Correção: atualizações do journal passam a ser auxiliares e nunca bloqueiam
+  transcrição ou envio; `recording_once` não herda a trava de envio manual de
+  texto; STT local recebe um retry idempotente; falha de entrega devolve a
+  transcrição ao compositor e mantém o WAV recuperável.
+- Artefato, hashes e bundle de rollback serão preenchidos após o build Intel e
+  a instalação validada no iMac.
+
+## Reversão
+
+1. Encerrar somente `/Applications/PULSO.app` e seus `kokoro_runner`.
+2. Mover o bundle atual para um caminho datado de contingência.
+3. Restaurar o bundle `pre-voice-priority` registrado nesta seção após a
+   instalação.
+4. Não remover `~/Documents/PULSO/Áudios recuperáveis`.
+
+---
+
 # Rollback — gravação de áudio recuperável no app Tauri (14/10/2026)
 
 - Fonte instalada: `ad37d3e4` em `main`.
