@@ -25,6 +25,7 @@ const APPROVALS_PATH = `${BASE_PATH}/pulso_operator_approvals`;
 const RUNTIME_PATH = `${BASE_PATH}/pulso_operator_runtime/current`;
 const HEARTBEAT_MS = Number.parseInt(process.env.PULSO_OPERATOR_HEARTBEAT_MS || '15000', 10);
 const BRIDGE_VERSION = '0.1.0';
+const OPERATOR_SCOPES = ['operator.read', 'operator.approvals'];
 
 let gatewayRuntimePromise = null;
 let stopping = false;
@@ -169,6 +170,8 @@ async function main() {
     clientDisplayName: 'PULSO Operator Bridge',
     clientVersion: BRIDGE_VERSION,
     mode: GATEWAY_CLIENT_MODES.CLI,
+    role: 'operator',
+    scopes: OPERATOR_SCOPES,
     onHelloOk: hello => readyResolve(hello),
     onConnectError: error => readyReject(error),
     onClose: async (code, reason) => {
