@@ -21,6 +21,7 @@ import {
 } from '../services/operatorControlService';
 
 type SystemSection = 'decisions' | 'state' | 'connections' | 'keys';
+const BUILD_REVISION = process.env.NEXT_PUBLIC_PULSO_BUILD_REVISION || 'local';
 
 const SECTIONS: Array<{ id: SystemSection; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> }> = [
   { id: 'decisions', label: 'Decisões', icon: ShieldCheck },
@@ -326,6 +327,7 @@ export default function SystemPage() {
           <span className="flex items-center gap-2"><Terminal size={11} /> OpenClaw · runtime</span>
           <span>PULSO · autoridade humana</span>
           <span>Control UI · contingência</span>
+          <span data-pulso-revision={BUILD_REVISION}>rev · {BUILD_REVISION.slice(0, 8)}</span>
         </footer>
       </div>
     </div>
