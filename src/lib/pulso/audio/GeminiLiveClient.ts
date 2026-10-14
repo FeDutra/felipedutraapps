@@ -30,7 +30,16 @@ export interface GeminiLiveConfig {
    * o resultado sair, chamar sendResultText() com a resposta real.
    * A Gemini Live nunca responde por conta própria — só reconhece e narra.
    */
-  onUserTurnReady?: (userText: string) => void;
+  onUserTurnStarted?: (turnId: string) => void;
+  onUserTurnReady?: (turn: { turnId: string; userText: string }) => void;
+}
+
+type NarrationKind = 'acknowledgement' | 'checkpoint' | 'result';
+
+interface NarrationItem {
+  kind: NarrationKind;
+  text: string;
+  turnId: string;
 }
 
 function base64FromInt16(samples: Int16Array): string {
@@ -98,18 +107,24 @@ export class GeminiLiveClient {
   private nextPlaybackTime = 0;
   private pendingSources = 0;
   private turnCompletePending = false;
+  private playbackSources = new Set<AudioBufferSourceNode>();
+  private playbackGeneration = 0;
 
   // Orquestração reconhecimento -> backend real -> narração do resultado
   private pendingUserTranscript = '';
+  private pendingAssistantTranscript = '';
+  private bufferedAutonomousAudio: string[] = [];
   private awaitingResult = false;
+  private turnSequence = 0;
+  private activeTurnId: string | null = null;
   /**
    * A Live API aceita novos turnos enquanto reproduz áudio, mas não garante
    * a ordem deles. Para presença, ordem é presença: a confirmação curta vem
    * primeiro; checkpoints e resultado entram depois, sem se atropelarem nem
    * desaparecerem durante uma fala em curso.
    */
-  private narrationQueue: Array<{ kind: 'checkpoint' | 'result'; text: string }> = [];
-  private narrationInFlight: 'checkpoint' | 'result' | null = null;
+  private narrationQueue: NarrationItem[] = [];
+  private narrationInFlight: NarrationItem | null = null;
   /** O chat pode produzir muitos eventos; a voz precisa de marcos, não de logs. */
   private deferredCheckpointText: string | null = null;
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null;
@@ -260,58 +275,95 @@ export class GeminiLiveClient {
         // turno sem nunca mandar turnComplete — sem isso, narrationInFlight
         // ficava preso pra sempre e travava toda fala seguinte (incluindo
         // resultados reais, que o chamador achava terem sido narrados).
-        const interruptedKind = this.narrationInFlight;
+        const interruptedKind = this.narrationInFlight?.kind;
         this.narrationInFlight = null;
         if (interruptedKind === 'result') {
           this.awaitingResult = false;
         }
+        this.narrationQueue = [];
+        this.deferredCheckpointText = null;
+        this.bufferedAutonomousAudio = [];
+        this.pendingAssistantTranscript = '';
         this.setState('listening');
-        this.flushNarrationQueue();
-        this.scheduleDeferredCheckpoint();
         return;
       }
 
       if (sc.inputTranscription?.text) {
+        if (!this.pendingUserTranscript) {
+          this.beginUserTurn();
+        }
         this.pendingUserTranscript += sc.inputTranscription.text;
         this.config.onTranscript?.('user', sc.inputTranscription.text);
       }
       if (sc.outputTranscription?.text) {
-        this.config.onTranscript?.('assistant', sc.outputTranscription.text);
+        if (this.narrationInFlight) {
+          this.config.onTranscript?.('assistant', sc.outputTranscription.text);
+        } else {
+          // A resposta espontânea do Gemini ao microfone nunca é publicada
+          // antes de sabermos se o turno é social ou operacional.
+          this.pendingAssistantTranscript += sc.outputTranscription.text;
+        }
       }
 
       const parts = sc.modelTurn?.parts || [];
       for (const p of parts) {
         if (p.inlineData?.data) {
-          this.enqueuePlayback(p.inlineData.data);
+          if (this.narrationInFlight) {
+            this.enqueuePlayback(p.inlineData.data);
+          } else {
+            // Retém o áudio autônomo do turno de entrada. Em pedidos
+            // operacionais ele será descartado para que apenas a Lótus fale.
+            this.bufferedAutonomousAudio.push(p.inlineData.data);
+          }
         }
       }
 
       if (sc.turnComplete) {
-        this.turnCompletePending = true;
-        this.maybeReturnToListening();
-
-        if (this.narrationInFlight === 'checkpoint') {
+        if (this.narrationInFlight?.kind === 'checkpoint') {
           // Checkpoint narrado no meio de um processo longo — não mexe no
           // ciclo de reconhecimento/resultado, só libera a próxima fala.
           this.narrationInFlight = null;
+          this.turnCompletePending = true;
+          this.maybeReturnToListening();
           this.flushNarrationQueue();
-        } else if (this.narrationInFlight === 'result') {
+        } else if (this.narrationInFlight?.kind === 'acknowledgement') {
+          this.narrationInFlight = null;
+          this.turnCompletePending = true;
+          this.maybeReturnToListening();
+          this.flushNarrationQueue();
+        } else if (this.narrationInFlight?.kind === 'result') {
           // Resultado final: fecha o ciclo daquele pedido e libera uma nova
           // interação falada do Fê.
           this.narrationInFlight = null;
           this.awaitingResult = false;
+          this.turnCompletePending = true;
+          this.maybeReturnToListening();
           this.flushNarrationQueue();
-        } else if (!this.awaitingResult) {
-          // Esse turno foi o reconhecimento curto ("peraí, deixa eu ver").
-          // Dispara o pipeline real com o que o Fê falou; a próxima fala do
-          // Gemini só acontece quando sendResultText() for chamado por fora.
+        } else {
+          // Turno vindo diretamente do microfone. Só saudações puramente
+          // sociais podem usar a resposta autônoma. Todo pedido operacional
+          // descarta esse áudio e abre um ciclo exclusivo da Lótus.
           const userText = this.pendingUserTranscript.trim();
+          const assistantText = this.pendingAssistantTranscript.trim();
+          const autonomousAudio = this.bufferedAutonomousAudio;
           this.pendingUserTranscript = '';
-          if (userText && !isPurelySocialTurn(userText)) {
+          this.pendingAssistantTranscript = '';
+          this.bufferedAutonomousAudio = [];
+
+          if (userText && isPurelySocialTurn(userText)) {
+            if (assistantText) this.config.onTranscript?.('assistant', assistantText);
+            this.turnCompletePending = true;
+            autonomousAudio.forEach(chunk => this.enqueuePlayback(chunk));
+            this.maybeReturnToListening();
+          } else if (userText) {
+            const turnId = this.activeTurnId || this.createTurnId();
             this.awaitingResult = true;
             this.checkpointSpokenThisTurn = false;
             this.lastCheckpointSpokenAt = 0;
-            this.config.onUserTurnReady?.(userText);
+            this.config.onUserTurnReady?.({ turnId, userText });
+            this.queueAcknowledgement(turnId, userText);
+          } else {
+            this.setState('listening');
           }
         }
       }
@@ -323,6 +375,38 @@ export class GeminiLiveClient {
       // como function declarations da Live API. Por ora, sem handler.
       console.warn('[GEMINI_LIVE_TOOL_CALL_UNHANDLED]', msg.toolCall);
     }
+  }
+
+  private createTurnId() {
+    this.turnSequence += 1;
+    return `voice_${Date.now()}_${this.turnSequence}`;
+  }
+
+  private beginUserTurn() {
+    const turnId = this.createTurnId();
+    this.activeTurnId = turnId;
+    this.awaitingResult = false;
+    this.narrationQueue = [];
+    this.narrationInFlight = null;
+    this.deferredCheckpointText = null;
+    this.checkpointSpokenThisTurn = false;
+    this.lastCheckpointSpokenAt = 0;
+    if (this.checkpointTimer) {
+      clearTimeout(this.checkpointTimer);
+      this.checkpointTimer = null;
+    }
+    this.flushPlayback();
+    this.config.onUserTurnStarted?.(turnId);
+  }
+
+  private queueAcknowledgement(turnId: string, userText: string) {
+    if (turnId !== this.activeTurnId) return;
+    this.narrationQueue.push({
+      kind: 'acknowledgement',
+      turnId,
+      text: userText,
+    });
+    this.flushNarrationQueue();
   }
 
   // ---- Captura de microfone (envio contínuo, full-duplex) ----
@@ -398,6 +482,7 @@ export class GeminiLiveClient {
 
   private enqueuePlayback(base64: string) {
     const ctx = this.ensurePlaybackContext();
+    const generation = this.playbackGeneration;
     const pcm16 = int16FromBase64(base64);
 
     const float32 = new Float32Array(pcm16.length);
@@ -411,6 +496,7 @@ export class GeminiLiveClient {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
+    this.playbackSources.add(source);
 
     const startTime = Math.max(this.nextPlaybackTime, ctx.currentTime);
     source.start(startTime);
@@ -422,6 +508,8 @@ export class GeminiLiveClient {
     }
 
     source.onended = () => {
+      this.playbackSources.delete(source);
+      if (generation !== this.playbackGeneration) return;
       this.pendingSources--;
       if (this.pendingSources <= 0) {
         this.pendingSources = 0;
@@ -451,7 +539,7 @@ export class GeminiLiveClient {
   private scheduleDeferredCheckpoint() {
     if (!this.deferredCheckpointText || !this.awaitingResult) return;
     if (this.checkpointSpokenThisTurn) return;
-    if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
+    if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight?.kind === 'result') return;
     // A confirmação inicial ainda está tocando: guarda o marco e só calcula
     // sua janela depois da fala terminar de fato.
     if (this.narrationInFlight || this.turnCompletePending || this.pendingSources > 0) return;
@@ -470,8 +558,10 @@ export class GeminiLiveClient {
       this.deferredCheckpointText = null;
       if (!text || !this.awaitingResult) return;
       if (this.checkpointSpokenThisTurn) return;
-      if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight === 'result') return;
-      this.narrationQueue.push({ kind: 'checkpoint', text });
+      if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight?.kind === 'result') return;
+      const turnId = this.activeTurnId;
+      if (!turnId) return;
+      this.narrationQueue.push({ kind: 'checkpoint', text, turnId });
       this.lastCheckpointSpokenAt = Date.now();
       this.checkpointSpokenThisTurn = true;
       this.flushNarrationQueue();
@@ -484,13 +574,22 @@ export class GeminiLiveClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const next = this.narrationQueue.shift();
     if (!next) return;
+    if (next.turnId !== this.activeTurnId) {
+      this.flushNarrationQueue();
+      return;
+    }
 
-    this.narrationInFlight = next.kind;
+    this.narrationInFlight = next;
+    const marker = next.kind === 'result'
+      ? '[RESULTADO]'
+      : next.kind === 'checkpoint'
+        ? '[CHECKPOINT]'
+        : '[CONFIRMAÇÃO]';
     this.ws.send(JSON.stringify({
       clientContent: {
         turns: [{
           role: 'user',
-          parts: [{ text: next.kind === 'result' ? `[RESULTADO] ${next.text}` : `[CHECKPOINT] ${next.text}` }]
+          parts: [{ text: `${marker} ${next.text}` }]
         }],
         turnComplete: true
       }
@@ -498,9 +597,14 @@ export class GeminiLiveClient {
   }
 
   private flushPlayback() {
-    // Barge-in: os buffers já agendados vão tocar até o ponto atual e parar;
-    // não temos handle individual pra cortar no meio, então só resetamos o
-    // relógio de agendamento pra próxima resposta não empilhar atrás do áudio antigo.
+    // Barge-in real: cada AudioBufferSourceNode agendado é retido para poder
+    // ser interrompido. Apenas zerar o relógio deixa áudio antigo tocando.
+    this.playbackGeneration += 1;
+    for (const source of this.playbackSources) {
+      try { source.stop(); } catch {}
+      try { source.disconnect(); } catch {}
+    }
+    this.playbackSources.clear();
     if (this.playbackContext) {
       this.nextPlaybackTime = this.playbackContext.currentTime;
     }
@@ -513,15 +617,16 @@ export class GeminiLiveClient {
    * Gemini deve narrar de forma breve e natural — nunca literal. Só deve ser
    * chamado depois de onUserTurnReady disparar.
    */
-  public sendResultText(resultText: string) {
+  public sendResultText(resultText: string, turnId = this.activeTurnId) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
     this.deferredCheckpointText = null;
     if (this.checkpointTimer) {
       clearTimeout(this.checkpointTimer);
       this.checkpointTimer = null;
     }
-    this.narrationQueue = this.narrationQueue.filter(item => item.kind !== 'checkpoint');
-    this.narrationQueue.push({ kind: 'result', text: resultText });
+    this.narrationQueue = [];
+    this.narrationQueue.push({ kind: 'result', text: resultText, turnId });
     this.flushNarrationQueue();
     return true;
   }
@@ -533,8 +638,9 @@ export class GeminiLiveClient {
    * Chamar só um de cada vez (espera o anterior terminar de falar) — vários
    * checkpoints em sequência rápida não são suportados ainda.
    */
-  public sendCheckpointText(checkpointText: string) {
+  public sendCheckpointText(checkpointText: string, turnId = this.activeTurnId) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    if (!turnId || turnId !== this.activeTurnId) return false;
     const text = this.normalizeCheckpoint(checkpointText);
     if (!text || !this.awaitingResult) return false;
     if (this.checkpointSpokenThisTurn) return false;
@@ -560,6 +666,12 @@ export class GeminiLiveClient {
     if (this.checkpointTimer) clearTimeout(this.checkpointTimer);
     this.checkpointTimer = null;
     this.deferredCheckpointText = null;
+    this.activeTurnId = null;
+    this.pendingUserTranscript = '';
+    this.pendingAssistantTranscript = '';
+    this.bufferedAutonomousAudio = [];
+    this.narrationQueue = [];
+    this.narrationInFlight = null;
     this.teardownMic();
     this.flushPlayback();
     if (this.playbackContext) {

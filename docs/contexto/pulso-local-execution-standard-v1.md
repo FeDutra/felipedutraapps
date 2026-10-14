@@ -63,8 +63,9 @@ ou aplicativo forem realmente necessários.
 
 O caminho diário deve separar **presença imediata** de **trabalho completo**:
 
-1. Gemini Live mantém a sessão de áudio e responde imediatamente com uma frase
-   curta, sem inventar conteúdo.
+1. Gemini Live mantém a sessão de áudio. A resposta autônoma do turno de entrada
+   não é reproduzida: depois da transcrição, a PULSO abre um turno identificado
+   e solicita uma confirmação curta separada.
 2. Pedidos factuais ou operacionais seguem ao fluxo canônico da Lótus.
 3. Ações simples e determinísticas usam despacho direto após classificação de
    risco; tarefas longas recebem confirmação e progresso sem bloquear a voz.
@@ -78,8 +79,8 @@ Gemini Live não recebe autoridade paralela sobre Notion, WhatsApp ou o Mac. Ele
 - **Gemini Live:** conversa em tempo real do modo Presença.
 - **Kokoro sidecar:** TTS local preferido no app desktop quando saudável.
 - **Kokoro VPS:** fallback de TTS para desktop e rota principal da web.
-- **Voz nativa:** último fallback, nunca substituição silenciosa quando o modo
-  exigir identidade vocal Kokoro.
+- **Voz nativa Apple:** proibida, inclusive como fallback. Falha total deve ficar
+  visível e silenciosa, sem degradar para uma voz incompatível com o produto.
 
 O build desktop deve baixar e empacotar `kokoro-v0_19.onnx`, `voices.bin` e o
 sidecar da arquitetura correta. A inicialização deve provar a porta local antes

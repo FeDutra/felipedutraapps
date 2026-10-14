@@ -3351,7 +3351,7 @@ export default function LivePage() {
               && !narratedPresenceProgressRef.current.has(req.id);
             if (canNarrateProgress) {
               const progressText = (req.text || req.message || '').trim();
-              if (progressText && presenceController?.notifyPresenceCheckpoint(progressText)) {
+              if (progressText && presenceController?.notifyPresenceCheckpoint(progressText, originRequestId)) {
                 narratedPresenceProgressRef.current.add(req.id);
                 console.log('[PULSO_GEMINI_LIVE_CHECKPOINT_NARRATED]', { requestId: req.id });
               }
@@ -3419,7 +3419,7 @@ export default function LivePage() {
                 }
               } else if (spokenRequestsRef.current.has(originRequestId)) {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: originRequestId });
-              } else if (useGeminiNarration && presenceController?.narratePresenceResult(ttsText)) {
+              } else if (useGeminiNarration && presenceController?.narratePresenceResult(ttsText, originRequestId)) {
                 // A resposta completa continua no chat. Na conversa falada,
                 // a Gemini só a traduz para uma devolutiva curta e humana.
                 spokenRequestsRef.current.add(originRequestId);
@@ -4301,6 +4301,10 @@ export default function LivePage() {
     }).finally(() => {
       setContextTyping(sendingContextId, false);
     });
+
+    // O controlador de voz precisa correlacionar imediatamente este pedido ao
+    // turno ativo. A persistência continua assíncrona, mas o ID já é canônico.
+    return { requestId: preGeneratedReqId };
   };
 
   const recordLocalPresenceFastPath = React.useCallback(async (

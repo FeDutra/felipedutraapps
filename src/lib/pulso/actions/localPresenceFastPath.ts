@@ -14,7 +14,6 @@ const APP_ALIASES: Array<{ aliases: string[]; appName: string; spokenName: strin
   { aliases: ['obsidian'], appName: 'Obsidian', spokenName: 'Obsidian' },
   { aliases: ['finder'], appName: 'Finder', spokenName: 'Finder' },
   { aliases: ['arc'], appName: 'Arc', spokenName: 'Arc' },
-  { aliases: ['chrome', 'google chrome'], appName: 'Google Chrome', spokenName: 'Chrome' },
   { aliases: ['safari'], appName: 'Safari', spokenName: 'Safari' },
   { aliases: ['spotify'], appName: 'Spotify', spokenName: 'Spotify' },
   { aliases: ['musica', 'music'], appName: 'Music', spokenName: 'Música' },

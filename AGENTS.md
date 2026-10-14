@@ -37,7 +37,8 @@ Regras invariantes:
   economizar tokens.
 * Gemini Live é a camada de conversa imediata do modo Presença; OpenClaw é o
   cérebro canônico. Kokoro é TTS do fluxo turn-based e precisa de fallback
-  explícito entre sidecar local, Kokoro VPS e voz nativa.
+  explícito entre sidecar local e Kokoro VPS. Vozes nativas Apple são proibidas,
+  inclusive como fallback.
 * Toda release desktop valida nó offline/online, permissões reais, sidecars,
   fallback de voz e uma prova local reversível. Registre o que não foi testado.
 <!-- END:pulso-local-execution-standard -->

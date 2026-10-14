@@ -1,3 +1,29 @@
+# Rollback — integridade de turnos do modo Presença (14/10/2026)
+
+- Baseline: `16ff1cfb` em `main`.
+- Escopo: impedir resposta autônoma do Gemini em pedidos operacionais, vincular
+  confirmação/checkpoint/resultado ao turno ativo, cancelar de verdade buffers
+  de áudio interrompidos e impedir retorno atrasado de outro pedido.
+- Reversão de código: reverter somente o commit desta frente e reconstruir o
+  aplicativo Intel. Firestore, relay, credenciais, Hermes e Kokoro não mudam.
+- Contingência sem reinstalação: selecionar `local — openclaw + kokoro` nas
+  configurações de voz.
+- A instalação existente no iMac permanece preservada até aprovação explícita;
+  esta frente não reinicia serviço nem substitui `/Applications/PULSO.app`.
+
+---
+
+# Preparação Hermes local para Presença (14/10/2026)
+
+- Nesta etapa apenas o estado foi auditado e o contrato foi documentado.
+- Nenhum perfil Hermes foi criado, nenhum modelo foi selecionado, nenhum
+  servidor/gateway foi iniciado e nenhuma permissão de macOS foi alterada.
+- Quando a canária for autorizada, o backup e os comandos exatos de remoção do
+  perfil `pulso` e do launcher local deverão ser acrescentados aqui antes da
+  primeira escrita no iMac.
+
+---
+
 # Release Tauri — seletor de contas e recência de sessões (12/10/2026)
 
 - Fonte: `8d25116ed1de50212e733d5b5d495f77e4b09c65` em `main`.

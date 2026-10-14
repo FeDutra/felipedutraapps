@@ -27,7 +27,7 @@ export interface VoiceSessionConfig {
     originMode: 'presence';
     targetContextNode?: PresenceRoutingDecision['target'];
     presenceRouting?: PresenceRoutingDecision;
-  }) => Promise<{ responseText: string } | null | void>;
+  }) => Promise<{ responseText?: string; requestId?: string } | null | void>;
   recordLocalFastPath?: (text: string, result: LocalPresenceFastPathResult) => Promise<void>;
   handlePresenceUiIntent?: (text: string) => Promise<LocalPresenceFastPathResult> | LocalPresenceFastPathResult;
   routePresenceIntent?: (text: string) => Promise<PresenceRoutingDecision> | PresenceRoutingDecision;
@@ -44,8 +44,9 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a voz da Lótus falando com o F
 Regra mais importante: você NÃO tem acesso a nenhuma informação real, ferramenta, memória ou dado — quem responde de verdade é outro sistema, por trás. Você nunca inventa fatos nem responde perguntas com conteúdo substantivo por conta própria.
 
 Seu papel tem duas partes:
-1. Assim que o Fê fizer um pedido que exige trabalho, responda imediatamente com UMA frase curta, concreta e adulta. Diga apenas o que começou a fazer (ex.: "Vou cruzar a agenda com o Despertar."). Não infantilize, não seja efusiva, não use diminutivos, não prometa prazo e não repita confirmações genéricas.
-2. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre só a mudança concreta de fase, em uma frase, e volte a esperar sem soar como se tivesse terminado.
+1. Ao ouvir o microfone, não responda ao conteúdo do pedido e nunca diga que não consegue fazer algo. A PULSO decide o destino do turno fora de você.
+2. Quando receber uma mensagem começando com "[CONFIRMAÇÃO]", diga UMA frase curta, concreta e adulta confirmando que começou. Não responda ao pedido, não cite limitações, não infantilize, não seja efusiva, não prometa prazo e não repita o pedido inteiro.
+3. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre só a mudança concreta de fase, em uma frase, e volte a esperar sem soar como se tivesse terminado.
 
 Para saudações puramente sociais (oi, tudo bem, obrigado, tchau) sem pedido nenhum, pode responder naturalmente sem esperar resultado.
 Ritmo é parte da sua personalidade: checkpoint é exceção, não batida de relógio. Nunca narre atualizações técnicas em sequência nem transforme cada passo interno em fala. Depois de um checkpoint, fique em silêncio produtivo até haver resultado, bloqueio ou nova mudança relevante.
@@ -88,6 +89,8 @@ export class VoiceSessionController {
   // Modo experimental Gemini Live
   private geminiLiveClient: GeminiLiveClient | null = null;
   private fallingBackToTurnBased = false;
+  private activeGeminiTurnId: string | null = null;
+  private activePresenceRequestId: string | null = null;
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
@@ -612,14 +615,22 @@ export class VoiceSessionController {
         this.log('GEMINI_LIVE_ERROR', message);
         void this.fallbackToTurnBased(message);
       },
-      onUserTurnReady: async (userText) => {
-        this.log('GEMINI_LIVE_USER_TURN_READY', { userText });
+      onUserTurnStarted: (turnId) => {
+        this.activeGeminiTurnId = turnId;
+        this.activePresenceRequestId = null;
+        this.config.onPresenceWorkChange?.(false);
+        this.log('GEMINI_LIVE_USER_TURN_STARTED', { turnId });
+      },
+      onUserTurnReady: async ({ turnId, userText }) => {
+        if (turnId !== this.activeGeminiTurnId) return;
+        this.log('GEMINI_LIVE_USER_TURN_READY', { turnId, userText });
         this.config.onPresenceWorkChange?.(true);
         try {
           const localResult = await this.executeImmediatePresenceAction(userText);
+          if (turnId !== this.activeGeminiTurnId) return;
           if (localResult?.handled && localResult.responseText) {
             this.config.onPresenceWorkChange?.(false);
-            this.geminiLiveClient?.sendResultText(localResult.responseText);
+            this.geminiLiveClient?.sendResultText(localResult.responseText, turnId);
             return;
           }
 
@@ -627,15 +638,17 @@ export class VoiceSessionController {
           // concluir. A resposta real chega pelo listener canônico do
           // Firestore; LivePage então chama narratePresenceResult().
           const presenceRouting = await this.config.routePresenceIntent?.(userText);
-          await this.config.handleSendMessage(userText, {
+          const dispatch = await this.config.handleSendMessage(userText, {
             originMode: 'presence',
             targetContextNode: presenceRouting?.target,
             presenceRouting,
           });
+          if (turnId !== this.activeGeminiTurnId) return;
+          this.activePresenceRequestId = dispatch?.requestId || null;
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
           this.config.onPresenceWorkChange?.(false);
-          this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.');
+          this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.', turnId);
         }
       }
     });
@@ -663,13 +676,15 @@ export class VoiceSessionController {
    * modo Presença solta uma atualização de progresso — repassa pra Gemini
    * narrar como checkpoint, sem quebrar a lei de "nunca parecer perdida".
    */
-  public notifyPresenceCheckpoint(checkpointText: string) {
-    return this.geminiLiveClient?.sendCheckpointText(checkpointText) ?? false;
+  public notifyPresenceCheckpoint(checkpointText: string, requestId?: string) {
+    if (requestId && requestId !== this.activePresenceRequestId) return false;
+    return this.geminiLiveClient?.sendCheckpointText(checkpointText, this.activeGeminiTurnId) ?? false;
   }
 
   /** Entrega à voz um resultado já produzido pela Lótus/OpenClaw. */
-  public narratePresenceResult(resultText: string) {
-    const accepted = this.geminiLiveClient?.sendResultText(resultText) ?? false;
+  public narratePresenceResult(resultText: string, requestId?: string) {
+    if (requestId && requestId !== this.activePresenceRequestId) return false;
+    const accepted = this.geminiLiveClient?.sendResultText(resultText, this.activeGeminiTurnId) ?? false;
     if (accepted) this.config.onPresenceWorkChange?.(false);
     return accepted;
   }
@@ -688,6 +703,8 @@ export class VoiceSessionController {
     if (this.geminiLiveClient) {
       this.geminiLiveClient.stop();
       this.geminiLiveClient = null;
+      this.activeGeminiTurnId = null;
+      this.activePresenceRequestId = null;
       this.config.onPresenceWorkChange?.(false);
       return;
     }

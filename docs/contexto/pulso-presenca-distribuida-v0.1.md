@@ -41,12 +41,23 @@ O prompt do transporte impede respostas substantivas autônomas. Gemini pode:
 
 Gemini não pode inventar fatos, consultar memória, executar ferramentas nem decidir ações sensíveis.
 
+## Integridade do turno
+
+- Cada fala do Fê abre um `voiceTurnId` local novo.
+- O áudio autônomo produzido pelo Gemini ao receber o microfone é retido e
+  descartado para pedidos operacionais; ele não disputa a resposta com a Lótus.
+- Confirmação, checkpoint e resultado são mensagens separadas, todas vinculadas
+  ao mesmo `voiceTurnId`.
+- Um novo turno invalida narrações pendentes do anterior. Resultados atrasados
+  continuam no chat, mas não invadem a conversa falada atual.
+- Interrupção para imediatamente todas as fontes de áudio já agendadas.
+
 ## Degradação
 
 1. Gemini Live tenta reconectar duas vezes.
 2. Persistindo a falha, o controlador encerra recursos do streaming.
 3. A sessão passa para transcrição turn-based sem sair do modo Presença.
-4. No desktop, TTS usa Kokoro local; se o sidecar falhar, o adaptador usa a Kokoro da VPS e depois a voz nativa.
+4. No desktop, TTS usa Kokoro local; se o sidecar falhar, o adaptador usa a Kokoro da VPS. Voz nativa Apple não é admitida.
 5. Falhas desktop nunca impedem web/mobile de usar a sessão canônica.
 
 ## Prova mínima de release
@@ -57,4 +68,3 @@ Gemini não pode inventar fatos, consultar memória, executar ferramentas nem de
 - Queda do relay conduz ao modo turn-based na mesma sessão.
 - PULSO desktop sintetiza Kokoro local; ausência do Mac preserva web/mobile.
 - Um pedido iniciado no desktop aparece no celular sem criar outro fio.
-
