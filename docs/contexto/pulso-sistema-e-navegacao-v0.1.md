@@ -1,7 +1,7 @@
 # PULSO · soberania operacional e nova navegação · v0.1
 
 **Data:** 14/10/2026  
-**Estado:** primeira fatia implementada; ativação operacional pendente de autorização  
+**Estado:** primeira fatia ativa em produção; web, regras e ponte comprovadas
 **Princípio:** PULSO é a autoridade humana e a experiência. OpenClaw é runtime. Control UI é contingência.
 
 ## O corte
@@ -69,7 +69,7 @@ OpenClaw executa ou nega
 - Segredos, variáveis de ambiente, tokens e metadados crus não entram no Firestore.
 - Apenas a conta proprietária pode ler e registrar uma decisão.
 - O cliente só pode mudar `pending → resolving` e somente para uma decisão oferecida pelo Gateway.
-- O bridge usa Admin SDK no Firestore e uma identidade OpenClaw dedicada com `operator.approvals`.
+- O bridge usa Admin SDK no Firestore e o `approval runtime` local nativo da OpenClaw, limitado a `operator.approvals` e aceito apenas no loopback do Gateway.
 - Resolução é first-answer-wins; retorno do Gateway é canônico.
 - Control UI permanece como contingência durante a migração.
 
@@ -124,16 +124,25 @@ Próximo trabalho desta frente:
 3. evitar dashboards independentes para cada canal;
 4. adotar uma caixa viva de comunicação com filtros, não cinco menus.
 
-## Critérios para ativar a primeira fatia
+## Provas da primeira fatia
 
 - build web aprovado;
-- regras Firestore testadas em emulador;
-- identidade dedicada do bridge pareada com escopo mínimo;
+- regras Firestore compiladas e publicadas pelo Firebase;
+- browser sem token do Gateway e bridge autenticado pelo runtime local nativo;
 - replay das pendências antes de aceitar eventos ao vivo;
-- prova com uma aprovação inofensiva: permitir uma vez, negar e expirar;
+- prova ponta a ponta com uma aprovação inofensiva e decisão `deny` devolvida ao Gateway;
 - confirmação de que nenhum segredo aparece no documento sanitizado;
 - bridge supervisionado com reinício e heartbeat;
 - Control UI ainda funcional como rollback.
+
+### Recibo da ativação
+
+- código web e ponte: `ffe79aebd47a3433fb7390e65fd3f7e10201a7d7`;
+- rota: `/pulso/sistema`;
+- serviço: `pulso-operator-bridge.service`;
+- autoridade canônica: `approval.resolve` no Gateway;
+- Firestore: projeção sanitizada e intenção humana, nunca fonte da autorização;
+- teste de execução: o comando-canário foi negado e não executado.
 
 ## O que não fazer
 

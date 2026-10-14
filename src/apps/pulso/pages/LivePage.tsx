@@ -992,7 +992,6 @@ import {
   Settings,
   Circle,
   Hash,
-  Database,
   Paperclip,
   FileText,
   Image as ImageIcon,
@@ -1007,12 +1006,14 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  Globe,
-  Layers,
   Cpu,
   Palette,
   Video,
-  Terminal
+  Terminal,
+  ListTodo,
+  Mail,
+  MessageCircleMore,
+  ShieldCheck
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -5986,26 +5987,48 @@ ${data.transcription}`, {
                       <Mic size={12} strokeWidth={1.5} />
                       <span>voz da lótus (tts)</span>
                     </button>
+                    <div className="h-px w-full bg-white/[0.06]" />
+                    <span className="text-[8px] font-mono tracking-[0.22em] uppercase text-[#fbf9f5]/20">
+                      trabalho e comunicação
+                    </span>
                     <button
-                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/ecossistema'); }}
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/tarefas'); }}
                       className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
                     >
-                      <Layers size={12} strokeWidth={1.5} />
-                      <span>visão do contexto</span>
+                      <ListTodo size={12} strokeWidth={1.5} />
+                      <span>tarefas</span>
                     </button>
                     <button
-                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/eventos'); }}
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/email'); }}
                       className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
                     >
-                      <Database size={12} strokeWidth={1.5} />
-                      <span>logs técnicos</span>
+                      <Mail size={12} strokeWidth={1.5} />
+                      <span>e-mail</span>
                     </button>
                     <button
-                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/conexoes'); }}
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/conversas'); }}
                       className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
                     >
-                      <Globe size={12} strokeWidth={1.5} />
-                      <span>conexões</span>
+                      <MessageCircleMore size={12} strokeWidth={1.5} />
+                      <span>conversas</span>
+                    </button>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/downloads'); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                    >
+                      <Download size={12} strokeWidth={1.5} />
+                      <span>cadastros</span>
+                    </button>
+                    <div className="h-px w-full bg-white/[0.06]" />
+                    <span className="text-[8px] font-mono tracking-[0.22em] uppercase text-[#fbf9f5]/20">
+                      bastidor
+                    </span>
+                    <button
+                      onMouseDown={() => { setIsHeaderMenuOpen(false); router.push('/pulso/sistema'); }}
+                      className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/55 hover:text-white/90"
+                    >
+                      <ShieldCheck size={12} strokeWidth={1.5} />
+                      <span>sistema</span>
                     </button>
                   </div>
                 </div>
