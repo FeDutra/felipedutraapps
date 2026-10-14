@@ -57,7 +57,7 @@ async function getGatewayRuntime() {
       const [bootstrapModule, clientModule, infoModule] = await Promise.all([
         findDistModule(name => name.startsWith('client-bootstrap-'), 'resolveGatewayClientBootstrap'),
         findDistModule(name => /^client-[^.]+\.(?:mjs|js)$/iu.test(name), 'GatewayClient'),
-        findDistModule(name => name.startsWith('client-info-'), 'GATEWAY_CLIENT_NAMES'),
+        findDistModule(name => name.startsWith('client-info-'), 'export { GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_IDS'),
       ]);
       const resolveGatewayClientBootstrap = resolveExport(bootstrapModule, 'resolveGatewayClientBootstrap');
       const GatewayClient = resolveExport(clientModule, 'GatewayClient');
