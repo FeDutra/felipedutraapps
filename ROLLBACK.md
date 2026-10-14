@@ -74,6 +74,20 @@ Reverter somente o commit desta correção, recompilar o artefato
 `/Applications/PULSO.rollback-20261014T121406Z.app`. A mudança não altera
 Firestore, Functions, relay, credenciais ou dados do usuário.
 
+## Release instalada
+
+- Fonte: `5d6db5d7` em `main`.
+- GitHub Actions: run `38576574329`, job macOS concluído com sucesso.
+- DMG Intel: SHA-256
+  `9b7cb42113a31e1d979099cd39f16081609db895d05976be63e2c27e395b4860`.
+- Executável instalado: SHA-256
+  `81b52e7ac492d2298511c57cb3a4691ddaa458d978c30356be9abea389124270`.
+- Bundle imediatamente anterior preservado em
+  `/Applications/PULSO.rollback-20261014T141725Z-pre-wav.app` e também em
+  `/Applications/PULSO.replaced-20261014T141725Z.app`.
+- A distribuição permanece sem assinatura/notarização; proveniência e
+  integridade foram verificadas por commit, run, arquitetura x86_64 e hashes.
+
 ---
 
 # Preparação Hermes local para Presença (14/10/2026)
