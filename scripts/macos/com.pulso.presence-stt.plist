@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pulso.presence-stt</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/fe/.local/share/hermes-agent-pulso-local/venvs/faster-whisper/bin/python</string>
+    <string>/Users/fe/.local/share/hermes-agent-pulso-local/services/pulso_presence_stt_server.py</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/fe/Library/Logs/pulso-presence-stt.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/fe/Library/Logs/pulso-presence-stt.log</string>
+</dict>
+</plist>

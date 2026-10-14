@@ -18,6 +18,7 @@ interface LocalRuntimeHealth {
   hermesGatewayActive: boolean;
   ollamaActive: boolean;
   kokoroActive: boolean;
+  localSttActive: boolean;
   whatsappBridgeActive: boolean;
 }
 
@@ -94,6 +95,7 @@ export async function executeLocalPresenceFastPath(input: string): Promise<Local
       if (!health.hermesProfileReady) unavailable.push('perfil Hermes');
       if (!health.ollamaActive) unavailable.push('modelo local');
       if (!health.kokoroActive) unavailable.push('áudio local');
+      if (!health.localSttActive) unavailable.push('transcrição local');
 
       const responseText = unavailable.length === 0
         ? 'A ponte local está ativa. O perfil isolado, o modelo e o áudio local estão disponíveis.'

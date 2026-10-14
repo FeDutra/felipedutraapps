@@ -547,11 +547,16 @@ export class VoiceSessionController {
     try {
       const isTauriEnv = this.isTauriRuntime();
 
-      const endpointUrl = isTauriEnv 
-        ? 'https://felipedutraapps.web.app/api/pulso/transcribe' 
+      const endpointUrl = isTauriEnv
+        ? 'http://127.0.0.1:14323/transcribe'
         : '/api/pulso/transcribe';
+      // plugin-http atravessa a fronteira nativa do Tauri sem depender do
+      // CORS do WKWebView. No navegador comum, preservamos o fetch padrão.
+      const requestFetch: typeof fetch = isTauriEnv
+        ? (await import('@tauri-apps/plugin-http')).fetch
+        : fetch;
 
-      const response = await fetch(endpointUrl, {
+      const response = await requestFetch(endpointUrl, {
         method: 'POST',
         headers: {
           'Content-Type': blob.type || 'audio/webm',
@@ -559,11 +564,15 @@ export class VoiceSessionController {
         body: blob,
       });
 
-      if (!response.ok) throw new Error('Falha no STT');
+      if (!response.ok) throw new Error(`Falha no STT (${response.status})`);
 
       const data = await response.json();
       const userText = data.text || '';
-      this.log('STT_REQUEST_FINISHED', { text: userText });
+      this.log('STT_REQUEST_FINISHED', {
+        text: userText,
+        engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
+        durationMs: data.durationMs,
+      });
 
       if (userText.trim().length === 0) {
         // Nada foi ouvido, reinicia loop de escuta

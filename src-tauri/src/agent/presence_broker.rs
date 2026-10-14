@@ -14,6 +14,7 @@ pub struct LocalPresenceReadResult {
     hermes_gateway_active: bool,
     ollama_active: bool,
     kokoro_active: bool,
+    local_stt_active: bool,
     whatsapp_bridge_active: bool,
 }
 
@@ -47,6 +48,7 @@ pub fn local_presence_read(capability: String) -> Result<LocalPresenceReadResult
     let hermes_gateway_active = loopback_port_open(9119);
     let ollama_active = loopback_port_open(11434);
     let kokoro_active = loopback_port_open(14321);
+    let local_stt_active = loopback_port_open(14323);
     let whatsapp_bridge_active = loopback_port_open(3005);
 
     Ok(LocalPresenceReadResult {
@@ -58,6 +60,7 @@ pub fn local_presence_read(capability: String) -> Result<LocalPresenceReadResult
         hermes_gateway_active,
         ollama_active,
         kokoro_active,
+        local_stt_active,
         whatsapp_bridge_active,
     })
 }
