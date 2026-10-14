@@ -1,11 +1,24 @@
+import { invoke } from '@tauri-apps/api/core';
 import { localActions } from './localActions';
 
 export interface LocalPresenceFastPathResult {
   handled: boolean;
-  action?: 'open_app' | 'close_mesa';
+  action?: 'open_app' | 'close_mesa' | 'local_read';
   target?: string;
   responseText?: string;
   durationMs?: number;
+}
+
+interface LocalRuntimeHealth {
+  capability: 'runtime_health';
+  ok: boolean;
+  durationMs: number;
+  architecture: string;
+  hermesProfileReady: boolean;
+  hermesGatewayActive: boolean;
+  ollamaActive: boolean;
+  kokoroActive: boolean;
+  whatsappBridgeActive: boolean;
 }
 
 const APP_ALIASES: Array<{ aliases: string[]; appName: string; spokenName: string }> = [
@@ -50,6 +63,12 @@ function resolveOpenApp(input: string) {
   return APP_ALIASES.find(app => app.aliases.includes(requested)) || null;
 }
 
+function requestsLocalRuntimeHealth(input: string) {
+  const normalized = normalize(input);
+  return /^(?:lotus\s+)?(?:(?:me\s+)?(?:mostra|diz|ve|verifica|checa)\s+)?(?:o\s+)?(?:status|estado|saude)(?:\s+(?:da|do))?\s+(?:ponte\s+local|modo\s+presenca|presenca\s+local|executor\s+local|hermes)(?:\s+por\s+favor)?$/.test(normalized)
+    || /^(?:lotus\s+)?(?:a\s+)?ponte\s+local\s+(?:esta|ta)\s+funcionando$/.test(normalized);
+}
+
 function isTauriDesktop() {
   if (typeof window === 'undefined') return false;
   const tauriWindow = window as Window & {
@@ -64,6 +83,40 @@ function isTauriDesktop() {
 
 export async function executeLocalPresenceFastPath(input: string): Promise<LocalPresenceFastPathResult> {
   if (!isTauriDesktop()) return { handled: false };
+
+  if (requestsLocalRuntimeHealth(input)) {
+    const startedAt = performance.now();
+    try {
+      const health = await invoke<LocalRuntimeHealth>('local_presence_read', {
+        capability: 'runtime_health',
+      });
+      const unavailable: string[] = [];
+      if (!health.hermesProfileReady) unavailable.push('perfil Hermes');
+      if (!health.ollamaActive) unavailable.push('modelo local');
+      if (!health.kokoroActive) unavailable.push('áudio local');
+
+      const responseText = unavailable.length === 0
+        ? 'A ponte local está ativa. O perfil isolado, o modelo e o áudio local estão disponíveis.'
+        : `A ponte local respondeu, mas ${unavailable.join(', ')} ${unavailable.length === 1 ? 'não está disponível' : 'não estão disponíveis'}.`;
+
+      return {
+        handled: true,
+        action: 'local_read',
+        target: 'runtime_health',
+        responseText,
+        durationMs: Math.round(performance.now() - startedAt),
+      };
+    } catch (error) {
+      console.error('[PresenceLocalBroker] Falha na leitura de saúde:', error);
+      return {
+        handled: true,
+        action: 'local_read',
+        target: 'runtime_health',
+        responseText: 'A ponte local não respondeu. Vou deixar essa consulta no fluxo principal.',
+        durationMs: Math.round(performance.now() - startedAt),
+      };
+    }
+  }
 
   const app = resolveOpenApp(input);
   if (!app) return { handled: false };

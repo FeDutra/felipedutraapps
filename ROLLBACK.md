@@ -15,12 +15,31 @@
 
 # Preparação Hermes local para Presença (14/10/2026)
 
-- Nesta etapa apenas o estado foi auditado e o contrato foi documentado.
-- Nenhum perfil Hermes foi criado, nenhum modelo foi selecionado, nenhum
-  servidor/gateway foi iniciado e nenhuma permissão de macOS foi alterada.
-- Quando a canária for autorizada, o backup e os comandos exatos de remoção do
-  perfil `pulso` e do launcher local deverão ser acrescentados aqui antes da
-  primeira escrita no iMac.
+- Baseline do Hermes: `v0.21.6`, perfil único `default`, gateway parado e sem
+  modelo padrão configurado.
+- Antes da primeira escrita, criar um backup completo em
+  `/Users/fe/hermes-backups/pulso-before-presence-20261014.zip`.
+- O perfil dedicado vive em `/Users/fe/.hermes/profiles/pulso`; ele não clona
+  canais, memória, skills, credenciais nem regras do perfil `default`.
+- O perfil aponta somente para o Ollama em loopback, mas mantém **zero
+  ferramentas habilitadas**. Gateway, cron, canais e Computer Use ficam
+  desligados.
+- A descoberta de desempenho mostrou que o Hermes exige contexto mínimo de
+  64k. No iMac Intel, ele não integra a via rápida; o Tauri usa um broker local
+  enumerado e somente leitura, e o Hermes permanece como segunda camada.
+- Para reverter o broker, reverter o commit desta frente e reinstalar o bundle
+  Intel anterior. O comando `local_presence_read` não cria estado persistente.
+
+## Reversão exata do Hermes
+
+1. Parar qualquer backend do perfil: `hermes -p pulso serve --stop`.
+2. Confirmar que não existe processo escutando a porta loopback reservada.
+3. Mover `/Users/fe/.hermes/profiles/pulso` para
+   `/Users/fe/.Trash/hermes-pulso-rollback-20261014` (não apagar).
+4. Se necessário, restaurar o estado anterior com
+   `hermes import /Users/fe/hermes-backups/pulso-before-presence-20261014.zip`.
+5. A reversão do aplicativo é independente: restaurar o backup datado de
+   `/Applications/PULSO.app` criado imediatamente antes da instalação.
 
 ---
 

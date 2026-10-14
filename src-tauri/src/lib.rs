@@ -5,6 +5,7 @@ use std::process::Stdio;
 
 mod agent;
 use agent::local_machine::{local_open_url, execute_applescript};
+use agent::presence_broker::local_presence_read;
 
 #[tauri::command]
 fn execute_shell_command(command: &str) -> Result<String, String> {
@@ -70,7 +71,13 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_http::init())
-    .invoke_handler(tauri::generate_handler![local_open_url, execute_applescript, execute_shell_command, execute_long_command_stream])
+    .invoke_handler(tauri::generate_handler![
+      local_open_url,
+      execute_applescript,
+      execute_shell_command,
+      execute_long_command_stream,
+      local_presence_read
+    ])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
