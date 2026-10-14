@@ -1,6 +1,16 @@
 # Rollback — integridade de turnos do modo Presença (14/10/2026)
 
 - Baseline: `16ff1cfb` em `main`.
+- Release instalada: `d7e64cb128a6bf195598a90dafb33bacb14df16d`.
+- GitHub Actions: run `38559860551`, job macOS concluído com sucesso.
+- DMG Intel: `PULSO_0.1.0_x64.dmg`, SHA-256
+  `51212c654c871e5c0144e54450fa9a788b6666bf320ca64d7f7b3d3b4a1311b0`.
+- Executável principal instalado: SHA-256
+  `c76254fbab683ddf295d887123ab6648fb9fe995808283ee79956a2fd9c18833`.
+- Aplicativo anterior preservado em
+  `/Applications/PULSO.rollback-20261014T121406Z.app`.
+- O bundle permanece sem assinatura/notarização, como a release anterior; a
+  origem foi validada por run, commit, arquitetura e hashes.
 - Escopo: impedir resposta autônoma do Gemini em pedidos operacionais, vincular
   confirmação/checkpoint/resultado ao turno ativo, cancelar de verdade buffers
   de áudio interrompidos e impedir retorno atrasado de outro pedido.
@@ -19,6 +29,8 @@
   modelo padrão configurado.
 - Antes da primeira escrita, criar um backup completo em
   `/Users/fe/hermes-backups/pulso-before-presence-20261014.zip`.
+- SHA-256 do backup Hermes:
+  `53af0c2b95ce0e18a9887705a43f3780b5dce78de1c644a8b4f2a90fed6bde74`.
 - O perfil dedicado vive em `/Users/fe/.hermes/profiles/pulso`; ele não clona
   canais, memória, skills, credenciais nem regras do perfil `default`.
 - O perfil aponta somente para o Ollama em loopback, mas mantém **zero
