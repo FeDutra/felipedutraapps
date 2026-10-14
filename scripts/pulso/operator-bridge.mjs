@@ -61,11 +61,11 @@ async function getGatewayRuntime() {
       ]);
       const resolveGatewayClientBootstrap = resolveExport(bootstrapModule, 'resolveGatewayClientBootstrap');
       const GatewayClient = resolveExport(clientModule, 'GatewayClient');
-      const { GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES } = infoModule;
-      if (!resolveGatewayClientBootstrap || !GatewayClient || !GATEWAY_CLIENT_NAMES || !GATEWAY_CLIENT_MODES) {
+      const { GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES } = infoModule;
+      if (!resolveGatewayClientBootstrap || !GatewayClient || !GATEWAY_CLIENT_CAPS || !GATEWAY_CLIENT_NAMES || !GATEWAY_CLIENT_MODES) {
         throw new Error('openclaw_gateway_runtime_incomplete');
       }
-      return { resolveGatewayClientBootstrap, GatewayClient, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES };
+      return { resolveGatewayClientBootstrap, GatewayClient, GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES };
     })();
   }
   return await gatewayRuntimePromise;
@@ -124,7 +124,7 @@ async function main() {
   const approvalsCollection = db.collection(APPROVALS_PATH);
   const runtimeRef = db.doc(RUNTIME_PATH);
   const cfg = loadConfig();
-  const { resolveGatewayClientBootstrap, GatewayClient, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES } = await getGatewayRuntime();
+  const { resolveGatewayClientBootstrap, GatewayClient, GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES } = await getGatewayRuntime();
   const bootstrap = await resolveGatewayClientBootstrap({
     config: cfg,
     gatewayUrl: process.env.PULSO_OPERATOR_GATEWAY_URL || undefined,
@@ -172,6 +172,7 @@ async function main() {
     mode: GATEWAY_CLIENT_MODES.CLI,
     role: 'operator',
     scopes: OPERATOR_SCOPES,
+    caps: [GATEWAY_CLIENT_CAPS.EXEC_APPROVALS],
     onHelloOk: hello => readyResolve(hello),
     onConnectError: error => readyReject(error),
     onClose: async (code, reason) => {
@@ -231,6 +232,7 @@ async function main() {
       pendingApprovals: pending.size,
       lastSeenAtMs: Date.now(),
       lastError: null,
+      stoppedBy: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
   };
