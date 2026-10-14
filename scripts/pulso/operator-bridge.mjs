@@ -40,7 +40,7 @@ function resolveExport(module, name) {
 }
 
 async function findDistModule(predicate, marker) {
-  const files = (await fs.readdir(OPENCLAW_DIST_DIR)).filter(name => name.endsWith('.js')).sort();
+  const files = (await fs.readdir(OPENCLAW_DIST_DIR)).filter(name => /\.(?:mjs|js)$/u.test(name)).sort();
   for (const file of files) {
     if (!predicate(file)) continue;
     const fullPath = path.join(OPENCLAW_DIST_DIR, file);
@@ -56,7 +56,7 @@ async function getGatewayRuntime() {
     gatewayRuntimePromise = (async () => {
       const [bootstrapModule, clientModule, infoModule] = await Promise.all([
         findDistModule(name => name.startsWith('client-bootstrap-'), 'resolveGatewayClientBootstrap'),
-        findDistModule(name => /^client-i.*\.js$/i.test(name), 'GatewayClient'),
+        findDistModule(name => /^client-[^.]+\.(?:mjs|js)$/iu.test(name), 'GatewayClient'),
         findDistModule(name => name.startsWith('client-info-'), 'GATEWAY_CLIENT_NAMES'),
       ]);
       const resolveGatewayClientBootstrap = resolveExport(bootstrapModule, 'resolveGatewayClientBootstrap');
