@@ -136,13 +136,15 @@ async function main() {
   };
 
   const markResolved = async (payload, fallbackKind) => {
-    const approval = sanitizeApproval(payload, fallbackKind);
-    if (!approval) return;
-    await approvalsCollection.doc(approval.id).set({
-      ...approval,
+    const request = payload?.request && typeof payload.request === 'object' ? payload.request : payload;
+    const id = String(payload?.id || request?.id || '').trim();
+    if (!id) return;
+    await approvalsCollection.doc(id).set({
+      id,
+      kind: normalizeKind(payload?.kind || payload?.approvalKind || request?.kind, fallbackKind),
       status: 'resolved',
       resolvedDecision: payload?.decision || payload?.resolution?.decision || null,
-      resolvedAtMs: Date.now(),
+      resolvedAtMs: Number(payload?.ts || payload?.resolvedAtMs || Date.now()),
       decisionRequest: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
