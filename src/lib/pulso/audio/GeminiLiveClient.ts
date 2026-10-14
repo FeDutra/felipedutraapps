@@ -114,6 +114,8 @@ export class GeminiLiveClient {
   private pendingUserTranscript = '';
   private pendingAssistantTranscript = '';
   private bufferedAutonomousAudio: string[] = [];
+  private inputTurnFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private inputTurnMayUseAutonomousAudio = false;
   private awaitingResult = false;
   private turnSequence = 0;
   private activeTurnId: string | null = null;
@@ -268,6 +270,22 @@ export class GeminiLiveClient {
     if (msg.serverContent) {
       const sc = msg.serverContent;
 
+      // A Live API pode entregar inputTranscription no mesmo pacote que marca
+      // uma interrupção. A transcrição precisa ser preservada antes de tratar
+      // o cancelamento da resposta autônoma; caso contrário o pedido inteiro
+      // desaparece sem chegar à Lótus.
+      if (sc.inputTranscription?.text) {
+        const interruptedTurnWasWaitingForTranscript = Boolean(this.inputTurnFinalizeTimer);
+        if (!this.pendingUserTranscript) {
+          this.beginUserTurn();
+        }
+        this.pendingUserTranscript += sc.inputTranscription.text;
+        this.config.onTranscript?.('user', sc.inputTranscription.text);
+        if (interruptedTurnWasWaitingForTranscript || this.inputTurnFinalizeTimer) {
+          this.scheduleInputTurnFinalization(this.inputTurnMayUseAutonomousAudio, 180);
+        }
+      }
+
       if (sc.interrupted) {
         console.log('[GEMINI_LIVE_INTERRUPTED]');
         this.flushPlayback();
@@ -277,6 +295,16 @@ export class GeminiLiveClient {
         // resultados reais, que o chamador achava terem sido narrados).
         const interruptedKind = this.narrationInFlight?.kind;
         this.narrationInFlight = null;
+        if (!interruptedKind) {
+          // A resposta espontânea do Gemini foi interrompida, não o pedido do
+          // Fê. Fecha o turno a partir da transcrição já recebida ou espera
+          // brevemente caso o fragmento de transcrição venha no pacote logo
+          // seguinte ao marcador de interrupção.
+          this.pendingAssistantTranscript = '';
+          this.bufferedAutonomousAudio = [];
+          this.scheduleInputTurnFinalization(false, 220);
+          return;
+        }
         if (interruptedKind === 'result') {
           this.awaitingResult = false;
         }
@@ -288,13 +316,6 @@ export class GeminiLiveClient {
         return;
       }
 
-      if (sc.inputTranscription?.text) {
-        if (!this.pendingUserTranscript) {
-          this.beginUserTurn();
-        }
-        this.pendingUserTranscript += sc.inputTranscription.text;
-        this.config.onTranscript?.('user', sc.inputTranscription.text);
-      }
       if (sc.outputTranscription?.text) {
         if (this.narrationInFlight) {
           this.config.onTranscript?.('assistant', sc.outputTranscription.text);
@@ -340,31 +361,10 @@ export class GeminiLiveClient {
           this.maybeReturnToListening();
           this.flushNarrationQueue();
         } else {
-          // Turno vindo diretamente do microfone. Só saudações puramente
-          // sociais podem usar a resposta autônoma. Todo pedido operacional
-          // descarta esse áudio e abre um ciclo exclusivo da Lótus.
-          const userText = this.pendingUserTranscript.trim();
-          const assistantText = this.pendingAssistantTranscript.trim();
-          const autonomousAudio = this.bufferedAutonomousAudio;
-          this.pendingUserTranscript = '';
-          this.pendingAssistantTranscript = '';
-          this.bufferedAutonomousAudio = [];
-
-          if (userText && isPurelySocialTurn(userText)) {
-            if (assistantText) this.config.onTranscript?.('assistant', assistantText);
-            this.turnCompletePending = true;
-            autonomousAudio.forEach(chunk => this.enqueuePlayback(chunk));
-            this.maybeReturnToListening();
-          } else if (userText) {
-            const turnId = this.activeTurnId || this.createTurnId();
-            this.awaitingResult = true;
-            this.checkpointSpokenThisTurn = false;
-            this.lastCheckpointSpokenAt = 0;
-            this.config.onUserTurnReady?.({ turnId, userText });
-            this.queueAcknowledgement(turnId, userText);
-          } else {
-            this.setState('listening');
-          }
+          // Algumas versões da Live API fecham o turno antes do último
+          // fragmento de inputTranscription. Um debounce curto evita perder a
+          // cauda sem adicionar latência perceptível à conversa.
+          this.scheduleInputTurnFinalization(true, 100);
         }
       }
       return;
@@ -382,6 +382,44 @@ export class GeminiLiveClient {
     return `voice_${Date.now()}_${this.turnSequence}`;
   }
 
+  private scheduleInputTurnFinalization(mayUseAutonomousAudio: boolean, delayMs: number) {
+    this.inputTurnMayUseAutonomousAudio = mayUseAutonomousAudio;
+    if (this.inputTurnFinalizeTimer) clearTimeout(this.inputTurnFinalizeTimer);
+    this.inputTurnFinalizeTimer = setTimeout(() => {
+      this.inputTurnFinalizeTimer = null;
+      this.finalizeInputTurn(this.inputTurnMayUseAutonomousAudio);
+    }, delayMs);
+  }
+
+  private finalizeInputTurn(mayUseAutonomousAudio: boolean) {
+    const userText = this.pendingUserTranscript.trim();
+    const assistantText = this.pendingAssistantTranscript.trim();
+    const autonomousAudio = mayUseAutonomousAudio ? this.bufferedAutonomousAudio : [];
+    this.pendingUserTranscript = '';
+    this.pendingAssistantTranscript = '';
+    this.bufferedAutonomousAudio = [];
+
+    if (userText && isPurelySocialTurn(userText) && autonomousAudio.length > 0) {
+      if (assistantText) this.config.onTranscript?.('assistant', assistantText);
+      this.turnCompletePending = true;
+      autonomousAudio.forEach(chunk => this.enqueuePlayback(chunk));
+      this.maybeReturnToListening();
+      return;
+    }
+
+    if (userText) {
+      const turnId = this.activeTurnId || this.createTurnId();
+      this.awaitingResult = true;
+      this.checkpointSpokenThisTurn = false;
+      this.lastCheckpointSpokenAt = 0;
+      this.config.onUserTurnReady?.({ turnId, userText });
+      this.queueAcknowledgement(turnId, userText);
+      return;
+    }
+
+    this.setState('listening');
+  }
+
   private beginUserTurn() {
     const turnId = this.createTurnId();
     this.activeTurnId = turnId;
@@ -394,6 +432,10 @@ export class GeminiLiveClient {
     if (this.checkpointTimer) {
       clearTimeout(this.checkpointTimer);
       this.checkpointTimer = null;
+    }
+    if (this.inputTurnFinalizeTimer) {
+      clearTimeout(this.inputTurnFinalizeTimer);
+      this.inputTurnFinalizeTimer = null;
     }
     this.flushPlayback();
     this.config.onUserTurnStarted?.(turnId);
@@ -665,6 +707,8 @@ export class GeminiLiveClient {
     this.reconnectTimer = null;
     if (this.checkpointTimer) clearTimeout(this.checkpointTimer);
     this.checkpointTimer = null;
+    if (this.inputTurnFinalizeTimer) clearTimeout(this.inputTurnFinalizeTimer);
+    this.inputTurnFinalizeTimer = null;
     this.deferredCheckpointText = null;
     this.activeTurnId = null;
     this.pendingUserTranscript = '';
