@@ -1,25 +1,28 @@
 # Rollback — integridade de turnos do modo Presença (14/10/2026)
 
 - Baseline: `16ff1cfb` em `main`.
-- Release instalada: `d7e64cb128a6bf195598a90dafb33bacb14df16d`.
-- GitHub Actions: run `38559860551`, job macOS concluído com sucesso.
+- Release instalada: `06355f8853665ae5554e6545f931bb76b8642d5e`.
+- GitHub Actions: run `38564703482`, job macOS concluído com sucesso.
 - DMG Intel: `PULSO_0.1.0_x64.dmg`, SHA-256
-  `51212c654c871e5c0144e54450fa9a788b6666bf320ca64d7f7b3d3b4a1311b0`.
+  `581617d5a10d8c9156dff8200ebe3e028f54175440d925c9691efcefe4c97997`.
 - Executável principal instalado: SHA-256
-  `c76254fbab683ddf295d887123ab6648fb9fe995808283ee79956a2fd9c18833`.
+  `de9408d8cafc1197c2a3f2ee91bbd32a85be06395839ff9ce7398ebba43a62c9`.
 - Aplicativo anterior preservado em
   `/Applications/PULSO.rollback-20261014T121406Z.app`.
+- A release silenciosa anterior também foi preservada em
+  `/Applications/PULSO.rollback-20261014T095137-silent-regression.app`.
 - O bundle permanece sem assinatura/notarização, como a release anterior; a
   origem foi validada por run, commit, arquitetura e hashes.
 - Escopo: impedir resposta autônoma do Gemini em pedidos operacionais, vincular
   confirmação/checkpoint/resultado ao turno ativo, cancelar de verdade buffers
-  de áudio interrompidos e impedir retorno atrasado de outro pedido.
+  de áudio interrompidos e preservar o pedido quando `interrupted` e
+  `inputTranscription` chegam juntos ou fora de ordem.
 - Reversão de código: reverter somente o commit desta frente e reconstruir o
   aplicativo Intel. Firestore, relay, credenciais, Hermes e Kokoro não mudam.
 - Contingência sem reinstalação: selecionar `local — openclaw + kokoro` nas
   configurações de voz.
-- A instalação existente no iMac permanece preservada até aprovação explícita;
-  esta frente não reinicia serviço nem substitui `/Applications/PULSO.app`.
+- A release foi instalada em `/Applications/PULSO.app`; o sidecar Kokoro foi
+  reiniciado e provado escutando apenas em `127.0.0.1:14321`.
 
 ---
 
