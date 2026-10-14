@@ -7,8 +7,8 @@
  * human decisions through the canonical Gateway `approval.resolve` method.
  *
  * This process is intentionally not started by the web app. Run it under a
- * supervised service only after provisioning a dedicated paired identity with
- * `operator.approvals` and read-only operator scopes.
+ * supervised service on the Gateway host. It uses OpenClaw's local
+ * approval-runtime credential, restricted to `operator.approvals`.
  */
 
 import { promises as fs } from 'node:fs';
@@ -25,7 +25,6 @@ const APPROVALS_PATH = `${BASE_PATH}/pulso_operator_approvals`;
 const RUNTIME_PATH = `${BASE_PATH}/pulso_operator_runtime/current`;
 const HEARTBEAT_MS = Number.parseInt(process.env.PULSO_OPERATOR_HEARTBEAT_MS || '15000', 10);
 const BRIDGE_VERSION = '0.1.0';
-const OPERATOR_SCOPES = ['operator.read', 'operator.approvals'];
 
 let gatewayRuntimePromise = null;
 let stopping = false;
@@ -54,18 +53,15 @@ async function findDistModule(predicate, marker) {
 async function getGatewayRuntime() {
   if (!gatewayRuntimePromise) {
     gatewayRuntimePromise = (async () => {
-      const [bootstrapModule, clientModule, infoModule] = await Promise.all([
-        findDistModule(name => name.startsWith('client-bootstrap-'), 'resolveGatewayClientBootstrap'),
-        findDistModule(name => /^client-[^.]+\.(?:mjs|js)$/iu.test(name), 'GatewayClient'),
-        findDistModule(name => name.startsWith('client-info-'), 'export { GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_IDS'),
-      ]);
-      const resolveGatewayClientBootstrap = resolveExport(bootstrapModule, 'resolveGatewayClientBootstrap');
-      const GatewayClient = resolveExport(clientModule, 'GatewayClient');
-      const { GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES } = infoModule;
-      if (!resolveGatewayClientBootstrap || !GatewayClient || !GATEWAY_CLIENT_CAPS || !GATEWAY_CLIENT_NAMES || !GATEWAY_CLIENT_MODES) {
+      const approvalsModule = await findDistModule(
+        name => name.startsWith('operator-approvals-client-'),
+        'createOperatorApprovalsGatewayClient',
+      );
+      const createOperatorApprovalsGatewayClient = resolveExport(approvalsModule, 'createOperatorApprovalsGatewayClient');
+      if (!createOperatorApprovalsGatewayClient) {
         throw new Error('openclaw_gateway_runtime_incomplete');
       }
-      return { resolveGatewayClientBootstrap, GatewayClient, GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES };
+      return { createOperatorApprovalsGatewayClient };
     })();
   }
   return await gatewayRuntimePromise;
@@ -124,16 +120,7 @@ async function main() {
   const approvalsCollection = db.collection(APPROVALS_PATH);
   const runtimeRef = db.doc(RUNTIME_PATH);
   const cfg = loadConfig();
-  const { resolveGatewayClientBootstrap, GatewayClient, GATEWAY_CLIENT_CAPS, GATEWAY_CLIENT_NAMES, GATEWAY_CLIENT_MODES } = await getGatewayRuntime();
-  const bootstrap = await resolveGatewayClientBootstrap({
-    config: cfg,
-    gatewayUrl: process.env.PULSO_OPERATOR_GATEWAY_URL || undefined,
-    explicitAuth: {
-      token: process.env.PULSO_OPERATOR_GATEWAY_TOKEN || undefined,
-      password: undefined,
-    },
-    env: process.env,
-  });
+  const { createOperatorApprovalsGatewayClient } = await getGatewayRuntime();
 
   let readyResolve;
   let readyReject;
@@ -161,18 +148,10 @@ async function main() {
     }, { merge: true });
   };
 
-  const gateway = new GatewayClient({
-    url: bootstrap.url,
-    token: bootstrap.auth?.token,
-    password: bootstrap.auth?.password,
-    preauthHandshakeTimeoutMs: bootstrap.preauthHandshakeTimeoutMs,
-    clientName: GATEWAY_CLIENT_NAMES.CLI,
+  const gateway = await createOperatorApprovalsGatewayClient({
+    config: cfg,
+    gatewayUrl: process.env.PULSO_OPERATOR_GATEWAY_URL || undefined,
     clientDisplayName: 'PULSO Operator Bridge',
-    clientVersion: BRIDGE_VERSION,
-    mode: GATEWAY_CLIENT_MODES.CLI,
-    role: 'operator',
-    scopes: OPERATOR_SCOPES,
-    caps: [GATEWAY_CLIENT_CAPS.EXEC_APPROVALS],
     onHelloOk: hello => readyResolve(hello),
     onConnectError: error => readyReject(error),
     onClose: async (code, reason) => {
