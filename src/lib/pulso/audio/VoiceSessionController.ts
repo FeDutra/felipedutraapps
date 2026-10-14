@@ -590,6 +590,14 @@ export class VoiceSessionController {
       });
       this.log('LLM_REQUEST_FINISHED');
 
+      if (!res?.requestId && !res?.responseText) {
+        // Nunca deixar a Orbe morrer em `thinking` quando a camada de envio
+        // recusar ou não confirmar o pedido.
+        this.log('PRESENCE_DISPATCH_NOT_CONFIRMED');
+        this.startListeningLoop();
+        return;
+      }
+
       if (res && res.responseText) {
         this.config.onTextReceived(userText, res.responseText);
         await this.speakAssistant(res.responseText);

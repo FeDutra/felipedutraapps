@@ -4127,7 +4127,13 @@ export default function LivePage() {
     targetContextNode?: PulsoContextNode;
     presenceRouting?: PresenceRoutingDecision;
   }) => {
-    if (isTyping || isSubmittingRef.current) {
+    const originMode = options?.originMode || 'text';
+
+    // Presença é uma entrada assíncrona própria. O estado `isTyping` pertence
+    // à interface do chat e não pode descartar um turno já transcrito. Esse
+    // descarte deixava o VoiceSessionController parado em `thinking`, sem
+    // pedido no Firestore e sem voltar a ouvir.
+    if (originMode !== 'presence' && (isTyping || isSubmittingRef.current)) {
       console.warn('Blocked duplicate send: message already processing or submitting.');
       return;
     }
@@ -4139,7 +4145,6 @@ export default function LivePage() {
     const hasPending = pendingAttachments.length > 0;
     if (!rawMsg.trim() && !hasPending) return;
 
-    const originMode = options?.originMode || 'text';
     const cleanMsg = originMode === 'recording_once' || originMode === 'presence'
       ? normalizeTranscript(rawMsg)
       : rawMsg.trim();
@@ -4226,35 +4231,37 @@ export default function LivePage() {
     }
 
     // Toda interação da /live segue diretamente para a Lótus/OpenClaw.
-    createPulsoConversationRequest(messageText, {
-      mode: sendMode,
-      areaId: sendingNode.areaId,
-      contextId: sendingNode.contextId,
-      chatId: sendingNode.chatId,
-      openclawSessionKey: sendingNode.openclawSessionKey,
-      attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
-      requestId: preGeneratedReqId,
-      presenceRouting: options?.presenceRouting,
-      context: {
-        ...(contextStatesMap[sendingNode.contextId]?.strongState
-          ? { reusableContext: contextStatesMap[sendingNode.contextId].strongState }
-          : {}),
-        ...(options?.presenceRouting
-          ? {
-              presenceRouting: {
-                targetContextId: options.presenceRouting.target.contextId,
-                targetAreaId: options.presenceRouting.target.areaId,
-                switched: options.presenceRouting.switched,
-                confidence: options.presenceRouting.confidence,
-                reason: options.presenceRouting.reason,
-                matchedTerms: options.presenceRouting.matchedTerms,
-                routerVersion: options.presenceRouting.routerVersion,
-                durationMs: options.presenceRouting.durationMs,
-              },
-            }
-          : {}),
-      }
-    }).then(async (newRequest) => {
+    try {
+      const newRequest = await createPulsoConversationRequest(messageText, {
+        mode: sendMode,
+        areaId: sendingNode.areaId,
+        contextId: sendingNode.contextId,
+        chatId: sendingNode.chatId,
+        openclawSessionKey: sendingNode.openclawSessionKey,
+        attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
+        requestId: preGeneratedReqId,
+        presenceRouting: options?.presenceRouting,
+        context: {
+          ...(contextStatesMap[sendingNode.contextId]?.strongState
+            ? { reusableContext: contextStatesMap[sendingNode.contextId].strongState }
+            : {}),
+          ...(options?.presenceRouting
+            ? {
+                presenceRouting: {
+                  targetContextId: options.presenceRouting.target.contextId,
+                  targetAreaId: options.presenceRouting.target.areaId,
+                  switched: options.presenceRouting.switched,
+                  confidence: options.presenceRouting.confidence,
+                  reason: options.presenceRouting.reason,
+                  matchedTerms: options.presenceRouting.matchedTerms,
+                  routerVersion: options.presenceRouting.routerVersion,
+                  durationMs: options.presenceRouting.durationMs,
+                },
+              }
+            : {}),
+        }
+      });
+
       // t2: Moment request vira queued_for_openclaw in Firestore
       if (latencyMapRef.current[newRequest.id]) {
         latencyMapRef.current[newRequest.id].t2_firestore_queued = Date.now();
@@ -4289,7 +4296,12 @@ export default function LivePage() {
         const diffTransToReq = latencyRequestCreatedRef.current - (latencyTranscriptionRef.current || latencyRequestCreatedRef.current);
         console.log(`[PULSO_LATENCY_TRANSCRIPTION_TO_REQUEST_CREATED_MS] ${diffTransToReq} ms`);
       }
-    }).catch((err: any) => {
+
+      // Só confirmamos despacho à camada de voz depois que o documento existe.
+      // Antes, a Presença avançava para `thinking` mesmo quando a persistência
+      // falhava ou o envio era descartado.
+      return { requestId: newRequest.id || preGeneratedReqId };
+    } catch (err: any) {
       const lotusErrorMsg: Message = {
         id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
@@ -4298,13 +4310,11 @@ export default function LivePage() {
         contextId: sendingNode.contextId
       };
       setMessages(prev => [...prev, lotusErrorMsg]);
-    }).finally(() => {
+      if (originMode === 'presence') throw err;
+      return null;
+    } finally {
       setContextTyping(sendingContextId, false);
-    });
-
-    // O controlador de voz precisa correlacionar imediatamente este pedido ao
-    // turno ativo. A persistência continua assíncrona, mas o ID já é canônico.
-    return { requestId: preGeneratedReqId };
+    }
   };
 
   const recordLocalPresenceFastPath = React.useCallback(async (
