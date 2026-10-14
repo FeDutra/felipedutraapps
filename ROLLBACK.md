@@ -8,15 +8,22 @@
   transcrição ou envio; `recording_once` não herda a trava de envio manual de
   texto; STT local recebe um retry idempotente; falha de entrega devolve a
   transcrição ao compositor e mantém o WAV recuperável.
-- Artefato, hashes e bundle de rollback serão preenchidos após o build Intel e
-  a instalação validada no iMac.
+- Fonte instalada: `81b154c7` em `main`.
+- GitHub Actions: run `38614350947`, build macOS Intel concluído com sucesso.
+- DMG Intel: SHA-256
+  `68e4f54eccdf4ab754cd41060b59c375ce82360660abd131f8cd7cd565b3301d`.
+- Executável principal instalado: SHA-256
+  `dfacf4e8d9fe71b68ab95279c94dc168dd4cf882b4afccb98a38124f57e6c9a5`.
+- Bundle anterior preservado em
+  `/Applications/PULSO.rollback-20261014T183944Z-pre-voice-priority.app`.
 
 ## Reversão
 
 1. Encerrar somente `/Applications/PULSO.app` e seus `kokoro_runner`.
 2. Mover o bundle atual para um caminho datado de contingência.
-3. Restaurar o bundle `pre-voice-priority` registrado nesta seção após a
-   instalação.
+3. Restaurar
+   `/Applications/PULSO.rollback-20261014T183944Z-pre-voice-priority.app` como
+   `/Applications/PULSO.app`.
 4. Não remover `~/Documents/PULSO/Áudios recuperáveis`.
 
 ---
