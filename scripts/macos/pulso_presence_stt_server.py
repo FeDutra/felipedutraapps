@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from faster_whisper import WhisperModel
 
@@ -22,7 +24,10 @@ HOST = "127.0.0.1"
 PORT = int(os.environ.get("PULSO_STT_PORT", "14323"))
 MODEL_NAME = os.environ.get("PULSO_STT_MODEL", "base")
 MODEL_CACHE = os.environ.get("PULSO_STT_MODEL_CACHE", os.path.expanduser("~/.cache/faster-whisper"))
-MAX_AUDIO_BYTES = 12 * 1024 * 1024
+MAX_AUDIO_BYTES = 256 * 1024 * 1024
+MAX_JSON_BYTES = 4096
+RECORDING_ID = re.compile(r"^[A-Za-z0-9_-]{8,120}$")
+RECOVERABLE_AUDIO_DIR = Path.home() / "Documents" / "PULSO" / "Áudios recuperáveis"
 
 MODEL = WhisperModel(
     MODEL_NAME,
@@ -67,7 +72,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"ok": True, "engine": "faster-whisper-local", "model": MODEL_NAME})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/transcribe":
+        if self.path not in {"/transcribe", "/transcribe-recording"}:
             self._json(404, {"error": "not_found"})
             return
 
@@ -75,6 +80,30 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
+        if self.path == "/transcribe-recording":
+            if length <= 0 or length > MAX_JSON_BYTES:
+                self._json(400, {"error": "invalid_request_size"})
+                return
+            try:
+                payload = json.loads(self.rfile.read(length))
+                recording_id = str(payload.get("recordingId", ""))
+            except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+                self._json(400, {"error": "invalid_json"})
+                return
+            if not RECORDING_ID.fullmatch(recording_id):
+                self._json(400, {"error": "invalid_recording_id"})
+                return
+            audio_path = (RECOVERABLE_AUDIO_DIR / f"{recording_id}.wav").resolve()
+            if audio_path.parent != RECOVERABLE_AUDIO_DIR.resolve() or not audio_path.is_file():
+                self._json(404, {"error": "recording_not_found"})
+                return
+            size = audio_path.stat().st_size
+            if size <= 44 or size > MAX_AUDIO_BYTES:
+                self._json(400, {"error": "invalid_audio_size"})
+                return
+            self._transcribe_path(str(audio_path))
+            return
+
         if length <= 44 or length > MAX_AUDIO_BYTES:
             self._json(400, {"error": "invalid_audio_size"})
             return
@@ -84,13 +113,25 @@ class Handler(BaseHTTPRequestHandler):
             self._json(415, {"error": "wav_required"})
             return
 
-        started = time.perf_counter()
         path = ""
         try:
             with tempfile.NamedTemporaryFile(prefix="pulso-presence-", suffix=".wav", delete=False) as handle:
                 handle.write(audio)
                 path = handle.name
+            self._transcribe_path(path)
+        except Exception as error:  # noqa: BLE001
+            print(f"[presence-stt] transcription error: {error!r}", flush=True)
+            self._json(500, {"error": "transcription_failed"})
+        finally:
+            if path:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
 
+    def _transcribe_path(self, path: str) -> None:
+        started = time.perf_counter()
+        try:
             with MODEL_LOCK:
                 segments, _ = MODEL.transcribe(
                     path,
@@ -102,7 +143,6 @@ class Handler(BaseHTTPRequestHandler):
                     temperature=0.0,
                 )
                 text = "".join(segment.text for segment in segments).strip()
-
             duration_ms = round((time.perf_counter() - started) * 1000)
             self._json(200, {
                 "text": text,
@@ -112,12 +152,6 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:  # noqa: BLE001
             print(f"[presence-stt] transcription error: {error!r}", flush=True)
             self._json(500, {"error": "transcription_failed"})
-        finally:
-            if path:
-                try:
-                    os.unlink(path)
-                except FileNotFoundError:
-                    pass
 
 
 if __name__ == "__main__":

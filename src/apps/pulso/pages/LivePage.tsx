@@ -8,7 +8,9 @@ import { SecondaryChatPane } from '../components/SecondaryChatPane';
 import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
 import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
+import { float32ToInt16Bytes } from '@/lib/pulso/audio/pcmWav';
 
 import {
   DndContext,
@@ -52,6 +54,20 @@ interface SortableChatItemDesktopProps {
 // tivesse dito. Quando a resposta original já não veio no payload, indicamos
 // a limitação de forma humana em vez de expor infraestrutura.
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
+
+const isTauriRuntime = () => typeof window !== 'undefined' && (
+  window.location.protocol === 'tauri:'
+  || window.location.protocol === 'file:'
+  || !!(window as any).__TAURI__
+  || !!(window as any).__TAURI_INTERNALS__
+);
+
+interface RecoverableVoiceRecording {
+  recordingId: string;
+  wavPath: string;
+  status: string;
+  rawAvailable: boolean;
+}
 
 interface PulsoModelCatalogEntry {
   id: string;
@@ -2773,6 +2789,15 @@ export default function LivePage() {
   const mediaStreamSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
   const microphoneStreamRef = React.useRef<MediaStream | null>(null);
   const audioChunksRef = React.useRef<Blob[]>([]);
+  const recordingIdRef = React.useRef<string | null>(null);
+  const recordingArtifactPathRef = React.useRef<string | null>(null);
+  const recordingPcmSpoolBufferRef = React.useRef<Float32Array[]>([]);
+  const recordingPcmSpoolSamplesRef = React.useRef(0);
+  const recordingPcmSampleRateRef = React.useRef(48_000);
+  const recordingPcmProcessorRef = React.useRef<ScriptProcessorNode | null>(null);
+  const recordingSilentGainRef = React.useRef<GainNode | null>(null);
+  const recordingSpoolWriteChainRef = React.useRef<Promise<void>>(Promise.resolve());
+  const recordingSpoolErrorRef = React.useRef<Error | null>(null);
   const silenceStartRef = React.useRef<number>(0);
   const animationFrameRef = React.useRef<number>(0);
   const startSpeechRecognitionRef = React.useRef<any>(null);
@@ -2783,6 +2808,41 @@ export default function LivePage() {
   // local impede a mesma frase de ser narrada repetidamente na voz.
   const narratedPresenceProgressRef = React.useRef<Set<string>>(new Set());
   const presentedPresenceResultsRef = React.useRef<Set<string>>(new Set());
+
+  const flushRecordingSpool = React.useCallback((force = false) => {
+    const recordingId = recordingIdRef.current;
+    if (!recordingId || recordingPcmSpoolBufferRef.current.length === 0) return;
+    if (!force && recordingPcmSpoolSamplesRef.current < recordingPcmSampleRateRef.current) return;
+
+    const chunks = recordingPcmSpoolBufferRef.current;
+    recordingPcmSpoolBufferRef.current = [];
+    recordingPcmSpoolSamplesRef.current = 0;
+    const pcmBytes = chunks.flatMap(float32ToInt16Bytes);
+    recordingSpoolWriteChainRef.current = recordingSpoolWriteChainRef.current
+      .then(async () => {
+        await invoke<number>('voice_recording_append', { recordingId, pcmBytes });
+      })
+      .catch((error) => {
+        recordingSpoolErrorRef.current = error instanceof Error ? error : new Error(String(error));
+        console.error('[PULSO_RECORDING_SPOOL_WRITE_FAILED]', { recordingId, error });
+      });
+  }, []);
+
+  React.useEffect(() => {
+    if (!isTauriRuntime()) return;
+    invoke<RecoverableVoiceRecording[]>('voice_recording_recover_incomplete')
+      .then((recordings) => {
+        if (recordings.length > 0) {
+          console.warn('[PULSO_RECOVERABLE_RECORDINGS_FOUND]', {
+            count: recordings.length,
+            recordingIds: recordings.map((recording) => recording.recordingId),
+          });
+          setToastMessage(`${recordings.length} áudio${recordings.length === 1 ? '' : 's'} recuperável${recordings.length === 1 ? '' : 'is'} em Documentos/PULSO`);
+          window.setTimeout(() => setToastMessage(null), 6000);
+        }
+      })
+      .catch((error) => console.error('[PULSO_RECORDING_RECOVERY_FAILED]', error));
+  }, []);
 
   React.useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -4566,28 +4626,40 @@ export default function LivePage() {
     inputMessageRef.current = inputMessage;
   }, [inputMessage]);
 
-  const transcribeAudioBlob = React.useCallback(async (blob: Blob, mode: VoiceMode) => {
+  const transcribeAudioBlob = React.useCallback(async (blob: Blob, mode: VoiceMode, recordingId?: string | null) => {
+    const tauri = isTauriRuntime();
+    const markRecording = async (status: string) => {
+      if (!tauri || !recordingId) return;
+      await invoke('voice_recording_mark', { recordingId, status });
+    };
+
     try {
       voiceStateRef.current = 'transcribing';
       setVoiceState('transcribing');
-      
-      const isTauriEnv = typeof window !== 'undefined' && (
-        window.location.protocol === 'tauri:' ||
-        !!(window as any).__TAURI__ ||
-        !!(window as any).__TAURI_INTERNALS__
-      );
+      await markRecording('transcribing');
 
-      const endpointUrl = isTauriEnv 
-        ? 'https://felipedutraapps.web.app/api/pulso/transcribe' 
+      const endpointUrl = tauri
+        ? `http://127.0.0.1:14323/${recordingId ? 'transcribe-recording' : 'transcribe'}`
         : '/api/pulso/transcribe';
+      const requestFetch: typeof fetch = tauri
+        ? (await import('@tauri-apps/plugin-http')).fetch
+        : fetch;
 
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': blob.type || 'audio/webm',
-        },
-        body: blob,
-      });
+      const transcriptionAbort = new AbortController();
+      const transcriptionTimeout = window.setTimeout(() => transcriptionAbort.abort(), 3 * 60 * 1000);
+      let response: Response;
+      try {
+        response = await requestFetch(endpointUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': recordingId ? 'application/json' : (blob.type || 'audio/webm'),
+          },
+          body: recordingId ? JSON.stringify({ recordingId }) : blob,
+          signal: transcriptionAbort.signal,
+        });
+      } finally {
+        window.clearTimeout(transcriptionTimeout);
+      }
 
       if (!response.ok) {
         throw new Error('Falha na transcrição');
@@ -4597,6 +4669,11 @@ export default function LivePage() {
       const transcribedText = data.text || '';
       
       if (mode === 'recording_once') {
+         if (!transcribedText.trim()) {
+           await markRecording('failed');
+         } else {
+           await markRecording('transcribed');
+         }
          const currentBase = baseTextBeforeRecordingRef.current;
          const newText = transcribedText.trim() ? (currentBase ? `${currentBase}${transcribedText}` : transcribedText) : currentBase.trim();
          const shouldSendDirect = sendAfterTranscribeRef.current;
@@ -4610,7 +4687,10 @@ export default function LivePage() {
            voiceStateRef.current = 'idle';
            setVoiceMode('off');
            voiceModeRef.current = 'off';
-           handleSendMessage(newText, { originMode: 'recording_once' });
+           await markRecording('message_queued');
+           const result = await handleSendMessage(newText, { originMode: 'recording_once' });
+           if (result?.requestId) await markRecording('committed');
+           else await markRecording('failed');
            return;
          }
 
@@ -4618,9 +4698,10 @@ export default function LivePage() {
          currentTextRef.current = newText;
          inputMessageRef.current = newText;
          if (!transcribedText.trim()) {
-           // Sinaliza claramente em vez de deixar a caixa de texto igual, sem
-           // pista nenhuma de que a gravação não virou texto.
-           setVoiceError('não captei nenhum áudio nessa gravação — tenta de novo.');
+           const location = recordingArtifactPathRef.current
+             ? ` O áudio foi salvo em ${recordingArtifactPathRef.current}.`
+             : '';
+           setVoiceError(`não consegui transcrever essa gravação.${location}`);
          }
 
          setVoiceState('idle');
@@ -4648,8 +4729,14 @@ export default function LivePage() {
       }
     } catch (err) {
       console.error('[PULSO_TRANSCRIBE_ERROR]', err);
+      await markRecording('failed').catch((markError) => {
+        console.error('[PULSO_RECORDING_MARK_FAILED]', markError);
+      });
       setVoiceState('error');
-      setVoiceError('Erro ao transcrever o áudio.');
+      const location = recordingArtifactPathRef.current
+        ? ` O áudio está salvo em ${recordingArtifactPathRef.current}.`
+        : '';
+      setVoiceError(`Erro ao transcrever o áudio.${location}`);
       if (mode === 'recording_once') {
          const originalText = baseTextBeforeRecordingRef.current.trim();
          setInputMessage(originalText);
@@ -4688,6 +4775,54 @@ export default function LivePage() {
       });
       microphoneStreamRef.current = stream;
 
+      const tauriRecordingOnce = isTauriRuntime() && mode === 'recording_once';
+      recordingPcmSpoolBufferRef.current = [];
+      recordingPcmSpoolSamplesRef.current = 0;
+      recordingSpoolWriteChainRef.current = Promise.resolve();
+      recordingSpoolErrorRef.current = null;
+      recordingArtifactPathRef.current = null;
+
+      if (tauriRecordingOnce) {
+        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+        const audioContext = new AudioContextCtor();
+        audioContextRef.current = audioContext;
+        if (audioContext.state === 'suspended') await audioContext.resume();
+        recordingPcmSampleRateRef.current = audioContext.sampleRate;
+
+        const recordingId = `audio_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
+        recordingIdRef.current = recordingId;
+        const artifact = await invoke<RecoverableVoiceRecording>('voice_recording_begin', {
+          recordingId,
+          sampleRate: audioContext.sampleRate,
+        });
+        recordingArtifactPathRef.current = artifact.wavPath;
+
+        const source = audioContext.createMediaStreamSource(stream);
+        mediaStreamSourceRef.current = source;
+        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+        recordingPcmProcessorRef.current = processor;
+        const silentGain = audioContext.createGain();
+        silentGain.gain.value = 0;
+        recordingSilentGainRef.current = silentGain;
+        processor.onaudioprocess = (event) => {
+          const input = event.inputBuffer.getChannelData(0);
+          const chunk = new Float32Array(input);
+          recordingPcmSpoolBufferRef.current.push(chunk);
+          recordingPcmSpoolSamplesRef.current += chunk.length;
+          flushRecordingSpool(false);
+        };
+        source.connect(processor);
+        processor.connect(silentGain);
+        silentGain.connect(audioContext.destination);
+        console.log('[PULSO_RECORDING_DURABLE_CAPTURE_READY]', {
+          recordingId,
+          sampleRate: audioContext.sampleRate,
+          wavPath: artifact.wavPath,
+        });
+      } else {
+        recordingIdRef.current = null;
+      }
+
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -4698,9 +4833,37 @@ export default function LivePage() {
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+      mediaRecorder.onstop = async () => {
+        const shouldTranscribe = voiceStateRef.current === 'recording_once'
+          || voiceStateRef.current === 'presence_listening'
+          || voiceStateRef.current === 'transcribing';
+        const recordingId = recordingIdRef.current;
+        let audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        let durableCaptureReady = !tauriRecordingOnce;
         audioChunksRef.current = [];
+        try {
+          if (tauriRecordingOnce && recordingId) {
+            recordingPcmProcessorRef.current?.disconnect();
+            recordingPcmProcessorRef.current = null;
+            recordingSilentGainRef.current?.disconnect();
+            recordingSilentGainRef.current = null;
+            flushRecordingSpool(true);
+            await recordingSpoolWriteChainRef.current;
+            if (recordingSpoolErrorRef.current) throw recordingSpoolErrorRef.current;
+            const artifact = await invoke<RecoverableVoiceRecording>('voice_recording_finalize', { recordingId });
+            recordingArtifactPathRef.current = artifact.wavPath;
+            durableCaptureReady = true;
+            console.log('[PULSO_RECORDING_CAPTURED]', {
+              recordingId,
+              wavPath: artifact.wavPath,
+            });
+          }
+        } catch (error) {
+          console.error('[PULSO_RECORDING_FINALIZE_FAILED]', { recordingId, error });
+          setVoiceError('A gravação foi interrompida durante o salvamento. O bruto parcial foi preservado em Documentos/PULSO.');
+          setVoiceState('error');
+          voiceStateRef.current = 'error';
+        }
         // Só agora, com o gravador de fato parado e o último chunk garantido,
         // é seguro encerrar as tracks do microfone. Pará-las antes (no clique
         // de stop) corta o flush final em alguns navegadores/iOS e produz
@@ -4710,8 +4873,8 @@ export default function LivePage() {
           microphoneStreamRef.current = null;
         }
         // Only transcribe if we haven't manually aborted or completely exited
-        if (voiceStateRef.current === 'recording_once' || voiceStateRef.current === 'presence_listening' || voiceStateRef.current === 'transcribing') {
-           transcribeAudioBlob(audioBlob, mode);
+        if (shouldTranscribe && durableCaptureReady && (tauriRecordingOnce || audioBlob.size > 44)) {
+           await transcribeAudioBlob(audioBlob, mode, recordingId);
         }
       };
 
@@ -4845,7 +5008,7 @@ export default function LivePage() {
       setVoiceState('error');
       setVoiceError('Permissão de microfone negada ou indisponível.');
     }
-  }, [stopVoiceRecognition, ttsAdapter, transcribeAudioBlob]);
+  }, [stopVoiceRecognition, ttsAdapter, transcribeAudioBlob, flushRecordingSpool]);
 
   React.useEffect(() => {
     startSpeechRecognitionRef.current = startSpeechRecognition;

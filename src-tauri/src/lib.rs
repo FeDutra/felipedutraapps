@@ -6,6 +6,13 @@ use std::process::Stdio;
 mod agent;
 use agent::local_machine::{local_open_url, execute_applescript};
 use agent::presence_broker::local_presence_read;
+use agent::voice_recording::{
+  voice_recording_append,
+  voice_recording_begin,
+  voice_recording_finalize,
+  voice_recording_mark,
+  voice_recording_recover_incomplete,
+};
 
 #[tauri::command]
 fn execute_shell_command(command: &str) -> Result<String, String> {
@@ -76,7 +83,12 @@ pub fn run() {
       execute_applescript,
       execute_shell_command,
       execute_long_command_stream,
-      local_presence_read
+      local_presence_read,
+      voice_recording_begin,
+      voice_recording_append,
+      voice_recording_finalize,
+      voice_recording_mark,
+      voice_recording_recover_incomplete
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
