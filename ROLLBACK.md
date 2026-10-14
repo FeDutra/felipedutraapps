@@ -1,3 +1,42 @@
+# Rollback — gravação de áudio recuperável no app Tauri (14/10/2026)
+
+- Fonte instalada: `ad37d3e4` em `main`.
+- GitHub Actions: run `38594650955`, build macOS Intel concluído com sucesso.
+- DMG Intel: SHA-256
+  `a1c81bcc8585c5fa5ac9a7c847cfb0e7f3e1b2216b90cb3fa788db409d6511fa`.
+- Executável principal instalado: SHA-256
+  `1125a27502398c24697ced1ec285a3abcc5883a203e19b1fd1f918042942c48f`.
+- Bundle anterior preservado em
+  `/Applications/PULSO.rollback-20261014T162012Z-pre-audio-recovery.app` e
+  `/Applications/PULSO.replaced-20261014T162012Z.app`.
+- A gravação comum do desktop agora recebe `recordingId`, grava PCM em blocos
+  durante a captura e fecha um WAV em
+  `~/Documents/PULSO/Áudios recuperáveis` antes de transcrever.
+- No Tauri, a transcrição usa o serviço local por `recordingId`; áudio longo não
+  atravessa o WebView nem depende da cota Gemini.
+- Serviço STT atualizado: SHA-256
+  `dbbdad877bb659807f58cae1f217b4a67c89455025605dff36c7cf9d57a926f4`.
+- Script anterior preservado em
+  `~/.local/share/hermes-agent-pulso-local/services/pulso_presence_stt_server.py.rollback-20261014T160300Z`.
+- Provas: testes Rust do contêiner WAV e proteção de ID passaram; endpoint local
+  transcreveu arquivo salvo em 940 ms; path traversal recebeu HTTP 400; após
+  reinício real do app, um PCM parcial foi reconstruído como WAV válido e
+  marcado `failed`, permanecendo recuperável.
+
+## Reversão
+
+1. Encerrar somente `/Applications/PULSO.app` e seus `kokoro_runner`.
+2. Mover o bundle atual para um caminho datado de contingência.
+3. Restaurar
+   `/Applications/PULSO.rollback-20261014T162012Z-pre-audio-recovery.app` como
+   `/Applications/PULSO.app`.
+4. Para reverter também o STT, parar `com.pulso.presence-stt`, restaurar o
+   script `.rollback-20261014T160300Z` e carregar novamente o LaunchAgent.
+5. Não remover `~/Documents/PULSO/Áudios recuperáveis`: ali ficam os brutos do
+   usuário e artefatos de recuperação.
+
+---
+
 # Rollback — transcrição local do modo Presença no iMac (14/10/2026)
 
 - Fonte instalada: `67d0bd94` em `main`.
