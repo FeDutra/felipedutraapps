@@ -78,6 +78,15 @@ export const firestorePaths = {
   publicConversation: (id: string) => `${BASE_PATH}/public_conversations/${id}`,
   publicConversationRequests: (id: string) => `${BASE_PATH}/public_conversations/${id}/requests`,
 
+  /**
+   * Sanitized operational projections produced by the PULSO Operator Bridge.
+   * Secrets and Gateway credentials must never be written to these documents.
+   */
+  operatorApprovals: () => `${BASE_PATH}/pulso_operator_approvals`,
+  operatorApproval: (id: string) => `${BASE_PATH}/pulso_operator_approvals/${id}`,
+  operatorRuntime: () => `${BASE_PATH}/pulso_operator_runtime`,
+  operatorRuntimeState: () => `${BASE_PATH}/pulso_operator_runtime/current`,
+
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`
 };

@@ -3,25 +3,36 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Activity, LayoutDashboard, Inbox, Globe, LogOut, HeartPulse, Zap, CheckSquare, Sparkles, Mail, MessageCircleMore, Download } from 'lucide-react';
+import { ArrowLeft, Activity, LogOut, CheckSquare, Sparkles, Mail, MessageCircleMore, Download, ShieldCheck } from 'lucide-react';
 import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
 import { authService } from '@/shared/services/authService';
 import { User } from 'firebase/auth';
 
-export const PULSO_NAV_ITEMS = [
-  { href: '/pulso/live', label: 'Lótus Live ✦', icon: Sparkles },
-  { href: '/pulso/cockpit', label: 'Campo Vivo', icon: LayoutDashboard },
-  { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
-  { href: '/pulso/email', label: 'E-mail', icon: Mail },
-  { href: '/pulso/downloads', label: 'Downloads', icon: Download },
-  { href: '/pulso/conversas', label: 'Conversas do site', icon: MessageCircleMore },
-  { href: '/pulso/ecossistema', label: 'Ecossistema', icon: Activity },
-  { href: '/pulso/conexoes', label: 'Conexões', icon: Globe },
-  { href: '/pulso/inbox', label: 'Registro da Lótus', icon: Inbox },
-  { href: '/pulso/metabolismo', label: 'Agentes', icon: Zap },
-  { href: '/pulso/health', label: 'Saúde / Riscos', icon: HeartPulse },
-  { href: '/pulso/eventos', label: 'Bastidor Técnico', icon: Activity },
+export const PULSO_NAV_GROUPS = [
+  {
+    label: 'PULSO',
+    items: [
+      { href: '/pulso/live', label: 'Lótus', icon: Sparkles },
+      { href: '/pulso/tarefas', label: 'Tarefas', icon: CheckSquare },
+    ],
+  },
+  {
+    label: 'COMUNICAÇÃO',
+    items: [
+      { href: '/pulso/email', label: 'E-mail', icon: Mail },
+      { href: '/pulso/conversas', label: 'Conversas', icon: MessageCircleMore },
+      { href: '/pulso/downloads', label: 'Cadastros', icon: Download },
+    ],
+  },
+  {
+    label: 'BASTIDOR',
+    items: [
+      { href: '/pulso/sistema', label: 'Sistema', icon: ShieldCheck },
+    ],
+  },
 ];
+
+export const PULSO_NAV_ITEMS = PULSO_NAV_GROUPS.flatMap(group => group.items);
 
 export default function PulsoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -36,18 +47,20 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
     } catch (error) {
       console.warn('[PULSO_THEME_STORAGE_UNAVAILABLE]', error);
     }
-    if (saved) setPulsoTheme(saved);
-    const handleThemeChange = (e: any) => {
-      setPulsoTheme(e.detail);
-      document.body.classList.toggle('pulso-theme-black', e.detail === 'black');
-      document.documentElement.classList.toggle('pulso-theme-black-preload', e.detail === 'black');
+    if (saved) queueMicrotask(() => setPulsoTheme(saved));
+    const handleThemeChange = (e: Event) => {
+      const theme = (e as CustomEvent<string>).detail;
+      if (theme !== 'black' && theme !== 'orange') return;
+      setPulsoTheme(theme);
+      document.body.classList.toggle('pulso-theme-black', theme === 'black');
+      document.documentElement.classList.toggle('pulso-theme-black-preload', theme === 'black');
       let metaTheme = document.querySelector('meta[name="theme-color"]');
       if (!metaTheme) {
         metaTheme = document.createElement('meta');
         metaTheme.setAttribute('name', 'theme-color');
         document.head.appendChild(metaTheme);
       }
-      metaTheme.setAttribute('content', e.detail === 'black' ? '#0f0f0f' : '#b8283e');
+      metaTheme.setAttribute('content', theme === 'black' ? '#0f0f0f' : '#b8283e');
     };
     document.body.classList.toggle('pulso-theme-black', saved === 'black');
     document.documentElement.classList.toggle('pulso-theme-black-preload', saved === 'black');
@@ -177,27 +190,31 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
                 </span>
               </div>
 
-              {/* Vertical Navigation items */}
-              <div className="flex flex-col gap-1.5 mt-2">
-                <p className="text-[8px] font-mono tracking-[0.2em] uppercase text-[#fbf9f5]/30 px-3.5 mb-2">Navegação</p>
-                {PULSO_NAV_ITEMS.map((item) => {
-                  const isActive = cleanPathname === item.href || cleanPathname.startsWith(item.href + '/');
-                  return (
-                    <Link 
-                      key={item.href}
-                      href={item.href}
-                      prefetch={false}
-                      className={`flex items-center gap-3 px-3.5 py-3 text-xs tracking-wide transition-all bg-transparent border-none ${
-                        isActive 
-                          ? 'text-white font-medium font-mono' 
-                          : 'text-[#fbf9f5]/60 hover:text-white'
-                      }`}
-                    >
-                      <item.icon size={14} className={isActive ? 'text-white' : 'text-[#fbf9f5]/40'} strokeWidth={isActive ? 2 : 1.5} />
-                      <span className="block truncate">{item.label}</span>
-                    </Link>
-                  );
-                })}
+              {/* A arquitetura fica explícita: trabalho e comunicação na frente; sistema atrás. */}
+              <div className="flex flex-col gap-6 mt-2">
+                {PULSO_NAV_GROUPS.map(group => (
+                  <div key={group.label} className="flex flex-col gap-1">
+                    <p className="text-[8px] font-mono tracking-[0.2em] uppercase text-[#fbf9f5]/25 px-3.5 mb-1.5">{group.label}</p>
+                    {group.items.map((item) => {
+                      const isActive = cleanPathname === item.href || cleanPathname.startsWith(item.href + '/');
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          prefetch={false}
+                          className={`flex items-center gap-3 px-3.5 py-2.5 text-xs tracking-wide rounded-2xl transition-all border ${
+                            isActive
+                              ? 'text-white font-medium font-mono bg-white/[0.07] border-white/10'
+                              : 'text-[#fbf9f5]/52 hover:text-white border-transparent hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          <item.icon size={14} className={isActive ? 'text-white' : 'text-[#fbf9f5]/35'} strokeWidth={isActive ? 2 : 1.5} />
+                          <span className="block truncate">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
 

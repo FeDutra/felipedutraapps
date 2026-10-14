@@ -28,6 +28,24 @@
 
 ---
 
+# Rollback — núcleo SISTEMA e operador de aprovações (14/10/2026)
+
+- Baseline reconciliada: `171e8a5e` em `origin/main`, já contendo a correção final da VOZ.
+- Escopo de código: navegação reduzida, rota `/pulso/sistema`, projeções Firestore do operador, regras específicas e bridge ainda não ativado.
+- Nenhuma rota antiga foi apagada; apenas saiu da navegação principal.
+- O Control UI continua sendo a contingência operacional.
+- O bridge não deve ser instalado nem iniciado sem autorização explícita.
+
+## Reversão
+
+1. Reverter o commit desta frente ou restaurar `src/app/pulso/layout.tsx` para devolver o menu antigo.
+2. Remover a rota `/pulso/sistema` e os arquivos `SystemPage.tsx` e `operatorControlService.ts` se a superfície precisar ser retirada.
+3. Reverter apenas os blocos `pulso_operator_*` em `firestore.rules`; as demais regras permanecem como antes.
+4. Se o bridge vier a ser ativado depois, parar somente seu serviço supervisionado antes da reversão; não reiniciar o Gateway.
+5. Não apagar as coleções `pulso_operator_approvals` ou `pulso_operator_runtime`: elas contêm apenas projeções e recibos, mas devem ser preservadas para auditoria até decisão explícita.
+
+---
+
 # Rollback — gravação de áudio recuperável no app Tauri (14/10/2026)
 
 - Fonte instalada: `ad37d3e4` em `main`.
