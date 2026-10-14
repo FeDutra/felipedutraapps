@@ -1,3 +1,40 @@
+# Rollback — transcrição local do modo Presença no iMac (14/10/2026)
+
+- Fonte instalada: `67d0bd94` em `main`.
+- GitHub Actions: run `38587622942`, build macOS Intel concluído com sucesso.
+- DMG Intel: `PULSO_0.1.0_x64.dmg`, SHA-256
+  `8465c27cd8364db4c9a26f5cbf23260db73332d0d49bbfcd286325eaaa922af7`.
+- Executável principal instalado: SHA-256
+  `134c7cfd71d9939cb1df6b4dc73f8d4ecb58b5b4498f07804986f90baa22ba08`.
+- Bundle anterior preservado em
+  `/Applications/PULSO.rollback-20261014T153128Z-pre-local-stt.app` e
+  `/Applications/PULSO.replaced-20261014T153128Z.app`.
+- Serviço local: `faster-whisper` `base`, CPU `int8`, persistente e restrito a
+  `127.0.0.1:14323`; não usa Gemini nem cota externa.
+- LaunchAgent: `~/Library/LaunchAgents/com.pulso.presence-stt.plist`.
+- Script do serviço:
+  `~/.local/share/hermes-agent-pulso-local/services/pulso_presence_stt_server.py`.
+- Ambiente isolado:
+  `~/.local/share/hermes-agent-pulso-local/venvs/faster-whisper`.
+- Log: `~/Library/Logs/pulso-presence-stt.log`.
+- Prova após instalação: áudio WAV real transcrito em `1047 ms`; health e porta
+  do serviço confirmados, assim como Kokoro em `127.0.0.1:14321`.
+
+## Reversão
+
+1. Encerrar apenas `/Applications/PULSO.app` e seus processos
+   `kokoro_runner`.
+2. Mover o bundle atual para um caminho datado de contingência.
+3. Restaurar
+   `/Applications/PULSO.rollback-20261014T153128Z-pre-local-stt.app` como
+   `/Applications/PULSO.app`.
+4. Parar o STT local com
+   `launchctl bootout gui/501/com.pulso.presence-stt`.
+5. Reabrir a PULSO e confirmar o executável e a porta Kokoro. Os arquivos do
+   serviço local podem permanecer inertes para uma reversão recuperável.
+
+---
+
 # Rollback — integridade de turnos do modo Presença (14/10/2026)
 
 - Baseline: `16ff1cfb` em `main`.
