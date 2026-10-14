@@ -73,6 +73,9 @@ export class VoiceSessionController {
   private analyser: AnalyserNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private silentGainNode: GainNode | null = null;
+  private pcmProcessor: ScriptProcessorNode | null = null;
+  private pcmChunks: Float32Array[] = [];
+  private pcmSampleRate = 48000;
   private silenceStart: number = 0;
   private hasSpoken: boolean = false;
   private animationFrameId: number | null = null;
@@ -97,12 +100,7 @@ export class VoiceSessionController {
     this.ttsAdapter = new TTSAdapter();
     // O Modo Presença tem uma identidade vocal única. Não herda a voz nativa
     // ou outra preferência eventualmente escolhida para leitura de mensagens.
-    const isTauri = typeof window !== 'undefined' && (
-      window.location.protocol === 'tauri:'
-      || window.location.protocol === 'file:'
-      || !!(window as any).__TAURI__
-      || !!(window as any).__TAURI_INTERNALS__
-    );
+    const isTauri = this.isTauriRuntime();
     this.ttsAdapter.updatePreferences({
       ttsProvider: isTauri ? 'local_kokoro_sidecar' : 'kokoro_http',
       voiceName: 'pf_dora(0.70)+af_bella(0.30)',
@@ -111,6 +109,57 @@ export class VoiceSessionController {
       pitch: 1,
       volume: 1
     }, false);
+  }
+
+  private isTauriRuntime() {
+    return typeof window !== 'undefined' && (
+      window.location.protocol === 'tauri:'
+      || window.location.protocol === 'file:'
+      || !!(window as any).__TAURI__
+      || !!(window as any).__TAURI_INTERNALS__
+    );
+  }
+
+  /**
+   * WKWebView grava MediaRecorder como MP4 fragmentado. Embora o arquivo tenha
+   * bytes e o endpoint responda 200, alguns fragmentos chegam ao transcritor
+   * sem fala decodificável. No Tauri, capturamos o mesmo microfone como PCM e
+   * enviamos WAV mono determinístico; o MediaRecorder permanece como fallback
+   * para navegadores comuns.
+   */
+  private encodePcmWav(chunks: Float32Array[], sampleRate: number) {
+    const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
+    const buffer = new ArrayBuffer(44 + sampleCount * 2);
+    const view = new DataView(buffer);
+
+    const writeAscii = (offset: number, value: string) => {
+      for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+    };
+
+    writeAscii(0, 'RIFF');
+    view.setUint32(4, 36 + sampleCount * 2, true);
+    writeAscii(8, 'WAVE');
+    writeAscii(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(36, 'data');
+    view.setUint32(40, sampleCount * 2, true);
+
+    let offset = 44;
+    for (const chunk of chunks) {
+      for (let i = 0; i < chunk.length; i++) {
+        const sample = Math.max(-1, Math.min(1, chunk[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+        offset += 2;
+      }
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
   }
 
   private async executeImmediatePresenceAction(userText: string) {
@@ -298,6 +347,19 @@ export class VoiceSessionController {
       this.analyser.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
 
+      if (this.isTauriRuntime() && typeof this.audioContext.createScriptProcessor === 'function') {
+        this.pcmSampleRate = this.audioContext.sampleRate;
+        this.pcmProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+        this.pcmProcessor.onaudioprocess = (event) => {
+          if (this.state !== 'presence_listening' && this.state !== 'user_speaking') return;
+          const input = event.inputBuffer.getChannelData(0);
+          this.pcmChunks.push(new Float32Array(input));
+        };
+        source.connect(this.pcmProcessor);
+        this.pcmProcessor.connect(gainNode);
+        this.log('PCM_WAV_CAPTURE_READY', { sampleRate: this.pcmSampleRate });
+      }
+
       this.log('VAD_READY');
 
       // Inicializa e começa escuta
@@ -320,6 +382,7 @@ export class VoiceSessionController {
     this.playSoundCue('start_listening');
 
     this.audioChunks = [];
+    this.pcmChunks = [];
     const mimeType = this.getBestAudioMimeType();
 
     try {
@@ -344,8 +407,12 @@ export class VoiceSessionController {
 
     this.mediaRecorder.onstop = async () => {
       const blobMime = this.mediaRecorder?.mimeType || mimeType || 'application/octet-stream';
-      const audioBlob = new Blob(this.audioChunks, { type: blobMime });
+      const pcmChunks = this.pcmChunks;
+      const audioBlob = this.isTauriRuntime() && pcmChunks.length > 0
+        ? this.encodePcmWav(pcmChunks, this.pcmSampleRate)
+        : new Blob(this.audioChunks, { type: blobMime });
       this.audioChunks = [];
+      this.pcmChunks = [];
 
       if (this.state === 'transcribing' || this.state === 'user_speaking') {
         await this.processUserSpeech(audioBlob);
@@ -478,11 +545,7 @@ export class VoiceSessionController {
     this.log('STT_REQUEST_STARTED');
     
     try {
-      const isTauriEnv = typeof window !== 'undefined' && (
-        window.location.protocol === 'tauri:' ||
-        !!(window as any).__TAURI__ ||
-        !!(window as any).__TAURI_INTERNALS__
-      );
+      const isTauriEnv = this.isTauriRuntime();
 
       const endpointUrl = isTauriEnv 
         ? 'https://felipedutraapps.web.app/api/pulso/transcribe' 
@@ -732,6 +795,12 @@ export class VoiceSessionController {
     this.analyser = null;
     this.silentGainNode?.disconnect();
     this.silentGainNode = null;
+    if (this.pcmProcessor) {
+      this.pcmProcessor.onaudioprocess = null;
+      this.pcmProcessor.disconnect();
+      this.pcmProcessor = null;
+    }
+    this.pcmChunks = [];
     const audioContext = this.audioContext;
     this.audioContext = null;
     if (audioContext && audioContext.state !== 'closed') {

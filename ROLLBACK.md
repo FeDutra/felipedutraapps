@@ -54,6 +54,28 @@ app. Isso devolve `pulso_presence_transport` ao valor anterior (`auto`).
 
 ---
 
+# Rollback — captura WAV no modo Presença do Tauri (14/10/2026)
+
+Baseline de código: `2a63a653` em `origin/main`.
+
+## Escopo
+
+- preservar VAD, microfone e ciclo de turnos existentes;
+- no Tauri, capturar o áudio do microfone também como PCM mono e enviar WAV
+  para transcrição;
+- manter MediaRecorder como fallback do navegador;
+- evitar MP4 fragmentado do WKWebView, que chegava com bytes ao endpoint, mas
+  retornava transcrição vazia e não criava `pulso_request`.
+
+## Reversão
+
+Reverter somente o commit desta correção, recompilar o artefato
+`x86_64-apple-darwin` e reinstalar o bundle anterior preservado em
+`/Applications/PULSO.rollback-20261014T121406Z.app`. A mudança não altera
+Firestore, Functions, relay, credenciais ou dados do usuário.
+
+---
+
 # Preparação Hermes local para Presença (14/10/2026)
 
 - Baseline do Hermes: `v0.21.6`, perfil único `default`, gateway parado e sem
