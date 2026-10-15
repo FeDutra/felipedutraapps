@@ -2830,6 +2830,10 @@ export default function LivePage() {
   const recordingSilentGainRef = React.useRef<GainNode | null>(null);
   const recordingSpoolWriteChainRef = React.useRef<Promise<void>>(Promise.resolve());
   const recordingSpoolErrorRef = React.useRef<Error | null>(null);
+  // O ciclo da gravação comum só termina depois de stop, WAV, transcrição e
+  // compositor/envio. Estados visuais podem mudar antes desses callbacks;
+  // esta trava impede que outro MediaRecorder seja aberto nesse intervalo.
+  const recordingCycleActiveRef = React.useRef(false);
   const silenceStartRef = React.useRef<number>(0);
   const animationFrameRef = React.useRef<number>(0);
   const startSpeechRecognitionRef = React.useRef<any>(null);
@@ -4639,6 +4643,7 @@ export default function LivePage() {
   }, []);
 
   React.useEffect(() => () => {
+    recordingCycleActiveRef.current = false;
     const recorder = mediaRecorderRef.current;
     if (recorder?.state === 'recording') {
       try {
@@ -4761,23 +4766,31 @@ export default function LivePage() {
            setInputMessage('');
            currentTextRef.current = '';
            inputMessageRef.current = '';
-           setVoiceState('idle');
-           voiceStateRef.current = 'idle';
            setVoiceMode('off');
            voiceModeRef.current = 'off';
+           // O microfone permanece indisponível até a mensagem existir no
+           // transporte. Voltar a `idle` aqui abria uma segunda captura
+           // enquanto a anterior ainda estava em message_queued/committed.
+           setVoiceState('submitting');
+           voiceStateRef.current = 'submitting';
            await markRecording('message_queued');
-           const result = await handleSendMessage(newText, { originMode: 'recording_once' });
-           if (result?.requestId) {
-             await markRecording('committed');
-           } else {
-             // Se a entrega falhar, devolve a transcrição ao compositor. O
-             // usuário pode reenviar sem falar tudo outra vez, e o WAV segue
-             // preservado para recuperação.
-             setInputMessage(newText);
-             currentTextRef.current = newText;
-             inputMessageRef.current = newText;
-             setVoiceError('A transcrição foi recuperada, mas o envio falhou. O texto voltou para a caixa e o áudio continua salvo.');
-             await markRecording('failed');
+           try {
+             const result = await handleSendMessage(newText, { originMode: 'recording_once' });
+             if (result?.requestId) {
+               await markRecording('committed');
+             } else {
+               // Se a entrega falhar, devolve a transcrição ao compositor. O
+               // usuário pode reenviar sem falar tudo outra vez, e o WAV segue
+               // preservado para recuperação.
+               setInputMessage(newText);
+               currentTextRef.current = newText;
+               inputMessageRef.current = newText;
+               setVoiceError('A transcrição foi recuperada, mas o envio falhou. O texto voltou para a caixa e o áudio continua salvo.');
+               await markRecording('failed');
+             }
+           } finally {
+             setVoiceState('idle');
+             voiceStateRef.current = 'idle';
            }
            return;
          }
@@ -4843,6 +4856,14 @@ export default function LivePage() {
   }, [handleSendMessage]);
 
   const startSpeechRecognition = React.useCallback(async (mode: VoiceMode) => {
+    if (mode === 'recording_once') {
+      if (recordingCycleActiveRef.current) {
+        console.warn('[PULSO_RECORDING_OVERLAP_BLOCKED]');
+        return;
+      }
+      recordingCycleActiveRef.current = true;
+    }
+
     ttsAdapter.cancel();
     stopVoiceRecognition();
 
@@ -4933,13 +4954,33 @@ export default function LivePage() {
         let audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
         let durableCaptureReady = !tauriRecordingOnce;
         audioChunksRef.current = [];
+
+        // `onstop` confirma que o MediaRecorder já entregou o último chunk.
+        // A partir daqui o hardware pode — e deve — ser liberado antes de
+        // aguardar escrita nativa, WAV, Gemini ou Firestore.
+        if (tauriRecordingOnce && recordingId) {
+          recordingPcmProcessorRef.current?.disconnect();
+          recordingPcmProcessorRef.current = null;
+          recordingSilentGainRef.current?.disconnect();
+          recordingSilentGainRef.current = null;
+          flushRecordingSpool(true);
+        }
+        if (microphoneStreamRef.current === stream) {
+          stream.getTracks().forEach(track => track.stop());
+          microphoneStreamRef.current = null;
+        }
+        mediaStreamSourceRef.current?.disconnect();
+        mediaStreamSourceRef.current = null;
+        analyserRef.current?.disconnect();
+        analyserRef.current = null;
+        const captureContext = audioContextRef.current;
+        audioContextRef.current = null;
+        if (captureContext && captureContext.state !== 'closed') {
+          await captureContext.close().catch(console.error);
+        }
+
         try {
           if (tauriRecordingOnce && recordingId) {
-            recordingPcmProcessorRef.current?.disconnect();
-            recordingPcmProcessorRef.current = null;
-            recordingSilentGainRef.current?.disconnect();
-            recordingSilentGainRef.current = null;
-            flushRecordingSpool(true);
             await recordingSpoolWriteChainRef.current;
             if (recordingSpoolErrorRef.current) throw recordingSpoolErrorRef.current;
             const artifact = await invoke<RecoverableVoiceRecording>('voice_recording_finalize', { recordingId });
@@ -4957,30 +4998,17 @@ export default function LivePage() {
           setVoiceState('error');
           voiceStateRef.current = 'error';
         }
-        // Só agora, com o gravador de fato parado e o último chunk garantido,
-        // é seguro encerrar as tracks do microfone. Pará-las antes (no clique
-        // de stop) corta o flush final em alguns navegadores/iOS e produz
-        // áudio truncado/vazio na transcrição.
-        if (microphoneStreamRef.current) {
-          microphoneStreamRef.current.getTracks().forEach(track => track.stop());
-          microphoneStreamRef.current = null;
+        try {
+          // Only transcribe if we haven't manually aborted or completely exited
+          if (shouldTranscribe && durableCaptureReady && (tauriRecordingOnce || audioBlob.size > 44)) {
+             recordingArtifactPathRef.current = activeArtifactPath;
+             await transcribeAudioBlob(audioBlob, mode, recordingId);
+          }
+        } finally {
+          if (mediaRecorderRef.current === mediaRecorder) mediaRecorderRef.current = null;
+          if (recordingIdRef.current === recordingId) recordingIdRef.current = null;
+          if (mode === 'recording_once') recordingCycleActiveRef.current = false;
         }
-        mediaStreamSourceRef.current?.disconnect();
-        mediaStreamSourceRef.current = null;
-        analyserRef.current?.disconnect();
-        analyserRef.current = null;
-        const captureContext = audioContextRef.current;
-        audioContextRef.current = null;
-        if (captureContext && captureContext.state !== 'closed') {
-          await captureContext.close().catch(console.error);
-        }
-        // Only transcribe if we haven't manually aborted or completely exited
-        if (shouldTranscribe && durableCaptureReady && (tauriRecordingOnce || audioBlob.size > 44)) {
-           recordingArtifactPathRef.current = activeArtifactPath;
-           await transcribeAudioBlob(audioBlob, mode, recordingId);
-        }
-        if (mediaRecorderRef.current === mediaRecorder) mediaRecorderRef.current = null;
-        if (recordingIdRef.current === recordingId) recordingIdRef.current = null;
       };
 
       if (mode === 'presence') {
@@ -5120,6 +5148,7 @@ export default function LivePage() {
 
     } catch (error) {
       console.error('Microphone error:', error);
+      if (mode === 'recording_once') recordingCycleActiveRef.current = false;
       microphoneStreamRef.current?.getTracks().forEach(track => track.stop());
       microphoneStreamRef.current = null;
       mediaRecorderRef.current = null;
@@ -5291,9 +5320,12 @@ ${data.transcription}`, {
     const recorderIsActive = mediaRecorderRef.current?.state === 'recording';
     if (recorderIsActive || voiceModeRef.current === 'recording_once') {
       voiceModeRef.current = 'off'; // Mark as off immediately so onend doesn't restart
+      voiceStateRef.current = 'transcribing';
+      setVoiceState('transcribing');
       stopVoiceRecognition();
       setVoiceMode('off');
     } else {
+      if (recordingCycleActiveRef.current) return;
       if (voiceStateRef.current === 'transcribing' || voiceStateRef.current === 'submitting') return;
       if (!isSpeechRecognitionSupported()) {
         setVoiceState('error');
@@ -5312,6 +5344,8 @@ ${data.transcription}`, {
     if (voiceModeRef.current !== 'recording_once') return;
     sendAfterTranscribeRef.current = true;
     voiceModeRef.current = 'off';
+    voiceStateRef.current = 'transcribing';
+    setVoiceState('transcribing');
     stopVoiceRecognition();
     setVoiceMode('off');
   }, [stopVoiceRecognition]);
@@ -5331,6 +5365,17 @@ ${data.transcription}`, {
     currentTextRef.current = originalText;
     inputMessageRef.current = originalText;
   }, [stopVoiceRecognition]);
+
+  // O envio principal e o atalho Enter obedecem ao mesmo contrato do botão
+  // de envio da gravação. Se o microfone está aberto, enviar significa
+  // primeiro finalizar a captura; nunca despachar texto deixando-a viva.
+  const submitComposer = React.useCallback((targetContextNode?: PulsoContextNode) => {
+    if (voiceModeRef.current === 'recording_once') {
+      sendRecordingOnceDirect();
+      return;
+    }
+    void handleSendMessage(undefined, { targetContextNode });
+  }, [handleSendMessage, sendRecordingOnceDirect]);
 
   const togglePresenceMode = React.useCallback(async (e?: React.MouseEvent) => {
     if (e) {
@@ -7324,7 +7369,7 @@ ${data.transcription}`, {
                     
                     if (!e.shiftKey) {
                       e.preventDefault();
-                      handleSendMessage(undefined, { targetContextNode: sendTargetContextNode });
+                      submitComposer(sendTargetContextNode);
                     }
                   }
                 }}
@@ -7423,8 +7468,8 @@ ${data.transcription}`, {
           </button>
 
           <button
-            onClick={() => handleSendMessage(undefined, { targetContextNode: sendTargetContextNode })}
-            disabled={!inputMessage.trim()}
+            onClick={() => submitComposer(sendTargetContextNode)}
+            disabled={!inputMessage.trim() && voiceMode !== 'recording_once'}
             className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
           >
             <Send size={14} strokeWidth={1.5} />
