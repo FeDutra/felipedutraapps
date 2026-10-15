@@ -20,6 +20,23 @@
 
 ---
 
+## Release desktop identificável 0.1.1 — 15/10/2026
+
+Baseline: `2916556a` em `origin/main`.
+
+### Escopo
+
+- elevar a versão desktop de `0.1.0` para `0.1.1`;
+- anexar ao artefato macOS um manifesto com commit, alvo e hashes SHA-256;
+- permitir provar a cadeia commit → DMG → executável instalado.
+
+### Reversão
+
+Reverter somente o commit desta alteração e disparar novamente o workflow
+`Build Tauri App` para macOS. O rollback não altera Firestore, Functions,
+credenciais, Operator Bridge, Runtime Adapter nem o protocolo de origem já
+presente na baseline.
+
 # Rollback — origem autenticada por instalação (15/10/2026)
 
 Baseline: `755bafd2` em `origin/main`.

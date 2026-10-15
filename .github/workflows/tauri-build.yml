@@ -43,6 +43,28 @@ jobs:
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
 
+      - name: Generate release provenance manifest
+        shell: bash
+        run: |
+          APP_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
+          DMG_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
+          APP_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+          APP_SHA256="$(shasum -a 256 "$APP_PATH/Contents/MacOS/$APP_EXECUTABLE" | awk '{print $1}')"
+          DMG_SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
+          mkdir -p release-metadata
+          printf '%s\n' \
+            "release_version=$APP_VERSION" \
+            "git_commit=$GITHUB_SHA" \
+            "git_ref=$GITHUB_REF" \
+            "target=x86_64-apple-darwin" \
+            "app_file=$(basename "$APP_PATH")" \
+            "app_executable_sha256=$APP_SHA256" \
+            "dmg_file=$(basename "$DMG_PATH")" \
+            "dmg_sha256=$DMG_SHA256" \
+            > release-metadata/PULSO-release-manifest.txt
+          cat release-metadata/PULSO-release-manifest.txt
+
       - name: Upload macOS build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -50,6 +72,7 @@ jobs:
           path: |
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
             src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
+            release-metadata/PULSO-release-manifest.txt
           if-no-files-found: warn
 
   build-linux:
