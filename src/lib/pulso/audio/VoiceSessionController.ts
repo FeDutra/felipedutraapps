@@ -4,6 +4,11 @@ import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
 import { encodePcmWav } from './pcmWav';
+import {
+  PresenceNarrationKind,
+  PresenceTurnEvent,
+  PresenceTurnMachine,
+} from './PresenceTurnMachine';
 
 export type VoiceSessionState =
   | 'idle'
@@ -38,6 +43,12 @@ export interface VoiceSessionConfig {
    * de voz; pedidos e ferramentas seguem pelo fluxo canônico da Lótus.
    */
   useGeminiLive?: boolean;
+}
+
+export interface PresenceNarrationContext {
+  turnId?: string;
+  requestId?: string;
+  kind?: PresenceNarrationKind;
 }
 
 const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a voz da Lótus falando com o Fê (Felipe Dutra) em português do Brasil, no modo Presença.
@@ -95,6 +106,8 @@ export class VoiceSessionController {
   private fallingBackToTurnBased = false;
   private activeGeminiTurnId: string | null = null;
   private activePresenceRequestId: string | null = null;
+  private activeTurnBasedTurnId: string | null = null;
+  private readonly turnMachine = new PresenceTurnMachine();
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
@@ -142,6 +155,26 @@ export class VoiceSessionController {
     console.log(`[VOICE_SESSION_STATE_CHANGED] { state: "${newState}" }`);
     this.state = newState;
     this.config.onStateChange(newState);
+  }
+
+  private createVoiceTurnId() {
+    const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+    return `presence-${Date.now()}-${randomId}`;
+  }
+
+  private advanceTurn(event: PresenceTurnEvent) {
+    const result = this.turnMachine.dispatch(event);
+    this.log('PRESENCE_TURN_EVENT', {
+      event: event.type,
+      turnId: result.turnId,
+      decision: result.decision,
+      reason: result.reason,
+      phase: result.state.phase,
+      activeTurnId: result.state.activeTurnId,
+    });
+    return result;
   }
 
   private log(tag: string, details?: any) {
@@ -258,6 +291,7 @@ export class VoiceSessionController {
    */
   public async start(passedAudioContext?: AudioContext) {
     this.log('VOICE_SESSION_START_REQUESTED');
+    this.advanceTurn({ type: 'session_started' });
     this.transition('starting');
 
     if (this.config.useGeminiLive) {
@@ -343,6 +377,12 @@ export class VoiceSessionController {
    */
   private startListeningLoop() {
     if (!this.stream) return;
+    if (this.activeTurnBasedTurnId) {
+      this.advanceTurn({ type: 'listening_resumed', turnId: this.activeTurnBasedTurnId });
+      this.activeTurnBasedTurnId = null;
+    } else {
+      this.advanceTurn({ type: 'listening_resumed' });
+    }
     this.transition('presence_listening');
     this.log('LISTENING_STARTED');
     this.playSoundCue('start_listening');
@@ -372,6 +412,7 @@ export class VoiceSessionController {
     };
 
     this.mediaRecorder.onstop = async () => {
+      const turnId = this.activeTurnBasedTurnId;
       const blobMime = this.mediaRecorder?.mimeType || mimeType || 'application/octet-stream';
       const pcmChunks = this.pcmChunks;
       const audioBlob = this.isTauriRuntime() && pcmChunks.length > 0
@@ -381,7 +422,7 @@ export class VoiceSessionController {
       this.pcmChunks = [];
 
       if (this.state === 'transcribing' || this.state === 'user_speaking') {
-        await this.processUserSpeech(audioBlob);
+        await this.processUserSpeech(audioBlob, turnId);
       }
     };
 
@@ -435,6 +476,8 @@ export class VoiceSessionController {
           if (this.state === 'presence_listening') {
             if (!this.hasSpoken) {
               this.hasSpoken = true;
+              this.activeTurnBasedTurnId = this.createVoiceTurnId();
+              this.advanceTurn({ type: 'turn_opened', turnId: this.activeTurnBasedTurnId });
               this.log('VAD_SPEECH_START');
               this.transition('user_speaking');
             }
@@ -471,6 +514,12 @@ export class VoiceSessionController {
    * Finaliza o turno atual de gravação para enviar para transcrição.
    */
   private finalizeUserTurn() {
+    if (!this.activeTurnBasedTurnId) {
+      this.activeTurnBasedTurnId = this.createVoiceTurnId();
+      this.advanceTurn({ type: 'turn_opened', turnId: this.activeTurnBasedTurnId });
+    }
+    this.advanceTurn({ type: 'turn_closed', turnId: this.activeTurnBasedTurnId });
+    this.advanceTurn({ type: 'transcription_started', turnId: this.activeTurnBasedTurnId });
     this.log('USER_TURN_FINALIZED');
     this.transition('transcribing');
     if (this.maxRecordTimeout) clearTimeout(this.maxRecordTimeout);
@@ -485,6 +534,11 @@ export class VoiceSessionController {
   public interruptAssistant() {
     if (!this.isAssistantSpeaking) return;
     this.log('ASSISTANT_INTERRUPTED');
+    const interruptedTurnId = this.turnMachine.getSnapshot().audibleTurnId
+      ?? this.activeTurnBasedTurnId
+      ?? this.activeGeminiTurnId
+      ?? undefined;
+    this.advanceTurn({ type: 'turn_interrupted', turnId: interruptedTurnId });
     this.transition('interrupted');
 
     this.isAssistantSpeaking = false;
@@ -507,7 +561,7 @@ export class VoiceSessionController {
   /**
    * Transcreve e processa o áudio enviado pelo usuário.
    */
-  private async processUserSpeech(blob: Blob) {
+  private async processUserSpeech(blob: Blob, turnId: string | null) {
     this.log('STT_REQUEST_STARTED');
     
     try {
@@ -542,8 +596,14 @@ export class VoiceSessionController {
 
       if (userText.trim().length === 0) {
         // Nada foi ouvido, reinicia loop de escuta
+        this.advanceTurn({ type: 'turn_failed', turnId: turnId ?? undefined });
         this.startListeningLoop();
         return;
+      }
+
+      if (turnId) {
+        this.advanceTurn({ type: 'transcription_ready', turnId });
+        this.advanceTurn({ type: 'routing_started', turnId });
       }
 
       // A captura fica parada enquanto a mesma sessão da Lótus processa o turno.
@@ -553,33 +613,48 @@ export class VoiceSessionController {
 
       const localResult = await this.executeImmediatePresenceAction(userText);
       if (localResult?.handled && localResult.responseText) {
-        await this.speakAssistant(localResult.responseText);
+        await this.speakAssistant(localResult.responseText, undefined, undefined, {
+          turnId: turnId ?? undefined,
+          kind: 'result',
+        });
         return;
       }
 
       const presenceRouting = await this.config.routePresenceIntent?.(userText);
-      const res = await this.config.handleSendMessage(userText, {
+      const rawDispatch = await this.config.handleSendMessage(userText, {
         originMode: 'presence',
         targetContextNode: presenceRouting?.target,
         presenceRouting,
       });
+      const res = rawDispatch && typeof rawDispatch === 'object' ? rawDispatch : null;
       this.log('LLM_REQUEST_FINISHED');
+
+      if (turnId && res?.requestId) {
+        this.activePresenceRequestId = res.requestId;
+        this.advanceTurn({ type: 'request_bound', turnId, requestId: res.requestId });
+      }
 
       if (!res?.requestId && !res?.responseText) {
         // Nunca deixar a Orbe morrer em `thinking` quando a camada de envio
         // recusar ou não confirmar o pedido.
         this.log('PRESENCE_DISPATCH_NOT_CONFIRMED');
+        this.advanceTurn({ type: 'turn_failed', turnId: turnId ?? undefined });
         this.startListeningLoop();
         return;
       }
 
       if (res && res.responseText) {
         this.config.onTextReceived(userText, res.responseText);
-        await this.speakAssistant(res.responseText);
+        await this.speakAssistant(res.responseText, undefined, undefined, {
+          turnId: turnId ?? undefined,
+          requestId: res.requestId,
+          kind: 'result',
+        });
       }
 
     } catch (err: any) {
       this.log('VOICE_SESSION_ERROR', err.message || err);
+      this.advanceTurn({ type: 'turn_failed', turnId: turnId ?? undefined });
       this.playSoundCue('error');
       this.startListeningLoop();
     }
@@ -588,14 +663,53 @@ export class VoiceSessionController {
   /**
    * Gera o áudio da resposta (TTS) e inicia a reprodução controlada.
    */
-  public async speakAssistant(text: string, onStart?: () => void, onEnd?: () => void) {
+  public async speakAssistant(
+    text: string,
+    onStart?: () => void,
+    onEnd?: () => void,
+    context: PresenceNarrationContext = {},
+  ) {
+    const turnId = context.turnId
+      ?? (context.requestId ? this.turnMachine.findTurnIdByRequestId(context.requestId) : undefined)
+      ?? this.activeTurnBasedTurnId
+      ?? this.activeGeminiTurnId
+      ?? undefined;
+
+    if (turnId) {
+      const result = this.advanceTurn({
+        type: 'result_received',
+        turnId,
+        requestId: context.requestId,
+      });
+      if (result.decision !== 'narrate') {
+        this.log('PRESENCE_NARRATION_SUPPRESSED', {
+          turnId,
+          requestId: context.requestId,
+          decision: result.decision,
+          reason: result.reason,
+        });
+        return false;
+      }
+    }
+
     if (!text.trim()) {
       this.startListeningLoop();
-      return;
+      return false;
     }
 
     // Uma resposta Firestore pode chegar depois de o modo ter sido encerrado.
-    if (!this.stream) return;
+    if (!this.stream) {
+      if (turnId) this.advanceTurn({ type: 'turn_interrupted', turnId });
+      return false;
+    }
+
+    if (turnId) {
+      this.advanceTurn({
+        type: 'narration_started',
+        turnId,
+        kind: context.kind ?? 'result',
+      });
+    }
 
     this.transition('speaking');
     this.log('TTS_REQUEST_STARTED');
@@ -615,6 +729,7 @@ export class VoiceSessionController {
           if (this.isAssistantSpeaking) {
             this.log('ASSISTANT_AUDIO_ENDED');
             this.isAssistantSpeaking = false;
+            if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
             onEnd?.();
             this.log('SESSION_RETURNED_TO_LISTENING');
             this.startListeningLoop();
@@ -626,8 +741,10 @@ export class VoiceSessionController {
     } catch (e) {
       console.warn('Erro ao reproduzir TTS:', e);
       this.isAssistantSpeaking = false;
+      if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
       this.startListeningLoop();
     }
+    return true;
   }
 
   // ---- Modo experimental Gemini Live ----
@@ -664,11 +781,16 @@ export class VoiceSessionController {
       onUserTurnStarted: (turnId) => {
         this.activeGeminiTurnId = turnId;
         this.activePresenceRequestId = null;
+        this.advanceTurn({ type: 'turn_opened', turnId });
         this.config.onPresenceWorkChange?.(false);
         this.log('GEMINI_LIVE_USER_TURN_STARTED', { turnId });
       },
       onUserTurnReady: async ({ turnId, userText }) => {
         if (turnId !== this.activeGeminiTurnId) return;
+        this.advanceTurn({ type: 'turn_closed', turnId });
+        this.advanceTurn({ type: 'transcription_started', turnId });
+        this.advanceTurn({ type: 'transcription_ready', turnId });
+        this.advanceTurn({ type: 'routing_started', turnId });
         this.log('GEMINI_LIVE_USER_TURN_READY', { turnId, userText });
         this.config.onPresenceWorkChange?.(true);
         try {
@@ -676,7 +798,13 @@ export class VoiceSessionController {
           if (turnId !== this.activeGeminiTurnId) return;
           if (localResult?.handled && localResult.responseText) {
             this.config.onPresenceWorkChange?.(false);
-            this.geminiLiveClient?.sendResultText(localResult.responseText, turnId);
+            const disposition = this.advanceTurn({ type: 'result_received', turnId });
+            if (
+              disposition.decision === 'narrate'
+              && this.geminiLiveClient?.sendResultText(localResult.responseText, turnId)
+            ) {
+              this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
+            }
             return;
           }
 
@@ -684,15 +812,20 @@ export class VoiceSessionController {
           // concluir. A resposta real chega pelo listener canônico do
           // Firestore; LivePage então chama narratePresenceResult().
           const presenceRouting = await this.config.routePresenceIntent?.(userText);
-          const dispatch = await this.config.handleSendMessage(userText, {
+          const rawDispatch = await this.config.handleSendMessage(userText, {
             originMode: 'presence',
             targetContextNode: presenceRouting?.target,
             presenceRouting,
           });
+          const dispatch = rawDispatch && typeof rawDispatch === 'object' ? rawDispatch : null;
           if (turnId !== this.activeGeminiTurnId) return;
           this.activePresenceRequestId = dispatch?.requestId || null;
+          if (dispatch?.requestId) {
+            this.advanceTurn({ type: 'request_bound', turnId, requestId: dispatch.requestId });
+          }
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
+          this.advanceTurn({ type: 'turn_failed', turnId });
           this.config.onPresenceWorkChange?.(false);
           this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.', turnId);
         }
@@ -723,14 +856,25 @@ export class VoiceSessionController {
    * narrar como checkpoint, sem quebrar a lei de "nunca parecer perdida".
    */
   public notifyPresenceCheckpoint(checkpointText: string, requestId?: string) {
-    if (requestId && requestId !== this.activePresenceRequestId) return false;
-    return this.geminiLiveClient?.sendCheckpointText(checkpointText, this.activeGeminiTurnId) ?? false;
+    const turnId = requestId
+      ? this.turnMachine.findTurnIdByRequestId(requestId)
+      : this.activeGeminiTurnId ?? undefined;
+    const disposition = this.advanceTurn({ type: 'checkpoint_received', turnId, requestId });
+    if (disposition.decision !== 'narrate' || !turnId) return false;
+    const accepted = this.geminiLiveClient?.sendCheckpointText(checkpointText, turnId) ?? false;
+    if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
+    return accepted;
   }
 
   /** Entrega à voz um resultado já produzido pela Lótus/OpenClaw. */
   public narratePresenceResult(resultText: string, requestId?: string) {
-    if (requestId && requestId !== this.activePresenceRequestId) return false;
-    const accepted = this.geminiLiveClient?.sendResultText(resultText, this.activeGeminiTurnId) ?? false;
+    const turnId = requestId
+      ? this.turnMachine.findTurnIdByRequestId(requestId)
+      : this.activeGeminiTurnId ?? undefined;
+    const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
+    if (disposition.decision !== 'narrate' || !turnId) return false;
+    const accepted = this.geminiLiveClient?.sendResultText(resultText, turnId) ?? false;
+    if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
     if (accepted) this.config.onPresenceWorkChange?.(false);
     return accepted;
   }
@@ -744,6 +888,7 @@ export class VoiceSessionController {
    */
   public stop() {
     this.log('VOICE_SESSION_STOPPED');
+    this.advanceTurn({ type: 'session_stopped' });
     this.transition('idle');
 
     if (this.geminiLiveClient) {
@@ -751,6 +896,7 @@ export class VoiceSessionController {
       this.geminiLiveClient = null;
       this.activeGeminiTurnId = null;
       this.activePresenceRequestId = null;
+      this.activeTurnBasedTurnId = null;
       this.config.onPresenceWorkChange?.(false);
       return;
     }
@@ -784,6 +930,7 @@ export class VoiceSessionController {
       this.pcmProcessor = null;
     }
     this.pcmChunks = [];
+    this.activeTurnBasedTurnId = null;
     const audioContext = this.audioContext;
     this.audioContext = null;
     if (audioContext && audioContext.state !== 'closed') {

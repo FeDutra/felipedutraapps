@@ -3583,6 +3583,10 @@ export default function LivePage() {
                       }
                       return prev;
                     });
+                  },
+                  {
+                    requestId: originRequestId,
+                    kind: 'result',
                   }
                   );
                 }

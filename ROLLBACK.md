@@ -730,3 +730,25 @@ Reverter somente o commit desta alteração, executar os gates e reinstalar o
 bundle Intel de `5eca4acd`. Os áudios em
 `~/Documents/PULSO/Áudios recuperáveis` não devem ser removidos. A reversão
 não altera Functions, segredos, Firestore nem serviços da Presença.
+
+---
+
+# Rollback — máquina explícita de turnos da Presença (15/10/2026)
+
+Baseline: `a043db43` (`origin/main`).
+
+## Escopo
+
+- acrescentar um núcleo puro e testável para identidade e propriedade do turno;
+- correlacionar `turnId → requestId → checkpoint/resultado → narração`;
+- impedir que resultado tardio, interrupção ou final de áudio antigo invadam o
+  turno corrente;
+- integrar a correlação ao `VoiceSessionController` e à resposta assíncrona do
+  Firestore sem trocar Gemini, Kokoro, STT, relay ou gravação comum.
+
+## Reversão
+
+Reverter somente o commit desta alteração e restaurar o Hosting/bundle Intel de
+`a043db43`. Nenhum banco, áudio durável, segredo, serviço local, relay ou
+configuração de transporte precisa ser revertido, porque esta etapa não altera
+essas camadas.
