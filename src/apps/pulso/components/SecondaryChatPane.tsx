@@ -87,6 +87,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
     contextId: contextNode.contextId,
     lastReadAt,
     messages,
+    preferLatestOnEntry: true,
   });
 
   React.useEffect(() => {

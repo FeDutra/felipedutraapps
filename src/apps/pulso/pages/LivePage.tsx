@@ -4610,7 +4610,14 @@ export default function LivePage() {
     }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      // No WebKit, desmontar o AudioContext ou a origem antes do evento
+      // `stop` pode impedir o flush/finalização. Primeiro pedimos o último
+      // chunk e paramos o gravador; o próprio `onstop` encerra o grafo.
+      try {
+        mediaRecorderRef.current.requestData();
+      } catch {}
       mediaRecorderRef.current.stop();
+      return;
     } else if (microphoneStreamRef.current) {
       // Sem gravação ativa (ex: erro antes de começar), não há onstop pra
       // limpar a stream — encerra aqui mesmo.
@@ -4632,6 +4639,14 @@ export default function LivePage() {
   }, []);
 
   React.useEffect(() => () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === 'recording') {
+      try {
+        recorder.requestData();
+      } catch {}
+      recorder.stop();
+      return;
+    }
     mediaStreamSourceRef.current?.disconnect();
     analyserRef.current?.disconnect();
     microphoneStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -4843,6 +4858,8 @@ export default function LivePage() {
       microphoneStreamRef.current = stream;
 
       const tauriRecordingOnce = isTauriRuntime() && mode === 'recording_once';
+      let activeRecordingId: string | null = null;
+      let activeArtifactPath: string | null = null;
       recordingPcmSpoolBufferRef.current = [];
       recordingPcmSpoolSamplesRef.current = 0;
       recordingSpoolWriteChainRef.current = Promise.resolve();
@@ -4857,12 +4874,14 @@ export default function LivePage() {
         recordingPcmSampleRateRef.current = audioContext.sampleRate;
 
         const recordingId = `audio_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
+        activeRecordingId = recordingId;
         recordingIdRef.current = recordingId;
         const artifact = await invoke<RecoverableVoiceRecording>('voice_recording_begin', {
           recordingId,
           sampleRate: audioContext.sampleRate,
         });
         recordingArtifactPathRef.current = artifact.wavPath;
+        activeArtifactPath = artifact.wavPath;
 
         const source = audioContext.createMediaStreamSource(stream);
         mediaStreamSourceRef.current = source;
@@ -4904,7 +4923,9 @@ export default function LivePage() {
         const shouldTranscribe = voiceStateRef.current === 'recording_once'
           || voiceStateRef.current === 'presence_listening'
           || voiceStateRef.current === 'transcribing';
-        const recordingId = recordingIdRef.current;
+        // O callback pertence à instância concreta que iniciou acima. Nunca
+        // consulta a identidade de uma gravação posterior.
+        const recordingId = activeRecordingId;
         let audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
         let durableCaptureReady = !tauriRecordingOnce;
         audioChunksRef.current = [];
@@ -4919,6 +4940,7 @@ export default function LivePage() {
             if (recordingSpoolErrorRef.current) throw recordingSpoolErrorRef.current;
             const artifact = await invoke<RecoverableVoiceRecording>('voice_recording_finalize', { recordingId });
             recordingArtifactPathRef.current = artifact.wavPath;
+            activeArtifactPath = artifact.wavPath;
             durableCaptureReady = true;
             console.log('[PULSO_RECORDING_CAPTURED]', {
               recordingId,
@@ -4939,10 +4961,22 @@ export default function LivePage() {
           microphoneStreamRef.current.getTracks().forEach(track => track.stop());
           microphoneStreamRef.current = null;
         }
+        mediaStreamSourceRef.current?.disconnect();
+        mediaStreamSourceRef.current = null;
+        analyserRef.current?.disconnect();
+        analyserRef.current = null;
+        const captureContext = audioContextRef.current;
+        audioContextRef.current = null;
+        if (captureContext && captureContext.state !== 'closed') {
+          await captureContext.close().catch(console.error);
+        }
         // Only transcribe if we haven't manually aborted or completely exited
         if (shouldTranscribe && durableCaptureReady && (tauriRecordingOnce || audioBlob.size > 44)) {
+           recordingArtifactPathRef.current = activeArtifactPath;
            await transcribeAudioBlob(audioBlob, mode, recordingId);
         }
+        if (mediaRecorderRef.current === mediaRecorder) mediaRecorderRef.current = null;
+        if (recordingIdRef.current === recordingId) recordingIdRef.current = null;
       };
 
       if (mode === 'presence') {
@@ -5066,12 +5100,28 @@ export default function LivePage() {
       }
       
       maxRecordingTimeoutRef.current = setTimeout(() => {
-        console.log('Max recording timeout reached.');
-        stopVoiceRecognition();
+        console.log('[PULSO_RECORDING_MAX_DURATION_REACHED]');
+        // O watchdog pertence ao gravador concreto. Não depende de refs de
+        // interface que podem ter sido resetadas por split, hidratação ou
+        // outra transição visual enquanto a captura segue no WebKit.
+        if (mediaRecorder.state === 'recording') {
+          voiceStateRef.current = 'transcribing';
+          setVoiceState('transcribing');
+          try {
+            mediaRecorder.requestData();
+          } catch {}
+          mediaRecorder.stop();
+        }
       }, 7 * 60 * 1000); // 7 minutes max
 
     } catch (error) {
       console.error('Microphone error:', error);
+      microphoneStreamRef.current?.getTracks().forEach(track => track.stop());
+      microphoneStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      recordingIdRef.current = null;
+      setVoiceMode('off');
+      voiceModeRef.current = 'off';
       setVoiceState('error');
       setVoiceError('Permissão de microfone negada ou indisponível.');
     }
@@ -5234,11 +5284,13 @@ ${data.transcription}`, {
 
   const toggleRecordingOnce = React.useCallback(async () => {
     hasRetriedSpeechRecognitionRef.current = false;
-    if (voiceModeRef.current === 'recording_once') {
+    const recorderIsActive = mediaRecorderRef.current?.state === 'recording';
+    if (recorderIsActive || voiceModeRef.current === 'recording_once') {
       voiceModeRef.current = 'off'; // Mark as off immediately so onend doesn't restart
       stopVoiceRecognition();
       setVoiceMode('off');
     } else {
+      if (voiceStateRef.current === 'transcribing' || voiceStateRef.current === 'submitting') return;
       if (!isSpeechRecognitionSupported()) {
         setVoiceState('error');
         setVoiceError('transcrição indisponível no app (WebView sem suporte a STT nativo)');
@@ -7325,7 +7377,7 @@ ${data.transcription}`, {
 
           <button
             onClick={toggleRecordingOnce}
-            disabled={false}
+            disabled={voiceState === 'transcribing' || voiceState === 'submitting'}
             className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer border-none outline-none bg-transparent ${
               voiceMode === 'recording_once' 
                 ? 'text-[#b8283e] bg-white scale-105 shadow-md' 

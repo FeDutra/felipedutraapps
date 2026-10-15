@@ -683,3 +683,29 @@ Firebase Hosting e reinstalar o artefato Intel anterior. A reversão do frontend
 não remove arquivos já persistidos no Storage nem altera o runtime do relay.
 
 ---
+
+# Rollback — encerramento de voz e âncora do split (15/10/2026)
+
+Baseline canônica: `d302d54f` (`origin/main`). O app Intel instalado antes da
+troca final deve ser preservado como
+`/Applications/PULSO.rollback-before-voice-split-20261015.app` em cada Mac.
+
+## Escopo
+
+- aguardar `MediaRecorder.onstop` antes de desmontar o grafo WebAudio;
+- prender `recordingId` e caminho do WAV à instância concreta da gravação;
+- impedir sobreposição durante transcrição e usar o gravador real como fonte
+  do estado do botão;
+- fazer o watchdog de sete minutos parar o gravador capturado pela própria
+  closure, sem depender de refs visuais;
+- abrir painéis de split na última mensagem e preservar a âncora de leitura
+  durante mudanças de largura.
+
+## Reversão
+
+1. reinstalar o bundle preservado acima;
+2. publicar novamente o Hosting do SHA `d302d54f`;
+3. não remover os arquivos em `~/Documents/PULSO/Áudios recuperáveis` — eles
+   continuam sendo a cópia durável das capturas;
+4. não alterar nem remover o LaunchAgent `com.pulso.presence-stt`: esta release
+   não muda o serviço Whisper local nem reintroduz Gemini no Tauri.

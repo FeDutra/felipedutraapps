@@ -14,6 +14,7 @@ interface UseConversationReadingAnchorOptions {
   lastReadAt?: string | null;
   messages: ReadingMessage[];
   bottomOffset?: number;
+  preferLatestOnEntry?: boolean;
 }
 
 const FOLLOW_THRESHOLD_PX = 120;
@@ -31,10 +32,12 @@ export function useConversationReadingAnchor({
   lastReadAt,
   messages,
   bottomOffset = 0,
+  preferLatestOnEntry = false,
 }: UseConversationReadingAnchorOptions) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const entryRef = React.useRef({ contextId: '', boundaryMs: 0, anchored: false });
   const nearLatestRef = React.useRef(true);
+  const visibleAnchorRef = React.useRef<{ messageId: string; viewportOffset: number } | null>(null);
   const previousMessageCountRef = React.useRef(0);
   const [showReturnToLatest, setShowReturnToLatest] = React.useState(false);
 
@@ -70,13 +73,60 @@ export function useConversationReadingAnchor({
     const isNearLatest = distance <= FOLLOW_THRESHOLD_PX;
     nearLatestRef.current = isNearLatest;
     setShowReturnToLatest(!isNearLatest);
+
+    if (isNearLatest) {
+      visibleAnchorRef.current = null;
+      return;
+    }
+
+    const containerTop = container.getBoundingClientRect().top;
+    const visibleMessage = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'))
+      .find((element) => element.getBoundingClientRect().bottom > containerTop + ANCHOR_TOP_GAP_PX);
+    visibleAnchorRef.current = visibleMessage?.dataset.messageId
+      ? {
+          messageId: visibleMessage.dataset.messageId,
+          viewportOffset: visibleMessage.getBoundingClientRect().top - containerTop,
+        }
+      : null;
   }, []);
+
+  React.useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+
+    let previousWidth = container.clientWidth;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (Math.abs(container.clientWidth - previousWidth) < 0.5) return;
+      previousWidth = container.clientWidth;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        if (nearLatestRef.current) {
+          scrollToLatest(false);
+          return;
+        }
+
+        const anchor = visibleAnchorRef.current;
+        if (!anchor) return;
+        const target = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'))
+          .find((element) => element.dataset.messageId === anchor.messageId);
+        if (!target) return;
+        const containerTop = container.getBoundingClientRect().top;
+        container.scrollTop += target.getBoundingClientRect().top - containerTop - anchor.viewportOffset;
+      });
+    });
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [scrollToLatest]);
 
   React.useLayoutEffect(() => {
     const container = scrollRef.current;
     if (!container || messages.length === 0 || entryRef.current.anchored) return;
 
-    const firstUnread = messages.find((message) => (
+    const firstUnread = preferLatestOnEntry ? undefined : messages.find((message) => (
       message.sender === 'lotus'
       && !message.isProgressUpdate
       && message.timestamp.getTime() > entryRef.current.boundaryMs
@@ -102,7 +152,7 @@ export function useConversationReadingAnchor({
     placeInitialAnchor();
     const timers = SETTLE_DELAYS_MS.slice(1).map((delay) => window.setTimeout(placeInitialAnchor, delay));
     return () => timers.forEach(window.clearTimeout);
-  }, [contextId, handleScroll, messages, scrollToLatest]);
+  }, [contextId, handleScroll, messages, preferLatestOnEntry, scrollToLatest]);
 
   React.useEffect(() => {
     const previousCount = previousMessageCountRef.current;
