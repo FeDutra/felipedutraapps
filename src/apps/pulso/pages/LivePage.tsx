@@ -4698,8 +4698,12 @@ export default function LivePage() {
       setVoiceState('transcribing');
       await markRecording('transcribing');
 
+      // A gravação comum e a Presença são produtos de voz distintos.
+      // O áudio do compositor mantém o contrato histórico do PULSO com
+      // pulsoTranscribe/Gemini, inclusive no Tauri. O STT local pertence
+      // somente à Presença e não pode ser exigido para enviar um áudio comum.
       const endpointUrl = tauri
-        ? `http://127.0.0.1:14323/${recordingId ? 'transcribe-recording' : 'transcribe'}`
+        ? 'https://felipedutraapps.web.app/api/pulso/transcribe'
         : '/api/pulso/transcribe';
       const requestFetch: typeof fetch = tauri
         ? (await import('@tauri-apps/plugin-http')).fetch
@@ -4710,17 +4714,17 @@ export default function LivePage() {
       let response: Response | null = null;
       let lastTranscriptionError: unknown = null;
       try {
-        // O objeto durável torna um retry seguro: ambos os pedidos apontam para
-        // o mesmo recordingId e não criam mensagens. Um espasmo do loopback
-        // não deve fazer o usuário perder um turno inteiro.
+        // A transcrição não cria mensagens. Repetir o upload do mesmo blob é
+        // seguro e o recordingId continua ligando o bruto durável ao estado
+        // local, sem transformar o serviço de Presença em dependência.
         for (let attempt = 1; attempt <= 2; attempt += 1) {
           try {
             response = await requestFetch(endpointUrl, {
               method: 'POST',
               headers: {
-                'Content-Type': recordingId ? 'application/json' : (blob.type || 'audio/webm'),
+                'Content-Type': blob.type || 'audio/webm',
               },
-              body: recordingId ? JSON.stringify({ recordingId }) : blob,
+              body: blob,
               signal: transcriptionAbort.signal,
             });
             if (response.ok || attempt === 2) break;

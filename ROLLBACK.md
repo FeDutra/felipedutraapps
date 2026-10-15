@@ -709,3 +709,24 @@ troca final deve ser preservado como
    continuam sendo a cópia durável das capturas;
 4. não alterar nem remover o LaunchAgent `com.pulso.presence-stt`: esta release
    não muda o serviço Whisper local nem reintroduz Gemini no Tauri.
+
+---
+
+# Rollback — gravação comum volta ao Gemini (15/10/2026)
+
+Baseline: `5eca4acd`.
+
+## Escopo
+
+- restaurar no Tauri o contrato histórico da gravação comum com
+  `pulsoTranscribe`/Gemini;
+- manter PCM/WAV recuperável, `recordingId`, retries e estados de entrega;
+- não alterar a Presença/Orbe, que continua como uma arquitetura separada;
+- não instalar Whisper nem criar serviço local novo no MacBook.
+
+## Reversão
+
+Reverter somente o commit desta alteração, executar os gates e reinstalar o
+bundle Intel de `5eca4acd`. Os áudios em
+`~/Documents/PULSO/Áudios recuperáveis` não devem ser removidos. A reversão
+não altera Functions, segredos, Firestore nem serviços da Presença.
