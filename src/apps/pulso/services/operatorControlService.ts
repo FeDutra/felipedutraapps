@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/shared/lib/firebase/client';
 import { firestorePaths } from './firestorePaths';
+import type { PulsoDeviceProjection } from '../lib/deviceExecutionTarget';
 
 export type OperatorApprovalKind = 'exec' | 'plugin' | 'system-agent';
 export type OperatorApprovalStatus = 'pending' | 'resolving' | 'resolved' | 'expired' | 'failed';
@@ -43,6 +44,7 @@ export interface OperatorRuntimeProjection {
   activeSessions?: number;
   lastSeenAtMs?: number | null;
   lastError?: string | null;
+  devices: PulsoDeviceProjection[];
 }
 
 function asMillis(value: unknown): number | null {
@@ -78,6 +80,23 @@ function normalizeApproval(id: string, raw: Record<string, unknown>): OperatorAp
     resolvedDecision: typeof raw.resolvedDecision === 'string' ? raw.resolvedDecision : null,
     failureMessage: typeof raw.failureMessage === 'string' ? raw.failureMessage : null,
   };
+}
+
+function normalizeDevices(value: unknown): PulsoDeviceProjection[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(item => {
+    if (!item || typeof item !== 'object') return [];
+    const raw = item as Record<string, unknown>;
+    if (raw.key !== 'imac' && raw.key !== 'macbook') return [];
+    if (typeof raw.nodeId !== 'string' || !raw.nodeId) return [];
+    return [{
+      key: raw.key,
+      nodeId: raw.nodeId,
+      connected: raw.connected === true,
+      operable: raw.operable === true,
+      lastSeenAtMs: asMillis(raw.lastSeenAtMs),
+    }];
+  });
 }
 
 export const operatorControlService = {
@@ -118,6 +137,7 @@ export const operatorControlService = {
           activeSessions: typeof raw.activeSessions === 'number' ? raw.activeSessions : 0,
           lastSeenAtMs: asMillis(raw.lastSeenAtMs ?? raw.lastSeenAt),
           lastError: typeof raw.lastError === 'string' ? raw.lastError : null,
+          devices: normalizeDevices(raw.devices),
         });
       },
       error => onError?.(error),

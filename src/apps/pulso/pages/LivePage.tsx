@@ -942,6 +942,16 @@ import {
 } from '../services/pulsoService';
 import { authService } from '../../../shared/services/authService';
 import { lotusOpenClawClient } from '../services/lotusOpenClawClient';
+import { operatorControlService } from '../services/operatorControlService';
+import { DevicePresenceRail } from '../components/device/DevicePresenceRail';
+import { ExecutionTargetSelector } from '../components/device/ExecutionTargetSelector';
+import {
+  executionTargetEnvelope,
+  readExecutionTarget,
+  writeExecutionTarget,
+  type PulsoDeviceProjection,
+  type PulsoExecutionTarget,
+} from '../lib/deviceExecutionTarget';
 import { useSearchParams } from 'next/navigation';
 import { ContextSurfaceVariants } from '../components/system/ContextSurfaceVariants';
 import { MessageActions } from '../components/chat/MessageRenderer';
@@ -1463,6 +1473,22 @@ export default function LivePage() {
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
   const [windowHeight, setWindowHeight] = React.useState<number>(768);
+  const [devicePresence, setDevicePresence] = React.useState<PulsoDeviceProjection[]>([]);
+  const [executionTarget, setExecutionTarget] = React.useState<PulsoExecutionTarget>('auto');
+
+  const selectExecutionTarget = React.useCallback((target: PulsoExecutionTarget) => {
+    setExecutionTarget(target);
+    if (typeof window !== 'undefined') writeExecutionTarget(target, window.sessionStorage);
+  }, []);
+
+  React.useEffect(() => {
+    setExecutionTarget(readExecutionTarget(window.sessionStorage));
+  }, []);
+
+  React.useEffect(() => operatorControlService.subscribeRuntime(
+    runtime => setDevicePresence(runtime?.devices || []),
+    subscriptionError => console.warn('[PULSO_DEVICE_PRESENCE]', subscriptionError.message),
+  ), []);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -3925,6 +3951,9 @@ export default function LivePage() {
       originType: "user_ui"
     };
 
+    lotusPayload.executionTarget = executionTargetEnvelope(executionTarget);
+    lotusPayload.context.executionTarget = lotusPayload.executionTarget;
+
     // Modelo e conta são persistidos pelo seletor diretamente na sessão do
     // OpenClaw. Reenviar esse estado em cada mensagem podia reaplicar um
     // snapshot antigo do cliente e desfazer uma troca recém-confirmada.
@@ -3977,7 +4006,7 @@ export default function LivePage() {
       console.log('[PULSO_DEBUG_LAST_SUBMIT]', JSON.stringify((window as any).lastPulsoSubmit, null, 2));
       throw err;
     }
-  }, [state, activeContextNode]);
+  }, [state, activeContextNode, executionTarget]);
 
   const uploadFile = async (file: File): Promise<Attachment> => {
     const isFirestore = pulsoService.getDataMode() === 'firestore';
@@ -7178,6 +7207,12 @@ ${data.transcription}`, {
             onApply={(selection) => handleApplySessionModel(sendTargetContextNode.contextId, selection)}
           />
 
+          <ExecutionTargetSelector
+            devices={devicePresence}
+            value={executionTarget}
+            onChange={selectExecutionTarget}
+          />
+
         {/* Quote preview bar was moved above the input row — removed from here */}
 
           {/* Mapeamento de status físico do canal cognitivo ativo */}
@@ -7334,6 +7369,12 @@ ${data.transcription}`, {
           </button>
         </div>
       </footer>
+
+      <DevicePresenceRail
+        devices={devicePresence}
+        selectedTarget={executionTarget}
+        onSelect={selectExecutionTarget}
+      />
 
       {/* Badge flutuante mobile: quando uma área não visível apita, mostra só
           o ícone dela piscando, no mesmo alinhamento em que a lista de áreas

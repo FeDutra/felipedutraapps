@@ -1,3 +1,25 @@
+# Rollback — presença e destino de máquinas na conversa (15/10/2026)
+
+- Baseline: `4a8f2fd6` em `origin/main`.
+- Escopo: dois glifos de presença (iMac/MacBook), seletor de destino no
+  compositor, envelope `executionTarget` nos pedidos e projeção sanitizada dos
+  nós pelo Operator Bridge.
+- Nenhuma publicação, instalação ou ativação de serviço faz parte do commit de
+  código. O bridge existente só deve ser atualizado e reiniciado após
+  autorização explícita.
+
+## Reversão
+
+1. Reverter o commit desta frente no repositório `felipedutraapps`.
+2. Se o Operator Bridge `0.2.0` tiver sido ativado, restaurar o script anterior
+   e reiniciar somente esse serviço supervisionado; não reiniciar o Gateway.
+3. Preservar o documento `pulso_operator_runtime/current`: os campos `devices`
+   podem permanecer sem afetar clientes antigos.
+4. O runtime antigo ignora `executionTarget`, portanto não é necessário apagar
+   pedidos históricos.
+
+---
+
 # Rollback — voz comum não bloqueável pela camada de recuperação (14/10/2026)
 
 - Baseline instalada: `ad37d3e4` em `main`.

@@ -346,6 +346,11 @@ export interface PulsoRequest {
     modelId: string;
     thinkingLevel: string;
   };
+  executionTarget?: {
+    mode: 'auto' | 'device';
+    deviceKey?: 'imac' | 'macbook';
+    nodeId?: string;
+  };
 
   areaRef?: string | null;
   projectRef?: string | null;

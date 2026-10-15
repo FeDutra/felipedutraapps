@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { loadConfig } from '/usr/lib/node_modules/openclaw/dist/index.js';
+import { callGatewayFromCli } from '/usr/lib/node_modules/openclaw/dist/plugin-sdk/gateway-runtime.js';
 
 const OPENCLAW_DIST_DIR = '/usr/lib/node_modules/openclaw/dist';
 const WORKSPACE_ID = process.env.PULSO_WORKSPACE_ID || 'felipe_dutra';
@@ -24,7 +25,11 @@ const BASE_PATH = `workspaces/${WORKSPACE_ID}`;
 const APPROVALS_PATH = `${BASE_PATH}/pulso_operator_approvals`;
 const RUNTIME_PATH = `${BASE_PATH}/pulso_operator_runtime/current`;
 const HEARTBEAT_MS = Number.parseInt(process.env.PULSO_OPERATOR_HEARTBEAT_MS || '15000', 10);
-const BRIDGE_VERSION = '0.1.0';
+const BRIDGE_VERSION = '0.2.0';
+const DEVICE_IDENTITIES = {
+  imac: '2ebf570d0a71ff10bf5c6b5491929be05c8c8786168108993a5efe3c986074db',
+  macbook: 'cd9a9e9a737df7280bb62480369e143c61ee9316c80408199754f813c222bba3',
+};
 
 let gatewayRuntimePromise = null;
 let stopping = false;
@@ -111,6 +116,31 @@ function sanitizeApproval(raw, fallbackKind) {
     requestedAtMs,
     expiresAtMs,
     updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+function sanitizeDeviceProjection(node, key, observedAtMs) {
+  const caps = Array.isArray(node?.caps) ? node.caps : [];
+  const commands = Array.isArray(node?.commands) ? node.commands : [];
+  const connected = node?.connected === true;
+  return {
+    key,
+    nodeId: DEVICE_IDENTITIES[key],
+    connected,
+    operable: connected && caps.includes('system') && commands.includes('system.run'),
+    lastSeenAtMs: connected
+      ? observedAtMs
+      : Number(node?.lastSeenAtMs || node?.lastDisconnectedAtMs || 0) || null,
+  };
+}
+
+async function readDeviceProjection() {
+  const response = await callGatewayFromCli('node.list', { timeout: String(5_000) }, {});
+  const nodes = Array.isArray(response?.nodes) ? response.nodes : [];
+  const observedAtMs = Date.now();
+  return Object.entries(DEVICE_IDENTITIES).map(([key, nodeId]) => {
+    const node = nodes.find(candidate => candidate?.nodeId === nodeId);
+    return sanitizeDeviceProjection(node, key, observedAtMs);
   });
 }
 
@@ -206,6 +236,14 @@ async function main() {
 
   const heartbeat = async () => {
     const pending = await approvalsCollection.where('status', 'in', ['pending', 'resolving']).get();
+    let devices;
+    let deviceProjectionError = null;
+    try {
+      devices = await readDeviceProjection();
+    } catch (error) {
+      deviceProjectionError = error instanceof Error ? error.message : String(error);
+      log('device-projection.error', { message: deviceProjectionError });
+    }
     await runtimeRef.set({
       status: 'connected',
       bridgeVersion: BRIDGE_VERSION,
@@ -213,6 +251,8 @@ async function main() {
       pendingApprovals: pending.size,
       lastSeenAtMs: Date.now(),
       lastError: null,
+      ...(devices ? { devices, devicesObservedAtMs: Date.now() } : {}),
+      deviceProjectionError,
       stoppedBy: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });

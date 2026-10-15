@@ -8,6 +8,7 @@
  */
 
 import { requestsService } from "./requestsService";
+import type { PulsoExecutionTargetEnvelope } from '../lib/deviceExecutionTarget';
 
 export interface LotusSendPayload {
   requestId: string;
@@ -48,6 +49,7 @@ export interface LotusSendPayload {
     thinkingLevel: string;
     authProfileId?: string;
   };
+  executionTarget?: PulsoExecutionTargetEnvelope;
 }
 
 export interface SessionModelSwitchPayload {
@@ -178,6 +180,7 @@ export const lotusOpenClawClient = {
       mediaType: payload.mediaType || null,
       mediaFileName: payload.mediaFileName || null,
       modelSelection: payload.modelSelection || null,
+      executionTarget: payload.executionTarget || { mode: 'auto' },
     };
 
     const cleanPayload = cleanUndefined(reqPayload);
