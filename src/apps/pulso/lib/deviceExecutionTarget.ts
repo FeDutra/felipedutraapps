@@ -13,6 +13,20 @@ export interface PulsoExecutionTargetEnvelope {
   mode: 'auto' | 'device';
   deviceKey?: PulsoDeviceKey;
   nodeId?: string;
+  originAssertion?: PulsoDeviceOriginAssertion;
+}
+
+export interface PulsoDeviceOriginAssertion {
+  version: 1;
+  installationId: string;
+  issuedAtMs: number;
+  signature: string;
+}
+
+export interface PulsoDeviceOriginStatus {
+  configured: boolean;
+  installationId?: string | null;
+  deviceKey?: PulsoDeviceKey | null;
 }
 
 export const PULSO_DEVICE_IDENTITIES: Record<PulsoDeviceKey, { nodeId: string; accessibleName: string }> = {
@@ -36,8 +50,36 @@ export function isDeviceAvailable(
   return now - device.lastSeenAtMs <= DEVICE_PRESENCE_MAX_AGE_MS;
 }
 
-export function executionTargetEnvelope(target: PulsoExecutionTarget): PulsoExecutionTargetEnvelope {
-  if (target === 'auto') return { mode: 'auto' };
+export async function readLocalDeviceOrigin(): Promise<PulsoDeviceOriginStatus> {
+  if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) {
+    return { configured: false };
+  }
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const status = await invoke<PulsoDeviceOriginStatus>('local_device_origin_status');
+    if (!status.configured || (status.deviceKey !== 'imac' && status.deviceKey !== 'macbook')) {
+      return { configured: false };
+    }
+    return status;
+  } catch {
+    return { configured: false };
+  }
+}
+
+export async function executionTargetEnvelope(
+  target: PulsoExecutionTarget,
+  requestId: string,
+): Promise<PulsoExecutionTargetEnvelope> {
+  if (target === 'auto') {
+    if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) return { mode: 'auto' };
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const originAssertion = await invoke<PulsoDeviceOriginAssertion>('local_device_origin_assert', { requestId });
+      return { mode: 'auto', originAssertion };
+    } catch {
+      return { mode: 'auto' };
+    }
+  }
   return {
     mode: 'device',
     deviceKey: target,

@@ -20,6 +20,26 @@
 
 ---
 
+# Rollback — origem autenticada por instalação (15/10/2026)
+
+Baseline: `755bafd2` em `origin/main`.
+
+## Escopo
+
+- assinatura Ed25519 vinculada ao `requestId` para a origem automática do app Tauri;
+- identificação visual automática do iMac/MacBook no seletor do compositor;
+- nenhuma credencial incorporada ao bundle: a identidade é provisionada no
+  diretório local de dados do aplicativo.
+
+## Reversão
+
+1. Reinstalar o artefato Intel correspondente a `755bafd2`.
+2. O arquivo `device-origin.json` pode permanecer inerte; a versão anterior não
+   o lê. Se for necessário retirá-lo, mover para quarentena, nunca apagar sem
+   autorização específica.
+3. Reverter o commit desta alteração e publicar novamente Hosting/Tauri a
+   partir dos mesmos bytes versionados.
+
 # 15/10/2026 — refinamento visual de presença e destino físico
 
 Baseline: `617aa0d0`.

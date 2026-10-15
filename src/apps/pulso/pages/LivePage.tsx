@@ -947,6 +947,7 @@ import { DevicePresenceRail } from '../components/device/DevicePresenceRail';
 import { ExecutionTargetSelector } from '../components/device/ExecutionTargetSelector';
 import {
   executionTargetEnvelope,
+  readLocalDeviceOrigin,
   readExecutionTarget,
   writeExecutionTarget,
   type PulsoDeviceProjection,
@@ -1475,6 +1476,7 @@ export default function LivePage() {
   const [windowHeight, setWindowHeight] = React.useState<number>(768);
   const [devicePresence, setDevicePresence] = React.useState<PulsoDeviceProjection[]>([]);
   const [executionTarget, setExecutionTarget] = React.useState<PulsoExecutionTarget>('auto');
+  const [localDeviceOrigin, setLocalDeviceOrigin] = React.useState<'imac' | 'macbook' | null>(null);
 
   const selectExecutionTarget = React.useCallback((target: PulsoExecutionTarget) => {
     setExecutionTarget(target);
@@ -1483,6 +1485,9 @@ export default function LivePage() {
 
   React.useEffect(() => {
     setExecutionTarget(readExecutionTarget(window.sessionStorage));
+    void readLocalDeviceOrigin().then(status => {
+      setLocalDeviceOrigin(status.configured && status.deviceKey ? status.deviceKey : null);
+    });
   }, []);
 
   React.useEffect(() => operatorControlService.subscribeRuntime(
@@ -3951,7 +3956,7 @@ export default function LivePage() {
       originType: "user_ui"
     };
 
-    lotusPayload.executionTarget = executionTargetEnvelope(executionTarget);
+    lotusPayload.executionTarget = await executionTargetEnvelope(executionTarget, reqId);
     lotusPayload.context.executionTarget = lotusPayload.executionTarget;
 
     // Modelo e conta são persistidos pelo seletor diretamente na sessão do
@@ -7210,6 +7215,7 @@ ${data.transcription}`, {
           <ExecutionTargetSelector
             devices={devicePresence}
             value={executionTarget}
+            localOrigin={localDeviceOrigin}
             onChange={selectExecutionTarget}
           />
 

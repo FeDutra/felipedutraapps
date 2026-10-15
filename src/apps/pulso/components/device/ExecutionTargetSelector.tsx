@@ -10,6 +10,7 @@ import {
 interface ExecutionTargetSelectorProps {
   devices: PulsoDeviceProjection[];
   value: PulsoExecutionTarget;
+  localOrigin?: PulsoDeviceKey | null;
   onChange: (target: PulsoExecutionTarget) => void;
 }
 
@@ -25,7 +26,7 @@ function AutoGlyph({ size = 16 }: { size?: number }) {
   );
 }
 
-export function ExecutionTargetSelector({ devices, value, onChange }: ExecutionTargetSelectorProps) {
+export function ExecutionTargetSelector({ devices, value, localOrigin, onChange }: ExecutionTargetSelectorProps) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const byKey = React.useMemo(() => new Map(devices.map(device => [device.key, device])), [devices]);
@@ -50,13 +51,19 @@ export function ExecutionTargetSelector({ devices, value, onChange }: ExecutionT
         aria-expanded={open}
         className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${
           value === 'auto'
-            ? `${open ? 'text-[#fbf9f5]/88 drop-shadow-[0_0_4px_rgba(255,255,255,.22)]' : 'text-[#fbf9f5]/38'} hover:text-[#fbf9f5]/78`
+            ? localOrigin
+              ? 'text-[#fbf9f5]/92 drop-shadow-[0_0_5px_rgba(255,255,255,.26)] hover:text-white'
+              : `${open ? 'text-[#fbf9f5]/88 drop-shadow-[0_0_4px_rgba(255,255,255,.22)]' : 'text-[#fbf9f5]/38'} hover:text-[#fbf9f5]/78`
             : targetAvailable
               ? 'text-[#fbf9f5]/92 drop-shadow-[0_0_5px_rgba(255,255,255,.26)] hover:text-white'
               : 'text-[#fbf9f5]/22 hover:text-[#fbf9f5]/34'
         }`}
       >
-        {value === 'auto' ? <AutoGlyph size={14} /> : <DeviceGlyph device={value} size={14} />}
+        {value === 'auto' && localOrigin
+          ? <DeviceGlyph device={localOrigin} size={14} />
+          : value === 'auto'
+            ? <AutoGlyph size={14} />
+            : <DeviceGlyph device={value} size={14} />}
       </button>
 
       {open && (
