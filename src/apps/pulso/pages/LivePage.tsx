@@ -7372,8 +7372,6 @@ ${data.transcription}`, {
 
       <DevicePresenceRail
         devices={devicePresence}
-        selectedTarget={executionTarget}
-        onSelect={selectExecutionTarget}
       />
 
       {/* Badge flutuante mobile: quando uma área não visível apita, mostra só

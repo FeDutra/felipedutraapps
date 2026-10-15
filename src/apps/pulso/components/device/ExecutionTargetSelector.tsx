@@ -48,27 +48,27 @@ export function ExecutionTargetSelector({ devices, value, onChange }: ExecutionT
         onClick={() => setOpen(current => !current)}
         aria-label="Escolher máquina de execução"
         aria-expanded={open}
-        className={`grid h-7 w-7 place-items-center rounded-full border bg-transparent p-0 outline-none transition-all ${
+        className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${
           value === 'auto'
-            ? 'border-transparent text-[#fbf9f5]/45 hover:text-white/80'
+            ? `${open ? 'text-[#fbf9f5]/88 drop-shadow-[0_0_4px_rgba(255,255,255,.22)]' : 'text-[#fbf9f5]/38'} hover:text-[#fbf9f5]/78`
             : targetAvailable
-              ? 'border-[#aa78ff]/45 text-[#fbf9f5] shadow-[0_0_10px_rgba(170,120,255,.18)]'
-              : 'border-[#aa78ff]/25 text-[#fbf9f5]/28'
+              ? 'text-[#fbf9f5]/92 drop-shadow-[0_0_5px_rgba(255,255,255,.26)] hover:text-white'
+              : 'text-[#fbf9f5]/22 hover:text-[#fbf9f5]/34'
         }`}
       >
-        {value === 'auto' ? <AutoGlyph /> : <DeviceGlyph device={value} size={16} />}
+        {value === 'auto' ? <AutoGlyph size={14} /> : <DeviceGlyph device={value} size={14} />}
       </button>
 
       {open && (
-        <div className="absolute bottom-[calc(100%+.7rem)] left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/10 bg-[#0c0c0c]/55 px-2 py-1.5 shadow-[0_12px_35px_rgba(0,0,0,.32)] backdrop-blur-xl">
+        <div className="absolute bottom-[calc(100%+.58rem)] left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/[.06] bg-[#0c0c0c]/32 px-1.5 py-1 shadow-[0_10px_28px_rgba(0,0,0,.24)] backdrop-blur-xl">
           <button
             type="button"
             onClick={() => { onChange('auto'); setOpen(false); }}
             aria-label="Destino automático"
             aria-pressed={value === 'auto'}
-            className={`grid h-7 w-7 place-items-center rounded-full border bg-transparent p-0 outline-none ${value === 'auto' ? 'border-[#aa78ff]/55 text-white' : 'border-transparent text-white/35 hover:text-white/70'}`}
+            className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${value === 'auto' ? 'scale-[1.04] text-white drop-shadow-[0_0_5px_rgba(255,255,255,.32)]' : 'text-white/28 hover:text-white/62'}`}
           >
-            <AutoGlyph size={15} />
+            <AutoGlyph size={13} />
           </button>
           {deviceOrder.map(deviceKey => {
             const available = isDeviceAvailable(byKey.get(deviceKey));
@@ -79,15 +79,15 @@ export function ExecutionTargetSelector({ devices, value, onChange }: ExecutionT
                 onClick={() => { onChange(deviceKey); setOpen(false); }}
                 aria-label={`${deviceKey === 'imac' ? 'iMac' : 'MacBook'}: ${available ? 'online' : 'offline'}`}
                 aria-pressed={value === deviceKey}
-                className={`grid h-7 w-7 place-items-center rounded-full border bg-transparent p-0 outline-none ${
+                className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${
                   value === deviceKey
-                    ? 'border-[#aa78ff]/55 text-white'
+                    ? 'scale-[1.04] text-white drop-shadow-[0_0_5px_rgba(255,255,255,.32)]'
                     : available
-                      ? 'border-transparent text-white/75 hover:text-white'
-                      : 'border-transparent text-white/18 hover:text-white/30'
+                      ? 'text-white/58 hover:text-white/88'
+                      : 'text-white/14 hover:text-white/26'
                 }`}
               >
-                <DeviceGlyph device={deviceKey} size={15} />
+                <DeviceGlyph device={deviceKey} size={13} />
               </button>
             );
           })}

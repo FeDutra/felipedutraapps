@@ -20,6 +20,25 @@
 
 ---
 
+# 15/10/2026 — refinamento visual de presença e destino físico
+
+Baseline: `617aa0d0`.
+
+Escopo: tornar a lateral direita estritamente informativa e não interativa,
+reduzir os glifos de iMac/MacBook e substituir toda indicação cromática de
+seleção por luminosidade e halo branco. O seletor continua existindo apenas no
+compositor, como um único botão que abre uma lâmina mínima sob demanda.
+
+Para reverter somente este refinamento, restaurar os três arquivos abaixo a
+`617aa0d0`, reconstruir e republicar o Hosting e gerar novo artefato Intel:
+
+- `src/apps/pulso/components/device/DevicePresenceRail.tsx`
+- `src/apps/pulso/components/device/ExecutionTargetSelector.tsx`
+- `src/apps/pulso/pages/LivePage.tsx`
+
+Nenhum serviço, pareamento, ID de nó ou regra de roteamento precisa ser
+revertido, pois esta alteração é exclusivamente visual e de interação local.
+
 # Rollback — voz comum não bloqueável pela camada de recuperação (14/10/2026)
 
 - Baseline instalada: `ad37d3e4` em `main`.
