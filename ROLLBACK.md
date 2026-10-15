@@ -1,3 +1,24 @@
+# Rollback — PULSO Tauri iOS canário 0.1.1 (15/10/2026)
+
+- Baseline: `d302d54f` em `origin/main`.
+- Escopo: portar a PULSO canônica 0.1.1 para Tauri iOS, preservar autenticação
+  Firebase, manter presença passiva de iMac/MacBook e transportar o destino de
+  execução como metadado estrutural. O modo automático no iPhone não autoriza
+  nenhuma máquina física; apenas uma escolha explícita no compositor pode fazê-lo.
+- Identificador isolado: `com.felipedutraapps.pulso.ios.canary`.
+- O IPA canário é instalável lado a lado e não substitui o aplicativo iOS anterior.
+
+## Reversão
+
+1. Remover somente o app canário do iPhone ou deixar de renová-lo no AltStore.
+2. Reverter os commits posteriores a `d302d54f` nesta frente.
+3. Não alterar o Operator Bridge, o Runtime Adapter, os nós pareados nem os
+   arquivos `device-origin.json` dos Macs: o canário móvel não os provisiona.
+4. Preservar pedidos já emitidos no Firestore para auditoria; clientes antigos
+   ignoram o envelope `executionTarget`.
+
+---
+
 # Rollback — presença e destino de máquinas na conversa (15/10/2026)
 
 - Baseline: `4a8f2fd6` em `origin/main`.

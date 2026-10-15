@@ -56,13 +56,6 @@ interface SortableChatItemDesktopProps {
 // a limitação de forma humana em vez de expor infraestrutura.
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
 
-const isTauriRuntime = () => typeof window !== 'undefined' && (
-  window.location.protocol === 'tauri:'
-  || window.location.protocol === 'file:'
-  || !!(window as any).__TAURI__
-  || !!(window as any).__TAURI_INTERNALS__
-);
-
 interface RecoverableVoiceRecording {
   recordingId: string;
   wavPath: string;

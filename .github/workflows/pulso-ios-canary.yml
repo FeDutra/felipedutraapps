@@ -3,7 +3,7 @@ name: Build PULSO iOS Canary
 on:
   push:
     branches:
-      - pulso/ios-tauri-canary-20261013
+      - feat/pulso-ios-tauri-secure-20261015
   workflow_dispatch:
 
 jobs:
@@ -49,7 +49,7 @@ jobs:
         run: npx tauri ios init --ci
 
       - name: Build unsigned PULSO iOS app
-        run: npx tauri ios build --ci --no-sign --build-number 2026101302
+        run: npx tauri ios build --ci --no-sign --build-number 2026101501
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
 
@@ -66,7 +66,7 @@ jobs:
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" 2>/dev/null || true)"
           test "$BUNDLE_NAME" = 'PULSO'
           test -z "$DISPLAY_NAME" || test "$DISPLAY_NAME" = 'PULSO'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.0.2026101302'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.1.2026101501'
           if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' "$APP"; then
             echo 'O IPA contém a interface errada do antigo cliente iOS.' >&2
             exit 1
@@ -78,11 +78,11 @@ jobs:
             exit 1
           fi
           shasum -a 256 "$IPA" | tee pulso-ios-canary.sha256
-          cp "$IPA" PULSO-iOS-auth-fix.ipa
+          cp "$IPA" PULSO-iOS-0.1.1-canary.ipa
 
       - name: Build and capture iPhone simulator proof
         run: |
-          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026101302
+          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026101501
           SIM_APP="$(find src-tauri/gen/apple/build -type d -name 'PULSO.app' -path '*sim*' -print -quit)"
           test -n "$SIM_APP"
           UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(d["udid"] for devices in data["devices"].values() for d in devices if d["name"].startswith("iPhone") and d["isAvailable"]))')"
@@ -96,9 +96,9 @@ jobs:
       - name: Upload audited IPA
         uses: actions/upload-artifact@v4
         with:
-          name: PULSO-iOS-auth-fix
+          name: PULSO-iOS-0.1.1-canary
           path: |
-            PULSO-iOS-auth-fix.ipa
+            PULSO-iOS-0.1.1-canary.ipa
             pulso-ios-canary.sha256
             pulso-ios-canary.png
           if-no-files-found: error
