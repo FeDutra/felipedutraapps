@@ -2,38 +2,59 @@ export type PresenceTransportPreference = 'auto' | 'gemini_live' | 'turn_based';
 
 export const PRESENCE_TRANSPORT_STORAGE_KEY = 'pulso_presence_transport';
 const PRESENCE_DEVICE_ID_STORAGE_KEY = 'pulso_presence_device_id';
+const GEMINI_DESKTOP_RESTORE_MIGRATION_KEY = 'pulso_presence_transport_migration_v3_gemini_restore';
 
 // NEXT_PUBLIC values are normally inlined by Next during the web build. The
 // Tauri static bundle can lose that replacement at runtime even when the same
-// build works in the browser. Keep the public relay contract deterministic in
-// the desktop artifact; the Gemini API key remains only on the relay.
+// build works in the browser. The relay URL is public; authorization comes
+// from the signed Firebase session sent after the WebSocket opens.
 const DEFAULT_LIVE_VOICE_RELAY_URL = 'wss://72-62-105-195.nip.io/live-voice/live';
-const DEFAULT_LIVE_VOICE_TOKEN = '5f44c1b490e70a358fbc789ec3862ff7db119d36c845626fc7cc743ccc49a3d1';
 
 export function getGeminiLiveConfig() {
   const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL || DEFAULT_LIVE_VOICE_RELAY_URL;
-  const token = process.env.NEXT_PUBLIC_LIVE_VOICE_TOKEN || DEFAULT_LIVE_VOICE_TOKEN;
-  return { relayUrl, token };
+  return { relayUrl };
 }
 
 export function hasGeminiLiveConfig() {
-  const { relayUrl, token } = getGeminiLiveConfig();
-  return Boolean(relayUrl && token);
+  const { relayUrl } = getGeminiLiveConfig();
+  return Boolean(relayUrl);
+}
+
+function isDesktopRuntime() {
+  if (typeof window === 'undefined') return false;
+  const tauriWindow = window as Window & {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
+  };
+  return window.location.protocol === 'tauri:'
+    || window.location.protocol === 'file:'
+    || Boolean(tauriWindow.__TAURI__)
+    || Boolean(tauriWindow.__TAURI_INTERNALS__);
 }
 
 export function readPresenceTransportPreference(): PresenceTransportPreference {
-  if (typeof window === 'undefined') return 'turn_based';
+  if (typeof window === 'undefined') return 'auto';
   try {
+    // Em 14/10, o desktop foi migrado silenciosamente para turn_based para
+    // investigar a Presença local. A experiência aprovada por Fe era Gemini
+    // Live; restaura uma única vez o transporte correto nos apps Tauri sem
+    // apagar escolhas futuras feitas no seletor.
+    if (
+      isDesktopRuntime()
+      && window.localStorage.getItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY) !== '1'
+    ) {
+      window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
+      window.localStorage.setItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY, '1');
+      return 'gemini_live';
+    }
+
     const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
     if (saved === 'gemini_live' || saved === 'turn_based' || saved === 'auto') return saved;
   } catch {
     // Some desktop WebViews can deny storage while the custom asset origin is
-    // being initialized. Presence must still open with its safe default.
+    // being initialized. Presence must still open with its intended default.
   }
-  // Gemini Live is experimental and must never become the active route merely
-  // because its relay is configured. The canonical presence path is the
-  // turn-based OpenClaw/Lótus pipeline with local Kokoro playback.
-  return 'turn_based';
+  return isDesktopRuntime() ? 'gemini_live' : 'auto';
 }
 
 export function writePresenceTransportPreference(preference: PresenceTransportPreference) {
@@ -49,7 +70,8 @@ export function shouldUseGeminiLive(preference: PresenceTransportPreference, sea
   const override = new URLSearchParams(search).get('gemini_live');
   if (override === '0') return false;
   if (override === '1') return hasGeminiLiveConfig();
-  return preference === 'gemini_live' && hasGeminiLiveConfig();
+  if (preference === 'turn_based') return false;
+  return hasGeminiLiveConfig();
 }
 
 export function getPresenceDeviceId() {

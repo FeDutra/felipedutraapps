@@ -1,3 +1,34 @@
+# Rollback — restauração Gemini Live no Modo Presença (16/10/2026)
+
+- Baseline: `65c70fc8` em `origin/main`.
+- Escopo: restaurar Gemini Live como transporte padrão do app Tauri, manter a
+  Lótus como única dona cognitiva do turno e substituir o token reutilizável
+  embutido por autenticação Firebase assinada e restrita ao usuário de Fe.
+- O relay mantém temporariamente o token legado somente para canária e rollback
+  do cliente anterior; o novo bundle não contém esse token.
+- A gravação comum, seu Gemini de transcrição, STT local e Kokoro não são
+  alterados por esta frente.
+
+## Reversão do relay
+
+1. Antes da ativação, copiar `/opt/pulso-live-voice/server.js` para um arquivo
+   datado no mesmo diretório e registrar seu SHA-256.
+2. Se a autenticação Firebase falhar, restaurar o arquivo datado e reiniciar
+   **somente** `pulso-live-voice.service`.
+3. Confirmar `/healthz` e executar a canária pelo token legado. Não alterar o
+   Gateway, o Operator Bridge, o STT local ou o Kokoro.
+
+## Reversão do aplicativo
+
+1. Preservar o bundle atual do iMac inteiro antes da instalação.
+2. Se o Modo Presença não conectar ao Gemini Live, restaurar esse bundle como
+   `/Applications/PULSO.app` e reabrir somente a PULSO.
+3. A migração de `localStorage` é de execução única e não apaga a escolha
+   posterior do usuário; o bundle anterior continua entendendo a preferência
+   existente.
+
+---
+
 # Rollback — presença e destino de máquinas na conversa (15/10/2026)
 
 - Baseline: `4a8f2fd6` em `origin/main`.

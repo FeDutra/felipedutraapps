@@ -5413,6 +5413,11 @@ ${data.transcription}`, {
       const controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
+        allowGeminiFallback: presenceTransport === 'auto',
+        getGeminiAccessToken: async () => {
+          const currentUser = await authService.ensurePulsoAuthReady();
+          return currentUser.getIdToken();
+        },
         onStateChange: (newState) => {
           setVoiceState(newState);
           voiceStateRef.current = newState;

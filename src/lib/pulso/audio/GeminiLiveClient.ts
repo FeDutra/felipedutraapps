@@ -17,6 +17,7 @@ export type GeminiLiveState =
 
 export interface GeminiLiveConfig {
   relayUrl: string;
+  getAccessToken: () => Promise<string | null>;
   model?: string;
   systemInstruction: string;
   voiceName?: string;
@@ -173,9 +174,18 @@ export class GeminiLiveClient {
       return;
     }
 
-    this.ws.onopen = () => {
+    this.ws.onopen = async () => {
       console.log('[GEMINI_LIVE_RELAY_OPEN]');
-      this.sendSetup();
+      try {
+        const firebaseIdToken = await this.config.getAccessToken();
+        if (!firebaseIdToken) throw new Error('Sessão PULSO sem autenticação.');
+        this.ws?.send(JSON.stringify({ auth: { firebaseIdToken } }));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : null;
+        this.config.onError(message || 'Falha ao autenticar a conversa em tempo real.');
+        this.setState('error');
+        this.ws?.close(1008, 'auth unavailable');
+      }
     };
 
     this.ws.onmessage = (event) => {
@@ -248,6 +258,19 @@ export class GeminiLiveClient {
       msg = JSON.parse(text);
     } catch (e) {
       console.warn('[GEMINI_LIVE_PARSE_ERROR]', e);
+      return;
+    }
+
+    if (msg.authComplete) {
+      console.log('[GEMINI_LIVE_AUTH_COMPLETE]');
+      this.sendSetup();
+      return;
+    }
+
+    if (msg.authError) {
+      this.config.onError('Sessão de voz não autorizada.');
+      this.setState('error');
+      this.ws?.close(1008, 'auth rejected');
       return;
     }
 

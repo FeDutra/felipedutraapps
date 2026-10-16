@@ -43,6 +43,13 @@ export interface VoiceSessionConfig {
    * de voz; pedidos e ferramentas seguem pelo fluxo canônico da Lótus.
    */
   useGeminiLive?: boolean;
+  /**
+   * Só o modo "automático" pode cair para o transporte local. Quando Fe
+   * escolhe Gemini Live explicitamente, uma falha precisa ficar visível em vez
+   * de reabrir silenciosamente o caminho turn-based pós-Gemini.
+   */
+  allowGeminiFallback?: boolean;
+  getGeminiAccessToken?: () => Promise<string | null>;
 }
 
 export interface PresenceNarrationContext {
@@ -295,8 +302,9 @@ export class VoiceSessionController {
     this.transition('starting');
 
     if (this.config.useGeminiLive) {
-      const started = this.startGeminiLive();
+      const started = await this.startGeminiLive();
       if (started) return;
+      if (!this.config.allowGeminiFallback) return;
     }
 
     await this.startTurnBased(passedAudioContext);
@@ -749,16 +757,19 @@ export class VoiceSessionController {
 
   // ---- Modo experimental Gemini Live ----
 
-  private startGeminiLive() {
-    const { relayUrl, token } = getGeminiLiveConfig();
+  private async startGeminiLive() {
+    const { relayUrl } = getGeminiLiveConfig();
 
-    if (!relayUrl || !token) {
+    if (!relayUrl || !this.config.getGeminiAccessToken) {
       this.log('GEMINI_LIVE_CONFIG_MISSING');
+      this.config.onError('Conversa em tempo real sem autenticação disponível.');
+      this.transition('error');
       return false;
     }
 
     this.geminiLiveClient = new GeminiLiveClient({
-      relayUrl: `${relayUrl}?token=${encodeURIComponent(token)}`,
+      relayUrl,
+      getAccessToken: this.config.getGeminiAccessToken,
       systemInstruction: GEMINI_LIVE_SYSTEM_INSTRUCTION,
       onStateChange: (state) => {
         this.transition(mapGeminiLiveState(state));
@@ -776,7 +787,13 @@ export class VoiceSessionController {
       },
       onError: (message) => {
         this.log('GEMINI_LIVE_ERROR', message);
-        void this.fallbackToTurnBased(message);
+        if (this.config.allowGeminiFallback) {
+          void this.fallbackToTurnBased(message);
+          return;
+        }
+        this.config.onPresenceWorkChange?.(false);
+        this.config.onError(`Conversa em tempo real indisponível: ${message}`);
+        this.transition('error');
       },
       onUserTurnStarted: (turnId) => {
         this.activeGeminiTurnId = turnId;
