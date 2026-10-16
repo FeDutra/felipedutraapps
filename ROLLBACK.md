@@ -783,3 +783,24 @@ Reverter somente o commit desta alteração e restaurar o Hosting/bundle Intel d
 `a043db43`. Nenhum banco, áudio durável, segredo, serviço local, relay ou
 configuração de transporte precisa ser revertido, porque esta etapa não altera
 essas camadas.
+
+---
+
+# Rollback — presença das agentes nas conversas (16/10/2026)
+
+Baseline: `563ae79f` (`origin/main`).
+
+## Escopo
+
+- renderizar mensagens proativas autônomas a partir de `text`/`message`;
+- resolver a entidade responsável pela chave canônica `agent:<id>:...`;
+- mostrar FORMA, RITMO, ESTRUTURA, VERBO, VÍNCULO, VETOR, LASTRO ou TRAMA
+  como autoria visível, sem rotular toda resposta como Lótus;
+- indicar a agente presente na sessão principal e nos painéis divididos;
+- manter mensagens derivadas de pedidos sem duplicação por `originRequestId`.
+
+## Reversão
+
+Reverter somente o commit desta alteração e publicar novamente o Firebase
+Hosting do SHA `563ae79f`. A reversão não muda documentos do Firestore, chaves
+de sessão, agentes do OpenClaw, serviços, credenciais ou computadores físicos.

@@ -11,6 +11,7 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
 import { float32ToInt16Bytes } from '@/lib/pulso/audio/pcmWav';
+import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assistantIdentity';
 
 import {
   DndContext,
@@ -1127,6 +1128,8 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   chatId: 'default',
   openclawSessionKey: session.openclawSessionKey,
   label: session.label,
+  agentId: session.agentId,
+  assistantName: session.assistantName,
   archived: session.archived ?? false,
   isDefault: session.isDefault ?? false,
   lastMessageAt: session.lastMessageAt,
@@ -1382,6 +1385,8 @@ interface Message {
   id: string;
   sender: 'user' | 'lotus' | 'system';
   text: string;
+  assistantName?: string;
+  agentId?: string;
   timestamp: Date;
   interpretation?: {
     intent: string;
@@ -1527,14 +1532,7 @@ export default function LivePage() {
     }
   }, []);
 
-  const [messages, setMessages] = React.useState<Message[]>([
-    {
-      id: 'welcome',
-      sender: 'lotus',
-      text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = React.useState<Message[]>([]);
   const [lastSentRequestsByContext, setLastSentRequestsByContext] = React.useState<Record<string, string>>({});
   const [contextTypingStates, setContextTypingStates] = React.useState<Record<string, boolean>>({});
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -1834,6 +1832,10 @@ export default function LivePage() {
   );
   const hasSplitChats = secondaryContextNodes.length > 0;
   const sendTargetContextNode = splitContextNodes.find(node => node.contextId === focusedPaneContextId) || activeContextNode;
+  const sendTargetAssistant = resolveAssistantIdentity(
+    sendTargetContextNode as unknown as Record<string, unknown>,
+    sendTargetContextNode.openclawSessionKey,
+  );
   // Em split, o chat-base pode continuar montado à esquerda, mas o único
   // destino válido do compositor é o painel focado. Todo sinal operacional
   // que orienta escrita (inclusive COMPROMISSO) precisa seguir esta mesma
@@ -3222,9 +3224,12 @@ export default function LivePage() {
           }
 
           if (req.requestType === "progress_update") {
+            const assistantIdentity = resolveAssistantIdentity(req, activeContextNode.openclawSessionKey);
             chatHistory.push({
               id: `lotus-progress-${req.id || Math.random()}`,
               sender: 'lotus',
+              assistantName: assistantIdentity.name,
+              agentId: assistantIdentity.agentId,
               text: req.text || req.message || '',
               timestamp: reqTime,
               contextId: req.contextId || null,
@@ -3239,9 +3244,10 @@ export default function LivePage() {
           
           if (isConvCommand) {
             const status = req.status;
-            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+            const responseText = toRenderableConversationText(getAssistantResponseText(req));
             const hasRealResponse = responseText && responseText.trim() !== '';
             const responseAttachments = getAssistantAttachments(req);
+            const assistantIdentity = resolveAssistantIdentity(req, activeContextNode.openclawSessionKey);
             
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
             if (isAcceptedStatus && (hasRealResponse || responseAttachments.length > 0)) {
@@ -3249,6 +3255,8 @@ export default function LivePage() {
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
                 sender: 'lotus',
+                assistantName: assistantIdentity.name,
+                agentId: assistantIdentity.agentId,
                 text: responseText || '',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
@@ -3269,7 +3277,9 @@ export default function LivePage() {
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
                 sender: 'lotus',
-                text: `[Lótus] ${errorText}`,
+                assistantName: assistantIdentity.name,
+                agentId: assistantIdentity.agentId,
+                text: `[${assistantIdentity.name}] ${errorText}`,
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -3282,15 +3292,19 @@ export default function LivePage() {
           }
         });
 
-        setMessages([
-          {
-            id: 'welcome',
-            sender: 'lotus',
-            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
-            timestamp: new Date()
-          },
-          ...chatHistory
-        ]);
+        const sessionAssistant = resolveAssistantIdentity(
+          activeContextNode as unknown as Record<string, unknown>,
+          activeContextNode.openclawSessionKey,
+        );
+        const welcomeMessages: Message[] = sessionAssistant.agentId === 'main' ? [{
+          id: 'welcome',
+          sender: 'lotus',
+          assistantName: sessionAssistant.name,
+          agentId: sessionAssistant.agentId,
+          text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+          timestamp: new Date(),
+        }] : [];
+        setMessages([...welcomeMessages, ...chatHistory]);
         void Promise.all([
           routinesService.getAll().catch(e => { console.error(e); return []; }),
           agentsService.getAll().catch(e => { console.error(e); return []; }),
@@ -3421,9 +3435,12 @@ export default function LivePage() {
           }
 
           if (req.requestType === "progress_update") {
+            const assistantIdentity = resolveAssistantIdentity(req, activeContextNode.openclawSessionKey);
             chatHistory.push({
               id: `lotus-progress-${req.id}`,
               sender: 'lotus',
+              assistantName: assistantIdentity.name,
+              agentId: assistantIdentity.agentId,
               text: req.text || req.message || '',
               timestamp: reqTime,
               contextId: req.contextId || null,
@@ -3458,9 +3475,10 @@ export default function LivePage() {
 
           if (isConvCommand) {
             const status = req.status;
-            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+            const responseText = toRenderableConversationText(getAssistantResponseText(req));
             const hasRealResponse = responseText && responseText.trim() !== '';
             const responseAttachments = getAssistantAttachments(req);
+            const assistantIdentity = resolveAssistantIdentity(req, activeContextNode.openclawSessionKey);
 
             // Check if auto TTS needs to be triggered in presence mode
             const originRequestId = req.meta?.originRequestId || req.openclawResult?.meta?.originRequestId || req.originRequestId || req.id;
@@ -3599,6 +3617,8 @@ export default function LivePage() {
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
+                assistantName: assistantIdentity.name,
+                agentId: assistantIdentity.agentId,
                 text: responseText || '',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
@@ -3619,7 +3639,9 @@ export default function LivePage() {
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
-                text: `[Lótus] ${errorText}`,
+                assistantName: assistantIdentity.name,
+                agentId: assistantIdentity.agentId,
+                text: `[${assistantIdentity.name}] ${errorText}`,
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
                 interpretation: req.interpretation,
                 openclawResult: req.openclawResult || undefined,
@@ -3644,15 +3666,19 @@ export default function LivePage() {
           reasonForSetMessages: 'realtime_update'
         });
 
-         setMessages([
-          {
-            id: 'welcome',
-            sender: 'lotus',
-            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
-            timestamp: new Date()
-          },
-          ...chatHistory
-        ]);
+        const sessionAssistant = resolveAssistantIdentity(
+          activeContextNode as unknown as Record<string, unknown>,
+          activeContextNode.openclawSessionKey,
+        );
+        const welcomeMessages: Message[] = sessionAssistant.agentId === 'main' ? [{
+          id: 'welcome',
+          sender: 'lotus',
+          assistantName: sessionAssistant.name,
+          agentId: sessionAssistant.agentId,
+          text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+          timestamp: new Date(),
+        }] : [];
+        setMessages([...welcomeMessages, ...chatHistory]);
 
         // Schedule t6 calculation (visible in UI) for any pending requests in latencyMapRef
         requestAnimationFrame(() => {
@@ -3772,7 +3798,7 @@ export default function LivePage() {
           snapshot.forEach((docSnap: any) => {
             const req = docSnap.data();
             const contextId = req.contextId;
-            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+            const responseText = toRenderableConversationText(getAssistantResponseText(req));
             const responseAttachments = getAssistantAttachments(req);
             const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
             if (!contextId || req.archived === true || !isAccepted || (!responseText?.trim() && responseAttachments.length === 0)) return;
@@ -3794,7 +3820,7 @@ export default function LivePage() {
           if (!globalIncomingReadyRef.current) {
             snapshot.forEach((docSnap: any) => {
               const req = docSnap.data();
-              const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+              const responseText = toRenderableConversationText(getAssistantResponseText(req));
               if (responseText?.trim() || getAssistantAttachments(req).length > 0) globalIncomingSeenRef.current.add(docSnap.id);
             });
             globalIncomingReadyRef.current = true;
@@ -3806,7 +3832,7 @@ export default function LivePage() {
             const req = change.doc.data();
             const requestId = change.doc.id;
             const contextId = req.contextId;
-            const responseText = toRenderableConversationText(req.openclawResult?.responseText);
+            const responseText = toRenderableConversationText(getAssistantResponseText(req));
             const responseAttachments = getAssistantAttachments(req);
             const isAccepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(req.status || '');
             if (!contextId || req.archived === true || !isAccepted || (!responseText?.trim() && responseAttachments.length === 0)) return;
@@ -4409,10 +4435,16 @@ export default function LivePage() {
       // falhava ou o envio era descartado.
       return { requestId: newRequest.id || preGeneratedReqId };
     } catch (err: any) {
+      const assistantIdentity = resolveAssistantIdentity(
+        sendingNode as unknown as Record<string, unknown>,
+        sendingNode.openclawSessionKey,
+      );
       const lotusErrorMsg: Message = {
         id: `lotus-error-${Date.now()}`,
         sender: 'lotus',
-        text: `falha ao enviar para a Lótus: ${err?.message || 'erro de persistência'}.`,
+        assistantName: assistantIdentity.name,
+        agentId: assistantIdentity.agentId,
+        text: `falha ao enviar para ${assistantIdentity.name}: ${err?.message || 'erro de persistência'}.`,
         timestamp: new Date(),
         contextId: sendingNode.contextId
       };
@@ -6547,7 +6579,7 @@ ${data.transcription}`, {
                       <span className={`block text-[9px] tracking-widest lowercase select-none ${
                         isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
                       }`}>
-                        {isLotus ? 'lótus' : 'fê'}
+                        {isLotus ? (msg.assistantName || 'Lótus') : 'fê'}
                       </span>
 
                       {/* Reply quote block */}
@@ -6886,7 +6918,9 @@ ${data.transcription}`, {
             {isLatestRequestPending && (
               <div className="flex justify-start w-full animate-pulse select-none text-left">
                 <div className="space-y-1">
-                  <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
+                  <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold">
+                    {sendTargetAssistant.name}
+                  </span>
                   <span className="text-xs font-light text-[#fbf9f5]/40">pensando...</span>
                 </div>
               </div>
@@ -7111,7 +7145,7 @@ ${data.transcription}`, {
         {activeContextNode && (
           <div className="w-full flex items-center justify-center gap-3 mb-0.5 animate-fade-in select-none">
             <span className="text-[9px] text-[#fbf9f5]/25 tracking-widest uppercase font-mono font-light">
-              [ contexto ativo: {sendTargetContextNode.label} ]
+              [ contexto ativo: {sendTargetContextNode.label} · agente: {sendTargetAssistant.name} ]
             </span>
             {isAtelieActive && (
               <button

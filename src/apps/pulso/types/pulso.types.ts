@@ -247,6 +247,8 @@ export interface PulsoContextNode {
   chatId: string;
   openclawSessionKey: string;
   label: string;
+  agentId?: string;
+  assistantName?: string;
   archived?: boolean;
   isDefault?: boolean;
   lastMessageAt?: Date;
@@ -291,6 +293,10 @@ export interface Session {
   order?: number;
   /** The OpenClaw session key used to route to the correct agent context */
   openclawSessionKey: string;
+  /** Specialist responsible for this conversation, when it is not Lótus. */
+  agentId?: string;
+  /** Human-facing identity shown inside the conversation. */
+  assistantName?: string;
   /** Whether this is a seeded/system session that ships with the platform */
   isDefault?: boolean;
   /** ISO timestamp of last message activity */

@@ -10,6 +10,7 @@ import { PulsoMessageContent } from './chat/PulsoMessageContent';
 import { MessageActions, type Message as RenderMessage } from './chat/MessageRenderer';
 import { MessageAttachments, type RenderableAttachment } from './chat/MessageAttachments';
 import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
+import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assistantIdentity';
 
 interface PaneMessage extends RenderMessage {
   sender: 'user' | 'lotus';
@@ -78,6 +79,10 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
 }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
+  const contextAssistant = resolveAssistantIdentity(
+    contextNode as unknown as Record<string, unknown>,
+    contextNode.openclawSessionKey,
+  );
   const {
     scrollRef,
     showReturnToLatest,
@@ -113,16 +118,20 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
           });
         }
         if (data.requestType === 'progress_update' && (data.text || data.message)) {
+          const assistantIdentity = resolveAssistantIdentity(data, contextNode.openclawSessionKey);
           items.push({
             id: `progress-${docSnap.id}`,
             sender: 'lotus',
+            assistantName: assistantIdentity.name,
+            agentId: assistantIdentity.agentId,
             text: data.text || data.message,
             timestamp,
             isProgressUpdate: true,
           });
         }
-        const responseText = toRenderableConversationText(data.openclawResult?.responseText);
+        const responseText = toRenderableConversationText(getAssistantResponseText(data));
         const accepted = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(data.status || '');
+        const assistantIdentity = resolveAssistantIdentity(data, contextNode.openclawSessionKey);
         const responseAttachments = normalizeAttachments(
           data.openclawResult?.attachments || data.responseAttachments || (data.requestType === 'active_message' ? data.attachments : undefined)
         );
@@ -131,6 +140,8 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
           items.push({
             id: `lotus-${docSnap.id}`,
             sender: 'lotus',
+            assistantName: assistantIdentity.name,
+            agentId: assistantIdentity.agentId,
             text: responseText,
             timestamp: responseTimestamp,
             openclawResult: data.openclawResult,
@@ -152,7 +163,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
       setIsPending(Boolean(latestRequest && !['success', 'completed', 'proposal_ready', 'needs_approval', 'needs_clarification', 'error', 'timeout', 'failed'].includes(latestRequest.status || '')));
     });
     return () => unsubscribe();
-  }, [contextNode.contextId]);
+  }, [contextNode.contextId, contextNode.openclawSessionKey]);
 
   return (
     <div
@@ -174,7 +185,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
             {areaIcon}
           </span>
           <span className={`text-[9px] tracking-[0.2em] uppercase font-sans truncate transition-colors ${isFocused ? 'text-white/85' : 'text-[#fbf9f5]/40'}`}>
-            {contextNode.label}
+            {contextNode.label} · {contextAssistant.name}
           </span>
         </span>
         <button
@@ -204,7 +215,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
           >
             <div className="min-w-0 max-w-[85%] space-y-1 select-text">
               <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
-                {msg.sender === 'lotus' ? 'lótus' : 'fê'}
+                {msg.sender === 'lotus' ? (msg.assistantName || 'Lótus') : 'fê'}
               </span>
               <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left select-text" style={{ overflowWrap: 'anywhere' }}>
                 <PulsoMessageContent
@@ -230,7 +241,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
         {isPending && (
           <div className="flex justify-start w-full animate-pulse select-none text-left">
             <div className="space-y-1">
-              <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold lowercase">lótus</span>
+              <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold">{contextAssistant.name}</span>
               <span className="text-xs font-light text-[#fbf9f5]/40">pensando...</span>
             </div>
           </div>

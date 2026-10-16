@@ -38,6 +38,8 @@ export interface Message {
   id: string;
   sender: 'user' | 'lotus' | 'system';
   text: string;
+  assistantName?: string;
+  agentId?: string;
   timestamp: Date | any;
   interpretation?: any;
   openclawResult?: OpenClawResult;
