@@ -54,13 +54,18 @@ export type PresenceAudioReceiptPhase =
   | 'turn_closed'
   | 'first_output_audio'
   | 'playback_started'
-  | 'capture_watchdog_failed';
+  | 'capture_watchdog_failed'
+  | 'canonical_dispatch_started'
+  | 'canonical_request_created'
+  | 'canonical_dispatch_failed'
+  | 'canonical_result_received';
 
 export interface PresenceAudioReceipt {
   sessionId: string;
   phase: PresenceAudioReceiptPhase;
   elapsedMs: number;
   turnId?: string;
+  requestId?: string;
   frameCount?: number;
   bytes?: number;
   sampleRate?: number;
@@ -213,6 +218,17 @@ export class GeminiLiveClient {
     }
   }
 
+  public recordCanonicalReceipt(
+    phase: Extract<PresenceAudioReceiptPhase,
+      | 'canonical_dispatch_started'
+      | 'canonical_request_created'
+      | 'canonical_dispatch_failed'
+      | 'canonical_result_received'>,
+    details: Pick<PresenceAudioReceipt, 'turnId' | 'requestId'> = {},
+  ) {
+    this.receipt(phase, details);
+  }
+
   private openSocket() {
     this.setState('connecting');
 
@@ -358,7 +374,6 @@ export class GeminiLiveClient {
       // o cancelamento da resposta autônoma; caso contrário o pedido inteiro
       // desaparece sem chegar à Lótus.
       if (sc.inputTranscription?.text) {
-        const interruptedTurnWasWaitingForTranscript = Boolean(this.inputTurnFinalizeTimer);
         if (!this.pendingUserTranscript) {
           this.beginUserTurn();
         }
@@ -368,9 +383,10 @@ export class GeminiLiveClient {
         }
         this.pendingUserTranscript += sc.inputTranscription.text;
         this.config.onTranscript?.('user', sc.inputTranscription.text);
-        if (interruptedTurnWasWaitingForTranscript || this.inputTurnFinalizeTimer) {
-          this.scheduleInputTurnFinalization(180);
-        }
+        // `inputTranscription` e `turnComplete` não têm ordem garantida. Este
+        // watchdog fecha o turno mesmo quando a transcrição final chega depois
+        // do marcador; `turnComplete` ainda encurta a espera para 100 ms.
+        this.scheduleInputTurnFinalization(850);
       }
 
       if (sc.interrupted) {

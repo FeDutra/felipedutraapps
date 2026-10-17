@@ -821,6 +821,7 @@ export class VoiceSessionController {
       },
       onUserTurnReady: async ({ turnId, userText, socialOnly }) => {
         if (turnId !== this.activeGeminiTurnId) return;
+        this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_started', { turnId });
         if (socialOnly) this.socialGeminiTurnIds.add(turnId);
         this.advanceTurn({ type: 'turn_closed', turnId });
         this.advanceTurn({ type: 'transcription_started', turnId });
@@ -857,9 +858,19 @@ export class VoiceSessionController {
           this.activePresenceRequestId = dispatch?.requestId || null;
           if (dispatch?.requestId) {
             this.advanceTurn({ type: 'request_bound', turnId, requestId: dispatch.requestId });
+            this.geminiLiveClient?.recordCanonicalReceipt('canonical_request_created', {
+              turnId,
+              requestId: dispatch.requestId,
+            });
+          } else if (!dispatch?.responseText) {
+            this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', { turnId });
+            this.advanceTurn({ type: 'turn_failed', turnId });
+            this.config.onPresenceWorkChange?.(false);
+            this.geminiLiveClient?.sendResultText('O pedido não entrou no chat. Vou continuar ouvindo.', turnId);
           }
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
+          this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', { turnId });
           this.advanceTurn({ type: 'turn_failed', turnId });
           this.config.onPresenceWorkChange?.(false);
           this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.', turnId);
@@ -894,6 +905,7 @@ export class VoiceSessionController {
       : this.activeGeminiTurnId ?? undefined;
     const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
+    this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
     if (this.socialGeminiTurnIds.delete(turnId)) {
       const completed = this.geminiLiveClient?.completeResultSilently(turnId) ?? false;
       if (completed) this.config.onPresenceWorkChange?.(false);

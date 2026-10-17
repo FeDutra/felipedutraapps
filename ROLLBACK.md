@@ -846,6 +846,8 @@ Baseline: `5dd72c76` (`origin/main`).
 - reduzir o fechamento do turno para 600 ms de silêncio, preservando pausas
   naturais;
 - impedir que resultado social, duplicado ou tardio caia no TTS local;
+- fechar o turno mesmo quando `inputTranscription` chega depois de
+  `turnComplete`, com recibos do despacho canônico;
 - acrescentar uma canária PCM de ponta a ponta sem armazenar áudio ou texto.
 
 ## Reversão

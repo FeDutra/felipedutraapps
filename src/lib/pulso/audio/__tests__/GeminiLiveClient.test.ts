@@ -165,3 +165,25 @@ test('saudação também entra no fluxo canônico e não duplica a resposta fala
   assert.equal(client.completeResultSilently(turns[0].turnId), true);
   assert.equal(client.completeResultSilently(turns[0].turnId), false);
 });
+
+test('transcrição tardia ainda fecha o turno e entra no fluxo canônico', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+  await new Promise(resolve => setTimeout(resolve, 140));
+  await handleMessage(client, {
+    serverContent: { inputTranscription: { text: 'Verifique minha agenda.' } },
+  });
+  await new Promise(resolve => setTimeout(resolve, 900));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Verifique minha agenda.');
+  assert.equal(turns[0].socialOnly, false);
+});
