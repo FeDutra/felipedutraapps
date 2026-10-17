@@ -1,5 +1,15 @@
 # Rollback — Presença ampliada no iMac (17/10/2026)
 
+## Extensão iPhone
+
+- O IPA é uma canária separada (`com.felipedutraapps.pulso.ios.canary`) e não
+  substitui nem altera o bundle desktop.
+- Antes de instalar pelo AltStore, preservar a versão iOS anterior disponível
+  no AltStore. Se a nova canária não autenticar, capturar áudio ou sustentar a
+  sessão em primeiro plano, reinstalar o IPA anterior.
+- `UIBackgroundModes=audio` e o bloqueio de tela são capacidades da canária;
+  removê-la do iPhone basta para reverter. Nenhum serviço ou dado é migrado.
+
 - Baseline instalada: `74d028c6`.
 - Escopo: agenda por intervalo, leitura recente de WhatsApp via `wacli`
   somente leitura, Apple Music como reflexo local, pulso de trabalho profundo,

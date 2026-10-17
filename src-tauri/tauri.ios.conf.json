@@ -1,0 +1,9 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "PULSO",
+  "identifier": "com.felipedutraapps.pulso.ios.canary",
+  "bundle": {
+    "externalBin": [],
+    "resources": []
+  }
+}

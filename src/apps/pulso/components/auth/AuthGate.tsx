@@ -35,12 +35,22 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
+    const authSettleTimeout = window.setTimeout(() => {
+      console.warn('[PULSO_AUTH_SETTLE_TIMEOUT] Auth state did not settle; showing access screen.');
+      setUser(authService.getCurrentUser());
+      setLoading(false);
+    }, 6000);
+
     const unsubscribe = authService.onAuthStateChange((u) => {
+      window.clearTimeout(authSettleTimeout);
       setUser(u);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(authSettleTimeout);
+      unsubscribe();
+    };
   }, []);
 
   // If in mock mode or loading is still happening, we might just bypass or show loader
@@ -93,7 +103,7 @@ const LoginScreen = () => {
   const handleLogin = async () => {
     const isTauriDevMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('pulso_tauri_dev') === '1';
     if (checkIsTauri() && !isTauriDevMode) {
-      setErrorMsg("Login com Google indisponível no app Desktop (limitação de WebView). Por favor, utilize E-mail e Senha abaixo.");
+      setErrorMsg("Login com Google indisponível neste app. Utilize e-mail e senha abaixo.");
       return;
     }
     setSigningIn(true);
@@ -117,7 +127,7 @@ const LoginScreen = () => {
       await authService.signInWithEmail(email, password);
     } catch (error: any) {
       console.error("Email login failed:", error);
-      setErrorMsg("Credenciais inválidas ou erro de autenticação.");
+      setErrorMsg(error?.message || "Credenciais inválidas ou erro de autenticação.");
     } finally {
       setSigningIn(false);
     }
@@ -168,7 +178,7 @@ const LoginScreen = () => {
           {isTauri && (
             <form onSubmit={handleEmailLogin} className="mt-6 pt-6 border-t border-white/5 flex flex-col gap-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-white/30 text-center mb-1">
-                Acesso Interno Desktop
+                Acesso seguro
               </p>
               <div>
                 <input

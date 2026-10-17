@@ -78,7 +78,13 @@ export const authService = {
    */
   signInWithEmail: async (email: string, password: string) => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const authAttempt = signInWithEmailAndPassword(auth, email, password);
+      const timeout = new Promise<never>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error("A autenticação demorou mais do que o esperado. Feche e abra a PULSO antes de tentar novamente."));
+        }, 12000);
+      });
+      const result = await Promise.race([authAttempt, timeout]);
       return result.user;
     } catch (error) {
       console.error("AuthService: Error during Email Sign-In", error);
@@ -200,4 +206,3 @@ export const authService = {
     });
   }
 };
-
