@@ -8,6 +8,13 @@
  * Gemini (VAD do lado do servidor), sem precisar de RMS manual no cliente.
  */
 
+import {
+  createPresenceAudioWorkletSource,
+  createRealtimeAudioEnvelope,
+  PRESENCE_INPUT_SAMPLE_RATE,
+  PRESENCE_PCM_FRAME_SAMPLES,
+} from './PresenceAudioFrames';
+
 export type GeminiLiveState =
   | 'idle'
   | 'connecting'
@@ -33,6 +40,32 @@ export interface GeminiLiveConfig {
    */
   onUserTurnStarted?: (turnId: string) => void;
   onUserTurnReady?: (turn: { turnId: string; userText: string }) => void;
+  onAudioReceipt?: (receipt: PresenceAudioReceipt) => void;
+}
+
+export type PresenceAudioReceiptPhase =
+  | 'playback_context_ready'
+  | 'socket_open'
+  | 'setup_complete'
+  | 'mic_open'
+  | 'audio_worklet_ready'
+  | 'first_pcm_frame'
+  | 'first_ws_frame'
+  | 'input_transcript'
+  | 'turn_closed'
+  | 'first_output_audio'
+  | 'playback_started'
+  | 'capture_watchdog_failed';
+
+export interface PresenceAudioReceipt {
+  sessionId: string;
+  phase: PresenceAudioReceiptPhase;
+  elapsedMs: number;
+  turnId?: string;
+  frameCount?: number;
+  bytes?: number;
+  sampleRate?: number;
+  contextState?: AudioContextState;
 }
 
 type NarrationKind = 'acknowledgement' | 'checkpoint' | 'result';
@@ -41,16 +74,6 @@ interface NarrationItem {
   kind: NarrationKind;
   text: string;
   turnId: string;
-}
-
-function base64FromInt16(samples: Int16Array): string {
-  const bytes = new Uint8Array(samples.buffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
 }
 
 function int16FromBase64(base64: string): Int16Array {
@@ -71,27 +94,6 @@ function isPurelySocialTurn(text: string) {
   return /^(oi|ola|bom dia|boa tarde|boa noite|tudo bem|obrigado|obrigada|valeu|tchau|ate logo|ate mais)$/.test(normalized);
 }
 
-/** Downsample simples (decimação) de Float32 numa taxa de origem pra 16kHz. */
-function downsampleTo16k(input: Float32Array, inputSampleRate: number): Int16Array {
-  if (inputSampleRate === 16000) {
-    const out = new Int16Array(input.length);
-    for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]));
-      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-    }
-    return out;
-  }
-  const ratio = inputSampleRate / 16000;
-  const outLength = Math.floor(input.length / ratio);
-  const out = new Int16Array(outLength);
-  for (let i = 0; i < outLength; i++) {
-    const srcIndex = Math.floor(i * ratio);
-    const s = Math.max(-1, Math.min(1, input[srcIndex]));
-    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return out;
-}
-
 export class GeminiLiveClient {
   private config: GeminiLiveConfig;
   private ws: WebSocket | null = null;
@@ -101,7 +103,13 @@ export class GeminiLiveClient {
   private micStream: MediaStream | null = null;
   private captureContext: AudioContext | null = null;
   private captureSource: MediaStreamAudioSourceNode | null = null;
-  private captureProcessor: ScriptProcessorNode | null = null;
+  private captureProcessor: AudioWorkletNode | null = null;
+  private captureSilentGain: GainNode | null = null;
+  private captureWatchdog: ReturnType<typeof setTimeout> | null = null;
+  private pcmFrameCount = 0;
+  private pcmBytesSent = 0;
+  private firstPcmFrameSeen = false;
+  private firstWsFrameSent = false;
 
   // Reprodução de áudio (PCM 24kHz vindo do Gemini)
   private playbackContext: AudioContext | null = null;
@@ -110,6 +118,13 @@ export class GeminiLiveClient {
   private turnCompletePending = false;
   private playbackSources = new Set<AudioBufferSourceNode>();
   private playbackGeneration = 0;
+  private firstOutputAudioSeen = false;
+  private firstPlaybackStarted = false;
+  private transcriptReceiptTurnId: string | null = null;
+
+  // Observabilidade local: metadados apenas, nunca áudio ou transcrição.
+  private readonly receiptSessionId = `presence_audio_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  private readonly receiptStartedAt = Date.now();
 
   // Orquestração reconhecimento -> backend real -> narração do resultado
   private pendingUserTranscript = '';
@@ -158,10 +173,41 @@ export class GeminiLiveClient {
     return this.state;
   }
 
-  public async start() {
+  public start() {
     this.closedByUser = false;
     this.reconnectAttempts = 0;
+    // Criar/retomar o contexto ainda dentro do gesto que abriu a Presença
+    // evita o downlink silencioso por autoplay no WKWebView.
+    try {
+      const playbackContext = this.ensurePlaybackContext();
+      if (playbackContext.state === 'suspended') {
+        void playbackContext.resume()
+          .then(() => this.receipt('playback_context_ready', { contextState: playbackContext.state }))
+          .catch((error) => console.warn('[GEMINI_LIVE_PLAYBACK_CONTEXT_RESUME_FAILED]', error));
+      } else {
+        this.receipt('playback_context_ready', { contextState: playbackContext.state });
+      }
+    } catch (error) {
+      console.warn('[GEMINI_LIVE_PLAYBACK_CONTEXT_PREPARE_FAILED]', error);
+    }
     this.openSocket();
+  }
+
+  private receipt(
+    phase: PresenceAudioReceiptPhase,
+    details: Omit<PresenceAudioReceipt, 'sessionId' | 'phase' | 'elapsedMs'> = {},
+  ) {
+    const receipt: PresenceAudioReceipt = {
+      sessionId: this.receiptSessionId,
+      phase,
+      elapsedMs: Date.now() - this.receiptStartedAt,
+      ...details,
+    };
+    if (this.config.onAudioReceipt) {
+      this.config.onAudioReceipt(receipt);
+    } else {
+      console.log('[PRESENCE_AUDIO_RECEIPT]', JSON.stringify(receipt));
+    }
   }
 
   private openSocket() {
@@ -176,6 +222,7 @@ export class GeminiLiveClient {
 
     this.ws.onopen = async () => {
       console.log('[GEMINI_LIVE_RELAY_OPEN]');
+      this.receipt('socket_open');
       try {
         const firebaseIdToken = await this.config.getAccessToken();
         if (!firebaseIdToken) throw new Error('Sessão PULSO sem autenticação.');
@@ -276,6 +323,7 @@ export class GeminiLiveClient {
 
     if (msg.setupComplete) {
       console.log('[GEMINI_LIVE_SETUP_COMPLETE]');
+      this.receipt('setup_complete');
       this.reconnectAttempts = 0;
       try {
         await this.startMic();
@@ -301,6 +349,10 @@ export class GeminiLiveClient {
         const interruptedTurnWasWaitingForTranscript = Boolean(this.inputTurnFinalizeTimer);
         if (!this.pendingUserTranscript) {
           this.beginUserTurn();
+        }
+        if (this.transcriptReceiptTurnId !== this.activeTurnId) {
+          this.transcriptReceiptTurnId = this.activeTurnId;
+          this.receipt('input_transcript', { turnId: this.activeTurnId ?? undefined });
         }
         this.pendingUserTranscript += sc.inputTranscription.text;
         this.config.onTranscript?.('user', sc.inputTranscription.text);
@@ -352,6 +404,10 @@ export class GeminiLiveClient {
       const parts = sc.modelTurn?.parts || [];
       for (const p of parts) {
         if (p.inlineData?.data) {
+          if (!this.firstOutputAudioSeen) {
+            this.firstOutputAudioSeen = true;
+            this.receipt('first_output_audio', { turnId: this.activeTurnId ?? undefined });
+          }
           if (this.narrationInFlight) {
             this.enqueuePlayback(p.inlineData.data);
           } else {
@@ -387,6 +443,7 @@ export class GeminiLiveClient {
           // Algumas versões da Live API fecham o turno antes do último
           // fragmento de inputTranscription. Um debounce curto evita perder a
           // cauda sem adicionar latência perceptível à conversa.
+          this.receipt('turn_closed', { turnId: this.activeTurnId ?? undefined });
           this.scheduleInputTurnFinalization(true, 100);
         }
       }
@@ -482,6 +539,7 @@ export class GeminiLiveClient {
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
     });
+    this.receipt('mic_open');
 
     const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
     this.captureContext = new AudioContextCtor();
@@ -490,29 +548,81 @@ export class GeminiLiveClient {
     }
 
     this.captureSource = this.captureContext.createMediaStreamSource(this.micStream);
-    // ScriptProcessorNode é deprecated mas universalmente suportado; migrar
-    // pra AudioWorklet é melhoria futura, não bloqueante pra essa primeira versão.
-    this.captureProcessor = this.captureContext.createScriptProcessor(4096, 1, 1);
+    if (!this.captureContext.audioWorklet) {
+      throw new Error('AudioWorklet indisponível neste WebView.');
+    }
 
-    const nativeSampleRate = this.captureContext.sampleRate;
+    const workletUrl = URL.createObjectURL(new Blob(
+      [createPresenceAudioWorkletSource()],
+      { type: 'application/javascript' },
+    ));
+    try {
+      await this.captureContext.audioWorklet.addModule(workletUrl);
+    } finally {
+      URL.revokeObjectURL(workletUrl);
+    }
 
-    this.captureProcessor.onaudioprocess = (event) => {
+    this.captureProcessor = new AudioWorkletNode(this.captureContext, 'pulso-presence-capture', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      processorOptions: {
+        targetSampleRate: PRESENCE_INPUT_SAMPLE_RATE,
+        frameSamples: PRESENCE_PCM_FRAME_SAMPLES,
+      },
+    });
+    this.receipt('audio_worklet_ready', {
+      sampleRate: this.captureContext.sampleRate,
+      contextState: this.captureContext.state,
+    });
+
+    this.captureProcessor.port.onmessage = (event: MessageEvent<{ type?: string; buffer?: ArrayBuffer }>) => {
+      if (event.data?.type !== 'pcm16' || !event.data.buffer) return;
+      const pcm16 = new Int16Array(event.data.buffer);
+      this.pcmFrameCount += 1;
+      if (!this.firstPcmFrameSeen) {
+        this.firstPcmFrameSeen = true;
+        if (this.captureWatchdog) clearTimeout(this.captureWatchdog);
+        this.captureWatchdog = null;
+        this.receipt('first_pcm_frame', {
+          frameCount: this.pcmFrameCount,
+          bytes: pcm16.byteLength,
+          sampleRate: PRESENCE_INPUT_SAMPLE_RATE,
+        });
+      }
+
       if (this.state === 'error' || this.closedByUser) return;
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      // O relay limita filas; não acumulamos áudio indefinidamente se a rede
+      // deixar de drenar o WebSocket.
+      if (this.ws.bufferedAmount > 512 * 1024) return;
 
-      const input = event.inputBuffer.getChannelData(0);
-      const pcm16 = downsampleTo16k(input, nativeSampleRate);
-      const base64 = base64FromInt16(pcm16);
-
-      this.ws.send(JSON.stringify({
-        realtimeInput: {
-          audio: { data: base64, mimeType: 'audio/pcm;rate=16000' }
-        }
-      }));
+      this.ws.send(JSON.stringify(createRealtimeAudioEnvelope(pcm16)));
+      this.pcmBytesSent += pcm16.byteLength;
+      if (!this.firstWsFrameSent) {
+        this.firstWsFrameSent = true;
+        this.receipt('first_ws_frame', {
+          frameCount: this.pcmFrameCount,
+          bytes: this.pcmBytesSent,
+          sampleRate: PRESENCE_INPUT_SAMPLE_RATE,
+        });
+      }
     };
 
-    // Destino de ganho zero: necessário no Safari pra manter o grafo de áudio vivo
+    this.captureWatchdog = setTimeout(() => {
+      if (this.firstPcmFrameSeen || this.closedByUser) return;
+      this.receipt('capture_watchdog_failed', {
+        contextState: this.captureContext?.state,
+      });
+      this.config.onError('O microfone abriu, mas a captura de áudio não iniciou.');
+      this.setState('error');
+      this.ws?.close(1011, 'capture watchdog failed');
+    }, 2_000);
+
+    // Destino de ganho zero mantém o grafo vivo no WKWebView sem realimentar
+    // o microfone com a própria captura.
     const silentGain = this.captureContext.createGain();
+    this.captureSilentGain = silentGain;
     silentGain.gain.setValueAtTime(0, this.captureContext.currentTime);
     this.captureSource.connect(this.captureProcessor);
     this.captureProcessor.connect(silentGain);
@@ -520,9 +630,14 @@ export class GeminiLiveClient {
   }
 
   private teardownMic() {
+    if (this.captureWatchdog) clearTimeout(this.captureWatchdog);
+    this.captureWatchdog = null;
+    if (this.captureProcessor) this.captureProcessor.port.onmessage = null;
     this.captureProcessor?.disconnect();
+    this.captureSilentGain?.disconnect();
     this.captureSource?.disconnect();
     this.captureProcessor = null;
+    this.captureSilentGain = null;
     this.captureSource = null;
     if (this.captureContext) {
       this.captureContext.close().catch(() => {});
@@ -565,6 +680,21 @@ export class GeminiLiveClient {
 
     const startTime = Math.max(this.nextPlaybackTime, ctx.currentTime);
     source.start(startTime);
+    const markPlaybackStarted = () => {
+      if (this.firstPlaybackStarted) return;
+      this.firstPlaybackStarted = true;
+      this.receipt('playback_started', {
+        turnId: this.activeTurnId ?? undefined,
+        contextState: ctx.state,
+      });
+    };
+    if (ctx.state === 'running') {
+      markPlaybackStarted();
+    } else {
+      void ctx.resume()
+        .then(markPlaybackStarted)
+        .catch((error) => console.warn('[GEMINI_LIVE_PLAYBACK_RESUME_FAILED]', error));
+    }
     this.nextPlaybackTime = startTime + buffer.duration;
 
     this.pendingSources++;

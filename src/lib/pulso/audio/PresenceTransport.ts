@@ -1,8 +1,9 @@
-export type PresenceTransportPreference = 'auto' | 'gemini_live' | 'turn_based';
+export type PresenceTransportPreference = 'gemini_live' | 'turn_based';
 
 export const PRESENCE_TRANSPORT_STORAGE_KEY = 'pulso_presence_transport';
 const PRESENCE_DEVICE_ID_STORAGE_KEY = 'pulso_presence_device_id';
 const GEMINI_DESKTOP_RESTORE_MIGRATION_KEY = 'pulso_presence_transport_migration_v3_gemini_restore';
+const GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY = 'pulso_presence_transport_migration_v4_explicit_gemini';
 
 // NEXT_PUBLIC values are normally inlined by Next during the web build. The
 // Tauri static bundle can lose that replacement at runtime even when the same
@@ -33,7 +34,7 @@ function isDesktopRuntime() {
 }
 
 export function readPresenceTransportPreference(): PresenceTransportPreference {
-  if (typeof window === 'undefined') return 'auto';
+  if (typeof window === 'undefined') return 'gemini_live';
   try {
     // Em 14/10, o desktop foi migrado silenciosamente para turn_based para
     // investigar a Presença local. A experiência aprovada por Fe era Gemini
@@ -49,12 +50,30 @@ export function readPresenceTransportPreference(): PresenceTransportPreference {
     }
 
     const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
-    if (saved === 'gemini_live' || saved === 'turn_based' || saved === 'auto') return saved;
+    // `auto` permitia que uma oscilação do Gemini abrisse silenciosamente o
+    // caminho local pós-Gemini que nunca foi aprovado. No desktop, migra uma
+    // única vez esse estado ambíguo para o contrato explícito Gemini. Uma
+    // escolha deliberada por turn_based continua preservada.
+    if (
+      isDesktopRuntime()
+      && window.localStorage.getItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY) !== '1'
+    ) {
+      window.localStorage.setItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY, '1');
+      if (saved === 'auto' || saved === null) {
+        window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
+        return 'gemini_live';
+      }
+    }
+    if (saved === 'auto') {
+      window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
+      return 'gemini_live';
+    }
+    if (saved === 'gemini_live' || saved === 'turn_based') return saved;
   } catch {
     // Some desktop WebViews can deny storage while the custom asset origin is
     // being initialized. Presence must still open with its intended default.
   }
-  return isDesktopRuntime() ? 'gemini_live' : 'auto';
+  return 'gemini_live';
 }
 
 export function writePresenceTransportPreference(preference: PresenceTransportPreference) {

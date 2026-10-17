@@ -1,5 +1,9 @@
 import { TTSAdapter } from '../TTSAdapter';
-import { GeminiLiveClient, GeminiLiveState } from './GeminiLiveClient';
+import {
+  GeminiLiveClient,
+  GeminiLiveState,
+  PresenceAudioReceipt,
+} from './GeminiLiveClient';
 import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
@@ -25,7 +29,6 @@ export interface VoiceSessionConfig {
   onStateChange: (state: VoiceSessionState) => void;
   onTextReceived: (userText: string, assistantText: string) => void;
   onError: (error: string) => void;
-  onTransportChange?: (message: string) => void;
   /** Mantém a Orbe viva visualmente enquanto o cérebro da Lótus trabalha. */
   onPresenceWorkChange?: (working: boolean) => void;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
@@ -43,12 +46,6 @@ export interface VoiceSessionConfig {
    * de voz; pedidos e ferramentas seguem pelo fluxo canônico da Lótus.
    */
   useGeminiLive?: boolean;
-  /**
-   * Só o modo "automático" pode cair para o transporte local. Quando Fe
-   * escolhe Gemini Live explicitamente, uma falha precisa ficar visível em vez
-   * de reabrir silenciosamente o caminho turn-based pós-Gemini.
-   */
-  allowGeminiFallback?: boolean;
   getGeminiAccessToken?: () => Promise<string | null>;
 }
 
@@ -57,6 +54,9 @@ export interface PresenceNarrationContext {
   requestId?: string;
   kind?: PresenceNarrationKind;
 }
+
+const PRESENCE_AUDIO_RECEIPTS_STORAGE_KEY = 'pulso_presence_audio_receipts_v1';
+const MAX_PRESENCE_AUDIO_RECEIPTS = 120;
 
 const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a voz da Lótus falando com o Fê (Felipe Dutra) em português do Brasil, no modo Presença.
 
@@ -110,7 +110,6 @@ export class VoiceSessionController {
 
   // Modo experimental Gemini Live
   private geminiLiveClient: GeminiLiveClient | null = null;
-  private fallingBackToTurnBased = false;
   private activeGeminiTurnId: string | null = null;
   private activePresenceRequestId: string | null = null;
   private activeTurnBasedTurnId: string | null = null;
@@ -186,6 +185,24 @@ export class VoiceSessionController {
 
   private log(tag: string, details?: any) {
     console.log(`[${tag}]`, details ? JSON.stringify(details) : '');
+  }
+
+  private persistAudioReceipt(receipt: PresenceAudioReceipt) {
+    this.log('PRESENCE_AUDIO_RECEIPT', receipt);
+    if (typeof window === 'undefined') return;
+    try {
+      const existing = JSON.parse(
+        window.localStorage.getItem(PRESENCE_AUDIO_RECEIPTS_STORAGE_KEY) || '[]',
+      );
+      const receipts = Array.isArray(existing) ? existing : [];
+      receipts.push(receipt);
+      window.localStorage.setItem(
+        PRESENCE_AUDIO_RECEIPTS_STORAGE_KEY,
+        JSON.stringify(receipts.slice(-MAX_PRESENCE_AUDIO_RECEIPTS)),
+      );
+    } catch {
+      // A observabilidade falha aberta: nunca bloqueia captura ou reprodução.
+    }
   }
 
   /**
@@ -304,7 +321,7 @@ export class VoiceSessionController {
     if (this.config.useGeminiLive) {
       const started = await this.startGeminiLive();
       if (started) return;
-      if (!this.config.allowGeminiFallback) return;
+      return;
     }
 
     await this.startTurnBased(passedAudioContext);
@@ -775,7 +792,7 @@ export class VoiceSessionController {
         this.transition(mapGeminiLiveState(state));
       },
       onTranscript: (role, text) => {
-        this.log('GEMINI_LIVE_TRANSCRIPT', { role, text });
+        this.log('GEMINI_LIVE_TRANSCRIPT', { role, chars: text.length });
         // onTextReceived espera (userText, assistantText) juntos por turno;
         // nesse modo os dois chegam em eventos separados, então repassamos
         // cada um isoladamente pro chamador decidir como exibir.
@@ -787,13 +804,12 @@ export class VoiceSessionController {
       },
       onError: (message) => {
         this.log('GEMINI_LIVE_ERROR', message);
-        if (this.config.allowGeminiFallback) {
-          void this.fallbackToTurnBased(message);
-          return;
-        }
         this.config.onPresenceWorkChange?.(false);
         this.config.onError(`Conversa em tempo real indisponível: ${message}`);
         this.transition('error');
+      },
+      onAudioReceipt: (receipt) => {
+        this.persistAudioReceipt(receipt);
       },
       onUserTurnStarted: (turnId) => {
         this.activeGeminiTurnId = turnId;
@@ -851,20 +867,6 @@ export class VoiceSessionController {
 
     this.geminiLiveClient.start();
     return true;
-  }
-
-  private async fallbackToTurnBased(reason: string) {
-    if (this.fallingBackToTurnBased) return;
-    this.fallingBackToTurnBased = true;
-    this.log('PRESENCE_TRANSPORT_FALLBACK', { from: 'gemini_live', to: 'turn_based', reason });
-    this.geminiLiveClient?.stop();
-    this.geminiLiveClient = null;
-    this.config.onTransportChange?.('Conversa em tempo real oscilou. Continuei no modo local.');
-    try {
-      await this.startTurnBased();
-    } finally {
-      this.fallingBackToTurnBased = false;
-    }
   }
 
   /**

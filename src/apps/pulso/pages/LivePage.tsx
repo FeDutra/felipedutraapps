@@ -5445,7 +5445,6 @@ ${data.transcription}`, {
       const controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
-        allowGeminiFallback: presenceTransport === 'auto',
         getGeminiAccessToken: async () => {
           const currentUser = await authService.ensurePulsoAuthReady();
           return currentUser.getIdToken();
@@ -5456,10 +5455,6 @@ ${data.transcription}`, {
         },
         onError: (err) => {
           setVoiceError(err);
-        },
-        onTransportChange: (message) => {
-          setToastMessage(message);
-          window.setTimeout(() => setToastMessage(null), 3500);
         },
         onPresenceWorkChange: (working) => {
           setPresenceWorkActive(working);
@@ -7855,7 +7850,6 @@ ${data.transcription}`, {
                   }}
                   className="pulso-select w-full"
                 >
-                  <option value="auto" className="bg-[#121212]">automático — tempo real com fallback local</option>
                   <option value="gemini_live" className="bg-[#121212]">gemini live — priorizar baixa latência</option>
                   <option value="turn_based" className="bg-[#121212]">local — openclaw + kokoro</option>
                 </select>

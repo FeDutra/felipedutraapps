@@ -46,14 +46,27 @@ test('restaura Gemini Live uma única vez no desktop Tauri', () => {
   });
 });
 
-test('mantém o modo automático como padrão fora do desktop', () => {
+test('mantém Gemini explícito como padrão fora do desktop', () => {
   withWindow('https:', () => {
-    assert.equal(readPresenceTransportPreference(), 'auto');
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
   });
 });
 
-test('auto e Gemini usam o relay; local continua explicitamente local', () => {
-  assert.equal(shouldUseGeminiLive('auto'), true);
+test('remove auto do desktop sem sobrescrever escolha local explícita', () => {
+  withWindow('tauri:', (storage) => {
+    // Executa a migração histórica e depois reproduz o estado ambíguo que
+    // permaneceu no iMac antes desta correção.
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
+    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'auto');
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
+    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'gemini_live');
+
+    writePresenceTransportPreference('turn_based');
+    assert.equal(readPresenceTransportPreference(), 'turn_based');
+  });
+});
+
+test('Gemini usa o relay; local continua explicitamente local', () => {
   assert.equal(shouldUseGeminiLive('gemini_live'), true);
   assert.equal(shouldUseGeminiLive('turn_based'), false);
   assert.equal(shouldUseGeminiLive('gemini_live', '?gemini_live=0'), false);

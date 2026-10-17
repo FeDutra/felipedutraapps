@@ -804,3 +804,29 @@ Baseline: `563ae79f` (`origin/main`).
 Reverter somente o commit desta alteração e publicar novamente o Firebase
 Hosting do SHA `563ae79f`. A reversão não muda documentos do Firestore, chaves
 de sessão, agentes do OpenClaw, serviços, credenciais ou computadores físicos.
+
+---
+
+# Rollback — captura AudioWorklet da Presença Gemini (17/10/2026)
+
+Baseline: `e0edd3d7` (`origin/main`).
+
+## Escopo
+
+- substituir somente a captura Gemini da Presença de `ScriptProcessorNode`
+  por `AudioWorklet`, com PCM16 mono a 16 kHz em frames de 20 ms;
+- preservar integralmente a gravação comum e a captura turn-based local;
+- registrar um journal circular local apenas com fases, tempos, bytes e IDs;
+- eliminar o transporte `auto` e qualquer fallback silencioso para o caminho
+  local pós-Gemini;
+- preparar o contexto de reprodução ainda no gesto que abre a Presença.
+
+## Reversão
+
+1. reinstalar o bundle Intel preservado antes da troca em cada Mac;
+2. republicar o Hosting do SHA `e0edd3d7` somente se a web também tiver sido
+   promovida;
+3. não alterar nem reiniciar `pulso-live-voice.service`: esta correção não muda
+   o relay, a chave Gemini ou a autenticação Firebase;
+4. não remover áudio recuperável nem serviços Kokoro/Whisper: a gravação comum
+   e o modo local não fazem parte desta alteração.
