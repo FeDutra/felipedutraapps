@@ -4565,6 +4565,80 @@ export default function LivePage() {
     return decision;
   }, [activeContextNode, sessions, state?.allAreas]);
 
+  /**
+   * Entrada canônica dedicada do Modo Presença.
+   *
+   * O turno de voz não atravessa a maquinaria do compositor de texto
+   * (anexos, reply, textarea e trava de submit). Isso elimina uma fronteira
+   * acidental que podia rejeitar a fala antes mesmo de criar o documento no
+   * Firestore. A mesma função canônica de persistência continua sendo usada,
+   * portanto o diálogo permanece pesquisável e chega à Lótus normalmente.
+   */
+  const handlePresenceCanonicalMessage = React.useCallback(async (
+    text: string,
+    options: {
+      originMode: 'presence';
+      targetContextNode?: PresenceRoutingDecision['target'];
+      presenceRouting?: PresenceRoutingDecision;
+    },
+  ) => {
+    const cleanText = normalizeTranscript(text);
+    if (!cleanText) throw new Error('presence_transcript_empty');
+
+    const target = options.targetContextNode || activeContextNode;
+    if (!target?.contextId) throw new Error('presence_context_missing');
+
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    latencyMapRef.current[requestId] = { t1_client_submit: Date.now() };
+    voiceReplyRequestsRef.current.add(requestId);
+
+    setMessages(previous => [...previous, {
+      id: `user-msg-${requestId}`,
+      sender: 'user',
+      text: cleanText,
+      timestamp: new Date(),
+      contextId: target.contextId,
+      originMode: 'presence',
+      requestId,
+    }]);
+
+    setContextTyping(target.contextId, true);
+    voiceStateRef.current = 'transcribing';
+    setVoiceState('transcribing');
+
+    try {
+      const created = await createPulsoConversationRequest(cleanText, {
+        mode: 'presence',
+        areaId: target.areaId,
+        contextId: target.contextId,
+        chatId: target.chatId,
+        openclawSessionKey: target.openclawSessionKey,
+        requestId,
+        presenceRouting: options.presenceRouting,
+        context: contextStatesMap[target.contextId]?.strongState
+          ? { reusableContext: contextStatesMap[target.contextId].strongState }
+          : undefined,
+      });
+
+      const persistedRequestId = created.id || requestId;
+      if (latencyMapRef.current[persistedRequestId]) {
+        latencyMapRef.current[persistedRequestId].t2_firestore_queued = Date.now();
+      }
+      sessionsService.touchSession(target.contextId);
+      setLastSentRequestsByContext(previous => ({
+        ...previous,
+        [target.contextId]: persistedRequestId,
+      }));
+      latencyRequestCreatedRef.current = Date.now();
+      voiceStateRef.current = 'waiting_lotus';
+      setVoiceState('waiting_lotus');
+
+      return { requestId: persistedRequestId };
+    } finally {
+      setContextTyping(target.contextId, false);
+    }
+  }, [activeContextNode, contextStatesMap, createPulsoConversationRequest]);
+
   const handlePresenceUiIntent = React.useCallback((input: string): LocalPresenceFastPathResult => {
     if (!isMesaOpen || !isMesaDismissUtterance(input)) return { handled: false };
 
@@ -5473,7 +5547,7 @@ ${data.transcription}`, {
           // Apenas adiciona ao log do chat se necessário (geralmente handleSendMessage já cria as mensagens)
         },
         handleSendMessage: async (text, options) => {
-          return handleSendMessage(text, options);
+          return handlePresenceCanonicalMessage(text, options);
         },
         recordLocalFastPath: recordLocalPresenceFastPath,
         handlePresenceUiIntent,
@@ -5492,7 +5566,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handleSendMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;

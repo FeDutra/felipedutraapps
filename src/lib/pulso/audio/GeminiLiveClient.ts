@@ -56,6 +56,7 @@ export type PresenceAudioReceiptPhase =
   | 'playback_started'
   | 'capture_watchdog_failed'
   | 'canonical_dispatch_started'
+  | 'canonical_routing_fallback'
   | 'canonical_request_created'
   | 'canonical_dispatch_failed'
   | 'canonical_result_received';
@@ -70,6 +71,8 @@ export interface PresenceAudioReceipt {
   bytes?: number;
   sampleRate?: number;
   contextState?: AudioContextState;
+  failureStage?: 'routing' | 'canonical_dispatch';
+  failureCode?: string;
 }
 
 type NarrationKind = 'acknowledgement' | 'checkpoint' | 'result';
@@ -221,10 +224,11 @@ export class GeminiLiveClient {
   public recordCanonicalReceipt(
     phase: Extract<PresenceAudioReceiptPhase,
       | 'canonical_dispatch_started'
+      | 'canonical_routing_fallback'
       | 'canonical_request_created'
       | 'canonical_dispatch_failed'
       | 'canonical_result_received'>,
-    details: Pick<PresenceAudioReceipt, 'turnId' | 'requestId'> = {},
+    details: Pick<PresenceAudioReceipt, 'turnId' | 'requestId' | 'failureStage' | 'failureCode'> = {},
   ) {
     this.receipt(phase, details);
   }

@@ -847,7 +847,22 @@ export class VoiceSessionController {
           // handleSendMessage persiste o pedido e devolve antes do OpenClaw
           // concluir. A resposta real chega pelo listener canônico do
           // Firestore; LivePage então chama narratePresenceResult().
-          const presenceRouting = await this.config.routePresenceIntent?.(userText);
+          let presenceRouting: PresenceRoutingDecision | undefined;
+          try {
+            presenceRouting = await this.config.routePresenceIntent?.(userText);
+          } catch (routingError: unknown) {
+            // Roteamento é uma otimização. Uma falha nele jamais pode engolir
+            // uma fala já reconhecida; o pedido segue para a sessão ativa.
+            this.log(
+              'GEMINI_LIVE_ROUTING_FALLBACK',
+              routingError instanceof Error ? routingError.message : String(routingError),
+            );
+            this.geminiLiveClient?.recordCanonicalReceipt('canonical_routing_fallback', {
+              turnId,
+              failureStage: 'routing',
+              failureCode: 'route_fallback',
+            });
+          }
           const rawDispatch = await this.config.handleSendMessage(userText, {
             originMode: 'presence',
             targetContextNode: presenceRouting?.target,
@@ -870,7 +885,11 @@ export class VoiceSessionController {
           }
         } catch (err: any) {
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
-          this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', { turnId });
+          this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', {
+            turnId,
+            failureStage: 'canonical_dispatch',
+            failureCode: err?.name || 'dispatch_error',
+          });
           this.advanceTurn({ type: 'turn_failed', turnId });
           this.config.onPresenceWorkChange?.(false);
           this.geminiLiveClient?.sendResultText('Tive um erro tentando processar isso.', turnId);

@@ -859,3 +859,28 @@ Baseline: `5dd72c76` (`origin/main`).
 4. preservar Firestore e histórico: os pedidos de voz já registrados continuam
    sendo mensagens canônicas válidas após a reversão;
 5. não tocar na gravação comum, Kokoro ou Whisper, pois estão fora do escopo.
+
+---
+
+# Rollback — despacho canônico dedicado da Presença (17/10/2026)
+
+Baseline: `e59c9cb8` (`origin/main`).
+
+## Escopo
+
+- separar o turno de voz do compositor de texto, anexos e replies;
+- criar o pedido pesquisável diretamente pela persistência canônica já usada
+  pela PULSO;
+- manter o roteamento cognitivo como otimização não bloqueante: em caso de
+  falha, preservar a sessão ativa e enviar o pedido;
+- registrar estágio e código seguro quando o despacho falhar;
+- não alterar captura, Gemini Live, relay, gravação comum, Kokoro ou Whisper.
+
+## Reversão
+
+1. reinstalar no iMac o bundle preservado antes desta troca;
+2. republicar o Hosting do SHA `e59c9cb8` se a web também tiver sido promovida;
+3. não alterar nem reiniciar `pulso-live-voice.service`, pois o protocolo de
+   áudio não muda nesta correção;
+4. preservar os pedidos de voz já criados no Firestore;
+5. manter MacBook e iPhone fora da reversão desta etapa.
