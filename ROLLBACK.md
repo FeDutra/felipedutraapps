@@ -965,3 +965,19 @@ Baseline: `c46012ea` (`origin/main`).
 3. não reiniciar `pulso-live-voice.service`, pois o relay não muda;
 4. preservar todos os registros de voz já gravados no Firestore;
 5. manter MacBook e iPhone fora da reversão desta etapa.
+# iOS shell + mobile recording recovery — 17/10/2026
+
+- Baseline rejected: `85259220` / build `2026101702`.
+- Failure: `tauri.ios.conf.json` launched `pulso/live/index.html` directly, so
+  Next received `/pulso/live/index.html` instead of the canonical
+  `/pulso/live` pathname. The operational PULSO menu wrapped the Lótus
+  surface, hydration/session context was incomplete, and the app no longer
+  matched the previously approved mobile shell.
+- Independent recording failure: ordinary iOS recording entered the
+  desktop-only durable Rust spool and invoked `voice_recording_begin`, which
+  is intentionally unavailable in the mobile command set.
+- Recovery: remove the iOS window URL override so Tauri boots at the root and
+  follows the canonical client redirect; restrict the durable recording spool
+  to `isTauriDesktopRuntime()` so iOS uses MediaRecorder + remote STT.
+- Rollback: revert the recovery commit only. Do not restore build
+  `2026101702` to a physical phone.

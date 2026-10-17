@@ -5015,7 +5015,10 @@ export default function LivePage() {
       });
       microphoneStreamRef.current = stream;
 
-      const tauriRecordingOnce = isTauriRuntime() && mode === 'recording_once';
+      // The durable Rust spool is a desktop-only capability. On iOS the
+      // command is intentionally absent, so ordinary voice recording must
+      // stay on the WebKit MediaRecorder path and upload the captured blob.
+      const tauriRecordingOnce = isTauriDesktopRuntime() && mode === 'recording_once';
       let activeRecordingId: string | null = null;
       let activeArtifactPath: string | null = null;
       recordingPcmSpoolBufferRef.current = [];

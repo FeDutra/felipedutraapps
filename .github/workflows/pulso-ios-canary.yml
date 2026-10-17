@@ -41,6 +41,19 @@ jobs:
           grep -F 'com.felipedutraapps.pulso.ios.canary' src-tauri/tauri.ios.conf.json
           grep -F 'browserLocalPersistence' src/shared/lib/firebase/client.ts
           grep -F 'A autenticação demorou mais do que o esperado' src/shared/services/authService.ts
+          # iOS must boot through the canonical root redirect. Pointing the
+          # WKWebView at pulso/live/index.html changes the pathname to an
+          # internal static-file route, mounts the operational menu around
+          # Lótus and breaks the mobile shell/hydration contract.
+          if grep -F 'pulso/live/index.html' src-tauri/tauri.ios.conf.json; then
+            echo 'O iOS aponta para a rota estática interna em vez do shell móvel canônico.' >&2
+            exit 1
+          fi
+          grep -F "router.replace('/pulso/live/');" src/app/page.tsx
+          grep -F "const isLivePage = cleanPathname === '/pulso/live';" src/app/pulso/layout.tsx
+          grep -F "navigator.mediaDevices.getUserMedia" src/apps/pulso/pages/LivePage.tsx
+          grep -F "window.MediaRecorder" src/apps/pulso/pages/LivePage.tsx
+          grep -F "const tauriRecordingOnce = isTauriDesktopRuntime() && mode === 'recording_once';" src/apps/pulso/pages/LivePage.tsx
           if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' src src-tauri --exclude-dir=target --exclude='*.md'; then
             echo 'A interface errada do antigo cliente iOS apareceu na fonte.' >&2
             exit 1
@@ -50,7 +63,7 @@ jobs:
         run: npx tauri ios init --ci
 
       - name: Build unsigned PULSO iOS app
-        run: npx tauri ios build --ci --no-sign --build-number 2026101702
+        run: npx tauri ios build --ci --no-sign --build-number 2026101703
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
 
@@ -67,7 +80,7 @@ jobs:
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" 2>/dev/null || true)"
           test "$BUNDLE_NAME" = 'PULSO'
           test -z "$DISPLAY_NAME" || test "$DISPLAY_NAME" = 'PULSO'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.1.2026101702'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.1.2026101703'
           test "$(/usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes:0' "$APP/Info.plist")" = 'audio'
           if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' "$APP"; then
             echo 'O IPA contém a interface errada do antigo cliente iOS.' >&2
@@ -84,7 +97,7 @@ jobs:
 
       - name: Build and capture iPhone simulator proof
         run: |
-          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026101702
+          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026101703
           SIM_APP="$(find src-tauri/gen/apple/build -type d -name 'PULSO.app' -path '*sim*' -print -quit)"
           test -n "$SIM_APP"
           UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(d["udid"] for devices in data["devices"].values() for d in devices if d["name"].startswith("iPhone") and d["isAvailable"]))')"
