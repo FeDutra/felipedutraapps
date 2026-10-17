@@ -7102,7 +7102,9 @@ ${data.transcription}`, {
       
           {/* Mesa Panel (Split Screen) - Global Right Half */}
           {isMesaOpen && activeMesaArtifact && (
-            <div className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
+            <div
+              onClick={(event) => event.stopPropagation()}
+              className={`fixed top-20 md:top-24 right-0 md:right-8 bottom-4 z-[70] transition-all duration-500 ease-in-out pointer-events-auto flex flex-col ${
               windowWidth < 768 
                 ? `left-0 px-4 w-full ${isMesaCollapsed ? 'transform translate-x-full pointer-events-none' : ''}` 
                 : `w-[calc(50vw-2rem)] md:w-[calc(50vw-3rem)] ${isMesaCollapsed ? 'transform translate-x-[calc(100%-12px)] md:translate-x-[calc(100%-16px)]' : ''}`

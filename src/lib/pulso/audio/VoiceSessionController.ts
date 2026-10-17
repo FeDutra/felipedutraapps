@@ -64,7 +64,7 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a voz da Lótus falando com o F
 Regra mais importante: você NÃO tem acesso a nenhuma informação real, ferramenta, memória ou dado — quem responde de verdade é outro sistema, por trás. Você nunca inventa fatos nem responde perguntas com conteúdo substantivo por conta própria.
 
 Seu papel tem três partes:
-1. Ao ouvir o microfone, responda imediatamente com UMA frase curta de presença. Se for uma saudação puramente social, responda naturalmente. Se houver pedido, confirme a ação concreta (por exemplo: “vou olhar sua agenda”) sem fornecer fatos, resultados ou conteúdo substantivo. Nunca diga que não consegue fazer algo, não cite limitações, não prometa prazo e não repita o pedido inteiro. A PULSO envia toda fala para a Lótus real em paralelo.
+1. Ao ouvir o microfone, responda imediatamente com UMA frase curta de presença. Se for uma saudação puramente social, responda naturalmente. Se houver pedido simples, confirme a ação concreta (por exemplo: “vou olhar sua agenda”). Se o pedido exigir análise, pesquisa, síntese ou decisão, diga apenas “Só um instante, vou olhar isso com cuidado.” Não forneça fatos, resultados ou conteúdo substantivo nessa primeira fala. Nunca diga que não consegue fazer algo, não cite limitações, não prometa prazo e não repita o pedido inteiro. A PULSO encaminha a fala ao executor correto em paralelo.
 2. Quando receber uma mensagem começando com "[CONFIRMAÇÃO]", diga UMA frase curta, concreta e adulta confirmando que começou. Não responda ao pedido, não cite limitações, não infantilize, não seja efusiva, não prometa prazo e não repita o pedido inteiro.
 3. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre só a mudança concreta de fase, em uma frase, e volte a esperar sem soar como se tivesse terminado.
 
@@ -113,6 +113,7 @@ export class VoiceSessionController {
   private geminiLiveClient: GeminiLiveClient | null = null;
   private activeGeminiTurnId: string | null = null;
   private activePresenceRequestId: string | null = null;
+  private deepFallbackCheckpointTimer: ReturnType<typeof setTimeout> | null = null;
   private activeTurnBasedTurnId: string | null = null;
   private readonly turnMachine = new PresenceTurnMachine();
 
@@ -180,7 +181,10 @@ export class VoiceSessionController {
     const capability = decision.quickReadCapability;
     if (!capability || !this.geminiLiveClient) return null;
     const startedAt = performance.now();
-    const result = await this.geminiLiveClient.requestQuickRead(capability, this.localDateParts());
+    const result = await this.geminiLiveClient.requestQuickRead(capability, {
+      ...this.localDateParts(),
+      ...decision.quickReadArgs,
+    });
     if (!result.ok || !result.responseText) {
       this.log('PRESENCE_QUICK_READ_FAILED', { capability, errorCode: result.errorCode });
       return null;
@@ -220,6 +224,24 @@ export class VoiceSessionController {
       activeTurnId: result.state.activeTurnId,
     });
     return result;
+  }
+
+  private clearDeepFallbackCheckpoint() {
+    if (this.deepFallbackCheckpointTimer) clearTimeout(this.deepFallbackCheckpointTimer);
+    this.deepFallbackCheckpointTimer = null;
+  }
+
+  private scheduleDeepFallbackCheckpoint(turnId: string) {
+    this.clearDeepFallbackCheckpoint();
+    this.deepFallbackCheckpointTimer = setTimeout(() => {
+      this.deepFallbackCheckpointTimer = null;
+      if (turnId !== this.activeGeminiTurnId) return;
+      const accepted = this.geminiLiveClient?.sendCheckpointText(
+        'Ainda estou cruzando as informações.',
+        turnId,
+      ) ?? false;
+      if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
+    }, 12_000);
   }
 
   private log(tag: string, details?: any) {
@@ -852,6 +874,7 @@ export class VoiceSessionController {
         this.persistAudioReceipt(receipt);
       },
       onUserTurnStarted: (turnId) => {
+        this.clearDeepFallbackCheckpoint();
         this.activeGeminiTurnId = turnId;
         this.activePresenceRequestId = null;
         this.advanceTurn({ type: 'turn_opened', turnId });
@@ -915,8 +938,11 @@ export class VoiceSessionController {
             }
           }
 
-          if (workDecision.kind === 'deep_work' || workDecision.kind === 'quick_read') {
-            this.geminiLiveClient?.playDeepWorkCue(turnId);
+          // O pulso sonoro comunica explicitamente a mudança para trabalho
+          // profundo. Consultas rápidas devem permanecer silenciosas e voltar
+          // em poucos segundos, sem sugerir uma escalada que não aconteceu.
+          if (workDecision.kind === 'deep_work') {
+            this.geminiLiveClient?.startDeepWorkPulse(turnId);
           }
 
           this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_started', { turnId });
@@ -954,6 +980,7 @@ export class VoiceSessionController {
               turnId,
               requestId: dispatch.requestId,
             });
+            this.scheduleDeepFallbackCheckpoint(turnId);
           } else if (!dispatch?.responseText) {
             this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', { turnId });
             this.advanceTurn({ type: 'turn_failed', turnId });
@@ -990,12 +1017,16 @@ export class VoiceSessionController {
     const disposition = this.advanceTurn({ type: 'checkpoint_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
     const accepted = this.geminiLiveClient?.sendCheckpointText(checkpointText, turnId) ?? false;
-    if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
+    if (accepted) {
+      this.clearDeepFallbackCheckpoint();
+      this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
+    }
     return accepted;
   }
 
   /** Entrega à voz um resultado já produzido pela Lótus/OpenClaw. */
   public narratePresenceResult(resultText: string, requestId?: string) {
+    this.clearDeepFallbackCheckpoint();
     const turnId = requestId
       ? this.turnMachine.findTurnIdByRequestId(requestId)
       : this.activeGeminiTurnId ?? undefined;
@@ -1019,6 +1050,7 @@ export class VoiceSessionController {
     this.log('VOICE_SESSION_STOPPED');
     this.advanceTurn({ type: 'session_stopped' });
     this.transition('idle');
+    this.clearDeepFallbackCheckpoint();
 
     if (this.geminiLiveClient) {
       this.geminiLiveClient.stop();

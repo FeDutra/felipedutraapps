@@ -4,7 +4,7 @@ import { classifyPresenceWork, PresenceWorkKind } from '../presence/PresenceWork
 
 export interface LocalPresenceFastPathResult {
   handled: boolean;
-  action?: 'open_app' | 'close_mesa' | 'local_read' | 'quick_read' | 'social_exchange';
+  action?: 'open_app' | 'play_music' | 'close_mesa' | 'local_read' | 'quick_read' | 'social_exchange';
   target?: string;
   responseText?: string;
   durationMs?: number;
@@ -96,11 +96,24 @@ export async function executeLocalPresenceFastPath(input: string): Promise<Local
   }
 
   const decision = classifyPresenceWork(input);
-  if (decision.kind !== 'local_reflex' || decision.localAction !== 'open_app' || !decision.target) {
+  if (decision.kind !== 'local_reflex' || !decision.target) {
     return { handled: false };
   }
 
   const startedAt = performance.now();
+  if (decision.localAction === 'play_music') {
+    const result = await localActions.playMusic(decision.target);
+    return {
+      handled: true,
+      action: 'play_music',
+      target: decision.target,
+      responseText: result,
+      durationMs: Math.round(performance.now() - startedAt),
+      routeKind: 'local_reflex',
+      capability: 'play_music',
+    };
+  }
+  if (decision.localAction !== 'open_app') return { handled: false };
   const result = await localActions.openApp(decision.target);
   const durationMs = Math.round(performance.now() - startedAt);
   const failed = result.toLocaleLowerCase('pt-BR').includes('problema');

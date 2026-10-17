@@ -21,16 +21,48 @@ test('não executa parcialmente comando composto', () => {
   assert.equal(decision.kind, 'deep_work');
 });
 
-test('classifica agenda de hoje como consulta rápida tipada', () => {
+test('classifica agenda como consulta rápida tipada', () => {
   for (const phrase of [
     'Quais são os meus compromissos de hoje?',
     'Vê minha agenda hoje para mim',
     'O que eu tenho hoje?',
   ]) {
-    const decision = classifyPresenceWork(phrase);
+    const decision = classifyPresenceWork(phrase, new Date(2026, 9, 17, 12));
     assert.equal(decision.kind, 'quick_read', phrase);
-    assert.equal(decision.quickReadCapability, 'calendar_today', phrase);
+    assert.equal(decision.quickReadCapability, 'calendar_range', phrase);
+    assert.deepEqual(decision.quickReadArgs, { startDate: '2026-10-17', endDate: '2026-10-17' });
   }
+});
+
+test('entende intervalo de hoje até quarta-feira', () => {
+  const decision = classifyPresenceWork(
+    'Quais são meus compromissos de hoje até quarta-feira?',
+    new Date(2026, 9, 17, 12),
+  );
+  assert.equal(decision.kind, 'quick_read');
+  assert.equal(decision.quickReadCapability, 'calendar_range');
+  assert.deepEqual(decision.quickReadArgs, { startDate: '2026-10-17', endDate: '2026-10-21' });
+});
+
+test('classifica leitura recente do WhatsApp sem ferramenta genérica', () => {
+  const named = classifyPresenceWork('Veja para mim as cinco últimas mensagens do Rodrigo no WhatsApp');
+  assert.equal(named.kind, 'quick_read');
+  assert.equal(named.quickReadCapability, 'whatsapp_latest');
+  assert.equal(named.quickReadArgs?.contactName, 'rodrigo');
+  assert.equal(named.quickReadArgs?.limit, 5);
+
+  const global = classifyPresenceWork('Leia minhas 3 últimas mensagens no WhatsApp');
+  assert.equal(global.kind, 'quick_read');
+  assert.equal(global.quickReadArgs?.contactName, undefined);
+  assert.equal(global.quickReadArgs?.limit, 3);
+});
+
+test('mídia volta ao reflexo local depois de trabalho profundo', () => {
+  assert.equal(classifyPresenceWork('Analise meu dia e proponha prioridades').kind, 'deep_work');
+  const next = classifyPresenceWork('Toca Bon Iver no Apple Music');
+  assert.equal(next.kind, 'local_reflex');
+  assert.equal(next.localAction, 'play_music');
+  assert.equal(next.target, 'bon iver');
 });
 
 test('escrita em agenda sempre exige Lótus', () => {

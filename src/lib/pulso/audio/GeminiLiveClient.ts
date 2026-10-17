@@ -140,6 +140,10 @@ export class GeminiLiveClient {
   private firstWsFrameSent = false;
   private captureFramesSuppressedUntil = 0;
   private deepCueSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
+  private deepWorkPulseTimer: ReturnType<typeof setTimeout> | null = null;
+  private deepWorkPulseTurnId: string | null = null;
+  private deepWorkPulseStartedAt = 0;
+  private deepWorkPulsePaused = false;
 
   // Reprodução de áudio (PCM 24kHz vindo do Gemini)
   private playbackContext: AudioContext | null = null;
@@ -147,6 +151,7 @@ export class GeminiLiveClient {
   private pendingSources = 0;
   private turnCompletePending = false;
   private playbackSources = new Set<AudioBufferSourceNode>();
+  private deepWorkPulseSources = new Set<AudioBufferSourceNode>();
   private playbackGeneration = 0;
   private firstOutputAudioSeen = false;
   private firstPlaybackStarted = false;
@@ -176,12 +181,15 @@ export class GeminiLiveClient {
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null;
   private lastNarrationCompletedAt = 0;
   private lastCheckpointSpokenAt = 0;
-  private checkpointSpokenThisTurn = false;
+  private checkpointSpokenCount = 0;
 
   // Equivale ao soft timeout recomendado para conversa: presença cedo, sem
   // virar relógio. O espaçamento longo vale apenas entre marcos posteriores.
-  private static readonly FIRST_CHECKPOINT_DELAY_MS = 12_000;
-  private static readonly MIN_CHECKPOINT_GAP_MS = 10_000;
+  private static readonly FIRST_CHECKPOINT_DELAY_MS = 6_000;
+  private static readonly MIN_CHECKPOINT_GAP_MS = 12_000;
+  private static readonly MAX_SPOKEN_CHECKPOINTS = 3;
+  private static readonly DEEP_PULSE_GAP_MS = 2_900;
+  private static readonly DEEP_PULSE_MAX_MS = 90_000;
 
   private closedByUser = false;
   private reconnectAttempts = 0;
@@ -444,6 +452,9 @@ export class GeminiLiveClient {
         }
         if (interruptedKind === 'result') {
           this.awaitingResult = false;
+          this.stopDeepWorkPulse();
+        } else if (interruptedKind === 'checkpoint') {
+          this.resumeDeepWorkPulse();
         }
         this.narrationQueue = [];
         this.deferredCheckpointText = null;
@@ -488,6 +499,7 @@ export class GeminiLiveClient {
           this.narrationInFlight = null;
           this.turnCompletePending = true;
           this.maybeReturnToListening();
+          this.resumeDeepWorkPulse();
           this.flushNarrationQueue();
         } else if (this.narrationInFlight?.kind === 'acknowledgement') {
           this.narrationInFlight = null;
@@ -543,7 +555,7 @@ export class GeminiLiveClient {
     if (userText) {
       const turnId = this.activeTurnId || this.createTurnId();
       this.awaitingResult = true;
-      this.checkpointSpokenThisTurn = false;
+      this.checkpointSpokenCount = 0;
       this.lastCheckpointSpokenAt = 0;
       // Toda fala entra no fluxo canônico, inclusive saudações. O áudio curto
       // já começou a tocar em streaming; não geramos uma segunda confirmação.
@@ -562,11 +574,12 @@ export class GeminiLiveClient {
   private beginUserTurn() {
     const turnId = this.createTurnId();
     this.activeTurnId = turnId;
+    this.stopDeepWorkPulse();
     this.awaitingResult = false;
     this.narrationQueue = [];
     this.narrationInFlight = null;
     this.deferredCheckpointText = null;
-    this.checkpointSpokenThisTurn = false;
+    this.checkpointSpokenCount = 0;
     this.lastCheckpointSpokenAt = 0;
     if (this.checkpointTimer) {
       clearTimeout(this.checkpointTimer);
@@ -716,23 +729,27 @@ export class GeminiLiveClient {
    * geração de voz. Os frames do microfone são brevemente suprimidos para o
    * próprio sinal não voltar como fala do usuário.
    */
-  public playDeepWorkCue(turnId = this.activeTurnId) {
-    if (!turnId || turnId !== this.activeTurnId) return false;
+  private emitDeepWorkPulse(turnId: string) {
+    if (turnId !== this.activeTurnId || !this.awaitingResult || this.deepWorkPulsePaused) return;
+    if (this.narrationInFlight || this.pendingSources > 0 || this.turnCompletePending) {
+      this.scheduleDeepWorkPulse(700);
+      return;
+    }
     const ctx = this.ensurePlaybackContext();
     const now = Math.max(ctx.currentTime, this.nextPlaybackTime) + 0.03;
     const waitMs = Math.max(0, (now - ctx.currentTime) * 1_000);
     if (this.deepCueSuppressionTimer) clearTimeout(this.deepCueSuppressionTimer);
     this.deepCueSuppressionTimer = setTimeout(() => {
       this.deepCueSuppressionTimer = null;
-      this.captureFramesSuppressedUntil = Date.now() + 540;
+      this.captureFramesSuppressedUntil = Date.now() + 760;
     }, waitMs);
 
-    const durationSeconds = 0.48;
+    const durationSeconds = 0.62;
     const sampleRate = 24_000;
     const sampleCount = Math.round(durationSeconds * sampleRate);
     const buffer = ctx.createBuffer(1, sampleCount, sampleRate);
     const channel = buffer.getChannelData(0);
-    const notes = [196, 293.66, 392];
+    const notes = [174.61, 261.63, 392];
     for (let index = 0; index < sampleCount; index += 1) {
       const time = index / sampleRate;
       const attack = Math.min(1, time / 0.025);
@@ -742,17 +759,83 @@ export class GeminiLiveClient {
         if (delayedTime === 0 && time < noteIndex * 0.045) return sum;
         return sum + Math.sin(2 * Math.PI * frequency * delayedTime) * (noteIndex === 0 ? 0.55 : 0.22);
       }, 0);
-      channel[index] = chord * attack * release * release * 0.09;
+      const breath = 0.82 + Math.sin(2 * Math.PI * 1.7 * time) * 0.18;
+      channel[index] = chord * attack * release * release * breath * 0.12;
     }
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
     this.playbackSources.add(source);
-    source.onended = () => this.playbackSources.delete(source);
+    this.deepWorkPulseSources.add(source);
+    source.onended = () => {
+      this.playbackSources.delete(source);
+      this.deepWorkPulseSources.delete(source);
+    };
     source.start(now);
     this.nextPlaybackTime = now + durationSeconds;
     void ctx.resume().catch(() => {});
+    this.scheduleDeepWorkPulse(GeminiLiveClient.DEEP_PULSE_GAP_MS);
+  }
+
+  private scheduleDeepWorkPulse(delayMs: number) {
+    if (this.deepWorkPulseTimer) clearTimeout(this.deepWorkPulseTimer);
+    const turnId = this.deepWorkPulseTurnId;
+    if (!turnId || this.deepWorkPulsePaused) return;
+    if (Date.now() - this.deepWorkPulseStartedAt >= GeminiLiveClient.DEEP_PULSE_MAX_MS) return;
+    this.deepWorkPulseTimer = setTimeout(() => {
+      this.deepWorkPulseTimer = null;
+      this.emitDeepWorkPulse(turnId);
+    }, delayMs);
+  }
+
+  public startDeepWorkPulse(turnId = this.activeTurnId) {
+    if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
+    this.stopDeepWorkPulse();
+    this.deepWorkPulseTurnId = turnId;
+    this.deepWorkPulseStartedAt = Date.now();
+    this.deepWorkPulsePaused = false;
+    this.emitDeepWorkPulse(turnId);
     return true;
+  }
+
+  /** Compatibilidade com recibos/testes anteriores. */
+  public playDeepWorkCue(turnId = this.activeTurnId) {
+    return this.startDeepWorkPulse(turnId);
+  }
+
+  private pauseDeepWorkPulse() {
+    if (!this.deepWorkPulseTurnId) return;
+    this.deepWorkPulsePaused = true;
+    if (this.deepWorkPulseTimer) clearTimeout(this.deepWorkPulseTimer);
+    this.deepWorkPulseTimer = null;
+    for (const source of this.deepWorkPulseSources) {
+      try { source.stop(); } catch {}
+      try { source.disconnect(); } catch {}
+      this.playbackSources.delete(source);
+    }
+    this.deepWorkPulseSources.clear();
+    if (this.playbackContext) this.nextPlaybackTime = this.playbackContext.currentTime;
+  }
+
+  private resumeDeepWorkPulse() {
+    if (!this.deepWorkPulseTurnId || !this.awaitingResult) return;
+    this.deepWorkPulsePaused = false;
+    this.scheduleDeepWorkPulse(1_400);
+  }
+
+  private stopDeepWorkPulse() {
+    if (this.deepWorkPulseTimer) clearTimeout(this.deepWorkPulseTimer);
+    this.deepWorkPulseTimer = null;
+    this.deepWorkPulseTurnId = null;
+    this.deepWorkPulseStartedAt = 0;
+    this.deepWorkPulsePaused = false;
+    for (const source of this.deepWorkPulseSources) {
+      try { source.stop(); } catch {}
+      try { source.disconnect(); } catch {}
+      this.playbackSources.delete(source);
+    }
+    this.deepWorkPulseSources.clear();
+    if (this.playbackContext) this.nextPlaybackTime = this.playbackContext.currentTime;
   }
 
   public requestQuickRead(
@@ -847,7 +930,7 @@ export class GeminiLiveClient {
    */
   private scheduleDeferredCheckpoint() {
     if (!this.deferredCheckpointText || !this.awaitingResult) return;
-    if (this.checkpointSpokenThisTurn) return;
+    if (this.checkpointSpokenCount >= GeminiLiveClient.MAX_SPOKEN_CHECKPOINTS) return;
     if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight?.kind === 'result') return;
     // A confirmação inicial ainda está tocando: guarda o marco e só calcula
     // sua janela depois da fala terminar de fato.
@@ -866,13 +949,14 @@ export class GeminiLiveClient {
       const text = this.deferredCheckpointText;
       this.deferredCheckpointText = null;
       if (!text || !this.awaitingResult) return;
-      if (this.checkpointSpokenThisTurn) return;
+      if (this.checkpointSpokenCount >= GeminiLiveClient.MAX_SPOKEN_CHECKPOINTS) return;
       if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight?.kind === 'result') return;
       const turnId = this.activeTurnId;
       if (!turnId) return;
       this.narrationQueue.push({ kind: 'checkpoint', text, turnId });
       this.lastCheckpointSpokenAt = Date.now();
-      this.checkpointSpokenThisTurn = true;
+      this.checkpointSpokenCount += 1;
+      this.pauseDeepWorkPulse();
       this.flushNarrationQueue();
     }, delay);
   }
@@ -929,6 +1013,7 @@ export class GeminiLiveClient {
   public sendResultText(resultText: string, turnId = this.activeTurnId) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
+    this.stopDeepWorkPulse();
     this.deferredCheckpointText = null;
     if (this.checkpointTimer) {
       clearTimeout(this.checkpointTimer);
@@ -948,6 +1033,7 @@ export class GeminiLiveClient {
   public completeResultSilently(turnId = this.activeTurnId) {
     if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
     this.awaitingResult = false;
+    this.stopDeepWorkPulse();
     this.deferredCheckpointText = null;
     this.narrationQueue = [];
     if (this.checkpointTimer) {
@@ -970,7 +1056,7 @@ export class GeminiLiveClient {
     if (!turnId || turnId !== this.activeTurnId) return false;
     const text = this.normalizeCheckpoint(checkpointText);
     if (!text || !this.awaitingResult) return false;
-    if (this.checkpointSpokenThisTurn) return false;
+    if (this.checkpointSpokenCount >= GeminiLiveClient.MAX_SPOKEN_CHECKPOINTS) return false;
 
     const queuedCheckpoint = this.narrationQueue.find(item => item.kind === 'checkpoint');
     if (queuedCheckpoint) {
@@ -996,6 +1082,7 @@ export class GeminiLiveClient {
     this.inputTurnFinalizeTimer = null;
     if (this.deepCueSuppressionTimer) clearTimeout(this.deepCueSuppressionTimer);
     this.deepCueSuppressionTimer = null;
+    this.stopDeepWorkPulse();
     this.deferredCheckpointText = null;
     for (const [requestId, pending] of this.pendingQuickReads) {
       clearTimeout(pending.timer);

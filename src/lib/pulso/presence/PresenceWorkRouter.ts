@@ -1,15 +1,24 @@
 export type PresenceWorkKind = 'social' | 'local_reflex' | 'quick_read' | 'deep_work';
 
-export type PresenceQuickReadCapability = 'calendar_today';
+export type PresenceQuickReadCapability = 'calendar_range' | 'whatsapp_latest';
+
+export interface PresenceQuickReadArgs {
+  startDate?: string;
+  endDate?: string;
+  contactName?: string;
+  limit?: number;
+  direction?: 'received' | 'all';
+}
 
 export interface PresenceWorkDecision {
   kind: PresenceWorkKind;
   normalizedUtterance: string;
   reason: string;
-  localAction?: 'open_app';
+  localAction?: 'open_app' | 'play_music';
   target?: string;
   spokenTarget?: string;
   quickReadCapability?: PresenceQuickReadCapability;
+  quickReadArgs?: PresenceQuickReadArgs;
 }
 
 export interface PresenceRecordedRequest {
@@ -90,6 +99,18 @@ function resolveOpenApp(input: string) {
   return APP_ALIASES.find(app => app.aliases.includes(requested)) || null;
 }
 
+function resolveMusicRequest(input: string) {
+  const unwrapped = stripLeadingWrappers(input);
+  const match = unwrapped.match(/^(?:toca|toque|coloca|coloque|poe|reproduz|reproduza)(?:\s+(?:pra mim|para mim))?\s+(.+?)(?:\s+(?:no|na)\s+(?:apple\s+music|musica|music))?$/);
+  if (!match) return null;
+  const query = match[1]
+    .replace(/^(?:a musica|a playlist|o artista|musica|playlist)\s+/g, '')
+    .replace(/\s+(?:pra mim|para mim|por favor)$/g, '')
+    .trim();
+  if (!query || /\b(?:e depois|e tambem)\b/.test(query)) return null;
+  return query;
+}
+
 function isSocialOnly(input: string) {
   if (!input) return false;
   let remainder = input;
@@ -97,7 +118,12 @@ function isSocialOnly(input: string) {
   return remainder.replace(/\s+/g, ' ').trim().length === 0;
 }
 
-function isCalendarTodayRead(input: string) {
+function isCompoundOperationalRequest(input: string) {
+  const actions = input.match(/\b(?:abre|abra|abrir|toca|toque|coloca|coloque|ve|veja|le|leia|mostra|consulta|analisa|organiza)\b/g) || [];
+  return actions.length > 1 && /\b(?:e|depois|tambem)\b/.test(input);
+}
+
+function isCalendarRead(input: string) {
   const asksCalendar = /\b(?:agenda|compromisso|compromissos|evento|eventos)\b/.test(input)
     || /\bo que (?:eu )?tenho hoje\b/.test(input);
   const readVerb = /\b(?:qual|quais|ve|veja|ver|olha|mostra|diz|tenho|consulta|consulte)\b/.test(input);
@@ -105,17 +131,95 @@ function isCalendarTodayRead(input: string) {
   return asksCalendar && readVerb && !isWrite;
 }
 
+const WEEKDAYS: Record<string, number> = {
+  domingo: 0,
+  segunda: 1,
+  'segunda feira': 1,
+  terca: 2,
+  'terca feira': 2,
+  quarta: 3,
+  'quarta feira': 3,
+  quinta: 4,
+  'quinta feira': 4,
+  sexta: 5,
+  'sexta feira': 5,
+  sabado: 6,
+};
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + days, 12, 0, 0, 0);
+  return next;
+}
+
+function resolveCalendarRange(input: string, referenceDate: Date) {
+  let endOffset = 0;
+  if (/\bamanha\b/.test(input) && !/\bhoje\b/.test(input)) {
+    return { startDate: formatLocalDate(addDays(referenceDate, 1)), endDate: formatLocalDate(addDays(referenceDate, 1)) };
+  }
+
+  const nextDays = input.match(/\b(?:proximos?|pelos?)\s+(\d{1,2})\s+dias\b/);
+  if (nextDays) endOffset = Math.min(30, Math.max(0, Number(nextDays[1]) - 1));
+  else if (/\b(?:esta semana|fim da semana)\b/.test(input)) {
+    endOffset = (7 - referenceDate.getDay()) % 7;
+  } else {
+    const weekdayMatch = Object.keys(WEEKDAYS)
+      .sort((left, right) => right.length - left.length)
+      .find(day => new RegExp(`\\b${day}\\b`).test(input));
+    if (weekdayMatch) {
+      endOffset = (WEEKDAYS[weekdayMatch] - referenceDate.getDay() + 7) % 7;
+      if (endOffset === 0 && /\b(?:ate|proxima)\b/.test(input)) endOffset = 7;
+    }
+  }
+
+  return {
+    startDate: formatLocalDate(referenceDate),
+    endDate: formatLocalDate(addDays(referenceDate, endOffset)),
+  };
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  uma: 1, um: 1, duas: 2, dois: 2, tres: 3, quatro: 4, cinco: 5,
+};
+
+function resolveWhatsAppRead(input: string) {
+  if (!/\b(?:whatsapp|zap|mensagem|mensagens)\b/.test(input)) return null;
+  const readVerb = /\b(?:ve|veja|ver|le|leia|mostra|diz|consulta|consulte)\b/.test(input);
+  const recent = /\b(?:ultima|ultimas|recente|recentes)\b/.test(input);
+  if (!readVerb || !recent) return null;
+
+  const countMatch = input.match(/\b(\d{1,2}|uma|um|duas|dois|tres|quatro|cinco)\s+(?:ultima|ultimas|mensagem|mensagens)\b/);
+  const rawCount = countMatch?.[1];
+  const limit = Math.min(5, Math.max(1, rawCount ? (NUMBER_WORDS[rawCount] || Number(rawCount)) : 1));
+  const contactMatch = input.match(/(?:mensagens?|whatsapp|zap)\s+(?:do|da|de)\s+(.+?)(?:\s+(?:no|na)\s+(?:whatsapp|zap))?$/);
+  const contactName = contactMatch?.[1]
+    ?.replace(/\s+(?:pra mim|para mim|por favor)$/g, '')
+    .trim();
+  return { contactName: contactName || undefined, limit };
+}
+
 function requiresDeepWork(input: string) {
   return /\b(?:analisa|analise|analisar|prioriza|priorize|priorizar|prioridade|prioridades|organiza|organize|organizar|reorganiza|reorganize|reorganizar|compara|compare|comparar|recomenda|recomende|recomendar|planeja|planeje|planejar|estrategia|estrategico|estrategica)\b/.test(input)
     || /\b(?:o que devo|como devo|o que voce sugere|qual caminho|melhor caminho)\b/.test(input);
 }
 
-export function classifyPresenceWork(input: string): PresenceWorkDecision {
+export function classifyPresenceWork(input: string, referenceDate = new Date()): PresenceWorkDecision {
   const normalizedUtterance = normalizePresenceUtterance(input);
   const unwrapped = stripLeadingWrappers(normalizedUtterance);
 
   if (isSocialOnly(normalizedUtterance)) {
     return { kind: 'social', normalizedUtterance, reason: 'social_only' };
+  }
+
+
+  if (isCompoundOperationalRequest(unwrapped)) {
+    return { kind: 'deep_work', normalizedUtterance, reason: 'compound_request_requires_lotus' };
   }
 
   const app = resolveOpenApp(normalizedUtterance);
@@ -130,6 +234,18 @@ export function classifyPresenceWork(input: string): PresenceWorkDecision {
     };
   }
 
+  const musicQuery = resolveMusicRequest(normalizedUtterance);
+  if (musicQuery) {
+    return {
+      kind: 'local_reflex',
+      normalizedUtterance,
+      reason: 'allowlisted_music_playback',
+      localAction: 'play_music',
+      target: musicQuery,
+      spokenTarget: musicQuery,
+    };
+  }
+
   // Um pedido pode citar agenda e ainda exigir julgamento. Intenção analítica
   // sempre vence uma leitura factual para que a consulta rápida nunca reduza
   // um trabalho de síntese a uma lista de eventos.
@@ -137,12 +253,25 @@ export function classifyPresenceWork(input: string): PresenceWorkDecision {
     return { kind: 'deep_work', normalizedUtterance, reason: 'analytical_judgement_required' };
   }
 
-  if (isCalendarTodayRead(unwrapped)) {
+  if (isCalendarRead(unwrapped)) {
     return {
       kind: 'quick_read',
       normalizedUtterance,
-      reason: 'typed_calendar_today_read',
-      quickReadCapability: 'calendar_today',
+      reason: 'typed_calendar_range_read',
+      quickReadCapability: 'calendar_range',
+      quickReadArgs: resolveCalendarRange(unwrapped, referenceDate),
+    };
+  }
+
+
+  const whatsappRead = resolveWhatsAppRead(unwrapped);
+  if (whatsappRead) {
+    return {
+      kind: 'quick_read',
+      normalizedUtterance,
+      reason: 'typed_whatsapp_latest_read',
+      quickReadCapability: 'whatsapp_latest',
+      quickReadArgs: { ...whatsappRead, direction: 'received' },
     };
   }
 

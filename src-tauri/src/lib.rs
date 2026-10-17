@@ -9,7 +9,7 @@ use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 
 mod agent;
-use agent::local_machine::{local_open_url, execute_applescript};
+use agent::local_machine::{local_open_url, execute_applescript, local_music_play};
 use agent::presence_broker::local_presence_read;
 use agent::voice_recording::{
   voice_recording_append,
@@ -174,6 +174,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       local_open_url,
       execute_applescript,
+      local_music_play,
       execute_shell_command,
       execute_long_command_stream,
       local_presence_read,

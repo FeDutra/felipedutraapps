@@ -19,12 +19,15 @@ export const localActions = {
     }
   },
   
-  playMusic: async (): Promise<string> => {
+  playMusic: async (query?: string): Promise<string> => {
     try {
-      // Exemplo simples com o app Música nativo do Mac
+      if (query?.trim()) {
+        const result = await invoke<{ matched: string; kind: string }>('local_music_play', { query: query.trim() });
+        return `Tocando ${result.matched} no Apple Music.`;
+      }
       const script = `tell application "Music" to play`;
       await invoke('execute_applescript', { script });
-      return `Coloquei a música para tocar.`;
+      return 'Retomei o Apple Music.';
     } catch (error) {
       console.error('Erro ao tocar música:', error);
       return `Não consegui dar play na música no momento.`;

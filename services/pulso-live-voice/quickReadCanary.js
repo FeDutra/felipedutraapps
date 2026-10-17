@@ -42,8 +42,8 @@ async function main() {
         ws.send(JSON.stringify({
           quickRead: {
             requestId,
-            capability: 'calendar_today',
-            args: { localDate, timezone: 'America/Sao_Paulo' },
+            capability: 'calendar_range',
+            args: { startDate: localDate, endDate: localDate, timezone: 'America/Sao_Paulo' },
           },
         }));
         return;

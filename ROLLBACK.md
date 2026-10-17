@@ -1,3 +1,24 @@
+# Rollback — Presença ampliada no iMac (17/10/2026)
+
+- Baseline instalada: `74d028c6`.
+- Escopo: agenda por intervalo, leitura recente de WhatsApp via `wacli`
+  somente leitura, Apple Music como reflexo local, pulso de trabalho profundo,
+  checkpoints narrados e preservação da Presença ao fechar a MESA.
+- A gravação comum, o STT local e o Kokoro não são alterados.
+
+## Reversão
+
+1. Antes da instalação, preservar `/Applications/PULSO.app` em bundle datado.
+2. Se a candidata falhar, encerrar somente a PULSO e seus `kokoro_runner`,
+   restaurar o bundle preservado e reabrir a PULSO.
+3. Antes de atualizar o relay, preservar `/opt/pulso-live-voice/quickReadBroker.js`
+   e `quickReadCanary.js` com data e SHA-256.
+4. Se agenda ou WhatsApp falhar na canária pós-reinício, restaurar apenas esses
+   arquivos e reiniciar somente `pulso-live-voice.service`.
+5. Não alterar Gateway, Firestore, STT, Kokoro, `wacli-sync` ou credenciais.
+
+---
+
 # Rollback — restauração Gemini Live no Modo Presença (16/10/2026)
 
 - Baseline: `65c70fc8` em `origin/main`.
