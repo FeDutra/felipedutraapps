@@ -7,6 +7,7 @@ import {
 import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
+import { classifyPresenceWork, PresenceWorkDecision } from '../presence/PresenceWorkRouter';
 import { encodePcmWav } from './pcmWav';
 import {
   PresenceNarrationKind,
@@ -113,7 +114,6 @@ export class VoiceSessionController {
   private activeGeminiTurnId: string | null = null;
   private activePresenceRequestId: string | null = null;
   private activeTurnBasedTurnId: string | null = null;
-  private readonly socialGeminiTurnIds = new Set<string>();
   private readonly turnMachine = new PresenceTurnMachine();
 
   constructor(config: VoiceSessionConfig) {
@@ -154,8 +154,46 @@ export class VoiceSessionController {
     if (!result.handled || !result.responseText) return null;
 
     this.log('PRESENCE_LOCAL_FAST_PATH_COMPLETED', result);
-    await this.config.recordLocalFastPath?.(userText, result);
     return result;
+  }
+
+  private recordLocalInteractionInBackground(userText: string, result: LocalPresenceFastPathResult) {
+    if (!this.config.recordLocalFastPath) return;
+    void this.config.recordLocalFastPath(userText, result).catch(error => {
+      this.log('PRESENCE_LOCAL_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+    });
+  }
+
+  private localDateParts() {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const value = (type: string) => parts.find(part => part.type === type)?.value || '';
+    return { timezone, localDate: `${value('year')}-${value('month')}-${value('day')}` };
+  }
+
+  private async executeQuickRead(decision: PresenceWorkDecision) {
+    const capability = decision.quickReadCapability;
+    if (!capability || !this.geminiLiveClient) return null;
+    const startedAt = performance.now();
+    const result = await this.geminiLiveClient.requestQuickRead(capability, this.localDateParts());
+    if (!result.ok || !result.responseText) {
+      this.log('PRESENCE_QUICK_READ_FAILED', { capability, errorCode: result.errorCode });
+      return null;
+    }
+    return {
+      handled: true,
+      action: 'quick_read' as const,
+      target: capability,
+      capability,
+      routeKind: 'quick_read' as const,
+      responseText: result.responseText,
+      durationMs: Math.round(performance.now() - startedAt),
+    };
   }
 
   private transition(newState: VoiceSessionState) {
@@ -639,6 +677,7 @@ export class VoiceSessionController {
 
       const localResult = await this.executeImmediatePresenceAction(userText);
       if (localResult?.handled && localResult.responseText) {
+        this.recordLocalInteractionInBackground(userText, localResult);
         await this.speakAssistant(localResult.responseText, undefined, undefined, {
           turnId: turnId ?? undefined,
           kind: 'result',
@@ -819,10 +858,8 @@ export class VoiceSessionController {
         this.config.onPresenceWorkChange?.(false);
         this.log('GEMINI_LIVE_USER_TURN_STARTED', { turnId });
       },
-      onUserTurnReady: async ({ turnId, userText, socialOnly }) => {
+      onUserTurnReady: async ({ turnId, userText, assistantText, socialOnly }) => {
         if (turnId !== this.activeGeminiTurnId) return;
-        this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_started', { turnId });
-        if (socialOnly) this.socialGeminiTurnIds.add(turnId);
         this.advanceTurn({ type: 'turn_closed', turnId });
         this.advanceTurn({ type: 'transcription_started', turnId });
         this.advanceTurn({ type: 'transcription_ready', turnId });
@@ -830,9 +867,26 @@ export class VoiceSessionController {
         this.log('GEMINI_LIVE_USER_TURN_READY', { turnId, userText });
         this.config.onPresenceWorkChange?.(true);
         try {
+          const workDecision = classifyPresenceWork(userText);
+          if (workDecision.kind === 'social' || socialOnly) {
+            this.recordLocalInteractionInBackground(userText, {
+              handled: true,
+              action: 'social_exchange',
+              target: 'presence_dialogue',
+              responseText: assistantText || undefined,
+              durationMs: 0,
+              routeKind: 'social',
+              capability: 'social_exchange',
+            });
+            this.config.onPresenceWorkChange?.(false);
+            this.advanceTurn({ type: 'result_received', turnId });
+            this.geminiLiveClient?.completeResultSilently(turnId);
+            return;
+          }
           const localResult = await this.executeImmediatePresenceAction(userText);
           if (turnId !== this.activeGeminiTurnId) return;
           if (localResult?.handled && localResult.responseText) {
+            this.recordLocalInteractionInBackground(userText, localResult);
             this.config.onPresenceWorkChange?.(false);
             const disposition = this.advanceTurn({ type: 'result_received', turnId });
             if (
@@ -843,6 +897,29 @@ export class VoiceSessionController {
             }
             return;
           }
+
+          if (workDecision.kind === 'quick_read') {
+            const quickResult = await this.executeQuickRead(workDecision);
+            if (turnId !== this.activeGeminiTurnId) return;
+            if (quickResult?.responseText) {
+              this.recordLocalInteractionInBackground(userText, quickResult);
+              this.config.onPresenceWorkChange?.(false);
+              const disposition = this.advanceTurn({ type: 'result_received', turnId });
+              if (
+                disposition.decision === 'narrate'
+                && this.geminiLiveClient?.sendResultText(quickResult.responseText, turnId)
+              ) {
+                this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
+              }
+              return;
+            }
+          }
+
+          if (workDecision.kind === 'deep_work' || workDecision.kind === 'quick_read') {
+            this.geminiLiveClient?.playDeepWorkCue(turnId);
+          }
+
+          this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_started', { turnId });
 
           // handleSendMessage persiste o pedido e devolve antes do OpenClaw
           // concluir. A resposta real chega pelo listener canônico do
@@ -925,11 +1002,6 @@ export class VoiceSessionController {
     const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
     this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
-    if (this.socialGeminiTurnIds.delete(turnId)) {
-      const completed = this.geminiLiveClient?.completeResultSilently(turnId) ?? false;
-      if (completed) this.config.onPresenceWorkChange?.(false);
-      return completed;
-    }
     const accepted = this.geminiLiveClient?.sendResultText(resultText, turnId) ?? false;
     if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
     if (accepted) this.config.onPresenceWorkChange?.(false);
@@ -954,7 +1026,6 @@ export class VoiceSessionController {
       this.activeGeminiTurnId = null;
       this.activePresenceRequestId = null;
       this.activeTurnBasedTurnId = null;
-      this.socialGeminiTurnIds.clear();
       this.config.onPresenceWorkChange?.(false);
       return;
     }

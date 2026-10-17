@@ -1388,7 +1388,7 @@ interface Message {
   assistantName?: string;
   agentId?: string;
   timestamp: Date;
-  originMode?: 'text' | 'voice' | 'presence' | 'recording_once' | 'recording_meeting' | 'local_fast_path';
+  originMode?: 'text' | 'voice' | 'presence' | 'recording_once' | 'recording_meeting' | 'local_fast_path' | 'quick_read';
   interpretation?: {
     intent: string;
     domain: string;
@@ -4483,7 +4483,7 @@ export default function LivePage() {
       source: 'pulso_live' as any,
       origin: 'local_machine_agent' as any,
       mode: 'voice' as any,
-      originMode: 'local_fast_path' as any,
+      originMode: (result.routeKind === 'quick_read' ? 'quick_read' : 'local_fast_path') as any,
       input,
       rawInput: input,
       requestedBy: userRef,
@@ -4510,14 +4510,18 @@ export default function LivePage() {
         locale: 'pt-BR',
         userName: 'Fê',
         localFastPath: true,
+        presenceRoute: result.routeKind || 'local_reflex',
+        capability: result.capability || null,
       } as any,
       openclawResult: {
-        responseText: result.responseText,
+        responseText: result.responseText || '',
         processedAt: now.toISOString(),
         requiresHumanApproval: false,
         riskLevel: 'low',
         meta: {
           localFastPath: true,
+          presenceRoute: result.routeKind || 'local_reflex',
+          capability: result.capability || null,
           action: result.action,
           target: result.target,
           durationMs: result.durationMs,
@@ -4525,7 +4529,7 @@ export default function LivePage() {
       } as any,
       result: {
         action: result.action,
-        summary: result.responseText,
+        summary: result.responseText || '',
         matResult: { ok: true, local: true, durationMs: result.durationMs },
       } as any,
     });
@@ -6661,7 +6665,7 @@ ${data.transcription}`, {
                       }`}>
                         {isLotus
                           ? (msg.assistantName || 'Lótus')
-                          : msg.originMode === 'presence'
+                          : ['presence', 'local_fast_path', 'quick_read'].includes(msg.originMode || '')
                             ? 'fê · voz'
                             : 'fê'}
                       </span>

@@ -41,7 +41,7 @@ export interface Message {
   assistantName?: string;
   agentId?: string;
   timestamp: Date | any;
-  originMode?: 'text' | 'voice' | 'presence' | 'recording_once' | 'recording_meeting' | 'local_fast_path';
+  originMode?: 'text' | 'voice' | 'presence' | 'recording_once' | 'recording_meeting' | 'local_fast_path' | 'quick_read';
   interpretation?: any;
   openclawResult?: OpenClawResult;
   handoffStatus?: string;

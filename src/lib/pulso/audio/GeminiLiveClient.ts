@@ -38,7 +38,12 @@ export interface GeminiLiveConfig {
    * reconhecimento curto; trabalho e resultado continuam sendo da Lótus.
    */
   onUserTurnStarted?: (turnId: string) => void;
-  onUserTurnReady?: (turn: { turnId: string; userText: string; socialOnly: boolean }) => void;
+  onUserTurnReady?: (turn: {
+    turnId: string;
+    userText: string;
+    assistantText: string;
+    socialOnly: boolean;
+  }) => void;
   onAudioReceipt?: (receipt: PresenceAudioReceipt) => void;
 }
 
@@ -73,6 +78,16 @@ export interface PresenceAudioReceipt {
   contextState?: AudioContextState;
   failureStage?: 'routing' | 'canonical_dispatch';
   failureCode?: string;
+}
+
+export interface PresenceQuickReadResult {
+  requestId: string;
+  ok: boolean;
+  capability?: string;
+  responseText?: string;
+  itemCount?: number;
+  durationMs?: number;
+  errorCode?: string;
 }
 
 type NarrationKind = 'acknowledgement' | 'checkpoint' | 'result';
@@ -123,6 +138,8 @@ export class GeminiLiveClient {
   private pcmBytesSent = 0;
   private firstPcmFrameSeen = false;
   private firstWsFrameSent = false;
+  private captureFramesSuppressedUntil = 0;
+  private deepCueSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Reprodução de áudio (PCM 24kHz vindo do Gemini)
   private playbackContext: AudioContext | null = null;
@@ -170,6 +187,10 @@ export class GeminiLiveClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly MAX_RECONNECT_ATTEMPTS = 2;
+  private pendingQuickReads = new Map<string, {
+    resolve: (result: PresenceQuickReadResult) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
 
   constructor(config: GeminiLiveConfig) {
     this.config = config;
@@ -353,6 +374,16 @@ export class GeminiLiveClient {
       return;
     }
 
+    if (msg.quickReadResult) {
+      const result = msg.quickReadResult as PresenceQuickReadResult;
+      const pending = this.pendingQuickReads.get(result.requestId);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      this.pendingQuickReads.delete(result.requestId);
+      pending.resolve(result);
+      return;
+    }
+
     if (msg.setupComplete) {
       console.log('[GEMINI_LIVE_SETUP_COMPLETE]');
       this.receipt('setup_complete');
@@ -505,6 +536,7 @@ export class GeminiLiveClient {
 
   private finalizeInputTurn() {
     const userText = this.pendingUserTranscript.trim();
+    const assistantText = this.pendingAssistantTranscript.trim();
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';
 
@@ -518,6 +550,7 @@ export class GeminiLiveClient {
       this.config.onUserTurnReady?.({
         turnId,
         userText,
+        assistantText,
         socialOnly: isPurelySocialTurn(userText),
       });
       return;
@@ -608,6 +641,7 @@ export class GeminiLiveClient {
       }
 
       if (this.state === 'error' || this.closedByUser) return;
+      if (Date.now() < this.captureFramesSuppressedUntil) return;
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
       // O relay limita filas; não acumulamos áudio indefinidamente se a rede
       // deixar de drenar o WebSocket.
@@ -674,6 +708,70 @@ export class GeminiLiveClient {
       this.nextPlaybackTime = this.playbackContext.currentTime;
     }
     return this.playbackContext;
+  }
+
+  /**
+   * Assinatura curta da PULSO: indica que o pedido saiu do reflexo/consulta
+   * direta e entrou em trabalho profundo. É local, imediata e não depende de
+   * geração de voz. Os frames do microfone são brevemente suprimidos para o
+   * próprio sinal não voltar como fala do usuário.
+   */
+  public playDeepWorkCue(turnId = this.activeTurnId) {
+    if (!turnId || turnId !== this.activeTurnId) return false;
+    const ctx = this.ensurePlaybackContext();
+    const now = Math.max(ctx.currentTime, this.nextPlaybackTime) + 0.03;
+    const waitMs = Math.max(0, (now - ctx.currentTime) * 1_000);
+    if (this.deepCueSuppressionTimer) clearTimeout(this.deepCueSuppressionTimer);
+    this.deepCueSuppressionTimer = setTimeout(() => {
+      this.deepCueSuppressionTimer = null;
+      this.captureFramesSuppressedUntil = Date.now() + 540;
+    }, waitMs);
+
+    const durationSeconds = 0.48;
+    const sampleRate = 24_000;
+    const sampleCount = Math.round(durationSeconds * sampleRate);
+    const buffer = ctx.createBuffer(1, sampleCount, sampleRate);
+    const channel = buffer.getChannelData(0);
+    const notes = [196, 293.66, 392];
+    for (let index = 0; index < sampleCount; index += 1) {
+      const time = index / sampleRate;
+      const attack = Math.min(1, time / 0.025);
+      const release = Math.max(0, 1 - time / durationSeconds);
+      const chord = notes.reduce((sum, frequency, noteIndex) => {
+        const delayedTime = Math.max(0, time - noteIndex * 0.045);
+        if (delayedTime === 0 && time < noteIndex * 0.045) return sum;
+        return sum + Math.sin(2 * Math.PI * frequency * delayedTime) * (noteIndex === 0 ? 0.55 : 0.22);
+      }, 0);
+      channel[index] = chord * attack * release * release * 0.09;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    this.playbackSources.add(source);
+    source.onended = () => this.playbackSources.delete(source);
+    source.start(now);
+    this.nextPlaybackTime = now + durationSeconds;
+    void ctx.resume().catch(() => {});
+    return true;
+  }
+
+  public requestQuickRead(
+    capability: string,
+    args: Record<string, unknown>,
+    timeoutMs = 5_000,
+  ): Promise<PresenceQuickReadResult> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return Promise.resolve({ requestId: '', ok: false, errorCode: 'relay_unavailable' });
+    }
+    const requestId = `quick_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return new Promise(resolve => {
+      const timer = setTimeout(() => {
+        this.pendingQuickReads.delete(requestId);
+        resolve({ requestId, ok: false, errorCode: 'quick_read_timeout' });
+      }, timeoutMs);
+      this.pendingQuickReads.set(requestId, { resolve, timer });
+      this.ws?.send(JSON.stringify({ quickRead: { requestId, capability, args } }));
+    });
   }
 
   private enqueuePlayback(base64: string) {
@@ -896,7 +994,14 @@ export class GeminiLiveClient {
     this.checkpointTimer = null;
     if (this.inputTurnFinalizeTimer) clearTimeout(this.inputTurnFinalizeTimer);
     this.inputTurnFinalizeTimer = null;
+    if (this.deepCueSuppressionTimer) clearTimeout(this.deepCueSuppressionTimer);
+    this.deepCueSuppressionTimer = null;
     this.deferredCheckpointText = null;
+    for (const [requestId, pending] of this.pendingQuickReads) {
+      clearTimeout(pending.timer);
+      pending.resolve({ requestId, ok: false, errorCode: 'client_stopped' });
+    }
+    this.pendingQuickReads.clear();
     this.activeTurnId = null;
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';

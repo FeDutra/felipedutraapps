@@ -1,12 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import { localActions } from './localActions';
+import { classifyPresenceWork, PresenceWorkKind } from '../presence/PresenceWorkRouter';
 
 export interface LocalPresenceFastPathResult {
   handled: boolean;
-  action?: 'open_app' | 'close_mesa' | 'local_read';
+  action?: 'open_app' | 'close_mesa' | 'local_read' | 'quick_read' | 'social_exchange';
   target?: string;
   responseText?: string;
   durationMs?: number;
+  routeKind?: PresenceWorkKind;
+  capability?: string;
 }
 
 interface LocalRuntimeHealth {
@@ -22,22 +25,6 @@ interface LocalRuntimeHealth {
   whatsappBridgeActive: boolean;
 }
 
-const APP_ALIASES: Array<{ aliases: string[]; appName: string; spokenName: string }> = [
-  { aliases: ['whatsapp', 'zap'], appName: 'WhatsApp', spokenName: 'WhatsApp' },
-  { aliases: ['notion'], appName: 'Notion', spokenName: 'Notion' },
-  { aliases: ['obsidian'], appName: 'Obsidian', spokenName: 'Obsidian' },
-  { aliases: ['finder'], appName: 'Finder', spokenName: 'Finder' },
-  { aliases: ['arc'], appName: 'Arc', spokenName: 'Arc' },
-  { aliases: ['safari'], appName: 'Safari', spokenName: 'Safari' },
-  { aliases: ['spotify'], appName: 'Spotify', spokenName: 'Spotify' },
-  { aliases: ['musica', 'music'], appName: 'Music', spokenName: 'Música' },
-  { aliases: ['figma'], appName: 'Figma', spokenName: 'Figma' },
-  { aliases: ['kdenlive'], appName: 'kdenlive', spokenName: 'Kdenlive' },
-  { aliases: ['photoshop'], appName: 'Adobe Photoshop 2026', spokenName: 'Photoshop' },
-  { aliases: ['illustrator'], appName: 'Adobe Illustrator', spokenName: 'Illustrator' },
-  { aliases: ['visual studio code', 'vs code', 'vscode'], appName: 'Visual Studio Code', spokenName: 'VS Code' },
-];
-
 function normalize(input: string) {
   return input
     .toLocaleLowerCase('pt-BR')
@@ -46,22 +33,6 @@ function normalize(input: string) {
     .replace(/[!?.,;:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function normalizeRequestedApp(input: string) {
-  return input
-    .replace(/^(?:(?:o|a|meu|minha)\s+)*/g, '')
-    .replace(/^(?:(?:aplicativo|aplicacao|app|programa)(?:\s+de)?\s+)/g, '')
-    .trim();
-}
-
-function resolveOpenApp(input: string) {
-  const normalized = normalize(input);
-  const match = normalized.match(/^(?:lotus\s+)?(?:abre|abra|abrir|pode abrir)(?:\s+(?:pra mim|para mim))?\s+(.+?)(?:\s+(?:pra mim|para mim|por favor))?$/);
-  if (!match) return null;
-
-  const requested = normalizeRequestedApp(match[1]);
-  return APP_ALIASES.find(app => app.aliases.includes(requested)) || null;
 }
 
 function requestsLocalRuntimeHealth(input: string) {
@@ -107,6 +78,8 @@ export async function executeLocalPresenceFastPath(input: string): Promise<Local
         target: 'runtime_health',
         responseText,
         durationMs: Math.round(performance.now() - startedAt),
+        routeKind: 'local_reflex',
+        capability: 'runtime_health',
       };
     } catch (error) {
       console.error('[PresenceLocalBroker] Falha na leitura de saúde:', error);
@@ -116,23 +89,29 @@ export async function executeLocalPresenceFastPath(input: string): Promise<Local
         target: 'runtime_health',
         responseText: 'A ponte local não respondeu. Vou deixar essa consulta no fluxo principal.',
         durationMs: Math.round(performance.now() - startedAt),
+        routeKind: 'local_reflex',
+        capability: 'runtime_health',
       };
     }
   }
 
-  const app = resolveOpenApp(input);
-  if (!app) return { handled: false };
+  const decision = classifyPresenceWork(input);
+  if (decision.kind !== 'local_reflex' || decision.localAction !== 'open_app' || !decision.target) {
+    return { handled: false };
+  }
 
   const startedAt = performance.now();
-  const result = await localActions.openApp(app.appName);
+  const result = await localActions.openApp(decision.target);
   const durationMs = Math.round(performance.now() - startedAt);
   const failed = result.toLocaleLowerCase('pt-BR').includes('problema');
 
   return {
     handled: true,
     action: 'open_app',
-    target: app.appName,
-    responseText: failed ? result : `Abri o ${app.spokenName}.`,
+    target: decision.target,
+    responseText: failed ? result : `Abri o ${decision.spokenTarget || decision.target}.`,
     durationMs,
+    routeKind: 'local_reflex',
+    capability: 'open_app',
   };
 }

@@ -884,3 +884,29 @@ Baseline: `e59c9cb8` (`origin/main`).
    áudio não muda nesta correção;
 4. preservar os pedidos de voz já criados no Firestore;
 5. manter MacBook e iPhone fora da reversão desta etapa.
+
+---
+
+# Rollback — três velocidades do Modo Presença (17/10/2026)
+
+Baseline: `06455c39` (`origin/main`).
+
+## Escopo
+
+- classificar cada fala em social, reflexo local, consulta rápida ou trabalho
+  profundo por regras estreitas e testáveis;
+- executar abertura de aplicativo antes do registro assíncrono no Firestore;
+- consultar a agenda de hoje por um broker tipado no relay, sem OpenClaw,
+  mouse, teclado ou tomada de foco;
+- manter conversas sociais pesquisáveis sem abrir trabalho profundo;
+- tocar uma assinatura sonora local quando o pedido entrar na Lótus;
+- preservar a gravação comum, o pipeline de reunião, Kokoro e Whisper.
+
+## Reversão
+
+1. restaurar `/opt/pulso-live-voice` pelo backup criado imediatamente antes da
+   ativação e reiniciar apenas `pulso-live-voice.service`;
+2. reinstalar no iMac o bundle preservado antes da troca;
+3. republicar o Hosting do SHA `06455c39` se a web também tiver sido promovida;
+4. não apagar registros `local_interaction`: continuam sendo histórico válido;
+5. não tocar no MacBook nem no iPhone nesta etapa.

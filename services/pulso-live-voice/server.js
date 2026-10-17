@@ -1,6 +1,7 @@
 const http = require('http');
 const { WebSocketServer, WebSocket } = require('ws');
 const { verifyFirebaseIdToken } = require('./firebaseTokenVerifier');
+const { executeQuickRead } = require('./quickReadBroker');
 
 const PORT = process.env.PORT || 8080;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -35,6 +36,7 @@ wss.on('connection', (clientWs, req) => {
   let authenticating = false;
   let upstream = null;
   let upstreamOpen = false;
+  let quickReadInFlight = false;
   const queue = [];
 
   const openUpstream = () => {
@@ -94,6 +96,38 @@ wss.on('connection', (clientWs, req) => {
         }
       } finally {
         authenticating = false;
+      }
+      return;
+    }
+
+    let message = null;
+    try {
+      message = JSON.parse(data.toString());
+    } catch {}
+
+    if (message?.quickRead) {
+      const requestId = String(message.quickRead.requestId || '').slice(0, 120);
+      if (!requestId || quickReadInFlight) {
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(JSON.stringify({
+            quickReadResult: {
+              requestId,
+              ok: false,
+              errorCode: quickReadInFlight ? 'quick_read_busy' : 'invalid_request',
+            },
+          }));
+        }
+        return;
+      }
+
+      quickReadInFlight = true;
+      try {
+        const result = await executeQuickRead(message.quickRead);
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(JSON.stringify({ quickReadResult: { requestId, ...result } }));
+        }
+      } finally {
+        quickReadInFlight = false;
       }
       return;
     }
