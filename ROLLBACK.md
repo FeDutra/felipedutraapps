@@ -910,3 +910,27 @@ Baseline: `06455c39` (`origin/main`).
 3. republicar o Hosting do SHA `06455c39` se a web também tiver sido promovida;
 4. não apagar registros `local_interaction`: continuam sendo histórico válido;
 5. não tocar no MacBook nem no iPhone nesta etapa.
+
+---
+
+# Rollback — autoridade única de voz e intenção analítica (17/10/2026)
+
+Baseline: `c46012ea` (`origin/main`).
+
+## Escopo
+
+- impedir o listener global de entregar ao Kokoro mensagens já narradas pelo
+  Gemini no Modo Presença;
+- preservar registro imediato e pesquisável com rótulos `Fê · voz` e
+  `Lótus · voz`;
+- garantir que analisar, priorizar, organizar, comparar, recomendar ou planejar
+  suba para trabalho profundo, mesmo quando a frase também cita agenda;
+- não alterar áudio, relay, credenciais, gravação comum ou conectores.
+
+## Reversão
+
+1. reinstalar no iMac o bundle `c46012ea` preservado antes da troca;
+2. republicar o Hosting do SHA `c46012ea` se a web também tiver sido promovida;
+3. não reiniciar `pulso-live-voice.service`, pois o relay não muda;
+4. preservar todos os registros de voz já gravados no Firestore;
+5. manter MacBook e iPhone fora da reversão desta etapa.

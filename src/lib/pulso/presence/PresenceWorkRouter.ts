@@ -12,6 +12,14 @@ export interface PresenceWorkDecision {
   quickReadCapability?: PresenceQuickReadCapability;
 }
 
+export interface PresenceRecordedRequest {
+  requestType?: string;
+  originMode?: string;
+  mode?: string;
+  context?: { localFastPath?: boolean };
+  openclawResult?: { meta?: { localFastPath?: boolean } };
+}
+
 const APP_ALIASES: Array<{ aliases: string[]; appName: string; spokenName: string }> = [
   { aliases: ['whatsapp', 'zap'], appName: 'WhatsApp', spokenName: 'WhatsApp' },
   { aliases: ['notion'], appName: 'Notion', spokenName: 'Notion' },
@@ -97,6 +105,11 @@ function isCalendarTodayRead(input: string) {
   return asksCalendar && readVerb && !isWrite;
 }
 
+function requiresDeepWork(input: string) {
+  return /\b(?:analisa|analise|analisar|prioriza|priorize|priorizar|prioridade|prioridades|organiza|organize|organizar|reorganiza|reorganize|reorganizar|compara|compare|comparar|recomenda|recomende|recomendar|planeja|planeje|planejar|estrategia|estrategico|estrategica)\b/.test(input)
+    || /\b(?:o que devo|como devo|o que voce sugere|qual caminho|melhor caminho)\b/.test(input);
+}
+
 export function classifyPresenceWork(input: string): PresenceWorkDecision {
   const normalizedUtterance = normalizePresenceUtterance(input);
   const unwrapped = stripLeadingWrappers(normalizedUtterance);
@@ -117,6 +130,13 @@ export function classifyPresenceWork(input: string): PresenceWorkDecision {
     };
   }
 
+  // Um pedido pode citar agenda e ainda exigir julgamento. Intenção analítica
+  // sempre vence uma leitura factual para que a consulta rápida nunca reduza
+  // um trabalho de síntese a uma lista de eventos.
+  if (requiresDeepWork(unwrapped)) {
+    return { kind: 'deep_work', normalizedUtterance, reason: 'analytical_judgement_required' };
+  }
+
   if (isCalendarTodayRead(unwrapped)) {
     return {
       kind: 'quick_read',
@@ -127,4 +147,12 @@ export function classifyPresenceWork(input: string): PresenceWorkDecision {
   }
 
   return { kind: 'deep_work', normalizedUtterance, reason: 'canonical_lotus_required' };
+}
+
+export function isPresenceOwnedRequest(request: PresenceRecordedRequest) {
+  const originMode = request.originMode || request.mode;
+  return request.requestType === 'local_interaction'
+    || ['presence', 'local_fast_path', 'quick_read'].includes(originMode || '')
+    || request.context?.localFastPath === true
+    || request.openclawResult?.meta?.localFastPath === true;
 }

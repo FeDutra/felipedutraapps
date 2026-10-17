@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // @ts-expect-error Node's strip-types runner executes the TypeScript source directly.
-import { classifyPresenceWork } from '../PresenceWorkRouter.ts';
+import { classifyPresenceWork, isPresenceOwnedRequest } from '../PresenceWorkRouter.ts';
 
 test('aceita invólucro conversacional antes de abrir aplicativo', () => {
   const decision = classifyPresenceWork('Beleza. Abre para mim o WhatsApp.');
@@ -38,7 +38,27 @@ test('escrita em agenda sempre exige Lótus', () => {
   assert.equal(decision.kind, 'deep_work');
 });
 
+test('análise e priorização vencem a consulta factual de agenda', () => {
+  for (const phrase of [
+    'Analise o meu dia e proponha três prioridades',
+    'Veja minha agenda e recomende o melhor caminho para hoje',
+    'Organize meus compromissos por prioridade',
+  ]) {
+    const decision = classifyPresenceWork(phrase);
+    assert.equal(decision.kind, 'deep_work', phrase);
+    assert.equal(decision.reason, 'analytical_judgement_required', phrase);
+  }
+});
+
 test('saudação pura permanece social', () => {
   assert.equal(classifyPresenceWork('E aí, beleza?').kind, 'social');
   assert.equal(classifyPresenceWork('Bom dia, Lótus').kind, 'social');
+});
+
+test('mensagens já faladas pela Presença não voltam ao narrador global', () => {
+  assert.equal(isPresenceOwnedRequest({ requestType: 'local_interaction' }), true);
+  assert.equal(isPresenceOwnedRequest({ originMode: 'quick_read' }), true);
+  assert.equal(isPresenceOwnedRequest({ originMode: 'presence' }), true);
+  assert.equal(isPresenceOwnedRequest({ context: { localFastPath: true } }), true);
+  assert.equal(isPresenceOwnedRequest({ originMode: 'text' }), false);
 });

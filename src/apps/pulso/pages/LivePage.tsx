@@ -11,6 +11,7 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPresenceFastPath';
 import { float32ToInt16Bytes } from '@/lib/pulso/audio/pcmWav';
+import { isPresenceOwnedRequest } from '@/lib/pulso/presence/PresenceWorkRouter';
 import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assistantIdentity';
 
 import {
@@ -3264,6 +3265,7 @@ export default function LivePage() {
                 openclawResult: req.openclawResult || undefined,
                 handoffStatus: req.status,
                 requestId: req.id || undefined,
+                originMode: req.originMode || req.mode,
                 originalCommand: req.summary || req.title || undefined,
                 executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
                 executedBy: req.executedBy || undefined,
@@ -3875,7 +3877,11 @@ export default function LivePage() {
             }
 
             const isRemoteMessage = !latencyMapRef.current[requestId];
-            if (isRemoteMessage && isActive && responseText?.trim()) {
+            const isPresenceOwnedMessage = isPresenceOwnedRequest(req);
+            // Presença já possui uma única autoridade de narração (Gemini).
+            // O listener global continua notificando/renderizando, mas nunca
+            // entrega de novo ao Kokoro um texto que a Presença já falou.
+            if (isRemoteMessage && isActive && responseText?.trim() && !isPresenceOwnedMessage) {
               console.log('[PULSO_PRESENCE_PROACTIVE_TTS]', { requestId, text: responseText });
               playPresenceSoundCue('speak_start');
               voiceStateRef.current = 'speaking';
@@ -6664,7 +6670,9 @@ ${data.transcription}`, {
                         isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
                       }`}>
                         {isLotus
-                          ? (msg.assistantName || 'Lótus')
+                          ? ['presence', 'local_fast_path', 'quick_read'].includes(msg.originMode || '')
+                            ? `${msg.assistantName || 'Lótus'} · voz`
+                            : (msg.assistantName || 'Lótus')
                           : ['presence', 'local_fast_path', 'quick_read'].includes(msg.originMode || '')
                             ? 'fê · voz'
                             : 'fê'}
