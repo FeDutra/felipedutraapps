@@ -50,7 +50,7 @@ jobs:
         run: npx tauri ios init --ci
 
       - name: Build unsigned PULSO iOS app
-        run: npx tauri ios build --ci --no-sign --build-number 2026101701
+        run: npx tauri ios build --ci --no-sign --build-number 2026101702
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
 
@@ -67,7 +67,7 @@ jobs:
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" 2>/dev/null || true)"
           test "$BUNDLE_NAME" = 'PULSO'
           test -z "$DISPLAY_NAME" || test "$DISPLAY_NAME" = 'PULSO'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.1.2026101701'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")" = '0.1.1.2026101702'
           test "$(/usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes:0' "$APP/Info.plist")" = 'audio'
           if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' "$APP"; then
             echo 'O IPA contém a interface errada do antigo cliente iOS.' >&2
@@ -84,7 +84,7 @@ jobs:
 
       - name: Build and capture iPhone simulator proof
         run: |
-          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026101701
+          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026101702
           SIM_APP="$(find src-tauri/gen/apple/build -type d -name 'PULSO.app' -path '*sim*' -print -quit)"
           test -n "$SIM_APP"
           UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(d["udid"] for devices in data["devices"].values() for d in devices if d["name"].startswith("iPhone") and d["isAvailable"]))')"
@@ -92,7 +92,10 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl install "$UDID" "$SIM_APP"
           xcrun simctl launch "$UDID" com.felipedutraapps.pulso.ios.canary
-          sleep 12
+          sleep 20
+          xcrun simctl spawn "$UDID" log show --last 30s --style compact \
+            --predicate 'process == "PULSO" OR senderImagePath CONTAINS "PULSO.app"' \
+            > pulso-ios-simulator.log 2>&1 || true
           xcrun simctl io "$UDID" screenshot pulso-ios-canary.png
 
       - name: Upload audited IPA
@@ -103,5 +106,6 @@ jobs:
             PULSO-iOS-0.1.1-presence.ipa
             pulso-ios-canary.sha256
             pulso-ios-canary.png
+            pulso-ios-simulator.log
           if-no-files-found: error
           retention-days: 7

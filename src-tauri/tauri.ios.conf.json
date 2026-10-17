@@ -2,6 +2,17 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "PULSO",
   "identifier": "com.felipedutraapps.pulso.ios.canary",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "PULSO | Lótus Live",
+        "url": "pulso/live/index.html",
+        "fullscreen": false,
+        "resizable": true
+      }
+    ]
+  },
   "bundle": {
     "externalBin": [],
     "resources": []
