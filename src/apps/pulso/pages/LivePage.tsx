@@ -1388,6 +1388,7 @@ interface Message {
   assistantName?: string;
   agentId?: string;
   timestamp: Date;
+  originMode?: 'text' | 'voice' | 'presence' | 'recording_once' | 'recording_meeting' | 'local_fast_path';
   interpretation?: {
     intent: string;
     domain: string;
@@ -3430,6 +3431,7 @@ export default function LivePage() {
               text: req.input || req.rawInput || req.summary || req.title || '',
               timestamp: reqTime,
               contextId: req.contextId || null,
+              originMode: req.originMode || req.mode,
               attachments: atts
             });
           }
@@ -3533,14 +3535,21 @@ export default function LivePage() {
                 }
               } else if (spokenRequestsRef.current.has(originRequestId)) {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_DEDUPED]', { requestId: originRequestId });
-              } else if (useGeminiNarration && presenceController?.narratePresenceResult(ttsText, originRequestId)) {
-                // A resposta completa continua no chat. Na conversa falada,
-                // a Gemini só a traduz para uma devolutiva curta e humana.
+              } else if (useGeminiNarration && presenceController) {
+                const narrated = presenceController.narratePresenceResult(ttsText, originRequestId);
+                // No transporte Gemini, o controlador é também a autoridade
+                // para suprimir resultados velhos ou sociais. Nunca deixar
+                // esses casos caírem no TTS local e invadirem outro turno.
                 spokenRequestsRef.current.add(originRequestId);
                 // Não deixa uma resposta antiga voltar a ser confundida com
                 // uma interação aberta numa próxima sessão de Presença.
                 voiceReplyRequestsRef.current.delete(originRequestId);
-                console.log('[PULSO_GEMINI_LIVE_RESULT_NARRATED]', { requestId: originRequestId });
+                console.log(
+                  narrated
+                    ? '[PULSO_GEMINI_LIVE_RESULT_NARRATED]'
+                    : '[PULSO_GEMINI_LIVE_RESULT_SUPPRESSED]',
+                  { requestId: originRequestId },
+                );
               } else if (voiceStateRef.current === 'speaking') {
                 console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
               } else {
@@ -4348,6 +4357,7 @@ export default function LivePage() {
       text: options?.displayText || cleanMsg,
       timestamp: new Date(),
       contextId: sendingNode.contextId,
+      originMode,
       replyTo: capturedReplyTo || undefined,
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined
     };
@@ -6567,6 +6577,7 @@ ${data.transcription}`, {
                     key={msg.id} 
                     data-message-id={msg.id}
                     data-message-sender={msg.sender}
+                    data-origin-mode={msg.originMode || 'text'}
                     data-message-timestamp={msg.timestamp.toISOString()}
                     className={`flex min-w-0 w-full max-w-full ${isLotus ? 'justify-start' : 'justify-end'} animate-fade-in`}
                   >
@@ -6574,7 +6585,11 @@ ${data.transcription}`, {
                       <span className={`block text-[9px] tracking-widest lowercase select-none ${
                         isLotus ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'
                       }`}>
-                        {isLotus ? (msg.assistantName || 'Lótus') : 'fê'}
+                        {isLotus
+                          ? (msg.assistantName || 'Lótus')
+                          : msg.originMode === 'presence'
+                            ? 'fê · voz'
+                            : 'fê'}
                       </span>
 
                       {/* Reply quote block */}

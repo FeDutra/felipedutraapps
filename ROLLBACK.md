@@ -830,3 +830,30 @@ Baseline: `e0edd3d7` (`origin/main`).
    o relay, a chave Gemini ou a autenticação Firebase;
 4. não remover áudio recuperável nem serviços Kokoro/Whisper: a gravação comum
    e o modo local não fazem parte desta alteração.
+
+---
+
+# Rollback — turno de voz canônico e resposta imediata (17/10/2026)
+
+Baseline: `5dd72c76` (`origin/main`).
+
+## Escopo
+
+- registrar toda fala da Presença como pedido canônico e pesquisável no chat;
+- identificar visualmente a entrada como `fê · voz` sem criar um documento
+  paralelo para cada turno;
+- tocar em streaming a confirmação curta do Gemini enquanto a Lótus executa;
+- reduzir o fechamento do turno para 600 ms de silêncio, preservando pausas
+  naturais;
+- impedir que resultado social, duplicado ou tardio caia no TTS local;
+- acrescentar uma canária PCM de ponta a ponta sem armazenar áudio ou texto.
+
+## Reversão
+
+1. reinstalar no iMac o bundle preservado antes da troca;
+2. republicar o Hosting do SHA `5dd72c76` se a web também tiver sido promovida;
+3. não alterar nem reiniciar `pulso-live-voice.service`: esta alteração usa o
+   protocolo já aceito pelo relay ativo;
+4. preservar Firestore e histórico: os pedidos de voz já registrados continuam
+   sendo mensagens canônicas válidas após a reversão;
+5. não tocar na gravação comum, Kokoro ou Whisper, pois estão fora do escopo.

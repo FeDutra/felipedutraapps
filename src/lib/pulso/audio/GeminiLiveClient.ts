@@ -32,14 +32,13 @@ export interface GeminiLiveConfig {
   onTranscript?: (role: 'user' | 'assistant', text: string) => void;
   onError: (message: string) => void;
   /**
-   * Disparado quando a Lótus-voz termina de falar o reconhecimento curto
-   * ("peraí, deixa eu ver") logo após o Fê falar. É o sinal pra rodar o
-   * pipeline de verdade (AgentOrchestrator) com o texto transcrito e, quando
-   * o resultado sair, chamar sendResultText() com a resposta real.
-   * A Gemini Live nunca responde por conta própria — só reconhece e narra.
+   * Disparado quando a Live API fecha um turno de entrada e entrega a
+   * transcrição. Toda fala segue para o pipeline canônico da Lótus, inclusive
+   * conversa social. O áudio autônomo da Gemini fica restrito ao primeiro
+   * reconhecimento curto; trabalho e resultado continuam sendo da Lótus.
    */
   onUserTurnStarted?: (turnId: string) => void;
-  onUserTurnReady?: (turn: { turnId: string; userText: string }) => void;
+  onUserTurnReady?: (turn: { turnId: string; userText: string; socialOnly: boolean }) => void;
   onAudioReceipt?: (receipt: PresenceAudioReceipt) => void;
 }
 
@@ -91,7 +90,13 @@ function isPurelySocialTurn(text: string) {
     .replace(/[^a-z\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return /^(oi|ola|bom dia|boa tarde|boa noite|tudo bem|obrigado|obrigada|valeu|tchau|ate logo|ate mais)$/.test(normalized);
+  if (!normalized) return false;
+  const remainder = normalized
+    .replace(/\b(bom dia|boa tarde|boa noite|tudo bem|como vai|como voce esta|e voce|salve salve|ate logo|ate mais)\b/g, ' ')
+    .replace(/\b(oi|ola|obrigado|obrigada|valeu|tchau|beleza)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return remainder.length === 0;
 }
 
 export class GeminiLiveClient {
@@ -129,9 +134,7 @@ export class GeminiLiveClient {
   // Orquestração reconhecimento -> backend real -> narração do resultado
   private pendingUserTranscript = '';
   private pendingAssistantTranscript = '';
-  private bufferedAutonomousAudio: string[] = [];
   private inputTurnFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
-  private inputTurnMayUseAutonomousAudio = false;
   private awaitingResult = false;
   private turnSequence = 0;
   private activeTurnId: string | null = null;
@@ -277,6 +280,15 @@ export class GeminiLiveClient {
       setup: {
         model: this.config.model || 'models/gemini-3.8-live',
         systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+            // O default do servidor gira em torno de 800 ms. 600 ms reduz a
+            // espera percebida sem fragmentar pausas naturais da fala.
+            prefixPaddingMs: 40,
+            silenceDurationMs: 600,
+          },
+        },
         generationConfig: {
           responseModalities: ['AUDIO'],
           speechConfig: {
@@ -357,7 +369,7 @@ export class GeminiLiveClient {
         this.pendingUserTranscript += sc.inputTranscription.text;
         this.config.onTranscript?.('user', sc.inputTranscription.text);
         if (interruptedTurnWasWaitingForTranscript || this.inputTurnFinalizeTimer) {
-          this.scheduleInputTurnFinalization(this.inputTurnMayUseAutonomousAudio, 180);
+          this.scheduleInputTurnFinalization(180);
         }
       }
 
@@ -376,8 +388,7 @@ export class GeminiLiveClient {
           // brevemente caso o fragmento de transcrição venha no pacote logo
           // seguinte ao marcador de interrupção.
           this.pendingAssistantTranscript = '';
-          this.bufferedAutonomousAudio = [];
-          this.scheduleInputTurnFinalization(false, 220);
+          this.scheduleInputTurnFinalization(220);
           return;
         }
         if (interruptedKind === 'result') {
@@ -385,7 +396,6 @@ export class GeminiLiveClient {
         }
         this.narrationQueue = [];
         this.deferredCheckpointText = null;
-        this.bufferedAutonomousAudio = [];
         this.pendingAssistantTranscript = '';
         this.setState('listening');
         return;
@@ -411,9 +421,11 @@ export class GeminiLiveClient {
           if (this.narrationInFlight) {
             this.enqueuePlayback(p.inlineData.data);
           } else {
-            // Retém o áudio autônomo do turno de entrada. Em pedidos
-            // operacionais ele será descartado para que apenas a Lótus fale.
-            this.bufferedAutonomousAudio.push(p.inlineData.data);
+            // A primeira fala do Gemini é somente uma confirmação curta,
+            // limitada pela instrução de sistema. Tocar o streaming agora
+            // evita esperar uma segunda geração só para dizer “estou vendo”.
+            // Conteúdo substantivo continua vindo exclusivamente da Lótus.
+            this.enqueuePlayback(p.inlineData.data);
           }
         }
       }
@@ -444,7 +456,8 @@ export class GeminiLiveClient {
           // fragmento de inputTranscription. Um debounce curto evita perder a
           // cauda sem adicionar latência perceptível à conversa.
           this.receipt('turn_closed', { turnId: this.activeTurnId ?? undefined });
-          this.scheduleInputTurnFinalization(true, 100);
+          this.turnCompletePending = true;
+          this.scheduleInputTurnFinalization(100);
         }
       }
       return;
@@ -462,38 +475,31 @@ export class GeminiLiveClient {
     return `voice_${Date.now()}_${this.turnSequence}`;
   }
 
-  private scheduleInputTurnFinalization(mayUseAutonomousAudio: boolean, delayMs: number) {
-    this.inputTurnMayUseAutonomousAudio = mayUseAutonomousAudio;
+  private scheduleInputTurnFinalization(delayMs: number) {
     if (this.inputTurnFinalizeTimer) clearTimeout(this.inputTurnFinalizeTimer);
     this.inputTurnFinalizeTimer = setTimeout(() => {
       this.inputTurnFinalizeTimer = null;
-      this.finalizeInputTurn(this.inputTurnMayUseAutonomousAudio);
+      this.finalizeInputTurn();
     }, delayMs);
   }
 
-  private finalizeInputTurn(mayUseAutonomousAudio: boolean) {
+  private finalizeInputTurn() {
     const userText = this.pendingUserTranscript.trim();
-    const assistantText = this.pendingAssistantTranscript.trim();
-    const autonomousAudio = mayUseAutonomousAudio ? this.bufferedAutonomousAudio : [];
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';
-    this.bufferedAutonomousAudio = [];
-
-    if (userText && isPurelySocialTurn(userText) && autonomousAudio.length > 0) {
-      if (assistantText) this.config.onTranscript?.('assistant', assistantText);
-      this.turnCompletePending = true;
-      autonomousAudio.forEach(chunk => this.enqueuePlayback(chunk));
-      this.maybeReturnToListening();
-      return;
-    }
 
     if (userText) {
       const turnId = this.activeTurnId || this.createTurnId();
       this.awaitingResult = true;
       this.checkpointSpokenThisTurn = false;
       this.lastCheckpointSpokenAt = 0;
-      this.config.onUserTurnReady?.({ turnId, userText });
-      this.queueAcknowledgement(turnId, userText);
+      // Toda fala entra no fluxo canônico, inclusive saudações. O áudio curto
+      // já começou a tocar em streaming; não geramos uma segunda confirmação.
+      this.config.onUserTurnReady?.({
+        turnId,
+        userText,
+        socialOnly: isPurelySocialTurn(userText),
+      });
       return;
     }
 
@@ -519,16 +525,6 @@ export class GeminiLiveClient {
     }
     this.flushPlayback();
     this.config.onUserTurnStarted?.(turnId);
-  }
-
-  private queueAcknowledgement(turnId: string, userText: string) {
-    if (turnId !== this.activeTurnId) return;
-    this.narrationQueue.push({
-      kind: 'acknowledgement',
-      turnId,
-      text: userText,
-    });
-    this.flushNarrationQueue();
   }
 
   // ---- Captura de microfone (envio contínuo, full-duplex) ----
@@ -827,6 +823,24 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Uma saudação já recebeu resposta no primeiro áudio do Gemini. O pedido
+   * continua canônico e pesquisável, mas o retorno do backend não precisa ser
+   * falado uma segunda vez.
+   */
+  public completeResultSilently(turnId = this.activeTurnId) {
+    if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
+    this.awaitingResult = false;
+    this.deferredCheckpointText = null;
+    this.narrationQueue = [];
+    if (this.checkpointTimer) {
+      clearTimeout(this.checkpointTimer);
+      this.checkpointTimer = null;
+    }
+    this.maybeReturnToListening();
+    return true;
+  }
+
+  /**
    * Checkpoint intermediário durante um processo longo (ex: programar algo).
    * Não fecha o ciclo de awaitingResult — usa role 'user' com um marcador
    * diferente pra o Gemini narrar sem soltar o "aguardando resultado final".
@@ -866,7 +880,6 @@ export class GeminiLiveClient {
     this.activeTurnId = null;
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';
-    this.bufferedAutonomousAudio = [];
     this.narrationQueue = [];
     this.narrationInFlight = null;
     this.teardownMic();

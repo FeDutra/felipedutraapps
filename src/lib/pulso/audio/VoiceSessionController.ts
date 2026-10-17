@@ -62,8 +62,8 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = `Você é a voz da Lótus falando com o F
 
 Regra mais importante: você NÃO tem acesso a nenhuma informação real, ferramenta, memória ou dado — quem responde de verdade é outro sistema, por trás. Você nunca inventa fatos nem responde perguntas com conteúdo substantivo por conta própria.
 
-Seu papel tem duas partes:
-1. Ao ouvir o microfone, não responda ao conteúdo do pedido e nunca diga que não consegue fazer algo. A PULSO decide o destino do turno fora de você.
+Seu papel tem três partes:
+1. Ao ouvir o microfone, responda imediatamente com UMA frase curta de presença. Se for uma saudação puramente social, responda naturalmente. Se houver pedido, confirme a ação concreta (por exemplo: “vou olhar sua agenda”) sem fornecer fatos, resultados ou conteúdo substantivo. Nunca diga que não consegue fazer algo, não cite limitações, não prometa prazo e não repita o pedido inteiro. A PULSO envia toda fala para a Lótus real em paralelo.
 2. Quando receber uma mensagem começando com "[CONFIRMAÇÃO]", diga UMA frase curta, concreta e adulta confirmando que começou. Não responda ao pedido, não cite limitações, não infantilize, não seja efusiva, não prometa prazo e não repita o pedido inteiro.
 3. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre só a mudança concreta de fase, em uma frase, e volte a esperar sem soar como se tivesse terminado.
 
@@ -113,6 +113,7 @@ export class VoiceSessionController {
   private activeGeminiTurnId: string | null = null;
   private activePresenceRequestId: string | null = null;
   private activeTurnBasedTurnId: string | null = null;
+  private readonly socialGeminiTurnIds = new Set<string>();
   private readonly turnMachine = new PresenceTurnMachine();
 
   constructor(config: VoiceSessionConfig) {
@@ -818,8 +819,9 @@ export class VoiceSessionController {
         this.config.onPresenceWorkChange?.(false);
         this.log('GEMINI_LIVE_USER_TURN_STARTED', { turnId });
       },
-      onUserTurnReady: async ({ turnId, userText }) => {
+      onUserTurnReady: async ({ turnId, userText, socialOnly }) => {
         if (turnId !== this.activeGeminiTurnId) return;
+        if (socialOnly) this.socialGeminiTurnIds.add(turnId);
         this.advanceTurn({ type: 'turn_closed', turnId });
         this.advanceTurn({ type: 'transcription_started', turnId });
         this.advanceTurn({ type: 'transcription_ready', turnId });
@@ -892,6 +894,11 @@ export class VoiceSessionController {
       : this.activeGeminiTurnId ?? undefined;
     const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
+    if (this.socialGeminiTurnIds.delete(turnId)) {
+      const completed = this.geminiLiveClient?.completeResultSilently(turnId) ?? false;
+      if (completed) this.config.onPresenceWorkChange?.(false);
+      return completed;
+    }
     const accepted = this.geminiLiveClient?.sendResultText(resultText, turnId) ?? false;
     if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
     if (accepted) this.config.onPresenceWorkChange?.(false);
@@ -916,6 +923,7 @@ export class VoiceSessionController {
       this.activeGeminiTurnId = null;
       this.activePresenceRequestId = null;
       this.activeTurnBasedTurnId = null;
+      this.socialGeminiTurnIds.clear();
       this.config.onPresenceWorkChange?.(false);
       return;
     }

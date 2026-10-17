@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // @ts-expect-error Node's strip-types runner executes the TypeScript source directly.
-import { GeminiLiveClient } from '../GeminiLiveClient.ts';
+import { GeminiLiveClient, type GeminiLiveConfig } from '../GeminiLiveClient.ts';
 
 const originalWebSocket = globalThis.WebSocket;
 
-function createHarness() {
+type HarnessCallbacks = Pick<GeminiLiveConfig, 'onUserTurnReady' | 'onTranscript'>;
+
+function createHarness(callbacks: Partial<HarnessCallbacks> = {}) {
   const sent: string[] = [];
   const states: string[] = [];
   const client = new GeminiLiveClient({
@@ -14,6 +16,7 @@ function createHarness() {
     systemInstruction: 'Canária',
     onStateChange: (state) => states.push(state),
     onError: () => undefined,
+    ...callbacks,
   });
   const fakeSocket = {
     readyState: 1,
@@ -26,6 +29,10 @@ function createHarness() {
   });
   return { client, sent, states };
 }
+
+const handleMessage = (client: GeminiLiveClient, payload: object) => (
+  client as unknown as { handleMessage: (raw: string) => Promise<void> }
+).handleMessage(JSON.stringify(payload));
 
 test.before(() => {
   globalThis.WebSocket = Object.assign(function WebSocketCanary() {}, { OPEN: 1 }) as unknown as typeof WebSocket;
@@ -91,4 +98,70 @@ test('interrupção limpa áudio e fila do turno sem reaproveitar fala antiga', 
   assert.equal(snapshot.awaitingResult, false);
   assert.equal(sent.length, 0);
   assert.equal(states.at(-1), 'listening');
+});
+
+test('setup reduz a espera de silêncio sem usar VAD agressivo', () => {
+  const { client, sent } = createHarness();
+  (client as unknown as { sendSetup: () => void }).sendSetup();
+
+  const setup = JSON.parse(sent[0]).setup;
+  assert.equal(setup.realtimeInputConfig.automaticActivityDetection.disabled, false);
+  assert.equal(setup.realtimeInputConfig.automaticActivityDetection.prefixPaddingMs, 40);
+  assert.equal(setup.realtimeInputConfig.automaticActivityDetection.silenceDurationMs, 600);
+});
+
+test('pedido operacional toca a confirmação autônoma e entra uma vez no fluxo canônico', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client, sent } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  const played: string[] = [];
+  Object.assign(client, {
+    enqueuePlayback: (chunk: string) => played.push(chunk),
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Quais são meus compromissos de hoje?' },
+      modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(played.length, 1);
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Quais são meus compromissos de hoje?');
+  assert.equal(turns[0].socialOnly, false);
+  assert.equal(sent.length, 0, 'não deve pedir uma segunda confirmação ao Gemini');
+});
+
+test('saudação também entra no fluxo canônico e não duplica a resposta falada', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  const played: string[] = [];
+  Object.assign(client, {
+    enqueuePlayback: (chunk: string) => played.push(chunk),
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Oi, bom dia. Tudo bem? E você?' },
+      modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(played.length, 1);
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].socialOnly, true);
+  assert.equal(client.completeResultSilently(turns[0].turnId), true);
+  assert.equal(client.completeResultSilently(turns[0].turnId), false);
 });
