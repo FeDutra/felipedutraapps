@@ -14,11 +14,9 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 // Lightweight React harness for Node test execution without node_modules
 const reactHarness = {
   currentState: undefined,
-  currentRef: undefined,
   pendingEffects: [],
   reset() {
     this.currentState = undefined;
-    this.currentRef = undefined;
     this.pendingEffects = [];
   },
   createElement(type, props, ...children) {
@@ -44,19 +42,13 @@ const reactHarness = {
   useEffect(effectFn) {
     reactHarness.pendingEffects.push(effectFn);
   },
-  useRef(initialValue) {
-    if (reactHarness.currentRef === undefined) {
-      reactHarness.currentRef = { current: initialValue };
-    }
-    return reactHarness.currentRef;
-  },
 };
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === 'react') {
       return {
-        url: 'data:text/javascript,export default globalThis.__PULSO_TEST_REACT__; export const useState = globalThis.__PULSO_TEST_REACT__.useState; export const useEffect = globalThis.__PULSO_TEST_REACT__.useEffect; export const useRef = globalThis.__PULSO_TEST_REACT__.useRef;',
+        url: 'data:text/javascript,export default globalThis.__PULSO_TEST_REACT__; export const useState = globalThis.__PULSO_TEST_REACT__.useState; export const useEffect = globalThis.__PULSO_TEST_REACT__.useEffect;',
         shortCircuit: true,
       };
     }
@@ -89,6 +81,7 @@ const {
   evaluateCanaryBootstrapResult,
   acknowledgeRenderedCanary,
   createRenderedReceiptPayload,
+  scheduleRenderedCanaryAcknowledgment,
   isTauriEnvironment,
   INITIAL_CANARY_SNAPSHOT,
 } = canaryModule;
@@ -158,6 +151,30 @@ test('render acknowledgment sends exact bounded fields only for a connected snap
     false
   );
   assert.equal(calls.length, 1);
+
+  let scheduled = null;
+  assert.equal(
+    scheduleRenderedCanaryAcknowledgment(
+      { __TAURI__: { core: receiver } },
+      connected,
+      (callback) => {
+        scheduled = callback;
+      }
+    ),
+    true
+  );
+  assert.equal(calls.length, 1);
+  await scheduled();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.length, 2);
+  assert.equal(
+    scheduleRenderedCanaryAcknowledgment(
+      { __TAURI__: { core: receiver } },
+      INITIAL_CANARY_SNAPSHOT,
+      () => assert.fail('idle snapshot must not schedule a receipt')
+    ),
+    false
+  );
 });
 
 test('Outside Tauri: PulsoCoreCanary remains idle and never invokes pulsoCoreClient.bootstrap', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   createPulsoCoreClient,
   resolveTauriInvoke,
@@ -192,6 +192,26 @@ export async function acknowledgeRenderedCanary(
   return true;
 }
 
+export function scheduleRenderedCanaryAcknowledgment(
+  scope: unknown,
+  snapshot: PulsoCoreCanarySnapshot,
+  schedule?: (callback: () => void) => unknown
+): boolean {
+  if (!createRenderedReceiptPayload(snapshot)) {
+    return false;
+  }
+  const candidate = scope as { requestAnimationFrame?: (callback: () => void) => unknown } | null;
+  const scheduleAfterPaint =
+    schedule ??
+    (candidate && typeof candidate.requestAnimationFrame === 'function'
+      ? candidate.requestAnimationFrame.bind(candidate)
+      : (callback: () => void) => setTimeout(callback, 0));
+  scheduleAfterPaint(() => {
+    void acknowledgeRenderedCanary(scope, snapshot).catch(() => undefined);
+  });
+  return true;
+}
+
 export async function runPulsoCoreCanaryProbe(
   options: PulsoCoreCanaryProbeOptions = {}
 ): Promise<PulsoCoreCanarySnapshot> {
@@ -252,7 +272,6 @@ export async function runPulsoCoreCanaryProbe(
 
 export function PulsoCoreCanary(props: PulsoCoreCanaryProps = {}) {
   const [snapshot, setSnapshot] = useState<PulsoCoreCanarySnapshot>(INITIAL_CANARY_SNAPSHOT);
-  const lastReceiptKey = useRef<string | null>(null);
   const scope = props.scope ?? (typeof window !== 'undefined' ? window : globalThis);
 
   useEffect(() => {
@@ -266,6 +285,7 @@ export function PulsoCoreCanary(props: PulsoCoreCanaryProps = {}) {
       onStateChange: (next) => {
         if (!cancelled) {
           setSnapshot(next);
+          scheduleRenderedCanaryAcknowledgment(scope, next);
         }
       },
     });
@@ -274,23 +294,6 @@ export function PulsoCoreCanary(props: PulsoCoreCanaryProps = {}) {
       cancelled = true;
     };
   }, [scope, props.timeoutMs, props.intervalMs, props.client]);
-
-  useEffect(() => {
-    const payload = createRenderedReceiptPayload(snapshot);
-    if (!payload) {
-      return;
-    }
-    const receiptKey = JSON.stringify(payload);
-    if (lastReceiptKey.current === receiptKey) {
-      return;
-    }
-    lastReceiptKey.current = receiptKey;
-    void acknowledgeRenderedCanary(scope, snapshot).catch(() => {
-      if (lastReceiptKey.current === receiptKey) {
-        lastReceiptKey.current = null;
-      }
-    });
-  }, [scope, snapshot]);
 
   return (
     <output
