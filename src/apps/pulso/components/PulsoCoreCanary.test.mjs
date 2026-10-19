@@ -14,9 +14,11 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 // Lightweight React harness for Node test execution without node_modules
 const reactHarness = {
   currentState: undefined,
+  currentRef: undefined,
   pendingEffects: [],
   reset() {
     this.currentState = undefined;
+    this.currentRef = undefined;
     this.pendingEffects = [];
   },
   createElement(type, props, ...children) {
@@ -42,13 +44,19 @@ const reactHarness = {
   useEffect(effectFn) {
     reactHarness.pendingEffects.push(effectFn);
   },
+  useRef(initialValue) {
+    if (reactHarness.currentRef === undefined) {
+      reactHarness.currentRef = { current: initialValue };
+    }
+    return reactHarness.currentRef;
+  },
 };
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === 'react') {
       return {
-        url: 'data:text/javascript,export default globalThis.__PULSO_TEST_REACT__; export const useState = globalThis.__PULSO_TEST_REACT__.useState; export const useEffect = globalThis.__PULSO_TEST_REACT__.useEffect;',
+        url: 'data:text/javascript,export default globalThis.__PULSO_TEST_REACT__; export const useState = globalThis.__PULSO_TEST_REACT__.useState; export const useEffect = globalThis.__PULSO_TEST_REACT__.useEffect; export const useRef = globalThis.__PULSO_TEST_REACT__.useRef;',
         shortCircuit: true,
       };
     }
@@ -79,9 +87,78 @@ const {
   PulsoCoreCanary,
   runPulsoCoreCanaryProbe,
   evaluateCanaryBootstrapResult,
+  acknowledgeRenderedCanary,
+  createRenderedReceiptPayload,
   isTauriEnvironment,
   INITIAL_CANARY_SNAPSHOT,
 } = canaryModule;
+
+test('render acknowledgment sends exact bounded fields only for a connected snapshot', async () => {
+  const calls = [];
+  const receiver = {
+    marker: 'canary-render-receiver',
+    async invoke(command, args) {
+      assert.equal(this.marker, 'canary-render-receiver');
+      calls.push({ command, args });
+      return { status: 'connected' };
+    },
+  };
+  const connected = Object.freeze({
+    status: 'connected',
+    message: 'ready',
+    activeAreaId: 'area_pulso',
+    activeSessionId: 'session_geral',
+    runtimeStatus: 'stopped',
+    errorCode: null,
+  });
+
+  assert.deepEqual(createRenderedReceiptPayload(connected), {
+    status: 'connected',
+    activeAreaId: 'area_pulso',
+    activeSessionId: 'session_geral',
+    runtimeStatus: 'stopped',
+  });
+  assert.equal(
+    await acknowledgeRenderedCanary({ __TAURI__: { core: receiver } }, connected),
+    true
+  );
+  assert.deepEqual(calls, [
+    {
+      command: 'core_canary_rendered',
+      args: {
+        payload: {
+          status: 'connected',
+          activeAreaId: 'area_pulso',
+          activeSessionId: 'session_geral',
+          runtimeStatus: 'stopped',
+        },
+      },
+    },
+  ]);
+
+  assert.equal(
+    await acknowledgeRenderedCanary(
+      { __TAURI__: { core: receiver } },
+      INITIAL_CANARY_SNAPSHOT
+    ),
+    false
+  );
+  assert.equal(
+    await acknowledgeRenderedCanary(
+      { __TAURI__: { core: receiver } },
+      {
+        status: 'error',
+        message: 'failed',
+        activeAreaId: null,
+        activeSessionId: null,
+        runtimeStatus: null,
+        errorCode: 'FAILED',
+      }
+    ),
+    false
+  );
+  assert.equal(calls.length, 1);
+});
 
 test('Outside Tauri: PulsoCoreCanary remains idle and never invokes pulsoCoreClient.bootstrap', async () => {
   let bootstrapCalls = 0;

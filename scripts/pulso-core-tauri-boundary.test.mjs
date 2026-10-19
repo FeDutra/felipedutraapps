@@ -245,6 +245,10 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.match(pulsoCoreRs, /--data-dir/);
   assert.match(pulsoCoreRs, /pub fn bridge_request/);
   assert.match(pulsoCoreRs, /pub fn shutdown_bridge/);
+  assert.match(pulsoCoreRs, /pub fn core_canary_rendered/);
+  assert.match(pulsoCoreRs, /core-canary-rendered\.json/);
+  assert.match(pulsoCoreRs, /rename\(&temporary, &destination\)/);
+  assert.match(libRs, /core_canary_rendered/);
   assert.equal(pulsoCoreRs.includes('store_provider_secret'), false);
   assert.equal(pulsoCoreRs.includes('security_framework'), false);
 });

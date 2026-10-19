@@ -19,7 +19,9 @@ use agent::voice_recording::{
   voice_recording_mark,
   voice_recording_recover_incomplete,
 };
-use pulso_core::{BridgeManager, bridge_request, shutdown_bridge};
+use pulso_core::{
+  BridgeManager, bridge_request, core_canary_rendered, shutdown_bridge,
+};
 use std::sync::Mutex;
 
 #[derive(Deserialize)]
@@ -190,6 +192,7 @@ pub fn run() {
       voice_recording_mark,
       voice_recording_recover_incomplete,
       bridge_request,
+      core_canary_rendered,
       shutdown_bridge
     ])
     .setup(|app| {

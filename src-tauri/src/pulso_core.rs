@@ -1,13 +1,119 @@
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, rename, File};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
 
 pub const SIDECAR_BIN_NAME: &str = "pulso-node";
 pub const SIDECAR_TRIPLE_BIN_NAME: &str = "pulso-node-x86_64-apple-darwin";
+pub const CANARY_RECEIPT_FILENAME: &str = "core-canary-rendered.json";
+const CANARY_FIELD_MAX_BYTES: usize = 128;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CanaryRenderedPayload {
+    pub status: String,
+    pub active_area_id: Option<String>,
+    pub active_session_id: Option<String>,
+    pub runtime_status: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CanaryRenderedReceipt {
+    pub schema_version: u8,
+    pub status: String,
+    pub active_area_id: Option<String>,
+    pub active_session_id: Option<String>,
+    pub runtime_status: String,
+    pub generated_at: String,
+}
+
+fn validate_canary_field(
+    field_name: &str,
+    value: Option<&str>,
+    required: bool,
+) -> Result<(), String> {
+    let Some(value) = value else {
+        return if required {
+            Err(format!("{} is required", field_name))
+        } else {
+            Ok(())
+        };
+    };
+    if value.is_empty() || value.trim() != value {
+        return Err(format!("{} must be non-empty and trimmed", field_name));
+    }
+    if value.len() > CANARY_FIELD_MAX_BYTES {
+        return Err(format!(
+            "{} exceeds {} bytes",
+            field_name, CANARY_FIELD_MAX_BYTES
+        ));
+    }
+    if value
+        .chars()
+        .any(|c| c.is_control() || c == '/' || c == '\\')
+    {
+        return Err(format!("{} contains forbidden characters", field_name));
+    }
+    Ok(())
+}
+
+pub fn write_canary_rendered_receipt(
+    app_data_dir: &Path,
+    payload: CanaryRenderedPayload,
+) -> Result<CanaryRenderedReceipt, String> {
+    if payload.status != "connected" {
+        return Err("status must be exactly connected".to_string());
+    }
+    validate_canary_field("activeAreaId", payload.active_area_id.as_deref(), false)?;
+    validate_canary_field(
+        "activeSessionId",
+        payload.active_session_id.as_deref(),
+        false,
+    )?;
+    validate_canary_field("runtimeStatus", Some(&payload.runtime_status), true)?;
+
+    create_dir_all(app_data_dir)
+        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+
+    let generated_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("System clock error: {}", e))?
+        .as_millis()
+        .to_string();
+    let receipt = CanaryRenderedReceipt {
+        schema_version: 1,
+        status: payload.status,
+        active_area_id: payload.active_area_id,
+        active_session_id: payload.active_session_id,
+        runtime_status: payload.runtime_status,
+        generated_at,
+    };
+
+    let destination = app_data_dir.join(CANARY_RECEIPT_FILENAME);
+    let temporary = app_data_dir.join(format!(
+        ".{}.{}.tmp",
+        CANARY_RECEIPT_FILENAME,
+        std::process::id()
+    ));
+    let mut file =
+        File::create(&temporary).map_err(|e| format!("Failed to create canary receipt: {}", e))?;
+    serde_json::to_writer_pretty(&mut file, &receipt)
+        .map_err(|e| format!("Failed to serialize canary receipt: {}", e))?;
+    file.write_all(b"\n")
+        .map_err(|e| format!("Failed to finalize canary receipt: {}", e))?;
+    file.sync_all()
+        .map_err(|e| format!("Failed to sync canary receipt: {}", e))?;
+    rename(&temporary, &destination)
+        .map_err(|e| format!("Failed to publish canary receipt atomically: {}", e))?;
+
+    Ok(receipt)
+}
 
 pub fn resolve_node_sidecar_path(exe_parent: &Path) -> Result<PathBuf, String> {
     let candidates = [
@@ -33,10 +139,7 @@ pub fn resolve_bridge_script_path(resource_dir: &Path) -> Result<PathBuf, String
             .join("core")
             .join("desktop")
             .join("bridge.mjs"),
-        resource_dir
-            .join("core")
-            .join("desktop")
-            .join("bridge.mjs"),
+        resource_dir.join("core").join("desktop").join("bridge.mjs"),
     ];
 
     for candidate in candidates {
@@ -250,10 +353,23 @@ pub fn shutdown_bridge(
     manager.shutdown()
 }
 
+#[tauri::command]
+pub fn core_canary_rendered(
+    app: AppHandle,
+    payload: CanaryRenderedPayload,
+) -> Result<Value, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let receipt = write_canary_rendered_receipt(&app_data_dir, payload)?;
+    serde_json::to_value(receipt).map_err(|e| format!("Failed to return canary receipt: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{File, remove_dir_all};
+    use std::fs::{remove_dir_all, File};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_temp_dir(prefix: &str) -> PathBuf {
@@ -308,6 +424,66 @@ mod tests {
         File::create(&script).unwrap();
 
         assert_eq!(resolve_bridge_script_path(&temp).unwrap(), script);
+        let _ = remove_dir_all(&temp);
+    }
+
+    fn valid_canary_payload() -> CanaryRenderedPayload {
+        CanaryRenderedPayload {
+            status: "connected".to_string(),
+            active_area_id: Some("area_pulso".to_string()),
+            active_session_id: Some("session_geral".to_string()),
+            runtime_status: "stopped".to_string(),
+        }
+    }
+
+    #[test]
+    fn canary_receipt_rejects_invalid_or_path_like_fields() {
+        let temp = unique_temp_dir("pulso-canary-invalid");
+
+        let mut invalid_status = valid_canary_payload();
+        invalid_status.status = "error".to_string();
+        assert!(write_canary_rendered_receipt(&temp, invalid_status).is_err());
+
+        let mut path_like = valid_canary_payload();
+        path_like.active_area_id = Some("../secrets".to_string());
+        assert!(write_canary_rendered_receipt(&temp, path_like).is_err());
+
+        let mut blank_runtime = valid_canary_payload();
+        blank_runtime.runtime_status = " ".to_string();
+        assert!(write_canary_rendered_receipt(&temp, blank_runtime).is_err());
+
+        assert!(!temp.join(CANARY_RECEIPT_FILENAME).exists());
+        let _ = remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn canary_receipt_is_valid_json_and_atomically_replaces_prior_content() {
+        let temp = unique_temp_dir("pulso-canary-receipt");
+        let receipt_path = temp.join(CANARY_RECEIPT_FILENAME);
+        std::fs::write(&receipt_path, b"stale").unwrap();
+
+        let receipt = write_canary_rendered_receipt(&temp, valid_canary_payload()).unwrap();
+        let parsed: Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+
+        assert_eq!(receipt.schema_version, 1);
+        assert_eq!(parsed["status"], "connected");
+        assert_eq!(parsed["activeAreaId"], "area_pulso");
+        assert_eq!(parsed["activeSessionId"], "session_geral");
+        assert_eq!(parsed["runtimeStatus"], "stopped");
+        assert!(parsed["generatedAt"]
+            .as_str()
+            .unwrap()
+            .parse::<u128>()
+            .is_ok());
+        assert_eq!(
+            std::fs::read_dir(&temp)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+                .count(),
+            0
+        );
+
         let _ = remove_dir_all(&temp);
     }
 }

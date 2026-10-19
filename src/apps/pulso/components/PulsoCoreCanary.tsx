@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   createPulsoCoreClient,
   resolveTauriInvoke,
@@ -33,6 +33,13 @@ export interface PulsoCoreCanaryProps {
   timeoutMs?: number;
   intervalMs?: number;
   client?: Pick<PulsoCoreClient, 'bootstrap'>;
+}
+
+export interface PulsoCoreRenderedReceiptPayload {
+  readonly status: 'connected';
+  readonly activeAreaId: string | null;
+  readonly activeSessionId: string | null;
+  readonly runtimeStatus: string;
 }
 
 export const DEFAULT_CANARY_WAIT_TIMEOUT_MS = 1500;
@@ -155,6 +162,36 @@ export function evaluateCanaryBootstrapResult(
   });
 }
 
+export function createRenderedReceiptPayload(
+  snapshot: PulsoCoreCanarySnapshot
+): PulsoCoreRenderedReceiptPayload | null {
+  if (snapshot.status !== 'connected' || !snapshot.runtimeStatus) {
+    return null;
+  }
+  return Object.freeze({
+    status: 'connected',
+    activeAreaId: snapshot.activeAreaId,
+    activeSessionId: snapshot.activeSessionId,
+    runtimeStatus: snapshot.runtimeStatus,
+  });
+}
+
+export async function acknowledgeRenderedCanary(
+  scope: unknown,
+  snapshot: PulsoCoreCanarySnapshot
+): Promise<boolean> {
+  const payload = createRenderedReceiptPayload(snapshot);
+  if (!payload) {
+    return false;
+  }
+  const invoke = resolveTauriInvoke(scope);
+  if (!invoke) {
+    return false;
+  }
+  await invoke('core_canary_rendered', { payload });
+  return true;
+}
+
 export async function runPulsoCoreCanaryProbe(
   options: PulsoCoreCanaryProbeOptions = {}
 ): Promise<PulsoCoreCanarySnapshot> {
@@ -215,12 +252,14 @@ export async function runPulsoCoreCanaryProbe(
 
 export function PulsoCoreCanary(props: PulsoCoreCanaryProps = {}) {
   const [snapshot, setSnapshot] = useState<PulsoCoreCanarySnapshot>(INITIAL_CANARY_SNAPSHOT);
+  const lastReceiptKey = useRef<string | null>(null);
+  const scope = props.scope ?? (typeof window !== 'undefined' ? window : globalThis);
 
   useEffect(() => {
     let cancelled = false;
 
     void runPulsoCoreCanaryProbe({
-      scope: props.scope ?? (typeof window !== 'undefined' ? window : globalThis),
+      scope,
       timeoutMs: props.timeoutMs,
       intervalMs: props.intervalMs,
       client: props.client,
@@ -234,7 +273,24 @@ export function PulsoCoreCanary(props: PulsoCoreCanaryProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, [props.scope, props.timeoutMs, props.intervalMs, props.client]);
+  }, [scope, props.timeoutMs, props.intervalMs, props.client]);
+
+  useEffect(() => {
+    const payload = createRenderedReceiptPayload(snapshot);
+    if (!payload) {
+      return;
+    }
+    const receiptKey = JSON.stringify(payload);
+    if (lastReceiptKey.current === receiptKey) {
+      return;
+    }
+    lastReceiptKey.current = receiptKey;
+    void acknowledgeRenderedCanary(scope, snapshot).catch(() => {
+      if (lastReceiptKey.current === receiptKey) {
+        lastReceiptKey.current = null;
+      }
+    });
+  }, [scope, snapshot]);
 
   return (
     <output
