@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import {
   mkdtempSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
   existsSync,
   statSync,
@@ -124,9 +125,19 @@ test('prepared Core bridge runs as persistent NDJSON sidecar with dedicated data
     targetDir: coreResourcesDir,
   });
 
+  // On macOS, tmpdir() under /tmp or /var resolves via symlink to /private/...,
+  // whereas bridge.mjs CLI entrypoint guard compares fileURLToPath(import.meta.url)
+  // (which resolves realpath) against path.resolve(process.argv[1]).
+  const canonicalBridgePath = realpathSync(bridgePath);
+  assert.equal(canonicalBridgePath, realpathSync(bridgePath));
+  assert.equal(path.isAbsolute(canonicalBridgePath), true);
+  if (process.platform === 'darwin' && bridgePath.startsWith('/tmp/')) {
+    assert.equal(canonicalBridgePath.startsWith('/private/tmp/'), true);
+  }
+
   const runSession = (requests) =>
     new Promise((resolveSession, rejectSession) => {
-      const child = spawn(process.execPath, [bridgePath, '--data-dir', dataDir], {
+      const child = spawn(process.execPath, [canonicalBridgePath, '--data-dir', dataDir], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
