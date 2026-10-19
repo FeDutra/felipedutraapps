@@ -40,6 +40,7 @@ test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   assert.equal(baseConfig.version, '0.1.0');
   assert.equal(baseConfig.app.windows[0].title, 'PULSO | Lótus Live');
   assert.equal(baseConfig.app.windows[0].resizable, true);
+  assert.equal(baseConfig.app.windows[0].url, undefined);
 });
 
 test('Merged base + tauri.canary.conf.json isolates canary identity while preserving sidecars, resources, frontendDist, /pulso/live devUrl, and resizable window', () => {
@@ -73,11 +74,12 @@ test('Merged base + tauri.canary.conf.json isolates canary identity while preser
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window title updated to PULSO Next Preview and remains resizable
+  // 5. Window title updated to PULSO Next Preview, inherits canonical HOME (no url override) and remains resizable
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, undefined);
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
+  assert.equal(merged.app.windows[0].url, undefined);
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
