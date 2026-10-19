@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.routing_receipt.v1",
+  "type": "object",
+  "required": [
+    "receiptId",
+    "status",
+    "resolvedScope",
+    "evaluatedScopes",
+    "primary",
+    "effective",
+    "fallbackActivated",
+    "cause",
+    "origin",
+    "attempts",
+    "occurredAt"
+  ],
+  "properties": {
+    "receiptId": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["succeeded", "failed"] },
+    "resolvedScope": { "type": "string", "minLength": 1 },
+    "evaluatedScopes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "primary": {
+      "type": "object",
+      "required": ["providerId", "model"],
+      "properties": {
+        "providerId": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "effective": {
+      "type": ["object", "null"],
+      "required": ["providerId", "model", "isFallback", "fallbackIndex"],
+      "properties": {
+        "providerId": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "isFallback": { "type": "boolean" },
+        "fallbackIndex": { "type": ["integer", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "fallbackActivated": { "type": "boolean" },
+    "cause": { "type": ["string", "null"] },
+    "origin": {
+      "type": "object",
+      "required": ["turnId", "sessionId", "agentId", "taskId"],
+      "properties": {
+        "turnId": { "type": ["string", "null"] },
+        "sessionId": { "type": ["string", "null"] },
+        "agentId": { "type": ["string", "null"] },
+        "taskId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "attemptIndex",
+          "providerId",
+          "model",
+          "role",
+          "fallbackIndex",
+          "status",
+          "cause",
+          "errorCode",
+          "latencyMs",
+          "timestamp"
+        ],
+        "properties": {
+          "attemptIndex": { "type": "integer", "minimum": 0 },
+          "providerId": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 },
+          "role": { "enum": ["primary", "fallback"] },
+          "fallbackIndex": { "type": ["integer", "null"] },
+          "status": { "enum": ["succeeded", "failed", "skipped"] },
+          "cause": { "type": ["string", "null"] },
+          "errorCode": { "type": ["string", "null"] },
+          "latencyMs": { "type": "number", "minimum": 0 },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "occurredAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

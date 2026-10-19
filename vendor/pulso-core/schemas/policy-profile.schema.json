@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.policy_profile.v1",
+  "type": "object",
+  "required": ["profileId", "name", "mode", "allowedActions", "deniedActions", "requireConfirmationFor", "metadata"],
+  "properties": {
+    "profileId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["read-only", "guarded", "workspace", "full"] },
+    "allowedActions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "deniedActions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "requireConfirmationFor": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

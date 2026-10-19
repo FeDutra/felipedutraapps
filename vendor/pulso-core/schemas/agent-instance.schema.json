@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.agent_instance.v1",
+  "type": "object",
+  "required": [
+    "instanceId",
+    "agentId",
+    "blueprintId",
+    "revisionId",
+    "version",
+    "identityId",
+    "status",
+    "resolvedBindings",
+    "health",
+    "concurrency",
+    "limits",
+    "createdAt",
+    "updatedAt",
+    "metadata"
+  ],
+  "properties": {
+    "instanceId": { "type": "string", "minLength": 1 },
+    "agentId": { "type": "string", "minLength": 1 },
+    "blueprintId": { "type": "string", "minLength": 1 },
+    "revisionId": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 1 },
+    "identityId": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["draft", "ready", "active", "paused", "draining", "retired", "failed"]
+    },
+    "resolvedBindings": {
+      "type": "object",
+      "required": ["model", "runtime"],
+      "properties": {
+        "model": {
+          "type": "object",
+          "required": ["providerId", "model"],
+          "properties": {
+            "providerId": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "runtime": {
+          "type": "object",
+          "required": ["providerId", "executorType"],
+          "properties": {
+            "providerId": { "type": "string", "minLength": 1 },
+            "executorType": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "health": {
+      "type": "object",
+      "required": ["status", "checkedAt"],
+      "properties": {
+        "status": { "enum": ["healthy", "degraded", "failed"] },
+        "checkedAt": { "type": "string" },
+        "detail": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "concurrency": {
+      "type": "object",
+      "required": ["current", "limit"],
+      "properties": {
+        "current": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "required": ["maxTurns", "maxTokens", "maxCost", "maxConcurrency", "timeoutMs"],
+      "properties": {
+        "maxTurns": { "type": "integer", "minimum": 0 },
+        "maxTokens": { "type": "integer", "minimum": 0 },
+        "maxCost": { "type": "number", "minimum": 0 },
+        "maxToolCalls": { "type": ["integer", "null"], "minimum": 0 },
+        "maxConcurrency": { "type": "integer", "minimum": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

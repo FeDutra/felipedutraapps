@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.runtime_service_status.v1",
+  "type": "object",
+  "required": [
+    "serviceId",
+    "status",
+    "startedAt",
+    "stoppedAt",
+    "checkedAt",
+    "recoveryCount",
+    "recoveredLeasesCount",
+    "storeIntegrity",
+    "outboxSummary",
+    "providersSummary"
+  ],
+  "properties": {
+    "serviceId": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["stopped", "starting", "running", "stopping", "degraded"]
+    },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "stoppedAt": { "type": ["string", "null"], "format": "date-time" },
+    "checkedAt": { "type": "string", "format": "date-time" },
+    "recoveryCount": { "type": "integer", "minimum": 0 },
+    "recoveredLeasesCount": { "type": "integer", "minimum": 0 },
+    "storeIntegrity": {
+      "type": "object",
+      "required": ["ok", "events", "aggregates"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "events": { "type": "integer", "minimum": 0 },
+        "aggregates": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "outboxSummary": {
+      "type": "object",
+      "required": [
+        "total",
+        "pending",
+        "leased",
+        "delivered",
+        "failed",
+        "dead_letter",
+        "cancelled"
+      ],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "pending": { "type": "integer", "minimum": 0 },
+        "leased": { "type": "integer", "minimum": 0 },
+        "delivered": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "dead_letter": { "type": "integer", "minimum": 0 },
+        "cancelled": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "providersSummary": {
+      "type": "object",
+      "required": ["total", "healthy", "degraded", "unhealthy"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "healthy": { "type": "integer", "minimum": 0 },
+        "degraded": { "type": "integer", "minimum": 0 },
+        "unhealthy": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

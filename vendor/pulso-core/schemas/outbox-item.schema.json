@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.outbox_item.v1",
+  "type": "object",
+  "required": [
+    "outboxId",
+    "idempotencyKey",
+    "topic",
+    "status",
+    "payload",
+    "scope",
+    "attemptCount",
+    "maxAttempts",
+    "backoffPolicy",
+    "nextAttemptAt",
+    "lease",
+    "lastError",
+    "receipt",
+    "history",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "outboxId": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "topic": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["pending", "leased", "delivered", "failed", "dead_letter", "cancelled"]
+    },
+    "payload": { "type": "object" },
+    "scope": {
+      "type": "object",
+      "required": ["type", "scopeId"],
+      "properties": {
+        "type": { "enum": ["system", "global", "agent", "session", "task"] },
+        "scopeId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "attemptCount": { "type": "integer", "minimum": 0 },
+    "maxAttempts": { "type": "integer", "minimum": 1 },
+    "backoffPolicy": {
+      "type": "object",
+      "required": ["baseDelayMs", "maxDelayMs", "multiplier"],
+      "properties": {
+        "baseDelayMs": { "type": "number", "minimum": 0 },
+        "maxDelayMs": { "type": "number", "minimum": 0 },
+        "multiplier": { "type": "number", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "nextAttemptAt": { "type": "string", "format": "date-time" },
+    "lease": {
+      "type": ["object", "null"],
+      "required": ["leaseId", "workerId", "leasedAt", "expiresAt"],
+      "properties": {
+        "leaseId": { "type": "string", "minLength": 1 },
+        "workerId": { "type": "string", "minLength": 1 },
+        "leasedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "lastError": { "type": ["object", "null"] },
+    "receipt": { "type": ["object", "null"] },
+    "history": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

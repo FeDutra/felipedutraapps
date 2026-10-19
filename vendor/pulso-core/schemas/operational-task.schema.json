@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.operational_task.v1",
+  "type": "object",
+  "required": ["taskId", "taskType", "priority", "status", "progress", "checkpoints", "cancellationReceipt", "result", "error", "metadata", "createdAt", "updatedAt"],
+  "properties": {
+    "taskId": { "type": "string", "minLength": 1 },
+    "taskType": { "type": "string", "minLength": 1 },
+    "priority": { "enum": ["low", "normal", "high", "critical"] },
+    "status": { "enum": ["queued", "running", "paused", "completed", "failed", "cancelled"] },
+    "progress": { "type": "number", "minimum": 0, "maximum": 100 },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["checkpointId", "label", "recordedAt"],
+        "properties": {
+          "checkpointId": { "type": "string" },
+          "label": { "type": "string" },
+          "data": {},
+          "recordedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "cancellationReceipt": {
+      "type": ["object", "null"],
+      "properties": {
+        "taskId": { "type": "string" },
+        "reason": { "type": "string" },
+        "cancelledAt": { "type": "string", "format": "date-time" },
+        "checkpointsCount": { "type": "integer" }
+      }
+    },
+    "result": { "type": ["object", "null"] },
+    "error": { "type": ["object", "null"] },
+    "metadata": { "type": "object" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

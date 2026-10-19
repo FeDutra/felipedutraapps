@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.event.v1",
+  "type": "object",
+  "required": ["eventId", "type", "aggregate", "correlationId", "actor", "occurredAt", "recordedAt", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "minLength": 1},
+    "type": {"type": "string", "pattern": "^[a-z_]+[.][a-z_]+$"},
+    "aggregate": {
+      "type": "object",
+      "required": ["type", "id", "sequence"],
+      "properties": {
+        "type": {"type": "string"},
+        "id": {"type": "string"},
+        "sequence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "correlationId": {"type": "string"},
+    "causationId": {"type": ["string", "null"]},
+    "actor": {"type": "object"},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": false
+}

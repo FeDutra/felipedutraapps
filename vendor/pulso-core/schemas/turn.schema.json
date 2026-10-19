@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.turn.v1",
+  "type": "object",
+  "required": ["turnId", "sessionId", "identityId", "input", "origin", "status", "idempotencyKey", "createdAt"],
+  "properties": {
+    "turnId": {"type": "string", "minLength": 1},
+    "sessionId": {"type": "string", "minLength": 1},
+    "spaceId": {"type": ["string", "null"]},
+    "identityId": {"type": "string", "minLength": 1},
+    "input": {"type": "object"},
+    "origin": {"type": "object"},
+    "status": {"enum": ["received", "accepted", "routing", "active", "awaiting_input", "awaiting_approval", "delivering", "completed", "failed", "cancelled"]},
+    "idempotencyKey": {"type": "string", "minLength": 1},
+    "createdAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": true
+}

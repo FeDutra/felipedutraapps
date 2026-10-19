@@ -26,8 +26,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["bin/kokoro_runner"],
-    "resources": ["resources/*"],
+    "externalBin": ["bin/kokoro_runner", "binaries/pulso-node"],
+    "resources": ["resources/*", "resources/core/**/*"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

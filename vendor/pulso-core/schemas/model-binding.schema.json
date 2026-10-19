@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.model_binding.v1",
+  "type": "object",
+  "required": [
+    "scope",
+    "scopeKey",
+    "primary",
+    "fallbackChain",
+    "active",
+    "status",
+    "metadata"
+  ],
+  "properties": {
+    "scope": {
+      "type": "object",
+      "required": ["type", "scopeId"],
+      "properties": {
+        "type": { "enum": ["global", "system", "agent", "session", "task"] },
+        "scopeId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "scopeKey": { "type": "string", "minLength": 1 },
+    "primary": {
+      "type": "object",
+      "required": ["providerId", "model"],
+      "properties": {
+        "providerId": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "fallbackChain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["providerId", "model"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "model": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "active": {
+      "type": "object",
+      "required": ["providerId", "model", "selectedFallbackIndex", "reason"],
+      "properties": {
+        "providerId": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "selectedFallbackIndex": { "type": ["integer", "null"] },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "status": { "enum": ["active", "fallback_active", "degraded"] },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

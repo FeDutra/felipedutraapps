@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.capability_record.v1",
+  "type": "object",
+  "required": [
+    "capabilityId",
+    "name",
+    "category",
+    "status",
+    "owner",
+    "evidence",
+    "checklist",
+    "functionalReference",
+    "nextAcceptance",
+    "metadata"
+  ],
+  "properties": {
+    "capabilityId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "category": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["absent", "planned", "partial", "ready", "verified"] },
+    "owner": { "type": "string", "minLength": 1 },
+    "evidence": {
+      "type": "array",
+      "items": { "type": ["string", "object"] }
+    },
+    "checklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "status", "verified"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "status": { "type": "string" },
+          "verified": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "functionalReference": { "type": "string" },
+    "nextAcceptance": { "type": "string" },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

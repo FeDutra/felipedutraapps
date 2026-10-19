@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.agent_grant.v1",
+  "type": "object",
+  "required": [
+    "grantId",
+    "agentId",
+    "capability",
+    "effect",
+    "scope",
+    "grantedBy",
+    "grantedAt",
+    "expiresAt"
+  ],
+  "properties": {
+    "grantId": { "type": "string", "minLength": 1 },
+    "agentId": { "type": "string", "minLength": 1 },
+    "capability": { "type": "string", "minLength": 1 },
+    "effect": { "enum": ["allow", "deny"] },
+    "scope": {
+      "type": "object",
+      "required": ["type", "scopeId"],
+      "properties": {
+        "type": { "enum": ["global", "workspace", "session", "task"] },
+        "scopeId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "grantedBy": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "type": "string" },
+        "id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "grantedAt": { "type": "string" },
+    "expiresAt": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

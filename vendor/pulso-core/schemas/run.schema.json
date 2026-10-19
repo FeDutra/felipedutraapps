@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.run.v1",
+  "type": "object",
+  "required": ["runId", "turnId", "sessionId", "kind", "capability", "status", "attempt", "createdAt"],
+  "properties": {
+    "runId": {"type": "string", "minLength": 1},
+    "turnId": {"type": "string", "minLength": 1},
+    "sessionId": {"type": "string", "minLength": 1},
+    "parentRunId": {"type": ["string", "null"]},
+    "kind": {"type": "string"},
+    "capability": {"type": "string"},
+    "status": {"enum": ["queued", "running", "waiting_input", "waiting_approval", "paused", "succeeded", "failed", "cancelled", "timed_out"]},
+    "attempt": {"type": "integer", "minimum": 1},
+    "createdAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": true
+}

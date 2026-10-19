@@ -502,6 +502,21 @@ Firestore, relay ou Gateway OpenClaw.
 - Contingência sem novo build: selecionar `kokoro_http` no app e usar o endpoint
   público da VPS; a web continua independente do sidecar local.
 
+## PULSO Core client canário v0.7 — 19/10/2026
+
+- Baseline visual e funcional: `9add42e76db330db029937f851e4b76f9e1e3274`.
+- Branch: `feature/pulso-core-client-v0.7-sparse`.
+- O bundle canário usa `PULSO Next Preview` e
+  `com.felipedutraapps.pulso.next-preview`; nunca substitui `/Applications/PULSO.app`.
+- Dados locais do canário pertencem ao identificador próprio e não compartilham
+  o diretório da PULSO vigente.
+- Antes da instalação, preservar qualquer `/Applications/PULSO Next Preview.app`
+  existente em backup datado.
+- Para reverter a oficina, usar `git revert <commit-do-canário>` nesta branch.
+- Para reverter no iMac, encerrar e mover somente
+  `/Applications/PULSO Next Preview.app`; manter `/Applications/PULSO.app`
+  intocada.
+
 ---
 
 ## Split de até quatro chats — 20/09/2026

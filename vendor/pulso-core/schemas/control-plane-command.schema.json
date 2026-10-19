@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.control_plane_command.v1",
+  "type": "object",
+  "required": ["commandId", "name", "actor", "payload", "confirmed"],
+  "properties": {
+    "commandId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "actor": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "type": "string" },
+        "id": { "type": "string" }
+      }
+    },
+    "idempotencyKey": { "type": ["string", "null"] },
+    "payload": { "type": "object" },
+    "confirmed": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

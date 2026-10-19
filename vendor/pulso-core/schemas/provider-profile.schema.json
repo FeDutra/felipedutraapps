@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.provider_profile.v1",
+  "type": "object",
+  "required": [
+    "providerId",
+    "kind",
+    "displayName",
+    "capabilities",
+    "enabled",
+    "health",
+    "metadata"
+  ],
+  "properties": {
+    "providerId": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["model", "executor", "local"] },
+    "displayName": { "type": "string", "minLength": 1 },
+    "endpoint": { "type": ["string", "null"] },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "enabled": { "type": "boolean" },
+    "health": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["healthy", "degraded", "unhealthy", "unknown"] },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "detail": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "metadata": { "type": "object" },
+    "secretRef": { "type": ["string", "null"] },
+    "authSource": {
+      "type": ["object", "null"],
+      "properties": {
+        "secretRef": { "type": ["string", "null"] },
+        "scheme": { "type": "string" },
+        "keyId": { "type": ["string", "null"] },
+        "configured": { "type": "boolean" },
+        "redactedPreview": { "type": "string" },
+        "checkedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

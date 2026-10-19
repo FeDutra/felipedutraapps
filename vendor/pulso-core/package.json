@@ -1,0 +1,24 @@
+{
+  "name": "@pulso/core",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo soberano e provider-neutral da PULSO.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test",
+    "desktop:test": "node --test test/desktop-contract.test.mjs test/desktop-bridge.test.mjs",
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:sidecar": "node scripts/prepare-macos-sidecar.mjs",
+    "desktop:dev": "npm run desktop:prepare && tauri dev",
+    "desktop:build": "npm run desktop:prepare && tauri build",
+    "build": "node scripts/build.mjs",
+    "demo": "node src/demo.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2"
+  }
+}
