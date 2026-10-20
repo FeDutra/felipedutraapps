@@ -50,6 +50,7 @@ next-env.d.ts
 # Sidecar Models
 src-tauri/resources/*.onnx
 src-tauri/resources/*.bin
+src-tauri/resources/core/
 scratch-*/
 sidecar_log.txt
 

@@ -39,10 +39,20 @@ Core. A casca visual canônica permanece a mesma.
 
 ## Evidência automatizada
 
-- 24/24 testes da fronteira Desktop/Core;
-- build Next de produção concluído;
+- 24/24 testes da fronteira Desktop/Core, reproduzíveis por
+  `npm run pulso:alpha:verify`;
+- build Next de produção concluído sobre a base canônica `122025308`;
 - `cargo check` concluído com apenas um aviso legado de API depreciada;
 - segredo bruto ausente dos recibos e dos logs de build.
+
+### Baseline herdado
+
+- a checagem global `tsc --noEmit` ainda encontra 46 erros anteriores ao Core
+  em Ateliê, integrações Notion, testes históricos e pontos da própria
+  `LivePage` já presentes em `origin/main`;
+- os dois erros introduzidos pela convergência v0.8 foram corrigidos;
+- o workflow Alpha executa a suíte específica, o build Next e a compilação
+  nativa, sem representar a dívida global de tipagem como resolvida.
 
 ## Critério de aceite no MacBook
 

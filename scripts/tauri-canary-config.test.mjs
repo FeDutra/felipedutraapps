@@ -37,7 +37,7 @@ test('Base tauri.conf.json preserves canonical PULSO identity', () => {
 
   assert.equal(baseConfig.productName, 'PULSO');
   assert.equal(baseConfig.identifier, 'com.felipedutraapps.pulso');
-  assert.equal(baseConfig.version, '0.1.0');
+  assert.equal(baseConfig.version, '0.1.1');
   assert.equal(baseConfig.app.windows[0].title, 'PULSO | Lótus Live');
   assert.equal(baseConfig.app.windows[0].resizable, true);
   assert.equal(baseConfig.app.windows[0].url, undefined);
@@ -51,7 +51,7 @@ test('Merged base + tauri.canary.conf.json isolates canary identity while preser
   // 1. Isolated canary identity (does not collide with installed PULSO.app or Application Support)
   assert.equal(merged.productName, 'PULSO Next Preview');
   assert.equal(merged.identifier, 'com.felipedutraapps.pulso.next-preview');
-  assert.equal(merged.version, '0.7.0');
+  assert.equal(merged.version, '0.8.0');
   assert.notEqual(merged.productName, baseConfig.productName);
   assert.notEqual(merged.identifier, baseConfig.identifier);
 

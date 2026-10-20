@@ -1,15 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import {
-  createPulsoCoreClient,
-  resolveTauriInvoke,
-  waitForTauriInvoke,
-  type PulsoCoreBootstrapSnapshot,
-  type PulsoCoreClient,
-  type PulsoCoreResult,
-  type WaitForTauriInvokeOptions,
-} from '../services/pulsoCoreClient.ts';
+// Node 24's strip-types test harness resolves the source file directly and
+// requires the explicit extension; Next/Turbopack also accepts this import.
+// @ts-expect-error explicit .ts extension is intentional for the shared test/runtime module
+import { createPulsoCoreClient, resolveTauriInvoke, waitForTauriInvoke, type PulsoCoreBootstrapSnapshot, type PulsoCoreClient, type PulsoCoreResult, type WaitForTauriInvokeOptions } from '../services/pulsoCoreClient.ts';
 
 export type PulsoCoreCanaryStatus = 'idle' | 'connecting' | 'connected' | 'error';
 
