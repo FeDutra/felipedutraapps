@@ -50,8 +50,10 @@ jobs:
           test -d "$app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.felipedutraapps.pulso.next-preview"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "0.8.0"
-          test -x "$app/Contents/MacOS/PULSO Next Preview"
-          file "$app/Contents/MacOS/PULSO Next Preview" | grep -q 'x86_64'
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          test -n "$executable"
+          test -x "$app/Contents/MacOS/$executable"
+          file "$app/Contents/MacOS/$executable" | grep -q 'x86_64'
           find "$app/Contents/Resources" -name 'pulso-node-*' -type f -perm -111 | grep -q .
           find "$app/Contents/Resources" -name 'kokoro_runner*' -type f -perm -111 | grep -q .
           test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx"
