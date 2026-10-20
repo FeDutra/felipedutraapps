@@ -502,6 +502,23 @@ Firestore, relay ou Gateway OpenClaw.
 - Contingência sem novo build: selecionar `kokoro_http` no app e usar o endpoint
   público da VPS; a web continua independente do sidecar local.
 
+## PULSO Desktop v0.8 — conversa soberana — 20/10/2026
+
+- Baseline original da integração: `de50ab242`.
+- Base canônica convergida: `122025308` (`origin/main` em 20/10/2026).
+- Fonte vendorizada do Core: commit `cfb441091cd048bc1e50aad2ec22ba65f97c12c0`.
+- O bundle de validação continua separado como `PULSO Next Preview` e
+  `com.felipedutraapps.pulso.next-preview`.
+- Nunca substituir `/Applications/PULSO.app` durante a canária.
+- Antes de promover nova Preview, preservar a anterior em backup datado.
+- Para reverter o código, usar `git revert <commit-v0.8>` nesta branch.
+- Para reverter no MacBook, encerrar e mover apenas
+  `/Applications/PULSO Next Preview.app`; não remover o banco nem entradas do
+  Keychain sem pedido explícito do Fe.
+- O caminho web/Firebase não é publicado nem alterado por este marco.
+
+---
+
 ## PULSO Core client canário v0.7 — 19/10/2026
 
 - Baseline visual e funcional: `9add42e76db330db029937f851e4b76f9e1e3274`.

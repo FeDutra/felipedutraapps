@@ -11,6 +11,32 @@ export const LIVE_ENTITY_STATE_SET = new Set(LIVE_ENTITY_STATES);
 export const LIVE_MESSAGE_STATES = Object.freeze(["persisted", "awaiting_provider"]);
 export const LIVE_MESSAGE_STATE_SET = new Set(LIVE_MESSAGE_STATES);
 
+export const LIVE_CONVERSATION_RUN_STATES = Object.freeze([
+  "awaiting_provider",
+  "queued",
+  "streaming",
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted"
+]);
+export const LIVE_CONVERSATION_RUN_STATE_SET = new Set(LIVE_CONVERSATION_RUN_STATES);
+export const LIVE_CONVERSATION_RUN_TERMINAL = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted"
+]);
+export const LIVE_CONVERSATION_RUN_TRANSITIONS = Object.freeze({
+  awaiting_provider: Object.freeze(["queued", "failed", "cancelled"]),
+  queued: Object.freeze(["streaming", "failed", "cancelled"]),
+  streaming: Object.freeze(["completed", "failed", "cancelled", "interrupted"]),
+  completed: Object.freeze([]),
+  failed: Object.freeze([]),
+  cancelled: Object.freeze([]),
+  interrupted: Object.freeze([])
+});
+
 export const LIVE_DEFAULT_SEED = Object.freeze({
   area: Object.freeze({
     id: "area_pulso",
@@ -116,4 +142,69 @@ export function validateSelection(selection, existingAreaIds = null, existingSes
     sessionId: selection.sessionId ? selection.sessionId.trim() : null,
     selectedAt: timestamp
   };
+}
+
+function requiredText(value, code) {
+  invariant(typeof value === "string" && value.trim().length > 0, code);
+  return value.trim();
+}
+
+function optionalText(value, code) {
+  if (value === null || value === undefined) return null;
+  return requiredText(value, code);
+}
+
+function freezeDeep(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const item of Object.values(value)) freezeDeep(item);
+  return Object.freeze(value);
+}
+
+export function assertConversationRunTransition(fromStatus, toStatus) {
+  invariant(LIVE_CONVERSATION_RUN_STATE_SET.has(fromStatus), "invalid_conversation_run_status:" + fromStatus);
+  invariant(LIVE_CONVERSATION_RUN_STATE_SET.has(toStatus), "invalid_conversation_run_status:" + toStatus);
+  invariant(
+    LIVE_CONVERSATION_RUN_TRANSITIONS[fromStatus].includes(toStatus),
+    `invalid_conversation_run_transition:${fromStatus}->${toStatus}`
+  );
+  return true;
+}
+
+export function validateConversationRun(run) {
+  invariant(run && typeof run === "object", "conversation_run_object_required");
+  const status = run.status || "awaiting_provider";
+  invariant(LIVE_CONVERSATION_RUN_STATE_SET.has(status), "invalid_conversation_run_status:" + status);
+  const identityId = run.identityId || LIVE_DEFAULT_IDENTITY;
+  invariant(identityId === LIVE_DEFAULT_IDENTITY, "sovereign_identity_must_be_lotus");
+  invariant(Number.isInteger(run.deltasCount ?? 0) && (run.deltasCount ?? 0) >= 0, "conversation_run_deltas_count_invalid");
+  invariant(typeof run.accumulatedText === "string" || run.accumulatedText === undefined, "conversation_run_accumulated_text_invalid");
+
+  const validated = {
+    id: requiredText(run.id, "conversation_run_id_required"),
+    sessionId: requiredText(run.sessionId, "conversation_run_session_id_required"),
+    humanMessageId: requiredText(run.humanMessageId, "conversation_run_human_message_id_required"),
+    assistantMessageId: optionalText(run.assistantMessageId, "conversation_run_assistant_message_id_invalid"),
+    identityId: LIVE_DEFAULT_IDENTITY,
+    status,
+    accumulatedText: run.accumulatedText || "",
+    deltasCount: run.deltasCount ?? 0,
+    resumedFromRunId: optionalText(run.resumedFromRunId, "conversation_run_resumed_from_invalid"),
+    providerId: optionalText(run.providerId, "conversation_run_provider_id_invalid"),
+    model: optionalText(run.model, "conversation_run_model_invalid"),
+    receipt: run.receipt ? structuredClone(run.receipt) : null,
+    failure: run.failure ? structuredClone(run.failure) : null,
+    createdAt: requiredText(run.createdAt, "conversation_run_created_at_required"),
+    updatedAt: requiredText(run.updatedAt, "conversation_run_updated_at_required"),
+    startedAt: optionalText(run.startedAt, "conversation_run_started_at_invalid"),
+    completedAt: optionalText(run.completedAt, "conversation_run_completed_at_invalid")
+  };
+  if (status === "completed") {
+    invariant(validated.assistantMessageId, "completed_conversation_run_requires_assistant_message");
+    invariant(validated.receipt, "completed_conversation_run_requires_receipt");
+    invariant(validated.completedAt, "terminal_conversation_run_requires_completed_at");
+  }
+  if (LIVE_CONVERSATION_RUN_TERMINAL.has(status)) {
+    invariant(validated.completedAt, "terminal_conversation_run_requires_completed_at");
+  }
+  return freezeDeep(validated);
 }

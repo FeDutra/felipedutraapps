@@ -20,11 +20,20 @@ export const BRIDGE_METHODS = Object.freeze([
   'agent.transition',
   'audit.list',
   'live.bootstrap',
+  'live.topology.ensure',
+  'live.areas.list',
   'live.area.create',
+  'live.sessions.list',
   'live.session.create',
   'live.session.select',
   'live.message.append',
-  'live.messages.list'
+  'live.messages.list',
+  'live.turn.start',
+  'live.turn.poll',
+  'live.turn.cancel',
+  'live.turn.resume',
+  'live.turn.get',
+  'live.turn.list'
 ]);
 
 const METHOD_SET = new Set(BRIDGE_METHODS);

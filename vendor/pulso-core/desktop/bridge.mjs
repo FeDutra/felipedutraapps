@@ -11,6 +11,11 @@ import {
   ControlPlaneService,
   PulsoRuntimeService,
   LiveService,
+  LiveConversationService,
+  OpenAIModelAdapter,
+  AnthropicModelAdapter,
+  LocalOpenAICompatibleAdapter,
+  pulsoId,
 } from "../src/index.mjs";
 
 import {
@@ -87,9 +92,47 @@ export class PulsoDesktopBridge {
       new LiveService({
         store: this.store,
       });
+    this.conversations =
+      options.conversations ||
+      new LiveConversationService({
+        store: this.store,
+        live: this.live,
+        router: this.controlPlane.router,
+      });
+    this.turnQueues = new Map();
+    this.turnExecutions = new Map();
 
     this.initialized = false;
     this.closed = false;
+  }
+
+  createModelAdapter(params, secretRef) {
+    if (typeof this.options.adapterFactory === "function") {
+      return this.options.adapterFactory(params, secretRef, this.secretResolver);
+    }
+    const adapterKind = params.adapterKind || params.providerType || params.providerId;
+    const common = {
+      id: params.providerId,
+      label: params.displayName || params.providerId,
+      endpoint: params.endpoint || undefined,
+      defaultModel: params.model || undefined,
+      secretRef,
+      secretResolver: this.secretResolver,
+      allowExternalNetwork: params.allowExternalNetwork === true,
+    };
+    if (adapterKind === "openai") return new OpenAIModelAdapter(common);
+    if (adapterKind === "anthropic") return new AnthropicModelAdapter(common);
+    if (["local", "local_openai_compatible", "ollama"].includes(adapterKind)) {
+      return new LocalOpenAICompatibleAdapter({ ...common, secretRef: secretRef || null });
+    }
+    const error = new Error("unsupported_provider_adapter:" + adapterKind);
+    error.code = "UNSUPPORTED_PROVIDER_ADAPTER";
+    throw error;
+  }
+
+  enqueueTurnEnvelope(runId, envelope) {
+    if (!this.turnQueues.has(runId)) this.turnQueues.set(runId, []);
+    this.turnQueues.get(runId).push(envelope);
   }
 
   async initialize() {
@@ -218,6 +261,7 @@ export class PulsoDesktopBridge {
         }
         const providerId = params.providerId;
         const secretRef = params.secretRef ?? (params.kind === "local" ? null : "keychain:" + providerId);
+        const adapter = this.createModelAdapter(params, secretRef);
         const profile = {
           providerId,
           displayName: params.displayName || providerId,
@@ -235,13 +279,13 @@ export class PulsoDesktopBridge {
           confirmed: true,
           idempotencyKey: params.idempotencyKey || null,
         });
+        this.controlPlane.router.attachAdapter(providerId, adapter);
         if (params.model) {
-          await this.controlPlane.command("set_model_binding", {
-            scope: params.scope || "system",
-            providerId,
-            model: params.model,
+          this.controlPlane.router.setBinding({
+            scope: params.scope || { type: "system", scopeId: null },
+            primary: { providerId, model: params.model },
             fallbackChain: params.fallbackChain || [],
-          }, { confirmed: true });
+          }, { idempotencyKey: params.bindingIdempotencyKey || null });
         }
         const result = {
           provider: this.controlPlane.get("provider", providerId),
@@ -250,9 +294,45 @@ export class PulsoDesktopBridge {
         this.secretResolver.assertZeroLeakage(result);
         return result;
       }
+      case "provider.test": {
+        await this.initialize();
+        if (typeof params.providerId !== "string" || !params.providerId.trim()) {
+          const error = new Error("providerId is required");
+          error.code = "INVALID_PARAMS";
+          throw error;
+        }
+        const adapter = this.controlPlane.router.getAdapter(params.providerId);
+        if (!adapter || typeof adapter.health !== "function") {
+          const error = new Error("provider_adapter_not_configured:" + params.providerId);
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        const report = await adapter.health();
+        this.secretResolver.assertZeroLeakage(report);
+        return report;
+      }
       case "live.bootstrap": {
         await this.initialize();
         return await this.live.bootstrap();
+      }
+      case "live.topology.ensure": {
+        await this.initialize();
+        const areas = Array.isArray(params.areas) ? params.areas : [];
+        const sessions = Array.isArray(params.sessions) ? params.sessions : [];
+        for (const area of areas) {
+          await this.live.createArea(area, { idempotencyKey: `topology:area:${area.id}` });
+        }
+        for (const session of sessions) {
+          await this.live.createSession(session, { idempotencyKey: `topology:session:${session.id}` });
+        }
+        return {
+          areas: this.live.listAreas(),
+          sessions: this.live.listSessions(),
+        };
+      }
+      case "live.areas.list": {
+        await this.initialize();
+        return this.live.listAreas();
       }
       case "live.area.create": {
         await this.initialize();
@@ -261,6 +341,10 @@ export class PulsoDesktopBridge {
       case "live.session.create": {
         await this.initialize();
         return await this.live.createSession(params, { idempotencyKey: params && params.idempotencyKey });
+      }
+      case "live.sessions.list": {
+        await this.initialize();
+        return this.live.listSessions(params.areaId || null);
       }
       case "live.session.select": {
         await this.initialize();
@@ -274,6 +358,79 @@ export class PulsoDesktopBridge {
         await this.initialize();
         const sessionId = (params && params.sessionId) || this.live.state.selection.sessionId;
         return this.live.listMessages(sessionId);
+      }
+      case "live.turn.start": {
+        await this.initialize();
+        const runId = params.runId || pulsoId("live_run");
+        let markReady;
+        const ready = new Promise(resolveReady => { markReady = resolveReady; });
+        let readyMarked = false;
+        const onEnvelope = async envelope => {
+          this.enqueueTurnEnvelope(runId, envelope);
+          if (!readyMarked) {
+            readyMarked = true;
+            markReady();
+          }
+        };
+        const execution = this.conversations.startTurn(
+          { ...params, runId },
+          { idempotencyKey: params.idempotencyKey || null, onEnvelope }
+        );
+        this.turnExecutions.set(runId, execution);
+        execution.finally(() => this.turnExecutions.delete(runId)).catch(() => {});
+        await Promise.race([ready, execution.then(() => undefined)]);
+        return { runId, run: this.conversations.getRun(runId) };
+      }
+      case "live.turn.poll": {
+        await this.initialize();
+        const runId = params.runId;
+        const run = this.conversations.getRun(runId);
+        if (!run) {
+          const error = new Error("conversation_run_not_found:" + runId);
+          error.code = "CONVERSATION_RUN_NOT_FOUND";
+          throw error;
+        }
+        const queue = this.turnQueues.get(runId) || [];
+        const maxItems = Math.max(1, Math.min(Number(params.maxItems) || 100, 500));
+        const envelopes = queue.splice(0, maxItems);
+        const done = ["completed", "failed", "cancelled", "interrupted"].includes(run.status);
+        if (done && queue.length === 0) this.turnQueues.delete(runId);
+        return { run, envelopes, done };
+      }
+      case "live.turn.cancel": {
+        await this.initialize();
+        return await this.conversations.cancelRun(params.runId, { reason: params.reason });
+      }
+      case "live.turn.resume": {
+        await this.initialize();
+        const newRunId = params.newRunId || pulsoId("live_run");
+        let markReady;
+        const ready = new Promise(resolveReady => { markReady = resolveReady; });
+        let readyMarked = false;
+        const onEnvelope = async envelope => {
+          this.enqueueTurnEnvelope(newRunId, envelope);
+          if (!readyMarked) {
+            readyMarked = true;
+            markReady();
+          }
+        };
+        const execution = this.conversations.resumeRun(params.runId, {
+          runId: newRunId,
+          idempotencyKey: params.idempotencyKey || null,
+          onEnvelope,
+        });
+        this.turnExecutions.set(newRunId, execution);
+        execution.finally(() => this.turnExecutions.delete(newRunId)).catch(() => {});
+        await Promise.race([ready, execution.then(() => undefined)]);
+        return { runId: newRunId, run: this.conversations.getRun(newRunId) };
+      }
+      case "live.turn.get": {
+        await this.initialize();
+        return this.conversations.getRun(params.runId);
+      }
+      case "live.turn.list": {
+        await this.initialize();
+        return this.conversations.listRuns(params.sessionId || null);
       }
       case "shutdown": {
         await this.close();
@@ -336,6 +493,11 @@ export class PulsoDesktopBridge {
       return;
     }
     this.closed = true;
+    for (const run of this.conversations.listRuns()) {
+      if (!["completed", "failed", "cancelled", "interrupted"].includes(run.status)) {
+        try { await this.conversations.cancelRun(run.id, { reason: "bridge_shutdown" }); } catch {}
+      }
+    }
     try {
       if (this.runtime && typeof this.runtime.stop === "function") {
         await this.runtime.stop();

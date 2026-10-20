@@ -12,6 +12,8 @@ pub const SIDECAR_BIN_NAME: &str = "pulso-node";
 pub const SIDECAR_TRIPLE_BIN_NAME: &str = "pulso-node-x86_64-apple-darwin";
 pub const CANARY_RECEIPT_FILENAME: &str = "core-canary-rendered.json";
 const CANARY_FIELD_MAX_BYTES: usize = 128;
+#[cfg(target_os = "macos")]
+const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -258,6 +260,148 @@ pub struct BridgeManager {
     process: Option<BridgeProcess>,
 }
 
+fn validate_provider_id(provider_id: &str) -> Result<(), String> {
+    if provider_id.is_empty() || provider_id.len() > 80 {
+        return Err("Provider ID must contain between 1 and 80 characters".to_string());
+    }
+    if !provider_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        return Err("Provider ID contains forbidden characters".to_string());
+    }
+    Ok(())
+}
+
+fn validate_secret_value(secret: &str) -> Result<(), String> {
+    if secret.trim().len() < 4 {
+        return Err("Secret must be at least 4 characters long".to_string());
+    }
+    Ok(())
+}
+
+fn keychain_coordinates(provider_id: &str) -> Result<(String, String), String> {
+    validate_provider_id(provider_id)?;
+    Ok((
+        format!("com.felipedutraapps.pulso.provider.{}", provider_id),
+        provider_id.to_string(),
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_store_secret(provider_id: &str, secret: &[u8]) -> Result<(), String> {
+    let (service, account) = keychain_coordinates(provider_id)?;
+    security_framework::passwords::set_generic_password(&service, &account, secret)
+        .map_err(|_| "Failed to store provider secret in macOS Keychain".to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_read_secret(provider_id: &str) -> Result<Option<Vec<u8>>, String> {
+    let (service, account) = keychain_coordinates(provider_id)?;
+    match security_framework::passwords::get_generic_password(&service, &account) {
+        Ok(secret) => Ok(Some(secret)),
+        Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
+        Err(_) => Err("Failed to read provider secret from macOS Keychain".to_string()),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_delete_secret(provider_id: &str) -> Result<(), String> {
+    let (service, account) = keychain_coordinates(provider_id)?;
+    match security_framework::passwords::delete_generic_password(&service, &account) {
+        Ok(()) => Ok(()),
+        Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
+        Err(_) => Err("Failed to delete provider secret from macOS Keychain".to_string()),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_store_secret(provider_id: &str, _secret: &[u8]) -> Result<(), String> {
+    let _ = keychain_coordinates(provider_id)?;
+    Err("Native macOS Keychain unavailable".to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_read_secret(provider_id: &str) -> Result<Option<Vec<u8>>, String> {
+    let _ = keychain_coordinates(provider_id)?;
+    Err("Native macOS Keychain unavailable".to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_delete_secret(provider_id: &str) -> Result<(), String> {
+    let _ = keychain_coordinates(provider_id)?;
+    Err("Native macOS Keychain unavailable".to_string())
+}
+
+fn secret_receipt(provider_id: &str, configured: bool) -> Value {
+    json!({
+        "providerId": provider_id,
+        "configured": configured,
+        "secretRef": if configured { Some(format!("keychain:{}", provider_id)) } else { None },
+    })
+}
+
+fn inject_secret_into_core(
+    app: &AppHandle,
+    manager: &mut BridgeManager,
+    provider_id: &str,
+    secret: String,
+) -> Result<(), String> {
+    let response = manager.send(app, &json!({
+        "requestId": format!("native-keychain-{}", provider_id),
+        "method": "provider.secret.inject",
+        "params": { "providerId": provider_id, "secret": secret }
+    }))?;
+    if response.get("ok").and_then(Value::as_bool) != Some(true) {
+        return Err("PULSO Core refused the Keychain credential".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn store_provider_secret(
+    app: AppHandle,
+    state: State<'_, Mutex<BridgeManager>>,
+    provider_id: String,
+    secret: String,
+) -> Result<Value, String> {
+    validate_provider_id(&provider_id)?;
+    validate_secret_value(&secret)?;
+    keychain_store_secret(&provider_id, secret.as_bytes())?;
+    let mut manager = state.lock().map_err(|_| "Bridge manager mutex poisoned".to_string())?;
+    inject_secret_into_core(&app, &mut manager, &provider_id, secret)?;
+    Ok(secret_receipt(&provider_id, true))
+}
+
+#[tauri::command]
+pub fn hydrate_provider_secret(
+    app: AppHandle,
+    state: State<'_, Mutex<BridgeManager>>,
+    provider_id: String,
+) -> Result<Value, String> {
+    validate_provider_id(&provider_id)?;
+    let Some(secret_bytes) = keychain_read_secret(&provider_id)? else {
+        return Ok(secret_receipt(&provider_id, false));
+    };
+    let secret = String::from_utf8(secret_bytes)
+        .map_err(|_| "Provider secret in Keychain is not valid UTF-8".to_string())?;
+    let mut manager = state.lock().map_err(|_| "Bridge manager mutex poisoned".to_string())?;
+    inject_secret_into_core(&app, &mut manager, &provider_id, secret)?;
+    Ok(secret_receipt(&provider_id, true))
+}
+
+#[tauri::command]
+pub fn provider_secret_status(provider_id: String) -> Result<Value, String> {
+    let configured = keychain_read_secret(&provider_id)?.is_some();
+    Ok(secret_receipt(&provider_id, configured))
+}
+
+#[tauri::command]
+pub fn delete_provider_secret(provider_id: String) -> Result<Value, String> {
+    keychain_delete_secret(&provider_id)?;
+    Ok(secret_receipt(&provider_id, false))
+}
+
 impl BridgeManager {
     fn ensure(&mut self, app: &AppHandle) -> Result<&mut BridgeProcess, String> {
         if let Some(existing) = self.process.as_mut() {
@@ -485,5 +629,22 @@ mod tests {
         );
 
         let _ = remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn provider_id_validation_rejects_path_and_shell_like_values() {
+        assert!(validate_provider_id("openai").is_ok());
+        assert!(validate_provider_id("anthropic_primary-1").is_ok());
+        for invalid in ["", "../openai", "open ai", "provider:secret", "provider;rm"] {
+            assert!(validate_provider_id(invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn secret_receipt_never_contains_raw_secret_material() {
+        let receipt = secret_receipt("openai", true);
+        assert_eq!(receipt["configured"], true);
+        assert_eq!(receipt["secretRef"], "keychain:openai");
+        assert!(receipt.get("secret").is_none());
     }
 }

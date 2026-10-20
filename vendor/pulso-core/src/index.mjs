@@ -116,6 +116,7 @@ export {
 
 // v0.7 Live Vertical Slice exports
 export { LiveService } from "./live/live-service.mjs";
+export { LiveConversationService } from "./live/live-conversation-service.mjs";
 export {
   emptyLiveState,
   applyLiveEvent,

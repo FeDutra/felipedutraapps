@@ -13,7 +13,6 @@ import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnc
 import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assistantIdentity';
 
 interface PaneMessage extends RenderMessage {
-  sender: 'user' | 'lotus';
   isProgressUpdate?: boolean;
   attachments?: RenderableAttachment[];
 }
@@ -30,6 +29,8 @@ interface SecondaryChatPaneProps {
   onHearMessage: (message: RenderMessage) => void;
   onCopyMessage: (message: RenderMessage) => void;
   lastReadAt?: string | null;
+  messagesOverride?: readonly PaneMessage[];
+  isPendingOverride?: boolean;
 }
 
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
@@ -63,7 +64,6 @@ const normalizeAttachments = (value: unknown): RenderableAttachment[] => {
       };
     });
 };
-
 export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
   contextNode,
   areaIcon,
@@ -76,9 +76,13 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
   onHearMessage,
   onCopyMessage,
   lastReadAt,
+  messagesOverride,
+  isPendingOverride,
 }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
+  const displayedMessages = messagesOverride || messages;
+  const displayedPending = isPendingOverride ?? isPending;
   const contextAssistant = resolveAssistantIdentity(
     contextNode as unknown as Record<string, unknown>,
     contextNode.openclawSessionKey,
@@ -91,11 +95,12 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
   } = useConversationReadingAnchor({
     contextId: contextNode.contextId,
     lastReadAt,
-    messages,
+    messages: displayedMessages,
     preferLatestOnEntry: true,
   });
 
   React.useEffect(() => {
+    if (messagesOverride) return;
     if (!db) return;
     const q = query(
       collection(db, firestorePaths.requests()),
@@ -163,7 +168,11 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
       setIsPending(Boolean(latestRequest && !['success', 'completed', 'proposal_ready', 'needs_approval', 'needs_clarification', 'error', 'timeout', 'failed'].includes(latestRequest.status || '')));
     });
     return () => unsubscribe();
-  }, [contextNode.contextId, contextNode.openclawSessionKey]);
+  }, [contextNode.contextId, contextNode.openclawSessionKey, messagesOverride]);
+
+  React.useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [displayedMessages.length, scrollRef]);
 
   return (
     <div
@@ -198,7 +207,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
       </div>
 
       <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto no-scrollbar chat-fade-mask px-4 md:px-6 py-6 pt-12 space-y-8">
-        {messages.map((msg) => msg.isProgressUpdate ? (
+        {displayedMessages.map((msg) => msg.isProgressUpdate ? (
           <div key={msg.id} className="flex min-w-0 w-full max-w-full justify-start animate-fade-in py-1">
             <div className="min-w-0 w-full max-w-[85%] border-l border-white/10 pl-3 flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
               <span className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-[#fbf9f5]/30" />
@@ -211,11 +220,11 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
             data-message-id={msg.id}
             data-message-sender={msg.sender}
             data-message-timestamp={msg.timestamp.toISOString()}
-            className={`group/message flex min-w-0 w-full max-w-full ${msg.sender === 'lotus' ? 'justify-start' : 'justify-end'} animate-fade-in`}
+            className={`group/message flex min-w-0 w-full max-w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
           >
             <div className="min-w-0 max-w-[85%] space-y-1 select-text">
-              <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'lotus' ? 'text-white font-bold opacity-90' : 'text-[#fbf9f5]/50 font-light'}`}>
-                {msg.sender === 'lotus' ? (msg.assistantName || 'Lótus') : 'fê'}
+              <span className={`block text-[9px] tracking-widest lowercase select-none ${msg.sender === 'user' ? 'text-[#fbf9f5]/50 font-light' : 'text-white font-bold opacity-90'}`}>
+                {msg.sender === 'user' ? 'fê' : (msg.sender === 'lotus' ? (msg.assistantName || 'Lótus') : 'sistema')}
               </span>
               <div className="min-w-0 max-w-full text-sm md:text-base leading-relaxed font-light text-[#fbf9f5]/90 block break-words text-left select-text" style={{ overflowWrap: 'anywhere' }}>
                 <PulsoMessageContent
@@ -238,7 +247,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
             </div>
           </div>
         ))}
-        {isPending && (
+        {displayedPending && (
           <div className="flex justify-start w-full animate-pulse select-none text-left">
             <div className="space-y-1">
               <span className="block text-[9px] tracking-widest text-[#fbf9f5] font-bold">{contextAssistant.name}</span>

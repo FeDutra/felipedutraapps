@@ -12,6 +12,29 @@ import { validateRoutingReceipt } from "./runtime-contracts.mjs";
 
 const ROUTER_ACTOR = Object.freeze({ kind: "runtime", id: "provider-router" });
 
+async function nextStreamItem(iterator, signal) {
+  if (!signal) return iterator.next();
+  if (signal.aborted) {
+    const cancelled = new Error("provider_stream_cancelled");
+    cancelled.code = "request_cancelled";
+    throw cancelled;
+  }
+  let abortHandler;
+  const aborted = new Promise((_, reject) => {
+    abortHandler = () => {
+      const cancelled = new Error("provider_stream_cancelled");
+      cancelled.code = "request_cancelled";
+      reject(cancelled);
+    };
+    signal.addEventListener("abort", abortHandler, { once: true });
+  });
+  try {
+    return await Promise.race([iterator.next(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", abortHandler);
+  }
+}
+
 export class ProviderRouter {
   constructor({
     store,
@@ -416,6 +439,11 @@ export class ProviderRouter {
     let primaryFailureCause = null;
 
     for (let i = 0; i < candidates.length; i++) {
+      if (request.signal?.aborted) {
+        const cancelled = new Error("provider_stream_cancelled");
+        cancelled.code = "request_cancelled";
+        throw cancelled;
+      }
       const candidate = candidates[i];
       const attemptTime = this.clock();
       const profile = providers.get(candidate.providerId);
@@ -687,6 +715,11 @@ export class ProviderRouter {
     let primaryFailureCause = null;
 
     for (let i = 0; i < candidates.length; i++) {
+      if (request.signal?.aborted) {
+        const cancelled = new Error("provider_stream_cancelled");
+        cancelled.code = "request_cancelled";
+        throw cancelled;
+      }
       const candidate = candidates[i];
       const attemptTime = this.clock();
       const profile = providers.get(candidate.providerId);
@@ -723,7 +756,16 @@ export class ProviderRouter {
           stream: true
         };
 
-        for await (const chunk of adapter.stream(normalizedRequest)) {
+        const iterator = adapter.stream(normalizedRequest)[Symbol.asyncIterator]();
+        while (true) {
+          const next = await nextStreamItem(iterator, request.signal);
+          if (next.done) break;
+          const chunk = next.value;
+          if (request.signal?.aborted) {
+            const cancelled = new Error("provider_stream_cancelled");
+            cancelled.code = "request_cancelled";
+            throw cancelled;
+          }
           if (chunk.type === "model.delta" || chunk.kind === "delta" || chunk.type === "delta") {
             const deltaText = String(chunk.text ?? chunk.delta ?? "");
             if (deltaText.length > 0) {
@@ -752,6 +794,13 @@ export class ProviderRouter {
           throw err;
         }
       } catch (streamError) {
+        if (request.signal?.aborted || streamError?.code === "request_cancelled" || streamError?.name === "AbortError") {
+          const cancelled = new Error("provider_stream_cancelled");
+          cancelled.code = "request_cancelled";
+          cancelled.partialText = accumulatedText;
+          cancelled.deltasEmitted = visibleDeltasCount;
+          throw cancelled;
+        }
         const safeErr = this.secretResolver.redactError(streamError, profile?.secretRef ?? adapter?.secretRef ?? null);
 
         // CRITICAL RULE: Once a visible delta has been emitted, NEVER fallback to another provider!

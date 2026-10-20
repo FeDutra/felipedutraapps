@@ -32,11 +32,20 @@ export const BRIDGE_METHODS = Object.freeze([
   'agent.transition',
   'audit.list',
   'live.bootstrap',
+  'live.topology.ensure',
+  'live.areas.list',
   'live.area.create',
+  'live.sessions.list',
   'live.session.create',
   'live.session.select',
   'live.message.append',
   'live.messages.list',
+  'live.turn.start',
+  'live.turn.poll',
+  'live.turn.cancel',
+  'live.turn.resume',
+  'live.turn.get',
+  'live.turn.list',
 ] as const);
 
 export type PulsoBridgeMethod = (typeof BRIDGE_METHODS)[number];
@@ -237,6 +246,74 @@ export interface PulsoAppendMessageReceipt {
 export interface PulsoAppendMessageResult {
   readonly message: PulsoLiveMessage;
   readonly receipt: PulsoAppendMessageReceipt;
+}
+
+export type PulsoConversationRunStatus =
+  | 'awaiting_provider'
+  | 'queued'
+  | 'streaming'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'interrupted';
+
+export interface PulsoConversationRun {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly humanMessageId: string;
+  readonly assistantMessageId: string | null;
+  readonly identityId: 'lotus';
+  readonly status: PulsoConversationRunStatus;
+  readonly accumulatedText: string;
+  readonly deltasCount: number;
+  readonly resumedFromRunId: string | null;
+  readonly providerId: string | null;
+  readonly model: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly completedAt: string | null;
+}
+
+export interface PulsoConversationEnvelope {
+  readonly type: string;
+  readonly runId?: string;
+  readonly index?: number;
+  readonly text?: string;
+  readonly accumulatedText?: string;
+  readonly run?: PulsoConversationRun;
+  readonly error?: { readonly code?: string; readonly message?: string };
+}
+
+export interface PulsoTurnStartResult {
+  readonly runId: string;
+  readonly run: PulsoConversationRun | null;
+}
+
+export interface PulsoTurnPollResult {
+  readonly run: PulsoConversationRun;
+  readonly envelopes: readonly PulsoConversationEnvelope[];
+  readonly done: boolean;
+}
+
+export type PulsoProviderAdapterKind = 'openai' | 'anthropic' | 'local';
+
+export interface PulsoProviderConfig {
+  readonly providerId: string;
+  readonly adapterKind: PulsoProviderAdapterKind;
+  readonly displayName: string;
+  readonly model: string;
+  readonly endpoint?: string | null;
+  readonly allowExternalNetwork: boolean;
+}
+
+export interface PulsoProviderHealth {
+  readonly status: 'healthy' | 'unhealthy' | string;
+  readonly providerId: string;
+  readonly adapterKind: string;
+  readonly checkedAt: string;
+  readonly detail: string;
+  readonly authSource?: Readonly<Record<string, unknown>>;
+  readonly error?: Readonly<{ readonly code?: string; readonly message?: string }>;
 }
 
 export interface PulsoCoreClientOptions {
@@ -601,8 +678,45 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
       return request<PulsoRuntimeHealth>('health', {}, requestId);
     },
 
+    configureProvider(
+      params: PulsoProviderConfig,
+      requestId?: string
+    ): Promise<PulsoCoreResult<Readonly<Record<string, unknown>>>> {
+      return request<Readonly<Record<string, unknown>>>('provider.configure', {
+        ...params,
+        kind: params.adapterKind === 'local' ? 'local' : 'model',
+        scope: { type: 'system', scopeId: null },
+        capabilities: ['chat', 'stream'],
+        enabled: true,
+      }, requestId);
+    },
+
+    testProvider(
+      providerId: string,
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoProviderHealth>> {
+      return request<PulsoProviderHealth>('provider.test', { providerId }, requestId);
+    },
+
     liveBootstrap(requestId?: string): Promise<PulsoCoreResult<PulsoLiveBootstrapSnapshot>> {
       return request<PulsoLiveBootstrapSnapshot>('live.bootstrap', {}, requestId);
+    },
+
+    ensureTopology(
+      params: {
+        areas: readonly PulsoCreateAreaParams[];
+        sessions: readonly PulsoCreateSessionParams[];
+      },
+      requestId?: string
+    ): Promise<PulsoCoreResult<{ readonly areas: readonly PulsoLiveArea[]; readonly sessions: readonly PulsoLiveSession[] }>> {
+      return request('live.topology.ensure', {
+        areas: params.areas.map(area => ({ ...area })),
+        sessions: params.sessions.map(session => ({ ...session })),
+      }, requestId);
+    },
+
+    listAreas(requestId?: string): Promise<PulsoCoreResult<readonly PulsoLiveArea[]>> {
+      return request<readonly PulsoLiveArea[]>('live.areas.list', {}, requestId);
     },
 
     createArea(
@@ -625,6 +739,13 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
         { ...params },
         requestId
       );
+    },
+
+    listSessions(
+      params: { areaId?: string } = {},
+      requestId?: string
+    ): Promise<PulsoCoreResult<readonly PulsoLiveSession[]>> {
+      return request<readonly PulsoLiveSession[]>('live.sessions.list', { ...params }, requestId);
     },
 
     selectSession(
@@ -658,6 +779,34 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
         { ...params },
         requestId
       );
+    },
+
+    startTurn(
+      params: { sessionId: string; text: string; idempotencyKey?: string },
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoTurnStartResult>> {
+      return request<PulsoTurnStartResult>('live.turn.start', { ...params }, requestId);
+    },
+
+    pollTurn(
+      params: { runId: string; maxItems?: number },
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoTurnPollResult>> {
+      return request<PulsoTurnPollResult>('live.turn.poll', { ...params }, requestId);
+    },
+
+    cancelTurn(
+      params: { runId: string; reason?: string },
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoConversationRun>> {
+      return request<PulsoConversationRun>('live.turn.cancel', { ...params }, requestId);
+    },
+
+    resumeTurn(
+      params: { runId: string; idempotencyKey?: string },
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoTurnStartResult>> {
+      return request<PulsoTurnStartResult>('live.turn.resume', { ...params }, requestId);
     },
 
     shutdown(

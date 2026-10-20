@@ -20,7 +20,8 @@ use agent::voice_recording::{
   voice_recording_recover_incomplete,
 };
 use pulso_core::{
-  BridgeManager, bridge_request, core_canary_rendered, shutdown_bridge,
+  BridgeManager, bridge_request, core_canary_rendered, delete_provider_secret,
+  hydrate_provider_secret, provider_secret_status, shutdown_bridge, store_provider_secret,
 };
 use std::sync::Mutex;
 
@@ -192,6 +193,10 @@ pub fn run() {
       voice_recording_mark,
       voice_recording_recover_incomplete,
       bridge_request,
+      store_provider_secret,
+      hydrate_provider_secret,
+      provider_secret_status,
+      delete_provider_secret,
       core_canary_rendered,
       shutdown_bridge
     ])

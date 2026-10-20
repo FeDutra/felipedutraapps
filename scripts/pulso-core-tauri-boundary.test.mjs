@@ -249,6 +249,11 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.match(pulsoCoreRs, /core-canary-rendered\.json/);
   assert.match(pulsoCoreRs, /rename\(&temporary, &destination\)/);
   assert.match(libRs, /core_canary_rendered/);
-  assert.equal(pulsoCoreRs.includes('store_provider_secret'), false);
-  assert.equal(pulsoCoreRs.includes('security_framework'), false);
+  assert.match(pulsoCoreRs, /pub fn store_provider_secret/);
+  assert.match(pulsoCoreRs, /pub fn hydrate_provider_secret/);
+  assert.match(pulsoCoreRs, /pub fn provider_secret_status/);
+  assert.match(pulsoCoreRs, /security_framework::passwords::set_generic_password/);
+  assert.match(pulsoCoreRs, /secret_receipt_never_contains_raw_secret_material/);
+  assert.match(libRs, /store_provider_secret/);
+  assert.match(libRs, /hydrate_provider_secret/);
 });
