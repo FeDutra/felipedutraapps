@@ -27,3 +27,6 @@ base64 = "0.22"
 ed25519-dalek = { version = "2.2", features = ["pkcs8"] }
 tauri-plugin-shell = "2.2.0"
 tauri-plugin-http = "2.5.9"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "2.11"

@@ -1036,6 +1036,10 @@ import { ref as storageRef, uploadBytes, getDownloadURL, uploadBytesResumable } 
 import { firestorePaths } from '../services/firestorePaths';
 import { Area, PulsoContextNode, Session } from '../types/pulso.types';
 import { sessionsService } from '../services/sessionsService';
+import { pulsoCoreConversation } from '../services/pulsoCoreConversation';
+import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
+import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
+import type { PulsoLiveMessage } from '../services/pulsoCoreClient';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
 const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
@@ -1225,6 +1229,24 @@ const AREA_ORDER = [
   "area_futuro",
   "area_livre"
 ];
+
+const AREA_GLYPHS: Record<string, string> = {
+  area_eu: '⊙',
+  area_trabalho: '▦',
+  area_casa: '⌂',
+  area_familia: '◎',
+  area_criacao: '✦',
+  area_estudo: '◈',
+  area_habitos: '〰',
+  area_saude: '✚',
+  area_dinheiro: '◌',
+  area_pessoas: '⟡',
+  area_viagens: '⌁',
+  area_lazer: '◇',
+  area_sistema: '○',
+  area_futuro: '⋮',
+  area_livre: '∞',
+};
 
 // Safe array helper
 const safeArray = (arr: any): any[] => Array.isArray(arr) ? arr.filter(Boolean) : [];
@@ -1472,6 +1494,9 @@ export type UnifiedVoiceState =
 
 export default function LivePage() {
   const router = useRouter();
+  const coreDesktopEnabled = React.useMemo(() => pulsoCoreConversation.isAvailable(), []);
+  const [coreReady, setCoreReady] = React.useState(false);
+  const [coreMessagesByContext, setCoreMessagesByContext] = React.useState<Record<string, Message[]>>({});
   const [state, setState] = React.useState<any>(null);
   // The shell is intentionally visible from the first render. Data hydration
   // may continue in the background, but it cannot hold the UI on a spinner.
@@ -1528,11 +1553,11 @@ export default function LivePage() {
   const pulsoJarvisLayerEnabled = true;
 
   React.useEffect(() => {
-    if (pulsoJarvisLayerEnabled) {
+    if (pulsoJarvisLayerEnabled && !coreDesktopEnabled) {
       actionLedgerClient.startListening();
       return () => actionLedgerClient.stopListening();
     }
-  }, []);
+  }, [coreDesktopEnabled]);
 
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [lastSentRequestsByContext, setLastSentRequestsByContext] = React.useState<Record<string, string>>({});
@@ -1656,7 +1681,7 @@ export default function LivePage() {
   }, []);
 
   React.useEffect(() => {
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
 
     if (!isFirestore) {
       // Non-Firestore mode: use DEFAULT_SESSIONS directly
@@ -1752,7 +1777,7 @@ export default function LivePage() {
     seedAndSubscribe();
 
     return () => { if (unsubscribe) unsubscribe(); };
-  }, [db, loading]);
+  }, [coreDesktopEnabled, db, loading]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1812,13 +1837,13 @@ export default function LivePage() {
     });
     safeStorageSet(`pulso_last_read_${contextId}`, nowStr);
     
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     if (isFirestore && db) {
       setDoc(doc(db, `workspaces/felipe_dutra/pulso_meta/read_status`), {
         [contextId]: nowStr
       }, { merge: true }).catch(err => console.error("Failed to save read status to Firestore:", err));
     }
-  }, []);
+  }, [coreDesktopEnabled]);
 
   // Keep server and first client render identical. The saved session is
   // restored after Firestore sessions arrive, avoiding hydration mismatch.
@@ -2083,7 +2108,7 @@ export default function LivePage() {
     setLastReadTimes(localTimes);
 
     // 2. Load and listen from Firestore
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     if (isFirestore && db) {
       const docRef = doc(db, 'workspaces/felipe_dutra/pulso_meta/read_status');
       const unsubscribe = onSnapshot(docRef, (snapshot) => {
@@ -2262,6 +2287,105 @@ export default function LivePage() {
     list.sort((a, b) => a.order - b.order);
     return list;
   }, [state?.allAreas]);
+
+  const mapCoreMessages = React.useCallback((items: readonly PulsoLiveMessage[], contextId: string): Message[] => (
+    items.map(item => ({
+      id: item.id,
+      sender: item.role === 'human' ? 'user' : (item.role === 'assistant' ? 'lotus' : 'system'),
+      text: item.texto,
+      timestamp: new Date(item.createdAt),
+      contextId,
+    }))
+  ), []);
+
+  const coreTopologyFingerprintRef = React.useRef('');
+  React.useEffect(() => {
+    if (!coreDesktopEnabled || !sessionsLoaded) return;
+    const visibleSessions = sessions.filter(session => session.contextId !== LOADING_PLACEHOLDER_NODE.contextId);
+    const fingerprint = JSON.stringify({
+      areas: dynamicAreas.map(area => area.id),
+      sessions: visibleSessions.map(session => [session.contextId, session.areaId, session.label]),
+    });
+    if (coreTopologyFingerprintRef.current === fingerprint) return;
+    let cancelled = false;
+    pulsoCoreConversation.ensureTopology(
+      dynamicAreas.map(area => ({
+        id: area.id,
+        nome: area.name,
+        glifo: AREA_GLYPHS[area.id] || '○',
+        ordem: area.order,
+      })),
+      visibleSessions.map(session => ({
+        id: session.contextId,
+        areaId: session.areaId,
+        titulo: session.label,
+      }))
+    ).then(() => {
+      if (cancelled) return;
+      coreTopologyFingerprintRef.current = fingerprint;
+      setCoreReady(true);
+    }).catch(error => {
+      if (!cancelled) {
+        setCoreReady(false);
+        setError(`Core indisponível: ${error?.message || String(error)}`);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [coreDesktopEnabled, dynamicAreas, sessions, sessionsLoaded]);
+
+  React.useEffect(() => {
+    if (!coreDesktopEnabled || !coreReady) return;
+    const contextId = activeContextNode.contextId;
+    if (!contextId || contextId === LOADING_PLACEHOLDER_NODE.contextId) return;
+    let cancelled = false;
+    const startedAt = performance.now();
+    pulsoCoreConversation.selectSession(activeContextNode.areaId, contextId)
+      .then(coreMessages => {
+        if (cancelled) return;
+        const mapped = mapCoreMessages(coreMessages, contextId);
+        setCoreMessagesByContext(previous => ({ ...previous, [contextId]: mapped }));
+        setMessages(previous => [
+          previous.find(message => message.id === 'welcome') || {
+            id: 'welcome',
+            sender: 'lotus',
+            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+            timestamp: new Date(),
+          },
+          ...mapped,
+        ]);
+        performance.measure('pulso.core.session.visible', {
+          start: startedAt,
+          end: performance.now(),
+        });
+      })
+      .catch(error => {
+        if (!cancelled) setError(`Falha ao abrir sessão no Core: ${error?.message || String(error)}`);
+      });
+    return () => { cancelled = true; };
+  }, [activeContextNode.areaId, activeContextNode.contextId, coreDesktopEnabled, coreReady, mapCoreMessages]);
+
+  React.useEffect(() => {
+    if (!coreDesktopEnabled || !coreReady || secondaryContextNodes.length === 0) return;
+    let cancelled = false;
+    Promise.all(secondaryContextNodes.map(async contextNode => ({
+      contextId: contextNode.contextId,
+      messages: mapCoreMessages(
+        await pulsoCoreConversation.listMessages(contextNode.contextId),
+        contextNode.contextId
+      ),
+    }))).then(results => {
+      if (cancelled) return;
+      setCoreMessagesByContext(previous => {
+        const next = { ...previous };
+        for (const result of results) next[result.contextId] = result.messages;
+        return next;
+      });
+    }).catch(error => {
+      if (!cancelled) setError(`Falha ao abrir split no Core: ${error?.message || String(error)}`);
+    });
+    return () => { cancelled = true; };
+  }, [coreDesktopEnabled, coreReady, mapCoreMessages, secondaryContextNodes]);
+
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [activeMobileAreaId, setActiveMobileAreaId] = React.useState<string | null>(null);
@@ -2445,12 +2569,21 @@ export default function LivePage() {
   const [availableVoices, setAvailableVoices] = React.useState<SpeechSynthesisVoice[]>([]);
   const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
   const [presenceTransport, setPresenceTransport] = React.useState<PresenceTransportPreference>(() => readPresenceTransportPreference());
+  const [isCoreProviderSettingsOpen, setIsCoreProviderSettingsOpen] = React.useState(false);
   const [kokoroEndpoint, setKokoroEndpoint] = React.useState(() => {
     if (typeof window !== 'undefined') {
       return safeStorageGet('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
     }
     return 'http://127.0.0.1:8880/v1/audio/speech';
   });
+
+  React.useEffect(() => {
+    if (!coreDesktopEnabled) return;
+    pulsoCoreProvider.restore().catch(() => {
+      // A ausência de configuração é um estado legítimo: a conversa permanece
+      // soberana e awaiting_provider até Fe escolher o motor cognitivo.
+    });
+  }, [coreDesktopEnabled]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -3161,6 +3294,19 @@ export default function LivePage() {
   };
   // Load database state once
   React.useEffect(() => {
+    if (coreDesktopEnabled) {
+      setLoading(false);
+      setState({
+        allRoutines: [],
+        allAgents: [],
+        allLogs: [],
+        allAreas: [],
+        allRequests: [],
+        allSources: [],
+        allTasks: [],
+      });
+      return;
+    }
     let cancelled = false;
     const revealFallback = window.setTimeout(() => {
       if (!cancelled) {
@@ -3335,11 +3481,11 @@ export default function LivePage() {
       cancelled = true;
       clearTimeout(revealFallback);
     };
-  }, []);
+  }, [coreDesktopEnabled]);
 
   // Real-time Firestore requests listener (Golden Path to OpenClaw usage)
   React.useEffect(() => {
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     if (!isFirestore) return;
     if (!db) return;
     if (!activeContextNode.contextId || activeContextNode.contextId === 'loading' || activeContextNode.contextId === LOADING_PLACEHOLDER_NODE.contextId) {
@@ -3742,11 +3888,11 @@ export default function LivePage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [db, loading, activeContextNode]);
+  }, [coreDesktopEnabled, db, loading, activeContextNode]);
 
   // ── Sincronização em Tempo Real Global de Estados Conversacionais e Compromissos ──
   React.useEffect(() => {
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     if (!isFirestore || !db) return;
 
     let unsubContextStates: (() => void) | null = null;
@@ -3777,13 +3923,13 @@ export default function LivePage() {
     return () => {
       if (unsubContextStates) unsubContextStates();
     };
-  }, [db]);
+  }, [coreDesktopEnabled, db]);
 
   // ── Global incoming-message listener ─────────────────────────────────────
   // Watches real Lótus outputs in every chat. User sends and generic session
   // activity never create unread state or desktop notifications.
   React.useEffect(() => {
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     if (!isFirestore || !db) return;
 
     let unsubscribe: (() => void) | null = null;
@@ -3904,7 +4050,7 @@ export default function LivePage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [db, markContextAsRead]);
+  }, [coreDesktopEnabled, db, markContextAsRead]);
 
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
@@ -4063,7 +4209,7 @@ export default function LivePage() {
   }, [state, activeContextNode, executionTarget]);
 
   const uploadFile = async (file: File): Promise<Attachment> => {
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     const id = `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const name = file.name;
     const sizeBytes = file.size;
@@ -4193,7 +4339,7 @@ export default function LivePage() {
   const handleAttachFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    const isFirestore = pulsoService.getDataMode() === 'firestore';
+    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
     const sendingContextId = activeContextNode.contextId;
 
     const newPending: PendingAttachment[] = Array.from(files).map(file => {
@@ -4264,6 +4410,7 @@ export default function LivePage() {
   };
 
   const isSubmittingRef = React.useRef(false);
+  const coreAbortControllersRef = React.useRef<Map<string, AbortController>>(new Map());
 
   const handleSendMessage = async (textToSend?: string, options?: {
     originMode?: 'text' | 'recording_once' | 'presence' | 'recording_meeting';
@@ -4293,6 +4440,11 @@ export default function LivePage() {
     const hasPending = pendingAttachments.length > 0;
     if (!rawMsg.trim() && !hasPending) return;
 
+    if (coreDesktopEnabled && hasPending) {
+      setError('Anexos ainda não estão disponíveis no PULSO Core. O arquivo foi preservado no compositor.');
+      isSubmittingRef.current = false;
+      return;
+    }
     const cleanMsg = originMode === 'recording_once' || originMode === 'presence'
       ? normalizeTranscript(rawMsg)
       : rawMsg.trim();
@@ -4377,6 +4529,91 @@ export default function LivePage() {
 
     if (originMode === 'presence' || originMode === 'recording_once' || originMode === 'recording_meeting') {
       voiceReplyRequestsRef.current.add(preGeneratedReqId);
+    }
+
+    if (coreDesktopEnabled) {
+      if (!coreReady) {
+        const unavailableMessage: Message = {
+          id: `lotus-core-unavailable-${preGeneratedReqId}`,
+          sender: 'lotus',
+          text: 'o PULSO Core ainda está iniciando. sua mensagem não foi enviada; tente novamente em instantes.',
+          timestamp: new Date(),
+          contextId: sendingContextId,
+        };
+        setMessages(previous => [...previous, unavailableMessage]);
+        setContextTyping(sendingContextId, false);
+        return;
+      }
+
+      const assistantMessageId = `lotus-core-stream-${preGeneratedReqId}`;
+      const updateStreamingMessage = (text: string) => {
+        const nextMessage: Message = {
+          id: assistantMessageId,
+          sender: 'lotus',
+          text,
+          timestamp: new Date(),
+          contextId: sendingContextId,
+        };
+        const upsert = (items: Message[]) => {
+          const index = items.findIndex(item => item.id === assistantMessageId);
+          if (index === -1) return [...items, nextMessage];
+          const next = [...items];
+          next[index] = { ...next[index], text };
+          return next;
+        };
+        setMessages(upsert);
+        setCoreMessagesByContext(previous => ({
+          ...previous,
+          [sendingContextId]: upsert(previous[sendingContextId] || []),
+        }));
+      };
+
+      try {
+        const controller = new AbortController();
+        coreAbortControllersRef.current.set(sendingContextId, controller);
+        const result = await pulsoCoreConversation.streamTurn({
+          sessionId: sendingContextId,
+          text: messageText,
+          idempotencyKey: preGeneratedReqId,
+          signal: controller.signal,
+          onDelta: (_delta, accumulatedText) => updateStreamingMessage(accumulatedText),
+          onState: run => {
+            if (run.status === 'streaming') setContextTyping(sendingContextId, true);
+          },
+        });
+        const mapped = mapCoreMessages(result.messages, sendingContextId);
+        setCoreMessagesByContext(previous => ({ ...previous, [sendingContextId]: mapped }));
+        setMessages(previous => [
+          previous.find(message => message.id === 'welcome') || {
+            id: 'welcome',
+            sender: 'lotus',
+            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+            timestamp: new Date(),
+          },
+          ...previous.filter(message => (
+            message.id !== 'welcome'
+            && message.contextId !== sendingContextId
+          )),
+          ...mapped,
+        ]);
+        sessionsService.touchSession(sendingContextId);
+      } catch (err: any) {
+        const providerMissing = err?.code === 'PROVIDER_NOT_CONFIGURED';
+        const lotusErrorMsg: Message = {
+          id: `lotus-core-error-${preGeneratedReqId}`,
+          sender: 'lotus',
+          text: providerMissing
+            ? 'esta sessão já pertence ao PULSO Core, mas ainda não há um provider configurado. a mensagem foi preservada e aguarda conexão cognitiva.'
+            : `falha na execução do PULSO Core: ${err?.message || 'erro desconhecido'}.`,
+          timestamp: new Date(),
+          contextId: sendingContextId,
+        };
+        setMessages(previous => [...previous.filter(message => message.id !== assistantMessageId), lotusErrorMsg]);
+      } finally {
+        coreAbortControllersRef.current.delete(sendingContextId);
+        setContextTyping(sendingContextId, false);
+      }
+      return;
     }
 
     // Toda interação da /live segue diretamente para a Lótus/OpenClaw.
@@ -6001,6 +6238,7 @@ ${data.transcription}`, {
     || isAttachmentMenuOpen
     || isSidebarOpen
     || isTtsSettingsOpen
+    || isCoreProviderSettingsOpen
     || areaConfigPanelAreaId
     || isArcaOpen
     || previewImage
@@ -6252,6 +6490,15 @@ ${data.transcription}`, {
                       <Mic size={12} strokeWidth={1.5} />
                       <span>voz da lótus (tts)</span>
                     </button>
+                    {coreDesktopEnabled && (
+                      <button
+                        onMouseDown={() => { setIsHeaderMenuOpen(false); setIsCoreProviderSettingsOpen(true); }}
+                        className="flex items-center gap-2.5 py-0.5 text-left bg-transparent border-none outline-none text-[9px] tracking-[0.16em] uppercase font-sans transition-colors cursor-pointer text-[#fbf9f5]/35 hover:text-white/85"
+                      >
+                        <Cpu size={12} strokeWidth={1.5} />
+                        <span>inteligência da pulso</span>
+                      </button>
+                    )}
                     <div className="h-px w-full bg-white/[0.06]" />
                     <span className="text-[8px] font-mono tracking-[0.22em] uppercase text-[#fbf9f5]/20">
                       trabalho e comunicação
@@ -7205,6 +7452,8 @@ ${data.transcription}`, {
                   <SecondaryChatPane
                     contextNode={contextNode}
                     areaIcon={getAreaIcon({ id: contextNode.areaId, name: dynamicAreas.find(a => a.id === contextNode.areaId)?.name || '' })}
+                    messagesOverride={coreDesktopEnabled ? (coreMessagesByContext[contextNode.contextId] || []) : undefined}
+                    isPendingOverride={coreDesktopEnabled ? Boolean(contextTypingStates[contextNode.contextId]) : undefined}
                     onClose={() => closeSplitPane(contextNode.contextId)}
                     isFocused={sendTargetContextNode.contextId === contextNode.contextId}
                     onFocus={(shouldFocusComposer = true) => {
@@ -7609,11 +7858,20 @@ ${data.transcription}`, {
           </button>
 
           <button
-            onClick={() => submitComposer(sendTargetContextNode)}
-            disabled={!inputMessage.trim() && voiceMode !== 'recording_once'}
+            onClick={() => {
+              if (coreDesktopEnabled && isTyping) {
+                coreAbortControllersRef.current.get(sendTargetContextNode.contextId)?.abort();
+                return;
+              }
+              submitComposer(sendTargetContextNode);
+            }}
+            disabled={!isTyping && !inputMessage.trim() && voiceMode !== 'recording_once'}
             className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
+            title={coreDesktopEnabled && isTyping ? 'interromper resposta' : 'enviar'}
           >
-            <Send size={14} strokeWidth={1.5} />
+            {coreDesktopEnabled && isTyping
+              ? <Square size={12} strokeWidth={1.5} fill="currentColor" />
+              : <Send size={14} strokeWidth={1.5} />}
           </button>
         </div>
       </footer>
@@ -8213,6 +8471,11 @@ ${data.transcription}`, {
           </div>
         </div>
       )}
+
+      <PulsoCoreProviderPanel
+        open={isCoreProviderSettingsOpen}
+        onClose={() => setIsCoreProviderSettingsOpen(false)}
+      />
 
       {previewImage && (
         <div 

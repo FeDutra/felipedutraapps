@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.agent_revision.v1",
+  "type": "object",
+  "required": [
+    "revisionId",
+    "blueprintId",
+    "version",
+    "hash",
+    "blueprint",
+    "changelog",
+    "provenance",
+    "createdAt"
+  ],
+  "properties": {
+    "revisionId": { "type": "string", "minLength": 1 },
+    "blueprintId": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 1 },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "blueprint": { "$ref": "agent-blueprint.schema.json" },
+    "changelog": { "type": "string" },
+    "provenance": {
+      "type": "object",
+      "required": ["kind", "createdBy"],
+      "properties": {
+        "kind": { "enum": ["human", "agent", "import"] },
+        "createdBy": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "createdAt": { "type": "string" }
+  },
+  "additionalProperties": false
+}

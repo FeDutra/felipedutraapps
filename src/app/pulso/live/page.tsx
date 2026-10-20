@@ -1,6 +1,7 @@
 import React from 'react';
 import { Viewport } from 'next';
 import LivePage from '@/apps/pulso/pages/LivePage';
+import { PulsoCoreCanary } from '@/apps/pulso/components/PulsoCoreCanary';
 
 export const metadata = {
   title: 'PULSO | Lótus Live',
@@ -17,6 +18,7 @@ export default function Page() {
       <div className="theme-her h-[100dvh] overflow-hidden" aria-label="Abrindo Pulso" />
     }>
       <LivePage />
+      <PulsoCoreCanary />
     </React.Suspense>
   );
 }

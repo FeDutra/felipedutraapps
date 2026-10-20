@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.delegation_contract.v1",
+  "type": "object",
+  "required": [
+    "delegationId",
+    "parentAgentId",
+    "childAgentId",
+    "objective",
+    "allowedContext",
+    "grantedCapabilities",
+    "budget",
+    "status",
+    "cancellationPolicy",
+    "provenance"
+  ],
+  "properties": {
+    "delegationId": { "type": "string", "minLength": 1 },
+    "parentAgentId": { "type": "string", "minLength": 1 },
+    "childAgentId": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "allowedContext": {
+      "type": "object",
+      "required": ["shareHistory", "allowedVariables", "artifactRefs"],
+      "properties": {
+        "shareHistory": { "type": "boolean" },
+        "allowedVariables": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "artifactRefs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "grantedCapabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "budget": {
+      "type": "object",
+      "required": ["maxTurns", "maxTimeMs", "maxTokens", "maxCost", "maxConcurrency"],
+      "properties": {
+        "maxTurns": { "type": "integer", "minimum": 0 },
+        "maxTimeMs": { "type": "integer", "minimum": 0 },
+        "maxTokens": { "type": "integer", "minimum": 0 },
+        "maxCost": { "type": "number", "minimum": 0 },
+        "maxToolCalls": { "type": ["integer", "null"], "minimum": 0 },
+        "maxConcurrency": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "expectedOutput": { "type": ["string", "object", "null"] },
+    "status": {
+      "enum": ["proposed", "accepted", "rejected", "running", "completed", "failed", "cancelled"]
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "cancellationPolicy": {
+      "type": "object",
+      "required": ["propagateToChild", "onParentCancel"],
+      "properties": {
+        "propagateToChild": { "type": "boolean" },
+        "onParentCancel": { "enum": ["cancel", "drain", "orphan"] }
+      },
+      "additionalProperties": false
+    },
+    "receipt": { "type": ["object", "null"] },
+    "provenance": {
+      "type": "object",
+      "required": ["initiator", "createdAt"],
+      "properties": {
+        "initiator": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "decidedAt": { "type": ["string", "null"] },
+        "finishedAt": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

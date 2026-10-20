@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.delivery_receipt.v1",
+  "type": "object",
+  "required": [
+    "receiptId",
+    "outboxId",
+    "idempotencyKey",
+    "topic",
+    "status",
+    "attemptCount",
+    "leaseId",
+    "workerId",
+    "reason",
+    "resultSummary",
+    "routingReceiptId",
+    "error",
+    "occurredAt"
+  ],
+  "properties": {
+    "receiptId": { "type": "string", "minLength": 1 },
+    "outboxId": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "topic": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["delivered", "dead_letter", "cancelled"] },
+    "attemptCount": { "type": "integer", "minimum": 0 },
+    "leaseId": { "type": ["string", "null"] },
+    "workerId": { "type": ["string", "null"] },
+    "reason": { "type": ["string", "null"] },
+    "resultSummary": { "type": ["string", "object", "null"] },
+    "routingReceiptId": { "type": ["string", "null"] },
+    "error": { "type": ["object", "null"] },
+    "occurredAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.agent_run.v1",
+  "type": "object",
+  "required": [
+    "agentRunId",
+    "agentId",
+    "status",
+    "budget",
+    "usage",
+    "checkpoints",
+    "createdAt"
+  ],
+  "properties": {
+    "agentRunId": { "type": "string", "minLength": 1 },
+    "agentId": { "type": "string", "minLength": 1 },
+    "delegationId": { "type": ["string", "null"] },
+    "parentRunId": { "type": ["string", "null"] },
+    "status": {
+      "enum": ["queued", "running", "waiting_approval", "paused", "succeeded", "failed", "cancelled", "timed_out"]
+    },
+    "budget": {
+      "type": "object",
+      "required": ["maxTurns", "maxTimeMs", "maxTokens", "maxCost", "maxConcurrency"],
+      "properties": {
+        "maxTurns": { "type": "integer", "minimum": 0 },
+        "maxTimeMs": { "type": "integer", "minimum": 0 },
+        "maxTokens": { "type": "integer", "minimum": 0 },
+        "maxCost": { "type": "number", "minimum": 0 },
+        "maxToolCalls": { "type": ["integer", "null"], "minimum": 0 },
+        "maxConcurrency": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "usage": {
+      "type": "object",
+      "required": ["turns", "tokens", "cost", "elapsedMs"],
+      "properties": {
+        "turns": { "type": "integer", "minimum": 0 },
+        "tokens": { "type": "integer", "minimum": 0 },
+        "cost": { "type": "number", "minimum": 0 },
+        "elapsedMs": { "type": "integer", "minimum": 0 },
+        "toolCalls": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "result": { "type": ["object", "null"] },
+    "error": { "type": ["object", "null"] },
+    "createdAt": { "type": "string" },
+    "startedAt": { "type": ["string", "null"] },
+    "completedAt": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

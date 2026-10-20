@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.provider_binding.v1",
+  "type": "object",
+  "required": ["providerType", "providerId", "connectionId", "externalRunId", "externalSessionId", "boundAt", "metadata"],
+  "properties": {
+    "providerType": { "enum": ["model", "executor"] },
+    "providerId": { "type": "string", "minLength": 1 },
+    "connectionId": { "type": "string", "minLength": 1 },
+    "externalRunId": { "type": ["string", "null"] },
+    "externalSessionId": { "type": ["string", "null"] },
+    "boundAt": { "type": "string", "format": "date-time" },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

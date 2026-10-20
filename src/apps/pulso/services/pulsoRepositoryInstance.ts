@@ -15,7 +15,7 @@ export const getRepository = (): IPulsoRepository => {
   
   if (DATA_MODE === 'firestore') {
     if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      console.log('PULSO: Modo Firestore Ativo. API KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+      console.log('PULSO: Modo Firestore Ativo.');
       const { FirestorePulsoRepository } = require("./firestorePulsoRepository");
       repository = new FirestorePulsoRepository();
     } else {

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.shadow_report.v1",
+  "type": "object",
+  "required": ["reportVersion", "generatedAt", "status", "sovereignty", "telemetry"],
+  "properties": {
+    "reportVersion": { "type": "string" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["CONFORMANT", "NON_CONFORMANT"] },
+    "runId": { "type": ["string", "null"] },
+    "turnId": { "type": ["string", "null"] },
+    "sessionId": { "type": ["string", "null"] },
+    "sovereignty": {
+      "type": "object",
+      "required": ["identityPreserved", "sessionPreserved", "memoryPreserved", "policyPreserved", "externalIdsConfined"],
+      "properties": {
+        "identityId": { "type": "string" },
+        "identityPreserved": { "type": "boolean" },
+        "sessionPreserved": { "type": "boolean" },
+        "memoryPreserved": { "type": "boolean" },
+        "policyPreserved": { "type": "boolean" },
+        "externalIdsConfined": { "type": "boolean" },
+        "leakageError": { "type": ["string", "null"] }
+      }
+    },
+    "providerBinding": { "type": ["object", "null"] },
+    "telemetry": {
+      "type": "object",
+      "required": ["rawFramesReceived", "normalizedEventsCount", "duplicatesDeduplicated", "malformationsIsolated", "anomaliesTotal"],
+      "properties": {
+        "rawFramesReceived": { "type": "integer", "minimum": 0 },
+        "normalizedEventsCount": { "type": "integer", "minimum": 0 },
+        "duplicatesDeduplicated": { "type": "integer", "minimum": 0 },
+        "malformationsIsolated": { "type": "integer", "minimum": 0 },
+        "anomaliesTotal": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "anomalies": { "type": "array" }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.agent_blueprint.v1",
+  "type": "object",
+  "required": [
+    "blueprintId",
+    "name",
+    "role",
+    "mission",
+    "instructions",
+    "requiredCapabilities",
+    "skills",
+    "tools",
+    "memory",
+    "policies",
+    "providerDefaults",
+    "runtimePreferences",
+    "limits",
+    "surfaces",
+    "metadata",
+    "provenance"
+  ],
+  "properties": {
+    "blueprintId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "minLength": 1 },
+    "mission": { "type": "string", "minLength": 1 },
+    "instructions": { "type": "string" },
+    "requiredCapabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "memory": {
+      "type": "object",
+      "required": ["scope", "retainContext", "maxContextTokens"],
+      "properties": {
+        "scope": { "enum": ["isolated", "shared", "session", "workspace"] },
+        "retainContext": { "type": "boolean" },
+        "maxContextTokens": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "policies": {
+      "type": "object",
+      "required": ["mode", "requireConfirmationFor"],
+      "properties": {
+        "mode": { "enum": ["read-only", "guarded", "workspace", "full"] },
+        "requireConfirmationFor": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "providerDefaults": {
+      "type": "object",
+      "required": ["modelProviderId", "model"],
+      "properties": {
+        "modelProviderId": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "runtimePreferences": {
+      "type": "object",
+      "required": ["executorProviderId", "timeoutMs"],
+      "properties": {
+        "executorProviderId": { "type": "string", "minLength": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "required": ["maxTurns", "maxTokens", "maxCost", "maxConcurrency", "timeoutMs"],
+      "properties": {
+        "maxTurns": { "type": "integer", "minimum": 0 },
+        "maxTokens": { "type": "integer", "minimum": 0 },
+        "maxCost": { "type": "number", "minimum": 0 },
+        "maxToolCalls": { "type": ["integer", "null"], "minimum": 0 },
+        "maxConcurrency": { "type": "integer", "minimum": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "surfaces": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "metadata": { "type": "object" },
+    "provenance": {
+      "type": "object",
+      "required": ["kind", "createdBy", "lineage"],
+      "properties": {
+        "kind": { "enum": ["human", "agent", "import"] },
+        "createdBy": { "type": "string", "minLength": 1 },
+        "lineage": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

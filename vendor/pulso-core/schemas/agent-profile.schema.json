@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.agent_profile.v1",
+  "type": "object",
+  "required": [
+    "agentId",
+    "name",
+    "identityId",
+    "role",
+    "capabilities",
+    "policyProfileId",
+    "modelScope",
+    "allowedTools",
+    "status",
+    "metadata"
+  ],
+  "properties": {
+    "agentId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "identityId": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "minLength": 1 },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "policyProfileId": { "type": "string", "minLength": 1 },
+    "modelScope": {
+      "type": "object",
+      "required": ["type", "scopeId"],
+      "properties": {
+        "type": { "enum": ["global", "agent", "session", "task"] },
+        "scopeId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "allowedTools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": { "enum": ["active", "paused", "draft"] },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

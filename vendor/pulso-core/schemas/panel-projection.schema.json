@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pulso.panel_projection.v1",
+  "type": "object",
+  "required": ["generatedAt", "sectionCount", "sections"],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "sectionCount": { "type": "integer", "const": 11 },
+    "sections": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "status", "alerts", "checklist", "actions"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "string" },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "level", "message"],
+              "properties": {
+                "id": { "type": "string" },
+                "level": { "type": "string" },
+                "message": { "type": "string" },
+                "recordedAt": { "type": "string" }
+              }
+            }
+          },
+          "checklist": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "label", "status", "verified"],
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "status": { "type": "string" },
+                "verified": { "type": "boolean" }
+              }
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "label", "command", "requiresConfirmation"],
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "command": { "type": "string" },
+                "params": { "type": "object" },
+                "requiresConfirmation": { "type": "boolean" }
+              }
+            }
+          },
+          "summary": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

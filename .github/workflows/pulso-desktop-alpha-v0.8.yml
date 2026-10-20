@@ -1,0 +1,91 @@
+name: PULSO Desktop Alpha v0.8
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos-intel:
+    name: Build macOS Intel canary
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Rust x86_64
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify sovereign Desktop boundary
+        run: npm run pulso:alpha:verify
+
+      - name: Prepare Core, Kokoro and Intel Node sidecar
+        run: npm run pulso:alpha:prepare
+
+      - name: Build isolated Alpha bundle
+        run: >-
+          npx tauri build
+          --target x86_64-apple-darwin
+          --config src-tauri/tauri.canary.conf.json
+
+      - name: Verify bundle identity and required resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/PULSO Next Preview.app"
+          test -d "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.felipedutraapps.pulso.next-preview"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "0.8.0"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          test -n "$executable"
+          test -x "$app/Contents/MacOS/$executable"
+          file "$app/Contents/MacOS/$executable" | grep -q 'x86_64'
+          pulso_node="$(find "$app/Contents/MacOS" -name 'pulso-node*' -type f -perm -111 -print -quit)"
+          kokoro_runner="$(find "$app/Contents/MacOS" -name 'kokoro_runner*' -type f -perm -111 -print -quit)"
+          test -n "$pulso_node" || { echo 'Missing executable pulso-node sidecar' >&2; exit 1; }
+          test -n "$kokoro_runner" || { echo 'Missing executable Kokoro sidecar' >&2; exit 1; }
+          test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx" || { echo 'Missing Kokoro model' >&2; exit 1; }
+          test -f "$app/Contents/Resources/resources/voices.bin" || { echo 'Missing Kokoro voices' >&2; exit 1; }
+          core_marker="$app/Contents/Resources/resources/core/PULSO_CORE_SOURCE_COMMIT"
+          test -f "$core_marker" || core_marker="$app/Contents/Resources/core/PULSO_CORE_SOURCE_COMMIT"
+          test -f "$core_marker" || { echo 'Missing bundled Core provenance marker' >&2; exit 1; }
+
+      - name: Write release provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/PULSO Next Preview.app"
+          mkdir -p release-provenance
+          {
+            echo "git_sha=${GITHUB_SHA}"
+            echo "git_ref=${GITHUB_REF}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")"
+            echo "bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+            echo "target=x86_64-apple-darwin"
+            echo "core_source_commit=$(tr -d '\n' < vendor/pulso-core/PULSO_CORE_SOURCE_COMMIT)"
+          } > release-provenance/manifest.txt
+          ditto -c -k --sequesterRsrc --keepParent "$app" release-provenance/pulso-next-preview-v0.8.0.zip
+          shasum -a 256 release-provenance/pulso-next-preview-v0.8.0.zip > release-provenance/SHA256SUMS
+
+      - name: Upload Alpha artifact and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-next-preview-v0.8.0-${{ github.sha }}
+          path: release-provenance/
+          if-no-files-found: error
+          retention-days: 14

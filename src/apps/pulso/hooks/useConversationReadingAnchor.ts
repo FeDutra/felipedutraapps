@@ -12,7 +12,7 @@ interface ReadingMessage {
 interface UseConversationReadingAnchorOptions {
   contextId: string;
   lastReadAt?: string | null;
-  messages: ReadingMessage[];
+  messages: readonly ReadingMessage[];
   bottomOffset?: number;
   preferLatestOnEntry?: boolean;
 }

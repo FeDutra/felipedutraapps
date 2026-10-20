@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pulso.local/schemas/live-conversation-run.schema.json",
+  "title": "PULSO Live Conversation Run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "sessionId", "humanMessageId", "identityId", "status", "accumulatedText", "deltasCount", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "humanMessageId": { "type": "string", "minLength": 1 },
+    "assistantMessageId": { "type": ["string", "null"] },
+    "identityId": { "const": "lotus" },
+    "status": { "enum": ["awaiting_provider", "queued", "streaming", "completed", "failed", "cancelled", "interrupted"] },
+    "accumulatedText": { "type": "string" },
+    "deltasCount": { "type": "integer", "minimum": 0 },
+    "resumedFromRunId": { "type": ["string", "null"] },
+    "providerId": { "type": ["string", "null"] },
+    "model": { "type": ["string", "null"] },
+    "receipt": { "type": ["object", "null"] },
+    "failure": { "type": ["object", "null"] },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "updatedAt": { "type": "string", "minLength": 1 },
+    "startedAt": { "type": ["string", "null"] },
+    "completedAt": { "type": ["string", "null"] }
+  }
+}

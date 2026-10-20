@@ -9,6 +9,7 @@ use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 
 mod agent;
+pub mod pulso_core;
 use agent::local_machine::{local_open_url, execute_applescript, local_music_play};
 use agent::presence_broker::local_presence_read;
 use agent::voice_recording::{
@@ -18,6 +19,11 @@ use agent::voice_recording::{
   voice_recording_mark,
   voice_recording_recover_incomplete,
 };
+use pulso_core::{
+  BridgeManager, bridge_request, core_canary_rendered, delete_provider_secret,
+  hydrate_provider_secret, provider_secret_status, shutdown_bridge, store_provider_secret,
+};
+use std::sync::Mutex;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -169,6 +175,7 @@ fn execute_long_command_stream(app: tauri::AppHandle, command: &str) -> Result<(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .manage(Mutex::new(BridgeManager::default()))
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_http::init())
     .invoke_handler(tauri::generate_handler![
@@ -184,7 +191,14 @@ pub fn run() {
       voice_recording_append,
       voice_recording_finalize,
       voice_recording_mark,
-      voice_recording_recover_incomplete
+      voice_recording_recover_incomplete,
+      bridge_request,
+      store_provider_secret,
+      hydrate_provider_secret,
+      provider_secret_status,
+      delete_provider_secret,
+      core_canary_rendered,
+      shutdown_bridge
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
