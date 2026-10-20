@@ -16,7 +16,7 @@ on:
 jobs:
   build-macos:
     if: ${{ github.event.inputs.target == 'macos' || github.event.inputs.target == 'both' }}
-    runs-on: macos-latest
+    runs-on: ${{ (startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8') && 'macos-15-intel' || 'macos-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,14 +36,32 @@ jobs:
         run: npm ci
 
       - name: Prepare Kokoro desktop resources
+        if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8') }}
         run: npm run pulso:setup
 
       - name: Build Tauri app (macOS, x86_64)
+        if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8') }}
         run: npm run pulso:app:build -- --target x86_64-apple-darwin
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
 
+      - name: Verify sovereign Desktop boundary
+        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8' }}
+        run: npm run pulso:alpha:verify
+
+      - name: Prepare Alpha Core, Kokoro and Intel Node sidecar
+        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8' }}
+        run: npm run pulso:alpha:prepare
+
+      - name: Build isolated Alpha bundle
+        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8' }}
+        run: >-
+          npx tauri build
+          --target x86_64-apple-darwin
+          --config src-tauri/tauri.canary.conf.json
+
       - name: Generate release provenance manifest
+        if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8') }}
         shell: bash
         run: |
           APP_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
@@ -66,6 +84,7 @@ jobs:
           cat release-metadata/PULSO-release-manifest.txt
 
       - name: Upload macOS build artifact
+        if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8') }}
         uses: actions/upload-artifact@v4
         with:
           name: pulso-macos-build
@@ -74,6 +93,44 @@ jobs:
             src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
             release-metadata/PULSO-release-manifest.txt
           if-no-files-found: warn
+
+      - name: Verify Alpha identity and write provenance
+        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/PULSO Next Preview.app"
+          test -d "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.felipedutraapps.pulso.next-preview"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "0.8.0"
+          test -x "$app/Contents/MacOS/PULSO Next Preview"
+          file "$app/Contents/MacOS/PULSO Next Preview" | grep -q 'x86_64'
+          find "$app/Contents/Resources" -name 'pulso-node-*' -type f -perm -111 | grep -q .
+          find "$app/Contents/Resources" -name 'kokoro_runner*' -type f -perm -111 | grep -q .
+          test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx"
+          test -f "$app/Contents/Resources/resources/voices.bin"
+          test -f "$app/Contents/Resources/resources/core/PULSO_CORE_SOURCE_COMMIT"
+          mkdir -p release-provenance
+          {
+            echo "git_sha=${GITHUB_SHA}"
+            echo "git_ref=${GITHUB_REF}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")"
+            echo "bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+            echo "target=x86_64-apple-darwin"
+            echo "core_source_commit=$(tr -d '\n' < vendor/pulso-core/PULSO_CORE_SOURCE_COMMIT)"
+          } > release-provenance/manifest.txt
+          ditto -c -k --sequesterRsrc --keepParent "$app" release-provenance/pulso-next-preview-v0.8.0.zip
+          shasum -a 256 release-provenance/pulso-next-preview-v0.8.0.zip > release-provenance/SHA256SUMS
+
+      - name: Upload Alpha artifact and provenance
+        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.8') || github.ref_name == 'feature/pulso-core-alpha-v0.8' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulso-next-preview-v0.8.0-${{ github.sha }}
+          path: release-provenance/
+          if-no-files-found: error
+          retention-days: 14
 
   build-linux:
     if: ${{ github.event.inputs.target == 'linux' || github.event.inputs.target == 'both' }}
