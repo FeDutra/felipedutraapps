@@ -107,11 +107,15 @@ jobs:
           test -n "$executable"
           test -x "$app/Contents/MacOS/$executable"
           file "$app/Contents/MacOS/$executable" | grep -q 'x86_64'
-          find "$app/Contents/Resources" -name 'pulso-node-*' -type f -perm -111 | grep -q .
-          find "$app/Contents/Resources" -name 'kokoro_runner*' -type f -perm -111 | grep -q .
-          test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx"
-          test -f "$app/Contents/Resources/resources/voices.bin"
-          test -f "$app/Contents/Resources/resources/core/PULSO_CORE_SOURCE_COMMIT"
+          pulso_node="$(find "$app/Contents/MacOS" -name 'pulso-node*' -type f -perm -111 -print -quit)"
+          kokoro_runner="$(find "$app/Contents/MacOS" -name 'kokoro_runner*' -type f -perm -111 -print -quit)"
+          test -n "$pulso_node" || { echo 'Missing executable pulso-node sidecar' >&2; exit 1; }
+          test -n "$kokoro_runner" || { echo 'Missing executable Kokoro sidecar' >&2; exit 1; }
+          test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx" || { echo 'Missing Kokoro model' >&2; exit 1; }
+          test -f "$app/Contents/Resources/resources/voices.bin" || { echo 'Missing Kokoro voices' >&2; exit 1; }
+          core_marker="$app/Contents/Resources/resources/core/PULSO_CORE_SOURCE_COMMIT"
+          test -f "$core_marker" || core_marker="$app/Contents/Resources/core/PULSO_CORE_SOURCE_COMMIT"
+          test -f "$core_marker" || { echo 'Missing bundled Core provenance marker' >&2; exit 1; }
           mkdir -p release-provenance
           {
             echo "git_sha=${GITHUB_SHA}"
