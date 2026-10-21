@@ -201,7 +201,7 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
           <span className="block text-xs font-bold tracking-widest text-white/90 lowercase">inteligência da pulso</span>
           <span className="block mt-1 text-[9px] tracking-[0.14em] text-[#fbf9f5]/35 uppercase">assinatura · modelo · identidade soberana</span>
         </div>
-        <button onClick={onClose} className="text-[#fbf9f5]/45 hover:text-white bg-transparent border-none cursor-pointer outline-none">
+        <button type="button" onClick={onClose} className="text-[#fbf9f5]/45 hover:text-white bg-transparent border-none cursor-pointer outline-none">
           <X size={16} strokeWidth={1.5} />
         </button>
       </div>
@@ -270,21 +270,21 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
       <div className="mt-auto pt-8 flex flex-col gap-2">
         {config.adapterKind === 'codex_subscription' ? (
           <>
-            <button onClick={login} disabled={busy !== null} className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 disabled:opacity-35 transition-colors lowercase bg-transparent cursor-pointer outline-none">
+            <button type="button" onClick={login} disabled={busy !== null} className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 disabled:opacity-35 transition-colors lowercase bg-transparent cursor-pointer outline-none">
               {busy === 'login' ? '[ aguardando login ]' : account ? '[ reconectar com ChatGPT ]' : '[ entrar com ChatGPT ]'}
             </button>
             {account && (
-              <button onClick={logout} disabled={busy !== null} className="w-full text-center py-2 text-[9px] text-[#fbf9f5]/35 hover:text-white disabled:opacity-35 transition-colors lowercase bg-transparent border-none cursor-pointer outline-none">
+              <button type="button" onClick={logout} disabled={busy !== null} className="w-full text-center py-2 text-[9px] text-[#fbf9f5]/35 hover:text-white disabled:opacity-35 transition-colors lowercase bg-transparent border-none cursor-pointer outline-none">
                 {busy === 'logout' ? '[ desconectando ]' : '[ sair desta assinatura ]'}
               </button>
             )}
           </>
         ) : (
           <>
-        <button onClick={save} disabled={busy !== null} className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 disabled:opacity-35 transition-colors lowercase bg-transparent cursor-pointer outline-none">
+        <button type="button" onClick={save} disabled={busy !== null} className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 disabled:opacity-35 transition-colors lowercase bg-transparent cursor-pointer outline-none">
           {busy === 'save' ? '[ configurando ]' : '[ salvar configuração ]'}
         </button>
-        <button onClick={test} disabled={busy !== null} className="w-full text-center py-2 text-[9px] text-[#fbf9f5]/45 hover:text-white disabled:opacity-35 transition-colors lowercase bg-transparent border-none cursor-pointer outline-none">
+        <button type="button" onClick={test} disabled={busy !== null} className="w-full text-center py-2 text-[9px] text-[#fbf9f5]/45 hover:text-white disabled:opacity-35 transition-colors lowercase bg-transparent border-none cursor-pointer outline-none">
           {busy === 'test' ? '[ testando conexão ]' : '[ testar conexão ]'}
         </button>
           </>

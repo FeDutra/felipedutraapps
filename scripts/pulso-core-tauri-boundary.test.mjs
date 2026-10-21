@@ -305,4 +305,61 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.match(pulsoCoreRs, /secret_receipt_never_contains_raw_secret_material/);
   assert.match(libRs, /store_provider_secret/);
   assert.match(libRs, /hydrate_provider_secret/);
+  assert.match(libRs, /"pulso-navigation-guard"/);
+  assert.match(libRs, /\.on_navigation\(/);
+  assert.match(libRs, /pub fn is_navigation_allowed/);
+
+  // A barreira de navegação deve ser registrada antes dos plugins de shell e http
+  const guardIndex = libRs.indexOf('pulso-navigation-guard');
+  const shellIndex = libRs.indexOf('tauri_plugin_shell::init()');
+  const httpIndex = libRs.indexOf('tauri_plugin_http::init()');
+  assert.ok(guardIndex > 0);
+  assert.ok(guardIndex < shellIndex);
+  assert.ok(guardIndex < httpIndex);
+
+  // Prova de ausência de vazamento de URL em saídas e logs
+  assert.doesNotMatch(libRs, /(println!|eprintln!|log::\w+)\([^)]*\burl\b/);
+});
+
+test('native navigation barrier strictly confines webview to packaged tauri origin, allows debug localhost only, and does not leak URLs', () => {
+  const libRs = readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'),
+    'utf8'
+  );
+
+  // Pure function for navigation policy
+  assert.match(libRs, /pub fn is_navigation_allowed_for_environment\(/);
+  assert.match(libRs, /pub fn is_navigation_allowed\(/);
+
+  // Packaged origin permitted
+  assert.match(libRs, /scheme == "tauri"/);
+  assert.match(libRs, /matches!\(url\.host_str\(\), Some\("localhost"\)/);
+
+  // Localhost restricted to debug
+  assert.match(
+    libRs,
+    /allow_debug_localhost && \(scheme == "http" \|\| scheme == "https"\)/
+  );
+  assert.match(libRs, /Some\("localhost"\) \| Some\("127\.0\.0\.1"\)/);
+
+  // Unit tests present in Rust
+  assert.match(libRs, /mod navigation_(guard|boundary)_tests/);
+  assert.match(libRs, /permits_internal_packaged_tauri_origin/);
+  assert.match(libRs, /refuses_external_https_and_oauth_navigation/);
+  assert.match(libRs, /(conditions|restricts)_localhost/);
+  assert.match(libRs, /refuses_non_web_schemes_and_foreign_tauri_hosts/);
+
+  // Strict check on logging: no URL leaking
+  assert.doesNotMatch(libRs, /(println!|eprintln!|log::\w+)\([^)]*\burl\b/);
+
+  // Provider panel buttons explicitly set type="button" to prevent implicit form submit
+  const providerPanelSource = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'components', 'PulsoCoreProviderPanel.tsx'),
+    'utf8'
+  );
+  const buttonMatches = providerPanelSource.match(/<button\b[^>]*>/g) || [];
+  assert.ok(buttonMatches.length >= 5);
+  for (const buttonTag of buttonMatches) {
+    assert.match(buttonTag, /type="button"/);
+  }
 });

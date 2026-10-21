@@ -1036,3 +1036,24 @@ Baseline: `fbc4a5be` (`feature/pulso-core-v0.9-sovereign`).
 5. não tocar na PULSO 0.1.1, no Firebase, no snapshot de migração nem nos backups do banco.
 
 ---
+
+# Rollback — barreira nativa de navegação da WKWebView e prevenção de submit (21/10/2026)
+
+Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
+
+## Escopo
+
+- barreira nativa Tauri v2 via `plugin::Builder::new("pulso-navigation-guard").on_navigation(...)` em `src-tauri/src/lib.rs`;
+- confinamento estrito da janela principal WKWebView à origem interna empacotada da PULSO (`tauri://localhost`);
+- liberação de `localhost` e `127.0.0.1` sob `http(s)` exclusivamente em modo debug (`cfg!(debug_assertions)`);
+- recusa estrita de URLs externas HTTP(S), inclusive endpoints OAuth de autenticação, evitando telas quebradas ('This page couldn’t load / Reload / Back') na janela principal;
+- garantia de privacidade: ausência total de log de URLs externas ou parâmetros sensíveis na barreira nativa;
+- atribuição explícita de `type="button"` a todos os botões do painel React de provider (`PulsoCoreProviderPanel.tsx`) para impedir submissão implícita de formulário.
+
+## Reversão
+
+1. Reverter o commit desta alteração com `git revert <commit-da-correcao>` na branch `feature/pulso-core-v0.9-sovereign`.
+2. Se uma nova Preview tiver sido instalada no macOS, restaurar o bundle anterior da RC9 a partir do backup preservado.
+3. Não apagar nem alterar o banco SQLite soberano (`pulso-core.sqlite`).
+4. Não apagar nem alterar as credenciais salvas no Keychain do macOS (`PULSO Core` / `codex-fe`).
+5. Não tocar na `/Applications/PULSO.app` (PULSO 0.1.1) atual, no Firebase Hosting, nas Firestore rules ou nas máquinas de produção.
