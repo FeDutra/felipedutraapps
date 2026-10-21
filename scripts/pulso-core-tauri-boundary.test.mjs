@@ -19,6 +19,10 @@ import {
   preparePulsoCoreSidecar,
   SIDECAR_BINARY_NAME,
 } from './prepare-pulso-core-sidecar.mjs';
+import {
+  prepareCodexSidecar,
+  CODEX_BINARY_NAME,
+} from './prepare-codex-sidecar.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -111,6 +115,38 @@ test('preparePulsoCoreSidecar validates darwin x86_64 target, binary existence, 
 
   const mode = statSync(prepared.targetFile).mode & 0o777;
   assert.equal(mode & 0o111, 0o111);
+
+  rmSync(tempRoot, { recursive: true, force: true });
+});
+
+test('prepareCodexSidecar vendors only an explicit Intel binary with executable permissions', () => {
+  const tempRoot = makeTempDir();
+  const binariesDir = path.join(tempRoot, 'binaries');
+
+  assert.throws(
+    () => prepareCodexSidecar({ platform: 'linux', arch: 'x64', repoRoot: tempRoot }),
+    /Unsupported platform\/architecture: expected darwin x64/
+  );
+  assert.throws(
+    () => prepareCodexSidecar({ sourceBin: path.join(tempRoot, 'missing-codex'), targetDir: binariesDir }),
+    /Official Codex Intel binary not found/
+  );
+
+  const tinyBin = path.join(tempRoot, 'tiny-codex');
+  writeFileSync(tinyBin, 'tiny', 'utf8');
+  assert.throws(
+    () => prepareCodexSidecar({ sourceBin: tinyBin, targetDir: binariesDir, minSizeBytes: 8 }),
+    /Codex binary size must be greater than 8 bytes/
+  );
+
+  const prepared = prepareCodexSidecar({
+    sourceBin: process.execPath,
+    targetDir: binariesDir,
+    minSizeBytes: 1024 * 1024,
+  });
+  assert.equal(prepared.targetFile, path.join(binariesDir, CODEX_BINARY_NAME));
+  assert.ok(prepared.size > 1024 * 1024);
+  assert.equal(statSync(prepared.targetFile).mode & 0o111, 0o111);
 
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -216,6 +252,7 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.deepEqual(tauriConf.bundle.externalBin, [
     'bin/kokoro_runner',
     'binaries/pulso-node',
+    'binaries/pulso-codex',
   ]);
   assert.deepEqual(tauriConf.bundle.resources, [
     'resources/*',
@@ -241,6 +278,8 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
     'utf8'
   );
   assert.match(pulsoCoreRs, /Bundled Node sidecar not found/);
+  assert.match(pulsoCoreRs, /Bundled Codex app-server sidecar not found/);
+  assert.match(pulsoCoreRs, /PULSO_CODEX_BIN/);
   assert.match(pulsoCoreRs, /Bundled Core bridge resource not found/);
   assert.match(pulsoCoreRs, /--data-dir/);
   assert.match(pulsoCoreRs, /pub fn bridge_request/);

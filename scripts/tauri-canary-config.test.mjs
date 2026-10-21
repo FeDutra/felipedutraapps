@@ -55,10 +55,11 @@ test('Merged base + tauri.canary.conf.json isolates canary identity while preser
   assert.notEqual(merged.productName, baseConfig.productName);
   assert.notEqual(merged.identifier, baseConfig.identifier);
 
-  // 2. Both externalBin entries (Kokoro + pulso-node) preserved
+  // 2. All externalBin entries (Kokoro + pulso-node + official Codex) preserved
   assert.ok(Array.isArray(merged.bundle?.externalBin));
   assert.equal(merged.bundle.externalBin.includes('bin/kokoro_runner'), true);
   assert.equal(merged.bundle.externalBin.includes('binaries/pulso-node'), true);
+  assert.equal(merged.bundle.externalBin.includes('binaries/pulso-codex'), true);
 
   // 3. Current resources + Core resources preserved
   assert.ok(Array.isArray(merged.bundle?.resources));

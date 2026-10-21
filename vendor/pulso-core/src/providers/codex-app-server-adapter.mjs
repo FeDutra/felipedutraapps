@@ -1,0 +1,512 @@
+import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
+
+import {
+  ModelProvider,
+  invariant,
+  validateProviderBinding,
+} from "../domain/contracts.mjs";
+import { SecretRefResolver } from "../runtime/secret-ref-resolver.mjs";
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+const TURN_TIMEOUT_MS = 300_000;
+
+function safeProfileId(value) {
+  const profileId = String(value || "personal").trim();
+  invariant(/^[A-Za-z0-9._-]{1,64}$/.test(profileId), "invalid_codex_profile_id");
+  return profileId;
+}
+
+function codexConfigText() {
+  return [
+    'forced_login_method = "chatgpt"',
+    'cli_auth_credentials_store = "keyring"',
+    "",
+  ].join("\n");
+}
+
+function ensureProfileDirectory(codexHome) {
+  mkdirSync(codexHome, { recursive: true, mode: 0o700 });
+  const configPath = join(codexHome, "config.toml");
+  writeFileSync(configPath, codexConfigText(), { encoding: "utf8", mode: 0o600 });
+  chmodSync(configPath, 0o600);
+  return configPath;
+}
+
+function asError(error, fallback = "codex_app_server_error") {
+  if (error instanceof Error) return error;
+  const wrapped = new Error(typeof error === "string" ? error : fallback);
+  wrapped.code = fallback;
+  return wrapped;
+}
+
+function composeTurnInput(request = {}) {
+  const messages = Array.isArray(request.messages) ? request.messages : [];
+  const nonSystem = messages.filter(message => message?.role !== "system");
+  if (nonSystem.length === 0) {
+    const text = String(request?.input?.text ?? request?.prompt ?? "").trim();
+    invariant(text, "input_text_or_messages_required");
+    return text;
+  }
+
+  return nonSystem.map(message => {
+    const role = message?.role === "assistant" ? "Lótus" : "Fe";
+    return `${role}: ${String(message?.content ?? "")}`;
+  }).join("\n\n");
+}
+
+function resolveSystemPrompt(request = {}) {
+  if (request.systemPrompt) return String(request.systemPrompt);
+  const system = Array.isArray(request.messages)
+    ? request.messages.find(message => message?.role === "system")
+    : null;
+  return system ? String(system.content || "") : null;
+}
+
+class AsyncNotificationQueue {
+  constructor() {
+    this.items = [];
+    this.waiters = [];
+    this.terminal = null;
+  }
+
+  push(value) {
+    if (this.terminal) return;
+    const waiter = this.waiters.shift();
+    if (waiter) waiter.resolve({ value, done: false });
+    else this.items.push(value);
+  }
+
+  close() {
+    if (this.terminal) return;
+    this.terminal = { done: true };
+    while (this.waiters.length) this.waiters.shift().resolve({ value: undefined, done: true });
+  }
+
+  fail(error) {
+    if (this.terminal) return;
+    this.terminal = { error: asError(error) };
+    while (this.waiters.length) this.waiters.shift().reject(this.terminal.error);
+  }
+
+  async next() {
+    if (this.items.length) return { value: this.items.shift(), done: false };
+    if (this.terminal?.error) throw this.terminal.error;
+    if (this.terminal?.done) return { value: undefined, done: true };
+    return new Promise((resolveNext, rejectNext) => {
+      this.waiters.push({ resolve: resolveNext, reject: rejectNext });
+    });
+  }
+
+  [Symbol.asyncIterator]() {
+    return this;
+  }
+}
+
+export class CodexAppServerClient {
+  constructor({
+    binaryPath,
+    profileId = "personal",
+    profilesRoot,
+    workspaceDir = null,
+    processFactory = spawn,
+    requestTimeoutMs = DEFAULT_TIMEOUT_MS,
+    turnTimeoutMs = TURN_TIMEOUT_MS,
+    clientVersion = "0.9.0",
+  } = {}) {
+    invariant(typeof binaryPath === "string" && binaryPath.trim(), "codex_binary_path_required");
+    invariant(typeof profilesRoot === "string" && profilesRoot.trim(), "codex_profiles_root_required");
+    this.binaryPath = resolve(binaryPath);
+    this.profileId = safeProfileId(profileId);
+    this.codexHome = resolve(profilesRoot, this.profileId);
+    this.workspaceDir = resolve(workspaceDir || join(this.codexHome, "workspace"));
+    this.processFactory = processFactory;
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.turnTimeoutMs = turnTimeoutMs;
+    this.clientVersion = clientVersion;
+    this.child = null;
+    this.reader = null;
+    this.nextId = 0;
+    this.pending = new Map();
+    this.events = new EventEmitter();
+    this.initialized = false;
+    this.closed = false;
+  }
+
+  async start() {
+    if (this.initialized && this.child) return;
+    invariant(existsSync(this.binaryPath), "codex_binary_not_found");
+    ensureProfileDirectory(this.codexHome);
+    mkdirSync(this.workspaceDir, { recursive: true, mode: 0o700 });
+
+    this.child = this.processFactory(this.binaryPath, ["app-server", "--listen", "stdio://"], {
+      cwd: this.workspaceDir,
+      env: { ...process.env, CODEX_HOME: this.codexHome },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    this.reader = createInterface({ input: this.child.stdout });
+    this.reader.on("line", line => this.#handleLine(line));
+    this.child.once("error", error => this.#terminate(error));
+    this.child.once("exit", (code, signal) => {
+      this.#terminate(new Error(`codex_app_server_exited:${code ?? "null"}:${signal ?? "none"}`));
+    });
+
+    await this.request("initialize", {
+      clientInfo: {
+        name: "pulso_desktop",
+        title: "PULSO",
+        version: this.clientVersion,
+      },
+    });
+    this.notify("initialized", {});
+    this.initialized = true;
+  }
+
+  #handleLine(line) {
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      return;
+    }
+
+    if (message && message.id !== undefined && ("result" in message || "error" in message)) {
+      const pending = this.pending.get(String(message.id));
+      if (!pending) return;
+      this.pending.delete(String(message.id));
+      clearTimeout(pending.timer);
+      if (message.error) {
+        const error = new Error(message.error.message || "codex_rpc_error");
+        error.code = `codex_rpc_${message.error.code ?? "error"}`;
+        pending.reject(error);
+      } else {
+        pending.resolve(message.result);
+      }
+      return;
+    }
+
+    if (message && typeof message.method === "string" && message.id === undefined) {
+      this.events.emit("notification", message);
+      this.events.emit(message.method, message.params ?? {});
+      return;
+    }
+
+    if (message && typeof message.method === "string" && message.id !== undefined) {
+      this.#write({
+        id: message.id,
+        error: { code: -32601, message: "PULSO does not expose provider-owned tools" },
+      });
+    }
+  }
+
+  #terminate(error) {
+    if (this.closed) return;
+    this.closed = true;
+    this.initialized = false;
+    const safeError = asError(error, "codex_app_server_closed");
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(safeError);
+    }
+    this.pending.clear();
+    this.events.emit("closed", safeError);
+  }
+
+  #write(message) {
+    invariant(this.child?.stdin?.writable, "codex_app_server_stdin_unavailable");
+    this.child.stdin.write(`${JSON.stringify(message)}\n`);
+  }
+
+  notify(method, params = {}) {
+    this.#write({ method, params });
+  }
+
+  async request(method, params = {}, timeoutMs = this.requestTimeoutMs) {
+    if (method !== "initialize") await this.start();
+    const id = String(++this.nextId);
+    const promise = new Promise((resolveRequest, rejectRequest) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        const error = new Error(`codex_rpc_timeout:${method}`);
+        error.code = "codex_rpc_timeout";
+        rejectRequest(error);
+      }, timeoutMs);
+      this.pending.set(id, { resolve: resolveRequest, reject: rejectRequest, timer, method });
+    });
+    this.#write({ method, id, params });
+    return promise;
+  }
+
+  async loginStart() {
+    await this.start();
+    return this.request("account/login/start", {
+      type: "chatgpt",
+      appBrand: "codex",
+      useHostedLoginSuccessPage: true,
+    });
+  }
+
+  async loginCancel(loginId) {
+    await this.start();
+    return this.request("account/login/cancel", { loginId });
+  }
+
+  async accountRead({ refreshToken = false } = {}) {
+    await this.start();
+    return this.request("account/read", { refreshToken });
+  }
+
+  async logout() {
+    await this.start();
+    return this.request("account/logout", {});
+  }
+
+  async listModels() {
+    await this.start();
+    return this.request("model/list", { includeHidden: false });
+  }
+
+  async *streamCompletion({ model, systemPrompt = null, input, signal = null } = {}) {
+    await this.start();
+    const account = await this.accountRead({ refreshToken: true });
+    invariant(account?.account?.type === "chatgpt", "codex_chatgpt_login_required");
+
+    const queue = new AsyncNotificationQueue();
+    let threadId = null;
+    let turnId = null;
+    const onNotification = message => {
+      const params = message.params ?? {};
+      if (threadId && params.threadId && params.threadId !== threadId) return;
+      if (turnId && params.turnId && params.turnId !== turnId) return;
+      if (message.method === "item/agentMessage/delta") {
+        queue.push({ type: "delta", delta: String(params.delta || ""), params });
+      } else if (message.method === "turn/completed") {
+        queue.push({ type: "completed", params });
+        queue.close();
+      } else if (message.method === "error") {
+        queue.fail(new Error(params.message || "codex_turn_error"));
+      }
+    };
+    const onClosed = error => queue.fail(error);
+    this.events.on("notification", onNotification);
+    this.events.once("closed", onClosed);
+
+    let abortHandler = null;
+    try {
+      const threadResult = await this.request("thread/start", {
+        model: model || null,
+        cwd: this.workspaceDir,
+        sandbox: "read-only",
+        approvalPolicy: "never",
+        ephemeral: true,
+        baseInstructions: systemPrompt || null,
+        developerInstructions: "Converse como a identidade fornecida pela PULSO. Não execute comandos, não altere arquivos e não use ferramentas. Responda apenas em texto ao pedido humano.",
+      });
+      threadId = threadResult?.thread?.id;
+      invariant(threadId, "codex_thread_id_missing");
+
+      const turnResult = await this.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: input }],
+        model: model || null,
+        approvalPolicy: "never",
+      }, this.turnTimeoutMs);
+      turnId = turnResult?.turn?.id;
+      invariant(turnId, "codex_turn_id_missing");
+
+      if (signal) {
+        abortHandler = () => {
+          this.request("turn/interrupt", { threadId, turnId }).catch(() => {});
+          queue.fail(Object.assign(new Error("provider_stream_cancelled"), { code: "request_cancelled" }));
+        };
+        if (signal.aborted) abortHandler();
+        else signal.addEventListener("abort", abortHandler, { once: true });
+      }
+
+      for await (const event of queue) {
+        if (event.type === "delta" && event.delta) {
+          yield { type: "delta", delta: event.delta, threadId, turnId };
+        } else if (event.type === "completed") {
+          const status = event.params?.turn?.status;
+          if (status !== "completed") {
+            const error = new Error(event.params?.turn?.error?.message || `codex_turn_${status || "failed"}`);
+            error.code = status === "interrupted" ? "request_cancelled" : "codex_turn_failed";
+            throw error;
+          }
+          yield { type: "completed", threadId, turnId, status };
+        }
+      }
+    } finally {
+      this.events.off("notification", onNotification);
+      this.events.off("closed", onClosed);
+      if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
+    }
+  }
+
+  async close() {
+    if (!this.child) return;
+    this.closed = true;
+    this.reader?.close();
+    this.child.kill();
+    this.child = null;
+    this.initialized = false;
+  }
+}
+
+export class CodexSubscriptionAdapter extends ModelProvider {
+  constructor({
+    id = "codex-subscription",
+    label = "ChatGPT · assinatura",
+    defaultModel = null,
+    models = [],
+    client,
+    clock = () => new Date().toISOString(),
+    secretResolver = null,
+  } = {}) {
+    super(id, label);
+    invariant(client && typeof client.streamCompletion === "function", "codex_app_server_client_required");
+    this.adapterKind = "codex_subscription";
+    this.protocol = "codex_app_server_stdio";
+    this.defaultModel = defaultModel;
+    this.models = [...models];
+    this.client = client;
+    this.clock = clock;
+    this.secretRef = null;
+    this.secretResolver = secretResolver || new SecretRefResolver({ clock });
+  }
+
+  async capabilities() {
+    return Object.freeze({
+      providerId: this.id,
+      adapterKind: this.adapterKind,
+      protocol: this.protocol,
+      modalities: ["text"],
+      streaming: true,
+      local: false,
+      allowExternalNetwork: true,
+      authRequired: true,
+      authMethod: "chatgpt_subscription",
+      credentialsStore: "keyring",
+      defaultModel: this.defaultModel,
+      models: [...this.models],
+      includes: feature => ["text", "text_completion", "streaming", "subscription_login"].includes(feature),
+    });
+  }
+
+  async health() {
+    const checkedAt = this.clock();
+    try {
+      const result = await this.client.accountRead({ refreshToken: true });
+      const account = result?.account ?? null;
+      return {
+        status: account?.type === "chatgpt" ? "healthy" : "unhealthy",
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        checkedAt,
+        detail: account?.type === "chatgpt" ? "chatgpt_subscription_authenticated" : "chatgpt_login_required",
+        account: account ? {
+          type: account.type,
+          email: account.email ?? null,
+          planType: account.planType ?? "unknown",
+        } : null,
+      };
+    } catch (error) {
+      return {
+        status: "unhealthy",
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        checkedAt,
+        detail: asError(error).message,
+      };
+    }
+  }
+
+  async complete(request = {}) {
+    let final = null;
+    let text = "";
+    for await (const event of this.stream(request)) {
+      if (event.type === "model.delta") text += event.text;
+      if (event.type === "model.completed") final = event;
+    }
+    invariant(final, "codex_stream_missing_completion");
+    return { ...final, text, outputText: text };
+  }
+
+  async *stream(request = {}) {
+    const model = request.model ?? this.defaultModel;
+    const input = composeTurnInput(request);
+    const systemPrompt = resolveSystemPrompt(request);
+    let text = "";
+    let index = 0;
+    let threadId = null;
+    let turnId = null;
+
+    for await (const event of this.client.streamCompletion({
+      model,
+      systemPrompt,
+      input,
+      signal: request.signal ?? null,
+    })) {
+      if (event.type === "delta") {
+        threadId = event.threadId ?? threadId;
+        turnId = event.turnId ?? turnId;
+        text += event.delta;
+        yield {
+          type: "model.delta",
+          kind: "delta",
+          providerId: this.id,
+          adapterKind: this.adapterKind,
+          model,
+          text: event.delta,
+          delta: event.delta,
+          index: index++,
+        };
+      } else if (event.type === "completed") {
+        threadId = event.threadId ?? threadId;
+        turnId = event.turnId ?? turnId;
+      }
+    }
+
+    invariant(text.trim(), "assistant_message_empty");
+    const providerBinding = validateProviderBinding({
+      providerType: "model",
+      providerId: this.id,
+      connectionId: `${this.id}-stdio`,
+      externalRunId: turnId ? `ext_codex_${turnId}` : null,
+      externalResponseId: turnId,
+      externalSessionId: threadId,
+      boundAt: this.clock(),
+      metadata: {
+        adapterKind: this.adapterKind,
+        protocol: this.protocol,
+        model,
+        ephemeralThread: true,
+      },
+    });
+    const completed = {
+      type: "model.completed",
+      kind: "completed",
+      providerId: this.id,
+      adapterKind: this.adapterKind,
+      model,
+      text,
+      outputText: text,
+      finishReason: "stop",
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        inputUnits: input.length,
+        outputUnits: text.length,
+      },
+      providerBinding,
+    };
+    this.secretResolver.assertZeroLeakage(completed);
+    yield completed;
+  }
+}
+
+export { composeTurnInput, ensureProfileDirectory, safeProfileId };

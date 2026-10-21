@@ -23,6 +23,11 @@ export const BRIDGE_METHODS = Object.freeze([
   'provider.test',
   'provider.remove',
   'provider.secret.inject',
+  'provider.subscription.login.start',
+  'provider.subscription.login.cancel',
+  'provider.subscription.account.read',
+  'provider.subscription.logout',
+  'provider.subscription.models.list',
   'identity.inspect',
   'identity.private.install',
   'legacy.import.plan',
@@ -299,7 +304,7 @@ export interface PulsoTurnPollResult {
   readonly done: boolean;
 }
 
-export type PulsoProviderAdapterKind = 'openai' | 'anthropic' | 'local' | 'ollama';
+export type PulsoProviderAdapterKind = 'codex_subscription' | 'openai' | 'anthropic' | 'local' | 'ollama';
 
 export interface PulsoProviderConfig {
   readonly providerId: string;
@@ -308,6 +313,24 @@ export interface PulsoProviderConfig {
   readonly model: string;
   readonly endpoint?: string | null;
   readonly allowExternalNetwork: boolean;
+  readonly profileId?: string | null;
+}
+
+export interface PulsoSubscriptionAccount {
+  readonly type: 'chatgpt';
+  readonly email: string | null;
+  readonly planType: string;
+}
+
+export interface PulsoSubscriptionAccountStatus {
+  readonly account: PulsoSubscriptionAccount | null;
+  readonly requiresOpenaiAuth: boolean;
+}
+
+export interface PulsoSubscriptionLoginStart {
+  readonly type: 'chatgpt';
+  readonly loginId: string;
+  readonly authUrl: string;
 }
 
 export interface PulsoProviderHealth {
@@ -700,6 +723,46 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
       requestId?: string
     ): Promise<PulsoCoreResult<PulsoProviderHealth>> {
       return request<PulsoProviderHealth>('provider.test', { providerId }, requestId);
+    },
+
+    startSubscriptionLogin(
+      providerId: string,
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoSubscriptionLoginStart>> {
+      return request<PulsoSubscriptionLoginStart>('provider.subscription.login.start', { providerId }, requestId);
+    },
+
+    cancelSubscriptionLogin(
+      providerId: string,
+      loginId: string,
+      requestId?: string
+    ): Promise<PulsoCoreResult<Readonly<Record<string, never>>>> {
+      return request('provider.subscription.login.cancel', { providerId, loginId }, requestId);
+    },
+
+    readSubscriptionAccount(
+      providerId: string,
+      refreshToken = false,
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoSubscriptionAccountStatus>> {
+      return request<PulsoSubscriptionAccountStatus>('provider.subscription.account.read', {
+        providerId,
+        refreshToken,
+      }, requestId);
+    },
+
+    logoutSubscription(
+      providerId: string,
+      requestId?: string
+    ): Promise<PulsoCoreResult<Readonly<Record<string, never>>>> {
+      return request('provider.subscription.logout', { providerId }, requestId);
+    },
+
+    listSubscriptionModels(
+      providerId: string,
+      requestId?: string
+    ): Promise<PulsoCoreResult<Readonly<Record<string, unknown>>>> {
+      return request('provider.subscription.models.list', { providerId }, requestId);
     },
 
     liveBootstrap(requestId?: string): Promise<PulsoCoreResult<PulsoLiveBootstrapSnapshot>> {

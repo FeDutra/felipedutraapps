@@ -9,6 +9,9 @@ const STORAGE_KEY = 'pulso_core_provider_v1';
 const isLocalAdapter = (adapterKind: PulsoProviderConfig['adapterKind']): boolean => (
   adapterKind === 'local' || adapterKind === 'ollama'
 );
+const isSubscriptionAdapter = (adapterKind: PulsoProviderConfig['adapterKind']): boolean => (
+  adapterKind === 'codex_subscription'
+);
 
 export interface PulsoProviderSecretReceipt {
   readonly providerId: string;
@@ -25,7 +28,7 @@ const nativeInvoke = async <T>(command: string, args: Record<string, unknown>): 
 const validateConfig = (config: PulsoProviderConfig): PulsoProviderConfig => {
   if (!/^[A-Za-z0-9._-]{1,80}$/.test(config.providerId)) throw new Error('Identificador de provider inválido.');
   if (!config.model.trim()) throw new Error('Modelo é obrigatório.');
-  if (!['openai', 'anthropic', 'local', 'ollama'].includes(config.adapterKind)) throw new Error('Tipo de provider inválido.');
+  if (!['codex_subscription', 'openai', 'anthropic', 'local', 'ollama'].includes(config.adapterKind)) throw new Error('Tipo de provider inválido.');
   return Object.freeze({
     ...config,
     providerId: config.providerId.trim(),
@@ -33,6 +36,7 @@ const validateConfig = (config: PulsoProviderConfig): PulsoProviderConfig => {
     model: config.model.trim(),
     endpoint: config.endpoint?.trim() || null,
     allowExternalNetwork: !isLocalAdapter(config.adapterKind),
+    profileId: config.profileId?.trim() || null,
   });
 };
 
@@ -52,11 +56,11 @@ export const pulsoCoreProvider = Object.freeze({
     const config = validateConfig(configInput);
     let receipt: PulsoProviderSecretReceipt = {
       providerId: config.providerId,
-      configured: isLocalAdapter(config.adapterKind),
-      secretRef: isLocalAdapter(config.adapterKind) ? null : `keychain:${config.providerId}`,
+      configured: isLocalAdapter(config.adapterKind) || isSubscriptionAdapter(config.adapterKind),
+      secretRef: isLocalAdapter(config.adapterKind) || isSubscriptionAdapter(config.adapterKind) ? null : `keychain:${config.providerId}`,
     };
 
-    if (!isLocalAdapter(config.adapterKind)) {
+    if (!isLocalAdapter(config.adapterKind) && !isSubscriptionAdapter(config.adapterKind)) {
       if (secret?.trim()) {
         receipt = await nativeInvoke<PulsoProviderSecretReceipt>('store_provider_secret', {
           providerId: config.providerId,
@@ -93,5 +97,39 @@ export const pulsoCoreProvider = Object.freeze({
 
   async status(providerId: string): Promise<PulsoProviderSecretReceipt> {
     return nativeInvoke<PulsoProviderSecretReceipt>('provider_secret_status', { providerId });
+  },
+
+  async startSubscriptionLogin(configInput: PulsoProviderConfig) {
+    const config = validateConfig(configInput);
+    if (!isSubscriptionAdapter(config.adapterKind)) throw new Error('Este provider não usa assinatura.');
+    await this.configure(config);
+    const started = await pulsoCoreClient.startSubscriptionLogin(config.providerId);
+    if (!started.ok) throw new Error(started.error.message);
+    await nativeInvoke<void>('local_open_url', { url: started.result.authUrl });
+    return started.result;
+  },
+
+  async readSubscriptionAccount(providerId: string, refreshToken = false) {
+    const result = await pulsoCoreClient.readSubscriptionAccount(providerId, refreshToken);
+    if (!result.ok) throw new Error(result.error.message);
+    return result.result;
+  },
+
+  async cancelSubscriptionLogin(providerId: string, loginId: string) {
+    const result = await pulsoCoreClient.cancelSubscriptionLogin(providerId, loginId);
+    if (!result.ok) throw new Error(result.error.message);
+    return result.result;
+  },
+
+  async listSubscriptionModels(providerId: string) {
+    const result = await pulsoCoreClient.listSubscriptionModels(providerId);
+    if (!result.ok) throw new Error(result.error.message);
+    return result.result;
+  },
+
+  async logoutSubscription(providerId: string) {
+    const result = await pulsoCoreClient.logoutSubscription(providerId);
+    if (!result.ok) throw new Error(result.error.message);
+    return result.result;
   },
 });

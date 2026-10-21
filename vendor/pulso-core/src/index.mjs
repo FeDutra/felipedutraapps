@@ -104,6 +104,10 @@ export {
   iterateNdjsonFramesFromStream
 } from "./providers/model-adapters.mjs";
 export {
+  CodexAppServerClient,
+  CodexSubscriptionAdapter
+} from "./providers/codex-app-server-adapter.mjs";
+export {
   SECRET_REF_SCHEMES,
   ADAPTER_KINDS,
   ROUTING_SCOPE_PRECEDENCE,

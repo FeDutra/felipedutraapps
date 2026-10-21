@@ -10,6 +10,8 @@ use tauri::{AppHandle, Manager, State};
 
 pub const SIDECAR_BIN_NAME: &str = "pulso-node";
 pub const SIDECAR_TRIPLE_BIN_NAME: &str = "pulso-node-x86_64-apple-darwin";
+pub const CODEX_BIN_NAME: &str = "pulso-codex";
+pub const CODEX_TRIPLE_BIN_NAME: &str = "pulso-codex-x86_64-apple-darwin";
 pub const CANARY_RECEIPT_FILENAME: &str = "core-canary-rendered.json";
 const CANARY_FIELD_MAX_BYTES: usize = 128;
 #[cfg(target_os = "macos")]
@@ -134,6 +136,23 @@ pub fn resolve_node_sidecar_path(exe_parent: &Path) -> Result<PathBuf, String> {
     Err("Bundled Node sidecar not found".to_string())
 }
 
+pub fn resolve_codex_sidecar_path(exe_parent: &Path) -> Result<PathBuf, String> {
+    let candidates = [
+        exe_parent.join(CODEX_BIN_NAME),
+        exe_parent.join(CODEX_TRIPLE_BIN_NAME),
+        exe_parent.join("binaries").join(CODEX_TRIPLE_BIN_NAME),
+        exe_parent.join("binaries").join(CODEX_BIN_NAME),
+    ];
+
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err("Bundled Codex app-server sidecar not found".to_string())
+}
+
 pub fn resolve_bridge_script_path(resource_dir: &Path) -> Result<PathBuf, String> {
     let candidates = [
         resource_dir
@@ -186,6 +205,11 @@ impl BridgeProcess {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
+        if let Some(exe_parent) = node_bin.parent() {
+            if let Ok(codex_bin) = resolve_codex_sidecar_path(exe_parent) {
+                cmd.env("PULSO_CODEX_BIN", codex_bin);
+            }
+        }
 
         let mut child = cmd.spawn().map_err(|e| {
             format!(
@@ -544,6 +568,28 @@ mod tests {
         let direct_path = temp.join(SIDECAR_BIN_NAME);
         File::create(&direct_path).unwrap();
         assert_eq!(resolve_node_sidecar_path(&temp).unwrap(), direct_path);
+
+        let _ = remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn resolve_codex_sidecar_fails_explicitly_when_missing() {
+        let temp = unique_temp_dir("pulso-codex-sidecar-missing");
+        let err = resolve_codex_sidecar_path(&temp).unwrap_err();
+        assert_eq!(err, "Bundled Codex app-server sidecar not found");
+        let _ = remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn resolve_codex_sidecar_prefers_direct_name_and_falls_back_to_target_triple() {
+        let temp = unique_temp_dir("pulso-codex-sidecar-resolve");
+        let triple_path = temp.join(CODEX_TRIPLE_BIN_NAME);
+        File::create(&triple_path).unwrap();
+        assert_eq!(resolve_codex_sidecar_path(&temp).unwrap(), triple_path);
+
+        let direct_path = temp.join(CODEX_BIN_NAME);
+        File::create(&direct_path).unwrap();
+        assert_eq!(resolve_codex_sidecar_path(&temp).unwrap(), direct_path);
 
         let _ = remove_dir_all(&temp);
     }

@@ -1014,3 +1014,25 @@ Baseline: `c46012ea` (`origin/main`).
 3. não reiniciar `pulso-live-voice.service`, pois o relay não muda;
 4. preservar todos os registros de voz já gravados no Firestore;
 5. manter MacBook e iPhone fora da reversão desta etapa.
+# Rollback — assinatura ChatGPT no Core soberano (21/10/2026)
+
+Baseline: `fbc4a5be` (`feature/pulso-core-v0.9-sovereign`).
+
+## Escopo
+
+- empacotar o binário oficial Codex `0.163.0` Intel como sidecar da Preview;
+- autenticar por **Sign in with ChatGPT**, sem chave de API;
+- guardar credenciais no Keychain, isoladas por `CODEX_HOME` de perfil;
+- usar threads efêmeros, sandbox somente leitura e aprovação `never` no modo conversa;
+- manter sessões, histórico, identidade Lótus e memória no PULSO Core;
+- disponibilizar inicialmente apenas o perfil pessoal do Fe.
+
+## Reversão
+
+1. reinstalar o bundle RC6 já preservado, sem substituir nem reimportar o SQLite soberano;
+2. restaurar a seleção de provider anterior no Core, preservando sessões e mensagens;
+3. remover apenas o provider `codex-fe` e encerrar o sidecar Codex;
+4. usar **sair desta assinatura** antes de remover a candidata, caso seja necessário apagar a credencial correspondente do Keychain;
+5. não tocar na PULSO 0.1.1, no Firebase, no snapshot de migração nem nos backups do banco.
+
+---

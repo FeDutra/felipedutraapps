@@ -16,6 +16,8 @@ import {
   AnthropicModelAdapter,
   LocalOpenAICompatibleAdapter,
   OllamaModelAdapter,
+  CodexAppServerClient,
+  CodexSubscriptionAdapter,
   LotusIdentityService,
   LegacyImportService,
   pulsoId,
@@ -107,6 +109,7 @@ export class PulsoDesktopBridge {
       });
     this.turnQueues = new Map();
     this.turnExecutions = new Map();
+    this.codexClients = new Map();
 
     this.initialized = false;
     this.closed = false;
@@ -117,6 +120,32 @@ export class PulsoDesktopBridge {
       return this.options.adapterFactory(params, secretRef, this.secretResolver);
     }
     const adapterKind = params.adapterKind || params.providerType || params.providerId;
+    if (adapterKind === "codex_subscription") {
+      const profileId = String(params.profileId || "personal");
+      const binaryPath = process.env.PULSO_CODEX_BIN;
+      if (!binaryPath) {
+        const error = new Error("codex_subscription_binary_unavailable");
+        error.code = "CODEX_BINARY_UNAVAILABLE";
+        throw error;
+      }
+      const client = typeof this.options.codexClientFactory === "function"
+        ? this.options.codexClientFactory({ params, profileId, binaryPath, dataDir: this.dataDir })
+        : new CodexAppServerClient({
+            binaryPath,
+            profileId,
+            profilesRoot: join(this.dataDir, "provider-profiles", "codex"),
+            workspaceDir: join(this.dataDir, "provider-workspaces", "codex", profileId),
+          });
+      this.codexClients.set(params.providerId, client);
+      return new CodexSubscriptionAdapter({
+        id: params.providerId,
+        label: params.displayName || "ChatGPT · assinatura",
+        defaultModel: params.model || null,
+        models: params.models || [],
+        client,
+        secretResolver: this.secretResolver,
+      });
+    }
     const localAdapter = ["local", "local_openai_compatible", "ollama"].includes(adapterKind);
     const common = {
       id: params.providerId,
@@ -289,6 +318,56 @@ export class PulsoDesktopBridge {
         this.secretResolver.setSecret(secretRef, params.secret);
         return this.secretResolver.inspectRef(secretRef);
       }
+      case "provider.subscription.login.start": {
+        await this.initialize();
+        const client = this.codexClients.get(params.providerId);
+        if (!client) {
+          const error = new Error("codex_subscription_provider_not_configured");
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        return await client.loginStart();
+      }
+      case "provider.subscription.login.cancel": {
+        await this.initialize();
+        const client = this.codexClients.get(params.providerId);
+        if (!client) {
+          const error = new Error("codex_subscription_provider_not_configured");
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        return await client.loginCancel(params.loginId);
+      }
+      case "provider.subscription.account.read": {
+        await this.initialize();
+        const client = this.codexClients.get(params.providerId);
+        if (!client) {
+          const error = new Error("codex_subscription_provider_not_configured");
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        return await client.accountRead({ refreshToken: params.refreshToken === true });
+      }
+      case "provider.subscription.logout": {
+        await this.initialize();
+        const client = this.codexClients.get(params.providerId);
+        if (!client) {
+          const error = new Error("codex_subscription_provider_not_configured");
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        return await client.logout();
+      }
+      case "provider.subscription.models.list": {
+        await this.initialize();
+        const client = this.codexClients.get(params.providerId);
+        if (!client) {
+          const error = new Error("codex_subscription_provider_not_configured");
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        return await client.listModels();
+      }
       case "provider.configure": {
         await this.initialize();
         if (typeof params.providerId !== "string" || !params.providerId.trim()) {
@@ -297,7 +376,14 @@ export class PulsoDesktopBridge {
           throw error;
         }
         const providerId = params.providerId;
-        const secretRef = params.secretRef ?? (params.kind === "local" ? null : "keychain:" + providerId);
+        const adapterKind = params.adapterKind || params.providerType || providerId;
+        const credentialless = ["local", "local_openai_compatible", "ollama", "codex_subscription"].includes(adapterKind);
+        const secretRef = params.secretRef ?? (credentialless ? null : "keychain:" + providerId);
+        const previousCodexClient = this.codexClients.get(providerId);
+        if (previousCodexClient && typeof previousCodexClient.close === "function") {
+          await previousCodexClient.close();
+          this.codexClients.delete(providerId);
+        }
         const adapter = this.createModelAdapter(params, secretRef);
         const profile = {
           providerId,
@@ -542,6 +628,14 @@ export class PulsoDesktopBridge {
     } catch {
       // Ignore errors when stopping runtime on close
     }
+    for (const client of this.codexClients.values()) {
+      try {
+        if (client && typeof client.close === "function") await client.close();
+      } catch {
+        // Provider shutdown must not prevent the event store from closing.
+      }
+    }
+    this.codexClients.clear();
     try {
       if (this.store && typeof this.store.close === "function") {
         await this.store.close();
