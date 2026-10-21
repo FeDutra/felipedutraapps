@@ -5,6 +5,7 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 use std::sync::Mutex;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{plugin, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
@@ -40,6 +41,23 @@ pub fn is_navigation_allowed_for_environment(
 
 pub fn is_navigation_allowed(url: &tauri::Url) -> bool {
     is_navigation_allowed_for_environment(url, cfg!(debug_assertions))
+}
+
+fn canonical_live_url() -> tauri::Url {
+    tauri::Url::parse("tauri://localhost/pulso/live")
+        .expect("the canonical PULSO live URL must be valid")
+}
+
+fn restore_canonical_live_route(webview: tauri::Webview) {
+    // WKWebView can replace the current document with its native
+    // “This page couldn’t load” surface even when a navigation is rejected.
+    // Recover on the dispatcher after the rejected navigation has unwound.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(40));
+        if let Err(error) = webview.navigate(canonical_live_url()) {
+            eprintln!("pulso-navigation-guard: falha ao restaurar a rota interna: {error}");
+        }
+    });
 }
 
 #[derive(Deserialize)]
@@ -208,12 +226,13 @@ pub fn run() {
     tauri::Builder::default()
     .plugin(
       plugin::Builder::<tauri::Wry>::new("pulso-navigation-guard")
-        .on_navigation(|_webview, url| {
+        .on_navigation(|webview, url| {
           let allowed = is_navigation_allowed(url);
           if !allowed {
             // Intencionalmente não registramos a URL para impedir vazamento
             // de parâmetros sensíveis (como tokens de autenticação/OAuth).
             eprintln!("pulso-navigation-guard: navegação externa recusada pela barreira nativa");
+            restore_canonical_live_route(webview.clone());
           }
           allowed
         })
@@ -288,7 +307,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod navigation_guard_tests {
-    use super::{is_navigation_allowed, is_navigation_allowed_for_environment};
+    use super::{canonical_live_url, is_navigation_allowed, is_navigation_allowed_for_environment};
     use tauri::Url;
 
     #[test]
@@ -414,5 +433,13 @@ mod navigation_guard_tests {
         } else {
             assert!(!is_navigation_allowed(&localhost_url));
         }
+    }
+
+    #[test]
+    fn recovery_target_is_the_packaged_live_route() {
+        let recovery_url = canonical_live_url();
+
+        assert_eq!(recovery_url.as_str(), "tauri://localhost/pulso/live");
+        assert!(is_navigation_allowed_for_environment(&recovery_url, false));
     }
 }
