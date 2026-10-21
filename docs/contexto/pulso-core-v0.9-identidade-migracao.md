@@ -62,6 +62,8 @@ Os 1.317 pedidos não convertidos foram classificados como envelopes operacionai
 
 O **Core v0.9** está sem vestígio de OpenClaw/OpenCloud. A casca ampla da PULSO ainda possui módulos legados de voz, ferramentas e operação que serão migrados por capacidade. A presença desses módulos fora de `vendor/pulso-core` não muda a propriedade do caminho conversacional soberano, mas impede declarar o produto inteiro como livre do legado nesta etapa.
 
+Providers locais usam timeout total de streaming de 120 segundos por padrão; APIs externas preservam 15 segundos. A distinção nasceu de prova real no iMac: o endpoint local estava saudável e entregava o primeiro byte rapidamente, mas o raciocínio completo com Soul, contexto privado e sessão ultrapassava uma política originalmente calibrada para APIs remotas.
+
 ## Critérios antes de promoção ao iMac
 
 - gate zero-vestígio do Core;

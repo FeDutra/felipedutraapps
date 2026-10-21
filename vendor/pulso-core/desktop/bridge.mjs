@@ -116,6 +116,7 @@ export class PulsoDesktopBridge {
       return this.options.adapterFactory(params, secretRef, this.secretResolver);
     }
     const adapterKind = params.adapterKind || params.providerType || params.providerId;
+    const localAdapter = ["local", "local_openai_compatible", "ollama"].includes(adapterKind);
     const common = {
       id: params.providerId,
       label: params.displayName || params.providerId,
@@ -124,10 +125,14 @@ export class PulsoDesktopBridge {
       secretRef,
       secretResolver: this.secretResolver,
       allowExternalNetwork: params.allowExternalNetwork === true,
+      // The transport timeout covers the whole streamed response, not only the
+      // connection handshake. Local models can legitimately spend longer
+      // reasoning while remaining healthy and responsive on loopback.
+      timeoutMs: params.timeoutMs ?? (localAdapter ? 120_000 : 15_000),
     };
     if (adapterKind === "openai") return new OpenAIModelAdapter(common);
     if (adapterKind === "anthropic") return new AnthropicModelAdapter(common);
-    if (["local", "local_openai_compatible", "ollama"].includes(adapterKind)) {
+    if (localAdapter) {
       return new LocalOpenAICompatibleAdapter({ ...common, secretRef: secretRef || null });
     }
     const error = new Error("unsupported_provider_adapter:" + adapterKind);

@@ -31,6 +31,6 @@ test("bundle soberano contém identidade versionada, importador e commit-fonte",
   const sourceCommit = readFileSync(join(coreRoot, "PULSO_CORE_SOURCE_COMMIT"), "utf8").trim();
   assert.match(index, /LotusIdentityService/);
   assert.match(index, /LegacyImportService/);
-  assert.equal(sourceCommit, "aa8ba419cc2fc2953f24a03eb28bd00a9cfb57c8");
+  assert.equal(sourceCommit, "b590b7ed43deaf40c4babb29ec51e2263ba06c05");
   assert.match(readFileSync(join(coreRoot, "desktop", "migration-cli.mjs"), "utf8"), /promoteStagedMigration/);
 });
