@@ -114,7 +114,7 @@ jobs:
           test -n "$pulso_codex" || { echo 'Missing executable official Codex sidecar' >&2; exit 1; }
           test -n "$kokoro_runner" || { echo 'Missing executable Kokoro sidecar' >&2; exit 1; }
           file "$pulso_codex" | grep -q 'x86_64' || { echo 'Codex sidecar is not Intel x86_64' >&2; exit 1; }
-          codex_version="$($pulso_codex --version)"
+          codex_version="$("$pulso_codex" --version)"
           test "$codex_version" = "codex-cli 0.163.0" || { echo "Unexpected Codex version: $codex_version" >&2; exit 1; }
           test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx" || { echo 'Missing Kokoro model' >&2; exit 1; }
           test -f "$app/Contents/Resources/resources/voices.bin" || { echo 'Missing Kokoro voices' >&2; exit 1; }
