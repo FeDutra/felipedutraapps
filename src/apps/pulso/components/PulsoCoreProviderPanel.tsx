@@ -30,8 +30,14 @@ const DEFAULTS: Record<PulsoProviderAdapterKind, Pick<PulsoProviderConfig, 'prov
   },
   local: {
     providerId: 'local',
-    displayName: 'Modelo local',
+    displayName: 'Endpoint local compatível',
     model: 'qwen2.5-coder:7b',
+    endpoint: 'http://127.0.0.1:11434',
+  },
+  ollama: {
+    providerId: 'ollama-local',
+    displayName: 'Ollama local',
+    model: 'qwen3:4b',
     endpoint: 'http://127.0.0.1:11434',
   },
 };
@@ -39,7 +45,7 @@ const DEFAULTS: Record<PulsoProviderAdapterKind, Pick<PulsoProviderConfig, 'prov
 const configFor = (adapterKind: PulsoProviderAdapterKind): PulsoProviderConfig => ({
   ...DEFAULTS[adapterKind],
   adapterKind,
-  allowExternalNetwork: adapterKind !== 'local',
+  allowExternalNetwork: adapterKind !== 'local' && adapterKind !== 'ollama',
 });
 
 export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCoreProviderPanelProps) {
@@ -127,6 +133,7 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
           <select value={config.adapterKind} onChange={(event) => updateKind(event.target.value as PulsoProviderAdapterKind)} className="pulso-select w-full">
             <option value="openai" className="bg-[#121212]">OpenAI</option>
             <option value="anthropic" className="bg-[#121212]">Anthropic</option>
+            <option value="ollama" className="bg-[#121212]">Ollama local</option>
             <option value="local" className="bg-[#121212]">local · compatível com OpenAI</option>
           </select>
         </div>
@@ -141,7 +148,7 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
           <input value={config.endpoint || ''} onChange={(event) => setConfig({ ...config, endpoint: event.target.value })} className={inputClass} autoComplete="off" />
         </div>
 
-        {config.adapterKind !== 'local' && (
+        {config.adapterKind !== 'local' && config.adapterKind !== 'ollama' && (
           <div className="space-y-1.5">
             <label className={labelClass}>credencial</label>
             <input

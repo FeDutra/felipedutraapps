@@ -64,6 +64,8 @@ O **Core v0.9** está sem vestígio de OpenClaw/OpenCloud. A casca ampla da PULS
 
 Providers locais usam timeout total de streaming de 120 segundos por padrão; APIs externas preservam 15 segundos. A distinção nasceu de prova real no iMac: o endpoint local estava saudável e entregava o primeiro byte rapidamente, mas o raciocínio completo com Soul, contexto privado e sessão ultrapassava uma política originalmente calibrada para APIs remotas.
 
+O Ollama também possui adaptador nativo (`/api/chat`, streaming NDJSON). O raciocínio permanece no canal privado `message.thinking`; somente `message.content` pode virar delta visível. Os modelos Qwen instalados no iMac foram medidos com a identidade completa e não atingiram latência interativa aceitável, por isso permanecem classificados como experimentais — não como provider conversacional padrão da Alpha.
+
 ## Critérios antes de promoção ao iMac
 
 - gate zero-vestígio do Core;

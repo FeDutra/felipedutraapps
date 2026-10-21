@@ -97,7 +97,11 @@ export {
   AnthropicProviderAdapter,
   LocalOpenAICompatibleAdapter,
   LocalModelAdapter,
-  defaultHttpTransport
+  OllamaModelAdapter,
+  OllamaProviderAdapter,
+  defaultHttpTransport,
+  defaultNdjsonTransport,
+  iterateNdjsonFramesFromStream
 } from "./providers/model-adapters.mjs";
 export {
   SECRET_REF_SCHEMES,

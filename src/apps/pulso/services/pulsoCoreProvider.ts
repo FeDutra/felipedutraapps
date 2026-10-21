@@ -6,6 +6,9 @@ import {
 } from './pulsoCoreClient';
 
 const STORAGE_KEY = 'pulso_core_provider_v1';
+const isLocalAdapter = (adapterKind: PulsoProviderConfig['adapterKind']): boolean => (
+  adapterKind === 'local' || adapterKind === 'ollama'
+);
 
 export interface PulsoProviderSecretReceipt {
   readonly providerId: string;
@@ -22,14 +25,14 @@ const nativeInvoke = async <T>(command: string, args: Record<string, unknown>): 
 const validateConfig = (config: PulsoProviderConfig): PulsoProviderConfig => {
   if (!/^[A-Za-z0-9._-]{1,80}$/.test(config.providerId)) throw new Error('Identificador de provider inválido.');
   if (!config.model.trim()) throw new Error('Modelo é obrigatório.');
-  if (!['openai', 'anthropic', 'local'].includes(config.adapterKind)) throw new Error('Tipo de provider inválido.');
+  if (!['openai', 'anthropic', 'local', 'ollama'].includes(config.adapterKind)) throw new Error('Tipo de provider inválido.');
   return Object.freeze({
     ...config,
     providerId: config.providerId.trim(),
     displayName: config.displayName.trim() || config.providerId.trim(),
     model: config.model.trim(),
     endpoint: config.endpoint?.trim() || null,
-    allowExternalNetwork: config.adapterKind !== 'local',
+    allowExternalNetwork: !isLocalAdapter(config.adapterKind),
   });
 };
 
@@ -49,11 +52,11 @@ export const pulsoCoreProvider = Object.freeze({
     const config = validateConfig(configInput);
     let receipt: PulsoProviderSecretReceipt = {
       providerId: config.providerId,
-      configured: config.adapterKind === 'local',
-      secretRef: config.adapterKind === 'local' ? null : `keychain:${config.providerId}`,
+      configured: isLocalAdapter(config.adapterKind),
+      secretRef: isLocalAdapter(config.adapterKind) ? null : `keychain:${config.providerId}`,
     };
 
-    if (config.adapterKind !== 'local') {
+    if (!isLocalAdapter(config.adapterKind)) {
       if (secret?.trim()) {
         receipt = await nativeInvoke<PulsoProviderSecretReceipt>('store_provider_secret', {
           providerId: config.providerId,

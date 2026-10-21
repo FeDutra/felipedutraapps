@@ -299,7 +299,7 @@ export interface PulsoTurnPollResult {
   readonly done: boolean;
 }
 
-export type PulsoProviderAdapterKind = 'openai' | 'anthropic' | 'local';
+export type PulsoProviderAdapterKind = 'openai' | 'anthropic' | 'local' | 'ollama';
 
 export interface PulsoProviderConfig {
   readonly providerId: string;
@@ -688,7 +688,7 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
     ): Promise<PulsoCoreResult<Readonly<Record<string, unknown>>>> {
       return request<Readonly<Record<string, unknown>>>('provider.configure', {
         ...params,
-        kind: params.adapterKind === 'local' ? 'local' : 'model',
+        kind: params.adapterKind === 'local' || params.adapterKind === 'ollama' ? 'local' : 'model',
         scope: { type: 'system', scopeId: null },
         capabilities: ['chat', 'stream'],
         enabled: true,

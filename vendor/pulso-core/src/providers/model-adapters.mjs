@@ -162,6 +162,83 @@ export async function* iterateSseFramesFromStream(streamSource, onCleanup = null
   }
 }
 
+export async function* iterateNdjsonFramesFromStream(streamSource, onCleanup = null) {
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  try {
+    for await (const chunk of streamSource) {
+      const strChunk = typeof chunk === "string"
+        ? chunk
+        : decoder.decode(chunk, { stream: true });
+      buffer += strChunk;
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line) continue;
+        yield JSON.parse(line);
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) yield JSON.parse(buffer.trim());
+  } finally {
+    if (typeof onCleanup === "function") onCleanup();
+  }
+}
+
+export async function defaultNdjsonTransport(request) {
+  const {
+    url,
+    method = "POST",
+    headers = {},
+    body = null,
+    timeoutMs = 120000,
+    allowExternalNetwork = false,
+    stream = false
+  } = request;
+
+  if (!allowExternalNetwork && !isLoopbackUrl(url)) {
+    const err = new Error(`external_network_disabled: refusing non-loopback request to ${url}`);
+    err.code = "external_network_disabled";
+    throw err;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let ownershipTransferredToStream = false;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body !== null && body !== undefined
+        ? (typeof body === "string" ? body : JSON.stringify(body))
+        : undefined,
+      signal: controller.signal
+    });
+    if (stream && response.ok && response.body) {
+      ownershipTransferredToStream = true;
+      return {
+        status: response.status,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+        frames: iterateNdjsonFramesFromStream(response.body, () => clearTimeout(timer))
+      };
+    }
+    const text = await response.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+    return {
+      status: response.status,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries()),
+      text,
+      json
+    };
+  } finally {
+    if (!ownershipTransferredToStream) clearTimeout(timer);
+  }
+}
+
 function normalizeMessages(request) {
   if (Array.isArray(request?.messages) && request.messages.length > 0) {
     return request.messages.map(m => ({
@@ -1194,9 +1271,189 @@ export class LocalOpenAICompatibleAdapter extends BaseProtocolModelAdapter {
   }
 }
 
+export class OllamaModelAdapter extends BaseProtocolModelAdapter {
+  constructor(options = {}) {
+    super({
+      id: options.id ?? "ollama-local",
+      label: options.label ?? "Ollama Local",
+      adapterKind: "ollama",
+      protocol: "ollama_native",
+      endpoint: options.endpoint ?? "http://127.0.0.1:11434",
+      defaultModel: options.defaultModel ?? "qwen3:4b",
+      models: options.models ?? ["qwen3:4b"],
+      secretRef: null,
+      authRequired: false,
+      local: true,
+      allowExternalNetwork: options.allowExternalNetwork ?? false,
+      secretResolver: options.secretResolver,
+      transport: options.transport ?? defaultHttpTransport,
+      timeoutMs: options.timeoutMs ?? 120000,
+      clock: options.clock
+    });
+    this.ollamaTransport = options.ollamaTransport ?? defaultNdjsonTransport;
+    // Keep model reasoning in Ollama's dedicated `message.thinking` channel.
+    // The adapter deliberately never forwards that channel to the user-visible
+    // PULSO stream; only `message.content` becomes a model delta.
+    this.think = options.think ?? true;
+    this.architecture = options.architecture ?? "x86_64-neutral";
+  }
+
+  async #invokeOllama({ path, method = "POST", body = null, stream = false }) {
+    return await this.ollamaTransport({
+      url: this.buildUrl(path),
+      method,
+      headers: { "content-type": "application/json", accept: stream ? "application/x-ndjson" : "application/json" },
+      body,
+      stream,
+      timeoutMs: this.timeoutMs,
+      allowExternalNetwork: this.allowExternalNetwork
+    });
+  }
+
+  async capabilities() {
+    const base = await super.capabilities();
+    return { ...base, architecture: this.architecture, thinkingControl: true };
+  }
+
+  async health() {
+    const checkedAt = this.clock();
+    try {
+      const response = await this.#invokeOllama({ path: "/api/tags", method: "GET" });
+      if (!response.ok || response.status >= 400) {
+        throw new Error(`ollama_health_http_${response.status}:${response.text ?? ""}`);
+      }
+      return {
+        status: "healthy",
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        local: true,
+        architecture: this.architecture,
+        checkedAt,
+        authSource: this.getAuthSource(),
+        detail: "ollama_native_endpoint_ok"
+      };
+    } catch (error) {
+      const safeErr = this.secretResolver.redactError(error, null);
+      return {
+        status: "unhealthy",
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        local: true,
+        architecture: this.architecture,
+        checkedAt,
+        authSource: this.getAuthSource(),
+        detail: safeErr.message,
+        error: safeErr
+      };
+    }
+  }
+
+  #body(request, stream) {
+    return {
+      model: request?.model ?? this.defaultModel,
+      messages: normalizeMessages(request),
+      stream,
+      think: request?.think ?? this.think,
+      options: {
+        temperature: request?.temperature ?? 0,
+        num_predict: request?.maxTokens ?? 512
+      }
+    };
+  }
+
+  async complete(request) {
+    try {
+      const body = this.#body(request, false);
+      const response = await this.#invokeOllama({ path: "/api/chat", body, stream: false });
+      if (!response.ok || response.status >= 400) {
+        throw new Error(`ollama_chat_http_${response.status}:${response.text ?? ""}`);
+      }
+      const payload = response.json ?? {};
+      const text = String(payload.message?.content ?? "");
+      const result = {
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        local: true,
+        model: payload.model ?? body.model,
+        text,
+        outputText: text,
+        finishReason: payload.done_reason ?? "stop",
+        usage: {
+          inputTokens: payload.prompt_eval_count ?? 0,
+          outputTokens: payload.eval_count ?? text.length,
+          totalTokens: (payload.prompt_eval_count ?? 0) + (payload.eval_count ?? text.length),
+          inputUnits: payload.prompt_eval_count ?? 0,
+          outputUnits: payload.eval_count ?? text.length
+        },
+        providerBinding: this.buildProviderBinding(payload.model ?? body.model, null, null)
+      };
+      this.secretResolver.assertZeroLeakage(result);
+      return result;
+    } catch (error) {
+      throw this.sanitizeFailure(error);
+    }
+  }
+
+  async *stream(request) {
+    try {
+      const body = this.#body(request, true);
+      const response = await this.#invokeOllama({ path: "/api/chat", body, stream: true });
+      if (!response.ok || response.status >= 400) {
+        throw new Error(`ollama_stream_http_${response.status}:${response.text ?? ""}`);
+      }
+      let fullText = "";
+      let index = 0;
+      let finalPayload = null;
+      for await (const payload of response.frames) {
+        finalPayload = payload;
+        const delta = payload?.message?.content;
+        if (typeof delta === "string" && delta.length > 0) {
+          fullText += delta;
+          const event = {
+            type: "model.delta",
+            kind: "delta",
+            providerId: this.id,
+            adapterKind: this.adapterKind,
+            local: true,
+            model: payload.model ?? body.model,
+            text: delta,
+            delta,
+            index: index++
+          };
+          this.secretResolver.assertZeroLeakage(event);
+          yield event;
+        }
+      }
+      const completed = {
+        type: "model.completed",
+        kind: "completed",
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        local: true,
+        model: finalPayload?.model ?? body.model,
+        text: fullText,
+        outputText: fullText,
+        finishReason: finalPayload?.done_reason ?? "stop",
+        usage: {
+          inputTokens: finalPayload?.prompt_eval_count ?? 0,
+          outputTokens: finalPayload?.eval_count ?? fullText.length,
+          totalTokens: (finalPayload?.prompt_eval_count ?? 0) + (finalPayload?.eval_count ?? fullText.length),
+          inputUnits: finalPayload?.prompt_eval_count ?? 0,
+          outputUnits: finalPayload?.eval_count ?? fullText.length
+        },
+        providerBinding: this.buildProviderBinding(finalPayload?.model ?? body.model, null, null)
+      };
+      this.secretResolver.assertZeroLeakage(completed);
+      yield completed;
+    } catch (error) {
+      throw this.sanitizeFailure(error);
+    }
+  }
+}
+
 export {
   OpenAIModelAdapter as OpenAIProviderAdapter,
   AnthropicModelAdapter as AnthropicProviderAdapter,
-  LocalOpenAICompatibleAdapter as LocalModelAdapter
+  LocalOpenAICompatibleAdapter as LocalModelAdapter,
+  OllamaModelAdapter as OllamaProviderAdapter
 };
-

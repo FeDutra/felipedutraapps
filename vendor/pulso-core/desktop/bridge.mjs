@@ -15,6 +15,7 @@ import {
   OpenAIModelAdapter,
   AnthropicModelAdapter,
   LocalOpenAICompatibleAdapter,
+  OllamaModelAdapter,
   LotusIdentityService,
   LegacyImportService,
   pulsoId,
@@ -132,6 +133,13 @@ export class PulsoDesktopBridge {
     };
     if (adapterKind === "openai") return new OpenAIModelAdapter(common);
     if (adapterKind === "anthropic") return new AnthropicModelAdapter(common);
+    if (adapterKind === "ollama") {
+      return new OllamaModelAdapter({
+        ...common,
+        secretRef: null,
+        think: params.think ?? true,
+      });
+    }
     if (localAdapter) {
       return new LocalOpenAICompatibleAdapter({ ...common, secretRef: secretRef || null });
     }
