@@ -51,7 +51,7 @@ test('Merged base + tauri.canary.conf.json isolates canary identity while preser
   // 1. Isolated canary identity (does not collide with installed PULSO.app or Application Support)
   assert.equal(merged.productName, 'PULSO Next Preview');
   assert.equal(merged.identifier, 'com.felipedutraapps.pulso.next-preview');
-  assert.equal(merged.version, '0.8.0');
+  assert.equal(merged.version, '0.9.0');
   assert.notEqual(merged.productName, baseConfig.productName);
   assert.notEqual(merged.identifier, baseConfig.identifier);
 

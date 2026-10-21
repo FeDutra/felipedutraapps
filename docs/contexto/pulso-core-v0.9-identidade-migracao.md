@@ -42,6 +42,11 @@ Fluxo:
 6. verificação de integridade;
 7. segunda aplicação obrigatoriamente idempotente.
 
+Antes de tocar o banco ativo, a migração é materializada em um banco staged no
+mesmo volume. A promoção exige hash do snapshot, hash do SQLite, Preview
+encerrada sem arquivos WAL/SHM e cria backup recuperável antes da troca
+atômica do arquivo principal.
+
 Snapshot auditado em 21/10/2026:
 
 - 21 áreas;
@@ -68,4 +73,3 @@ O **Core v0.9** está sem vestígio de OpenClaw/OpenCloud. A casca ampla da PULS
 - importação ensaiada em banco descartável;
 - backup e reversão comprováveis;
 - nenhuma mudança em credenciais ou Firebase durante a promoção.
-

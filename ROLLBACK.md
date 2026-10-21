@@ -1,7 +1,7 @@
 # Rollback — PULSO Core v0.9: identidade soberana e migração (21/10/2026)
 
 - Baseline de produto: RC4 `7d0904d2e7f9a64af8eb15b88c6d4338fc172a13`.
-- Core-fonte: `a7341514c45d03138f033dd73893f74754da855d`.
+- Core-fonte: `aa8ba419cc2fc2953f24a03eb28bd00a9cfb57c8`.
 - Escopo: remoção do runtime legado do Core, identidade versionada da Lótus,
   overlay privado local e importador idempotente com proveniência.
 - O snapshot privado e o overlay de identidade não pertencem ao Git.

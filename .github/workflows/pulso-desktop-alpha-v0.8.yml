@@ -1,4 +1,4 @@
-name: PULSO Desktop Alpha v0.8
+name: PULSO Desktop Alpha v0.9
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
           app="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/PULSO Next Preview.app"
           test -d "$app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.felipedutraapps.pulso.next-preview"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "0.8.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "0.9.0"
           executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
           test -n "$executable"
           test -x "$app/Contents/MacOS/$executable"
@@ -79,13 +79,13 @@ jobs:
             echo "target=x86_64-apple-darwin"
             echo "core_source_commit=$(tr -d '\n' < vendor/pulso-core/PULSO_CORE_SOURCE_COMMIT)"
           } > release-provenance/manifest.txt
-          ditto -c -k --sequesterRsrc --keepParent "$app" release-provenance/pulso-next-preview-v0.8.0.zip
-          shasum -a 256 release-provenance/pulso-next-preview-v0.8.0.zip > release-provenance/SHA256SUMS
+          ditto -c -k --sequesterRsrc --keepParent "$app" release-provenance/pulso-next-preview-v0.9.0.zip
+          shasum -a 256 release-provenance/pulso-next-preview-v0.9.0.zip > release-provenance/SHA256SUMS
 
       - name: Upload Alpha artifact and provenance
         uses: actions/upload-artifact@v4
         with:
-          name: pulso-next-preview-v0.8.0-${{ github.sha }}
+          name: pulso-next-preview-v0.9.0-${{ github.sha }}
           path: release-provenance/
           if-no-files-found: error
           retention-days: 14
