@@ -273,6 +273,16 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.match(libRs, /shutdown_bridge/);
   assert.match(libRs, /sidecar\("kokoro_runner"\)/);
 
+  const localMachineRs = readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'agent', 'local_machine.rs'),
+    'utf8'
+  );
+  assert.match(localMachineRs, /Command::new\("\/usr\/bin\/open"\)/);
+  assert.match(localMachineRs, /\.arg\("-a"\)/);
+  assert.match(localMachineRs, /\.arg\("Arc"\)/);
+  assert.match(localMachineRs, /Apenas URLs HTTP\(S\)/);
+  assert.doesNotMatch(localMachineRs, /println!\([^\n]*local_open_url/);
+
   const pulsoCoreRs = readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'pulso_core.rs'),
     'utf8'
