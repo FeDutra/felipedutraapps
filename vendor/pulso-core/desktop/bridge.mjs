@@ -15,6 +15,8 @@ import {
   OpenAIModelAdapter,
   AnthropicModelAdapter,
   LocalOpenAICompatibleAdapter,
+  LotusIdentityService,
+  LegacyImportService,
   pulsoId,
 } from "../src/index.mjs";
 
@@ -92,12 +94,15 @@ export class PulsoDesktopBridge {
       new LiveService({
         store: this.store,
       });
+    this.identity = options.identityService || new LotusIdentityService({ dataDir: this.dataDir });
+    this.legacyImport = options.legacyImport || new LegacyImportService({ live: this.live, store: this.store });
     this.conversations =
       options.conversations ||
       new LiveConversationService({
         store: this.store,
         live: this.live,
         router: this.controlPlane.router,
+        identityService: this.identity,
       });
     this.turnQueues = new Map();
     this.turnExecutions = new Map();
@@ -204,6 +209,7 @@ export class PulsoDesktopBridge {
           panel: this.controlPlane.get("panel"),
           health: await this.runtime.health(),
           live: liveData,
+          identity: this.identity.resolve().receipt,
         };
         if (
           this.secretResolver &&
@@ -228,6 +234,24 @@ export class PulsoDesktopBridge {
       case "health": {
         await this.initialize();
         return await this.runtime.health();
+      }
+      case "identity.inspect": {
+        await this.initialize();
+        return this.identity.resolve().receipt;
+      }
+      case "identity.private.install": {
+        await this.initialize();
+        return this.identity.installPrivateOverlay(params.overlay);
+      }
+      case "legacy.import.plan": {
+        await this.initialize();
+        const plan = this.legacyImport.plan(params.snapshot);
+        return { snapshotHash: plan.snapshotHash, source: plan.source, counts: plan.counts };
+      }
+      case "legacy.import.apply": {
+        await this.initialize();
+        const backupPath = join(this.dataDir, "backups", `before-legacy-import-${Date.now()}.sqlite`);
+        return await this.legacyImport.apply(params.snapshot, { backupPath });
       }
       case "runtime.start": {
         await this.initialize();

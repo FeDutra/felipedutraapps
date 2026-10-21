@@ -4,8 +4,6 @@ import {
   SqliteEventStore,
   FakeModelProvider,
   FakeExecutorProvider,
-  OpenClawShadowAdapter,
-  generateShadowReport,
   ControlPlaneService,
   InternalPanelProjection,
   PulsoRuntimeService,
@@ -20,7 +18,6 @@ const database = dir + "/demo.sqlite";
 await rm(dir, { recursive: true, force: true });
 await mkdir(dir, { recursive: true });
 
-const shadowAdapter = new OpenClawShadowAdapter({ id: "openclaw-shadow" });
 const store = new SqliteEventStore(database);
 const core = new PulsoCore({
   store,
@@ -28,40 +25,8 @@ const core = new PulsoCore({
     new FakeModelProvider("model-a", "Motor A"),
     new FakeModelProvider("model-b", "Motor B")
   ],
-  executorProviders: [
-    new FakeExecutorProvider(),
-    shadowAdapter
-  ]
+  executorProviders: [new FakeExecutorProvider()]
 });
-
-console.log("=== [v0.2] EXECUÇÃO DO RUN SOBERANO COM OPENCLAW EM MODO SOMBRA ===\n");
-const result = await core.handle({
-  sessionId: "session_demo",
-  spaceId: "area_pulso",
-  identityId: "lotus",
-  input: { modality: "text", text: "Prove o run soberano v0.2 com OpenClaw em modo sombra.", attachments: [] },
-  origin: { deviceId: "vps-isolated", surface: "harness", channel: "local" },
-  idempotencyKey: "demo-v0.2",
-  memory: { pinnedContext: "v0.2 shadow harness proof" },
-  policy: { localOnly: true },
-  route: {
-    lane: "deep_work",
-    capability: "core.shadow.proof",
-    executorProviderId: "openclaw-shadow"
-  }
-});
-
-const report = generateShadowReport({
-  run: core.state.runs.get(result.execution.runId),
-  turn: result.turn,
-  session: core.state.sessions.get(result.turn.sessionId),
-  adapter: shadowAdapter
-});
-
-console.log("=== RELATÓRIO HUMANO (MARKDOWN) ===\n");
-console.log(report.human);
-console.log("\n=== RELATÓRIO JSON ===\n");
-console.log(JSON.stringify(report.json, null, 2));
 
 console.log("\n=======================================================");
 console.log("=== [v0.3] DEMONSTRAÇÃO DO AUTONOMY CONTROL PLANE ===");

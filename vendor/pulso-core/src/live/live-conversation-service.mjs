@@ -21,13 +21,15 @@ function errorDescriptor(error) {
 }
 
 export class LiveConversationService {
-  constructor({ store, live, router, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
+  constructor({ store, live, router, identityService = null, memoryProvider = null, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
     invariant(store, "event_store_required");
     invariant(live, "live_service_required");
     invariant(router, "provider_router_required");
     this.store = store;
     this.live = live;
     this.router = router;
+    this.identityService = identityService;
+    this.memoryProvider = memoryProvider;
     this.clock = clock;
     this.idGenerator = idGenerator;
     this.activeRuns = new Map();
@@ -245,10 +247,14 @@ export class LiveConversationService {
     let routingReceipt = null;
     let completion = null;
     try {
+      const session = this.live.getSession(sessionId);
+      const memory = this.memoryProvider ? await this.memoryProvider({ sessionId, input: humanMessage.texto }) : null;
+      const systemPrompt = this.identityService?.composeSystemPrompt({ session, memory }) ?? null;
       const history = this.live.listMessages(sessionId).map(message => ({
         role: message.role === "human" ? "user" : message.role,
         content: message.texto
       }));
+      if (systemPrompt) history.unshift({ role: "system", content: systemPrompt });
       const stream = this.router.stream({
         sessionId,
         agentId: LIVE_DEFAULT_IDENTITY,

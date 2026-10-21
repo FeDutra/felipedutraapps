@@ -1,3 +1,30 @@
+# Rollback — PULSO Core v0.9: identidade soberana e migração (21/10/2026)
+
+- Baseline de produto: RC4 `7d0904d2e7f9a64af8eb15b88c6d4338fc172a13`.
+- Core-fonte: `a7341514c45d03138f033dd73893f74754da855d`.
+- Escopo: remoção do runtime legado do Core, identidade versionada da Lótus,
+  overlay privado local e importador idempotente com proveniência.
+- O snapshot privado e o overlay de identidade não pertencem ao Git.
+- Nenhuma migração no banco ativo ou instalação em máquina física faz parte
+  deste commit de código.
+
+## Reversão de código
+
+1. Voltar a branch da candidata para a RC4 `7d0904d2`.
+2. Restaurar `vendor/pulso-core` a partir do marcador anterior.
+3. Reexecutar a suíte Alpha da RC4 e gerar novo bundle Intel rastreável.
+
+## Reversão de dados, quando a migração for promovida
+
+1. Encerrar somente a Preview, nunca a PULSO atual.
+2. Preservar o banco migrado como artefato datado; não apagar.
+3. Restaurar o SQLite pré-migração a partir do backup verificado.
+4. Restaurar o overlay privado anterior, se houver, ou mover o novo overlay
+   para quarentena recuperável.
+5. Reabrir a Preview e conferir contagens, integridade e recibo do Core.
+
+---
+
 # Rollback — Presença ampliada no iMac (17/10/2026)
 
 - Baseline instalada: `74d028c6`.

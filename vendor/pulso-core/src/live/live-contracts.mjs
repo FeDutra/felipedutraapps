@@ -11,6 +11,15 @@ export const LIVE_ENTITY_STATE_SET = new Set(LIVE_ENTITY_STATES);
 export const LIVE_MESSAGE_STATES = Object.freeze(["persisted", "awaiting_provider"]);
 export const LIVE_MESSAGE_STATE_SET = new Set(LIVE_MESSAGE_STATES);
 
+export function validateProvenance(provenance) {
+  if (provenance === null || provenance === undefined) return null;
+  invariant(provenance && typeof provenance === "object" && !Array.isArray(provenance), "provenance_object_required");
+  for (const field of ["sourceSystem", "sourceCollection", "sourceId", "exportedAt", "contentHash"]) {
+    invariant(typeof provenance[field] === "string" && provenance[field].trim(), "provenance_" + field + "_required");
+  }
+  return Object.freeze(structuredClone(provenance));
+}
+
 export const LIVE_CONVERSATION_RUN_STATES = Object.freeze([
   "awaiting_provider",
   "queued",
@@ -70,7 +79,8 @@ export function validateArea(area) {
     ordem: area.ordem,
     estado,
     createdAt: timestamp,
-    updatedAt: area.updatedAt || timestamp
+    updatedAt: area.updatedAt || timestamp,
+    provenance: validateProvenance(area.provenance)
   };
 }
 
@@ -95,7 +105,8 @@ export function validateSession(session, existingAreaIds = null) {
     identityId: LIVE_DEFAULT_IDENTITY,
     estado,
     createdAt: timestamp,
-    updatedAt: session.updatedAt || timestamp
+    updatedAt: session.updatedAt || timestamp,
+    provenance: validateProvenance(session.provenance)
   };
 }
 
@@ -118,7 +129,8 @@ export function validateMessage(message, existingSessionIds = null) {
     role: message.role,
     texto: texto.trim(),
     estado,
-    createdAt: timestamp
+    createdAt: timestamp,
+    provenance: validateProvenance(message.provenance)
   };
 }
 

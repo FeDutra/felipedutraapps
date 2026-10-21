@@ -2,9 +2,15 @@ export { PulsoCore } from "./core/pulso-core.mjs";
 export { SqliteEventStore } from "./core/sqlite-event-store.mjs";
 export { FakeModelProvider } from "./providers/fake-model-provider.mjs";
 export { FakeExecutorProvider } from "./providers/fake-executor-provider.mjs";
-export { OpenClawShadowAdapter, OfflineOpenClawTransport } from "./adapters/openclaw-shadow-adapter.mjs";
-export { OPENCLAW_FIXTURES } from "./adapters/openclaw-fixtures.mjs";
 export { ProviderHarness } from "./harness/provider-harness.mjs";
+export {
+  LOTUS_IDENTITY_ID,
+  LOTUS_PUBLIC_IDENTITY,
+  LotusIdentityService,
+  identityDigest,
+  validatePrivateIdentityOverlay
+} from "./identity/lotus-identity.mjs";
+export { LegacyImportService, normalizeLegacySnapshot, contentHash } from "./migration/legacy-importer.mjs";
 export { normalizeProviderEvent, deduplicateAndSortEvents, computeEventFingerprint } from "./shadow/normalizer.mjs";
 export { generateShadowReport } from "./shadow/shadow-report.mjs";
 export * from "./domain/contracts.mjs";

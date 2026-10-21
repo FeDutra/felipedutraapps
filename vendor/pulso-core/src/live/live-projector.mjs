@@ -25,7 +25,8 @@ export function applyLiveEvent(state, event) {
         ordem: p.ordem ?? 0,
         estado: p.estado || "active",
         createdAt: p.createdAt || event.occurredAt,
-        updatedAt: p.updatedAt || event.occurredAt
+        updatedAt: p.updatedAt || event.occurredAt,
+        provenance: p.provenance ?? null
       };
       state.areas.set(area.id, area);
       break;
@@ -38,7 +39,8 @@ export function applyLiveEvent(state, event) {
         identityId: p.identityId || "lotus",
         estado: p.estado || "active",
         createdAt: p.createdAt || event.occurredAt,
-        updatedAt: p.updatedAt || event.occurredAt
+        updatedAt: p.updatedAt || event.occurredAt,
+        provenance: p.provenance ?? null
       };
       state.sessions.set(session.id, session);
       if (!state.messagesBySession.has(session.id)) {
@@ -61,7 +63,8 @@ export function applyLiveEvent(state, event) {
         role: p.role,
         texto: p.texto ?? p.text,
         estado: p.estado || (p.role === "human" ? "awaiting_provider" : "persisted"),
-        createdAt: p.createdAt || event.occurredAt
+        createdAt: p.createdAt || event.occurredAt,
+        provenance: p.provenance ?? null
       };
       state.messages.set(message.id, message);
       if (!state.messagesBySession.has(message.sessionId)) {

@@ -19,7 +19,7 @@ export function validateProviderBinding(binding) {
  * Deeply verifies that external IDs do not leak into Pulso domain entities
  * (turn, session, run, event, artifact) outside of providerBinding or metadata.external.
  */
-export function assertExternalIdsConfined(target, externalPrefixes = ["openclaw_", "claw_", "ext_", "external_"]) {
+export function assertExternalIdsConfined(target, externalPrefixes = ["ext_", "external_"]) {
   const seen = new Set();
   const allowedKeys = new Set([
     "providerBinding",

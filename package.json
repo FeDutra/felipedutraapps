@@ -16,7 +16,7 @@
     "pulso:desktop:dev": "npm run pulso:desktop",
     "pulso:app:dev": "npm run pulso:desktop:dev",
     "pulso:app:build": "tauri build",
-    "pulso:alpha:verify": "node --test scripts/pulso-core-provider.test.mjs scripts/pulso-core-tauri-boundary.test.mjs scripts/tauri-canary-config.test.mjs src/apps/pulso/components/PulsoCoreCanary.test.mjs src/apps/pulso/services/pulsoCoreClient.test.mjs src/apps/pulso/services/pulsoCoreConversation.test.mjs",
+    "pulso:alpha:verify": "node --test scripts/pulso-core-sovereignty.test.mjs scripts/pulso-legacy-snapshot.test.mjs scripts/pulso-core-provider.test.mjs scripts/pulso-core-tauri-boundary.test.mjs scripts/tauri-canary-config.test.mjs src/apps/pulso/components/PulsoCoreCanary.test.mjs src/apps/pulso/services/pulsoCoreClient.test.mjs src/apps/pulso/services/pulsoCoreConversation.test.mjs",
     "pulso:alpha:prepare": "npm run pulso:setup && node scripts/prepare-pulso-core.mjs && node scripts/prepare-pulso-core-sidecar.mjs",
     "pulso:alpha:build": "npm run pulso:alpha:prepare && tauri build --target x86_64-apple-darwin --config src-tauri/tauri.canary.conf.json"
   },

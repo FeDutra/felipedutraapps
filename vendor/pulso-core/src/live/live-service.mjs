@@ -160,6 +160,7 @@ export class LiveService {
         estado: validated.estado,
         createdAt: validated.createdAt,
         updatedAt: validated.updatedAt
+        ,provenance: validated.provenance
       }
     });
 
@@ -225,6 +226,7 @@ export class LiveService {
         estado: validated.estado,
         createdAt: validated.createdAt,
         updatedAt: validated.updatedAt
+        ,provenance: validated.provenance
       }
     });
 
@@ -354,6 +356,7 @@ export class LiveService {
         texto: validated.texto,
         estado: validated.estado,
         createdAt: validated.createdAt
+        ,provenance: validated.provenance
       }
     });
 
