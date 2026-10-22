@@ -44,10 +44,10 @@ pub fn is_navigation_allowed(url: &tauri::Url) -> bool {
 }
 
 fn canonical_live_url() -> tauri::Url {
-    // The packaged Next.js export emits this route as a directory index.
-    // Keep the trailing slash so WKWebView resolves `index.html` instead of
-    // treating `/pulso/live` as a missing static asset.
-    tauri::Url::parse("tauri://localhost/pulso/live/")
+    // Point at the concrete asset embedded by the Next.js static export.
+    // WKWebView does not consistently map the pretty directory URL
+    // `/pulso/live/` to its packaged `index.html` file.
+    tauri::Url::parse("tauri://localhost/pulso/live/index.html")
         .expect("the canonical PULSO live URL must be valid")
 }
 
@@ -442,7 +442,10 @@ mod navigation_guard_tests {
     fn recovery_target_is_the_packaged_live_route() {
         let recovery_url = canonical_live_url();
 
-        assert_eq!(recovery_url.as_str(), "tauri://localhost/pulso/live/");
+        assert_eq!(
+            recovery_url.as_str(),
+            "tauri://localhost/pulso/live/index.html"
+        );
         assert!(is_navigation_allowed_for_environment(&recovery_url, false));
     }
 }

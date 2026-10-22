@@ -370,3 +370,11 @@ test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   assert.match(authGateSource, /setLoading\(false\)/);
   assert.match(authGateSource, /return;/);
 });
+
+test('Next Preview starts from the concrete exported live asset', () => {
+  const canaryConfig = JSON.parse(
+    readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json'), 'utf8')
+  );
+
+  assert.equal(canaryConfig.app.windows[0].url, 'pulso/live/index.html');
+});
