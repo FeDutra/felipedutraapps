@@ -43,7 +43,7 @@ test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   assert.equal(baseConfig.app.windows[0].url, undefined);
 });
 
-test('Merged base + tauri.canary.conf.json isolates canary identity while preserving sidecars, resources, frontendDist, /pulso/live devUrl, and resizable window', () => {
+test('Merged base + tauri.canary.conf.json isolates canary identity, starts from the packaged live asset, and preserves the Desktop bundle contract', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
   const canaryPatch = JSON.parse(readFileSync(canaryPath, 'utf8'));
   const merged = mergeTauriConfig(baseConfig, canaryPatch);
@@ -75,12 +75,13 @@ test('Merged base + tauri.canary.conf.json isolates canary identity while preser
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window title updated to PULSO Next Preview, inherits canonical HOME (no url override) and remains resizable
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, undefined);
+  // 5. Window starts from the concrete static-export asset and remains resizable.
+  // WKWebView does not reliably map the pretty directory route to index.html.
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'pulso/live/index.html');
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, undefined);
+  assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
