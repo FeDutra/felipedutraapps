@@ -19,6 +19,16 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [hasConfig, setHasConfig] = React.useState(true);
 
   React.useEffect(() => {
+    // The sovereign Desktop runtime owns its local session and must remain
+    // usable without Firebase. ChatGPT subscription authentication is a
+    // separate, explicit provider flow inside the PULSO panel.
+    if (checkIsTauri()) {
+      setIsFirestore(false);
+      setHasConfig(true);
+      setLoading(false);
+      return;
+    }
+
     // Check if we are in firestore mode
     const mode = process.env.NEXT_PUBLIC_PULSO_DATA_MODE;
     const isFS = mode === 'firestore';

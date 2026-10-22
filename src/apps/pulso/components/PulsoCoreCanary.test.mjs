@@ -358,3 +358,15 @@ test('Structural and visual non-regression: PulsoCoreCanary is sr-only output an
     /<div className="theme-her h-\[100dvh\] overflow-hidden" aria-label="Abrindo Pulso" \/>/
   );
 });
+
+test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
+  const authGateSource = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'components', 'auth', 'AuthGate.tsx'),
+    'utf8'
+  );
+
+  assert.match(authGateSource, /if \(checkIsTauri\(\)\) \{/);
+  assert.match(authGateSource, /setIsFirestore\(false\)/);
+  assert.match(authGateSource, /setLoading\(false\)/);
+  assert.match(authGateSource, /return;/);
+});
