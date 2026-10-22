@@ -43,6 +43,12 @@ pub fn is_navigation_allowed(url: &tauri::Url) -> bool {
     is_navigation_allowed_for_environment(url, cfg!(debug_assertions))
 }
 
+fn is_pretty_live_route(url: &tauri::Url) -> bool {
+    url.scheme() == "tauri"
+        && matches!(url.host_str(), Some("localhost") | None)
+        && matches!(url.path(), "/pulso/live" | "/pulso/live/")
+}
+
 fn canonical_live_url() -> tauri::Url {
     // Point at the concrete asset embedded by the Next.js static export.
     // WKWebView does not consistently map the pretty directory URL
@@ -230,11 +236,18 @@ pub fn run() {
     .plugin(
       plugin::Builder::<tauri::Wry>::new("pulso-navigation-guard")
         .on_navigation(|webview, url| {
-          let allowed = is_navigation_allowed(url);
+          let pretty_live_route = is_pretty_live_route(url);
+          let allowed = is_navigation_allowed(url) && !pretty_live_route;
           if !allowed {
             // Intencionalmente não registramos a URL para impedir vazamento
             // de parâmetros sensíveis (como tokens de autenticação/OAuth).
-            eprintln!("pulso-navigation-guard: navegação externa recusada pela barreira nativa");
+            if pretty_live_route {
+              eprintln!(
+                "pulso-navigation-guard: rota interna bonita restaurada para o asset físico"
+              );
+            } else {
+              eprintln!("pulso-navigation-guard: navegação externa recusada pela barreira nativa");
+            }
             restore_canonical_live_route(webview.clone());
           }
           allowed
@@ -310,7 +323,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod navigation_guard_tests {
-    use super::{canonical_live_url, is_navigation_allowed, is_navigation_allowed_for_environment};
+    use super::{
+        canonical_live_url, is_navigation_allowed, is_navigation_allowed_for_environment,
+        is_pretty_live_route,
+    };
     use tauri::Url;
 
     #[test]
@@ -447,5 +463,14 @@ mod navigation_guard_tests {
             "tauri://localhost/pulso/live/index.html"
         );
         assert!(is_navigation_allowed_for_environment(&recovery_url, false));
+    }
+
+    #[test]
+    fn recovers_pretty_live_route_to_physical_packaged_entry() {
+        let pretty = Url::parse("tauri://localhost/pulso/live/").unwrap();
+        let physical = canonical_live_url();
+
+        assert!(is_pretty_live_route(&pretty));
+        assert!(!is_pretty_live_route(&physical));
     }
 }

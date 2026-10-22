@@ -359,6 +359,15 @@ test('Structural and visual non-regression: PulsoCoreCanary is sr-only output an
   );
 });
 
+test('Desktop packaged entry keeps the physical index.html URL during Next hydration', () => {
+  const rootLayout = readFileSync(path.join(repoRoot, 'src/app/layout.tsx'), 'utf8');
+
+  assert.match(rootLayout, /physicalPath = '\/pulso\/live\/index\.html'/);
+  assert.match(rootLayout, /preservePhysicalEntry\('pushState'\)/);
+  assert.match(rootLayout, /preservePhysicalEntry\('replaceState'\)/);
+  assert.match(rootLayout, /window\.location\.protocol !== 'tauri:'/);
+});
+
 test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   const authGateSource = readFileSync(
     path.join(repoRoot, 'src', 'apps', 'pulso', 'components', 'auth', 'AuthGate.tsx'),
