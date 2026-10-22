@@ -78,8 +78,11 @@ export class TTSAdapter {
   constructor() {
     this.preferences = { ...DEFAULT_PREFERENCES };
     this.loadPreferences();
-    // Silent warmup on startup
-    this.warmup();
+    // Do not touch a local speech endpoint while the desktop shell is
+    // mounting. The packaged Kokoro process starts in parallel with the
+    // WebView and may not be listening yet; a best-effort warmup here used to
+    // race the first page load on macOS. Speech remains lazy and the explicit
+    // provider/voice changes below can still warm the selected engine.
   }
 
   private loadPreferences() {

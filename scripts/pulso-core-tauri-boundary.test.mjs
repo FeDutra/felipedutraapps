@@ -321,6 +321,20 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.doesNotMatch(libRs, /(println!|eprintln!|log::\w+)\([^)]*\burl\b/);
 });
 
+test('desktop UI startup does not depend on Kokoro becoming ready before the WebView', () => {
+  const ttsAdapter = readFileSync(
+    path.join(repoRoot, 'src', 'lib', 'pulso', 'TTSAdapter.ts'),
+    'utf8'
+  );
+  const constructorBody = ttsAdapter.match(
+    /constructor\(\) \{([\s\S]*?)\n  \}\n\n  private loadPreferences/
+  )?.[1];
+
+  assert.ok(constructorBody, 'TTSAdapter constructor must remain inspectable');
+  assert.doesNotMatch(constructorBody, /this\.warmup\(\)/);
+  assert.match(ttsAdapter, /if \(isKokoro && \(!wasKokoro \|\| oldVoice !== this\.preferences\.voiceName\)\) \{\s*this\.warmup\(\)/);
+});
+
 test('native navigation barrier strictly confines webview to packaged tauri origin, allows debug localhost only, and does not leak URLs', () => {
   const libRs = readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'),
