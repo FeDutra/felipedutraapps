@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core';
+
 export type TTSProvider = 'browser_native' | 'local_kokoro_sidecar' | 'local_kokoro' | 'kokoro_http' | 'cloud_google';
 
 const isTauriApp = (): boolean => {
@@ -27,6 +29,11 @@ const DESKTOP_LEGACY_NATIVE_MIGRATION_KEY = 'pulso_tts_migration_v3_desktop_no_l
 const EXPLICIT_NATIVE_CHOICE_KEY = 'pulso_tts_browser_native_explicit';
 const DEFAULT_KOKORO_VOICE = 'pf_dora(0.70)+af_bella(0.30)';
 const KOKORO_REMOTE_ENDPOINT = 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
+
+const ensureDesktopKokoroSidecar = async (): Promise<void> => {
+  if (!isTauriApp()) return;
+  await invoke<string>('ensure_kokoro_sidecar');
+};
 
 const isKokoroProvider = (provider: TTSProvider) => (
   provider === 'local_kokoro'
@@ -556,6 +563,7 @@ export class TTSAdapter {
 
     if (provider === 'local_kokoro_sidecar') {
       try {
+        await ensureDesktopKokoroSidecar();
         const response = await fetch('http://127.0.0.1:14321', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

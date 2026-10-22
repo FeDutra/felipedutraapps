@@ -3,12 +3,15 @@ use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{BufRead, BufReader};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{plugin, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
+
+const KOKORO_PORT: u16 = 14321;
 
 mod agent;
 pub mod pulso_core;
@@ -67,6 +70,53 @@ fn restore_canonical_live_route(webview: tauri::Webview) {
             eprintln!("pulso-navigation-guard: falha ao restaurar a rota interna: {error}");
         }
     });
+}
+
+fn kokoro_is_ready() -> bool {
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), KOKORO_PORT);
+    TcpStream::connect_timeout(&address, Duration::from_millis(120)).is_ok()
+}
+
+#[tauri::command]
+fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
+    // Voice is an optional capability. It must never participate in the cold
+    // path that creates the desktop HOME. Reuse an existing local listener
+    // (for example the stable PULSO) and spawn this bundle's sidecar only when
+    // an explicit voice action asks for it.
+    if kokoro_is_ready() {
+        return Ok("ready".to_string());
+    }
+
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("Kokoro resource directory unavailable: {error}"))?;
+    let model_path = resource_dir.join("resources").join("kokoro-v0_19.onnx");
+    let voices_path = resource_dir.join("resources").join("voices.bin");
+    if !model_path.exists() || !voices_path.exists() {
+        return Err("Kokoro sidecar resources are unavailable".to_string());
+    }
+
+    let command = app
+        .shell()
+        .sidecar("kokoro_runner")
+        .map_err(|error| format!("Failed to create Kokoro sidecar command: {error}"))?
+        .args([
+            model_path.to_string_lossy().to_string(),
+            voices_path.to_string_lossy().to_string(),
+        ]);
+    command
+        .spawn()
+        .map_err(|error| format!("Failed to spawn Kokoro sidecar: {error}"))?;
+
+    for _ in 0..40 {
+        if kokoro_is_ready() {
+            return Ok("started".to_string());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    Err("Kokoro sidecar did not become ready".to_string())
 }
 
 #[derive(Deserialize)]
@@ -271,6 +321,7 @@ pub fn run() {
       voice_recording_finalize,
       voice_recording_mark,
       voice_recording_recover_incomplete,
+      ensure_kokoro_sidecar,
       bridge_request,
       store_provider_secret,
       hydrate_provider_secret,
@@ -287,30 +338,6 @@ pub fn run() {
             .build(),
         )?;
       }
-
-      // Start Kokoro HTTP server Sidecar
-      let resource_dir = app.path().resource_dir().expect("Failed to get resource dir");
-      let model_path = resource_dir.join("resources").join("kokoro-v0_19.onnx");
-      let voices_path = resource_dir.join("resources").join("voices.bin");
-
-      println!("Starting Kokoro sidecar with model: {:?}", model_path);
-
-      if !model_path.exists() || !voices_path.exists() {
-        eprintln!(
-          "Kokoro sidecar resources missing: model_exists={}, voices_exists={}",
-          model_path.exists(),
-          voices_path.exists()
-        );
-      } else { match app.shell().sidecar("kokoro_runner") {
-        Ok(sidecar_command) => {
-          let command = sidecar_command.args([model_path.to_str().unwrap(), voices_path.to_str().unwrap()]);
-          match command.spawn() {
-            Ok((_rx, _child)) => println!("Kokoro sidecar started successfully."),
-            Err(e) => eprintln!("Failed to spawn Kokoro sidecar: {}", e),
-          }
-        },
-        Err(e) => eprintln!("Failed to create kokoro sidecar command: {}", e),
-      }}
 
       // O microsserviço Node.js do WhatsApp agora roda externamente (via PM2)
       // para garantir persistência independentemente do ciclo de vida da interface.

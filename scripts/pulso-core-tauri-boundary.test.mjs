@@ -243,7 +243,7 @@ test('prepared Core bridge runs as persistent NDJSON sidecar with dedicated data
   rmSync(tempRoot, { recursive: true, force: true });
 });
 
-test('Tauri configuration and Rust sidecar manager preserve existing commands, Kokoro sidecar, and canonical bundle identity', () => {
+test('Tauri configuration preserves bundled sidecars while Kokoro starts only on explicit voice demand', () => {
   const tauriConf = JSON.parse(
     readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.conf.json'), 'utf8')
   );
@@ -271,7 +271,13 @@ test('Tauri configuration and Rust sidecar manager preserve existing commands, K
   assert.match(libRs, /execute_long_command_stream/);
   assert.match(libRs, /bridge_request/);
   assert.match(libRs, /shutdown_bridge/);
+  assert.match(libRs, /fn ensure_kokoro_sidecar\(/);
   assert.match(libRs, /sidecar\("kokoro_runner"\)/);
+  assert.doesNotMatch(
+    libRs.match(/\.setup\(\|app\| \{([\s\S]*?)\n    \}\)/)?.[1] || '',
+    /sidecar\("kokoro_runner"\)/
+  );
+  assert.match(libRs, /ensure_kokoro_sidecar,/);
 
   const localMachineRs = readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'agent', 'local_machine.rs'),
@@ -332,6 +338,8 @@ test('desktop UI startup does not depend on Kokoro becoming ready before the Web
 
   assert.ok(constructorBody, 'TTSAdapter constructor must remain inspectable');
   assert.doesNotMatch(constructorBody, /this\.warmup\(\)/);
+  assert.match(ttsAdapter, /invoke<string>\('ensure_kokoro_sidecar'\)/);
+  assert.match(ttsAdapter, /await ensureDesktopKokoroSidecar\(\);\s*const response = await fetch\('http:\/\/127\.0\.0\.1:14321'/);
   assert.match(ttsAdapter, /if \(isKokoro && \(!wasKokoro \|\| oldVoice !== this\.preferences\.voiceName\)\) \{\s*this\.warmup\(\)/);
 });
 
