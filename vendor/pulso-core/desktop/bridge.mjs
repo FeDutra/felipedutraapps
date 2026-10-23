@@ -19,6 +19,8 @@ import {
   CodexAppServerClient,
   CodexSubscriptionAdapter,
   LotusIdentityService,
+  AccessModeStore,
+  PrivateMemoryProvider,
   LegacyImportService,
   pulsoId,
 } from "../src/index.mjs";
@@ -98,6 +100,10 @@ export class PulsoDesktopBridge {
         store: this.store,
       });
     this.identity = options.identityService || new LotusIdentityService({ dataDir: this.dataDir });
+    this.accessMode = options.accessModeStore || new AccessModeStore({ dataDir: this.dataDir });
+    this.privateMemory = options.memoryProvider || new PrivateMemoryProvider({
+      rootDir: join(this.dataDir, "private-context"),
+    });
     this.legacyImport = options.legacyImport || new LegacyImportService({ live: this.live, store: this.store });
     this.conversations =
       options.conversations ||
@@ -106,6 +112,7 @@ export class PulsoDesktopBridge {
         live: this.live,
         router: this.controlPlane.router,
         identityService: this.identity,
+        memoryProvider: query => this.privateMemory.retrieve(query),
       });
     this.turnQueues = new Map();
     this.turnExecutions = new Map();
@@ -135,6 +142,7 @@ export class PulsoDesktopBridge {
             profileId,
             profilesRoot: join(this.dataDir, "provider-profiles", "codex"),
             workspaceDir: join(this.dataDir, "provider-workspaces", "codex", profileId),
+            accessModeStore: this.accessMode,
           });
       this.codexClients.set(params.providerId, client);
       return new CodexSubscriptionAdapter({
@@ -252,6 +260,7 @@ export class PulsoDesktopBridge {
           health: await this.runtime.health(),
           live: liveData,
           identity: this.identity.resolve().receipt,
+          access: this.accessMode.read(),
         };
         if (
           this.secretResolver &&
@@ -284,6 +293,14 @@ export class PulsoDesktopBridge {
       case "identity.private.install": {
         await this.initialize();
         return this.identity.installPrivateOverlay(params.overlay);
+      }
+      case "access.mode.read": {
+        await this.initialize();
+        return this.accessMode.read();
+      }
+      case "access.mode.set": {
+        await this.initialize();
+        return this.accessMode.set(params.mode);
       }
       case "legacy.import.plan": {
         await this.initialize();

@@ -31,9 +31,39 @@ function codexConfigText() {
 function ensureProfileDirectory(codexHome) {
   mkdirSync(codexHome, { recursive: true, mode: 0o700 });
   const configPath = join(codexHome, "config.toml");
-  writeFileSync(configPath, codexConfigText(), { encoding: "utf8", mode: 0o600 });
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, codexConfigText(), { encoding: "utf8", mode: 0o600 });
+  }
   chmodSync(configPath, 0o600);
   return configPath;
+}
+
+function integralDeveloperInstructions() {
+  return [
+    "Você é a Lótus dentro da PULSO e opera em modo integral, conforme a identidade soberana fornecida.",
+    "Use as ferramentas locais, web, plugins e apps/conectores disponíveis quando ajudarem a concluir o pedido.",
+    "O perfil ChatGPT de Fe possui conectores próprios; prefira o app Notion para conteúdo no Notion e preserve a fonte canônica.",
+    "Você pode ler e escrever arquivos e executar comandos no Mac, mas preserve dados, use ações reversíveis e nunca exponha credenciais.",
+    "Antes de enviar mensagens, publicar, mover dinheiro, alterar credenciais ou agir em relações humanas, obtenha autorização humana explícita.",
+    "Consulte o contexto privado e a memória local com proveniência quando forem relevantes; não invente acesso nem resultado.",
+    "Entregue resposta humana limpa. Não despeje chamadas de ferramenta, comandos ou bastidor técnico no chat.",
+  ].join("\n");
+}
+
+function restrictedDeveloperInstructions() {
+  return "Converse como a identidade fornecida pela PULSO. Não execute comandos, não altere arquivos e não use ferramentas. Responda apenas em texto ao pedido humano.";
+}
+
+function approvalAnswers(params = {}) {
+  const answers = {};
+  for (const question of params.questions || []) {
+    if (question?.isSecret) return null;
+    const options = Array.isArray(question?.options) ? question.options : [];
+    const accepted = options.find(option => /^(accept|allow|approve|confirm|aceitar|permitir|aprovar|confirmar)$/i.test(String(option?.label || "").trim()));
+    if (!accepted) return null;
+    answers[question.id] = { answers: [accepted.label] };
+  }
+  return { answers };
 }
 
 function asError(error, fallback = "codex_app_server_error") {
@@ -116,6 +146,7 @@ export class CodexAppServerClient {
     requestTimeoutMs = DEFAULT_TIMEOUT_MS,
     turnTimeoutMs = TURN_TIMEOUT_MS,
     clientVersion = "0.9.0",
+    accessModeStore = null,
   } = {}) {
     invariant(typeof binaryPath === "string" && binaryPath.trim(), "codex_binary_path_required");
     invariant(typeof profilesRoot === "string" && profilesRoot.trim(), "codex_profiles_root_required");
@@ -127,6 +158,7 @@ export class CodexAppServerClient {
     this.requestTimeoutMs = requestTimeoutMs;
     this.turnTimeoutMs = turnTimeoutMs;
     this.clientVersion = clientVersion;
+    this.accessModeStore = accessModeStore;
     this.child = null;
     this.reader = null;
     this.nextId = 0;
@@ -159,6 +191,10 @@ export class CodexAppServerClient {
         name: "pulso_desktop",
         title: "PULSO",
         version: this.clientVersion,
+      },
+      capabilities: {
+        experimentalApi: true,
+        mcpServerOpenaiFormElicitation: true,
       },
     });
     this.notify("initialized", {});
@@ -195,11 +231,45 @@ export class CodexAppServerClient {
     }
 
     if (message && typeof message.method === "string" && message.id !== undefined) {
-      this.#write({
-        id: message.id,
-        error: { code: -32601, message: "PULSO does not expose provider-owned tools" },
-      });
+      this.#handleServerRequest(message);
     }
+  }
+
+  #access() {
+    return this.accessModeStore?.read?.() ?? { mode: "restricted" };
+  }
+
+  #handleServerRequest(message) {
+    const access = this.#access();
+    if (access.mode !== "integral") {
+      this.#write({ id: message.id, error: { code: -32601, message: "PULSO integral access is disabled" } });
+      return;
+    }
+    const method = message.method;
+    const params = message.params ?? {};
+    if (method === "item/commandExecution/requestApproval") {
+      this.#write({ id: message.id, result: { decision: "acceptForSession" } });
+      return;
+    }
+    if (method === "item/fileChange/requestApproval") {
+      this.#write({ id: message.id, result: { decision: "acceptForSession" } });
+      return;
+    }
+    if (method === "item/permissions/requestApproval") {
+      const permissions = {};
+      if (params.permissions?.network) permissions.network = params.permissions.network;
+      if (params.permissions?.fileSystem) permissions.fileSystem = params.permissions.fileSystem;
+      this.#write({ id: message.id, result: { permissions, scope: "session", strictAutoReview: false } });
+      return;
+    }
+    if (method === "item/tool/requestUserInput") {
+      const result = approvalAnswers(params);
+      if (result) {
+        this.#write({ id: message.id, result });
+        return;
+      }
+    }
+    this.#write({ id: message.id, error: { code: -32601, message: `Unsupported PULSO server request: ${method}` } });
   }
 
   #terminate(error) {
@@ -296,14 +366,16 @@ export class CodexAppServerClient {
 
     let abortHandler = null;
     try {
+      const access = this.#access();
+      const integral = access.mode === "integral";
       const threadResult = await this.request("thread/start", {
         model: model || null,
         cwd: this.workspaceDir,
-        sandbox: "read-only",
+        sandbox: integral ? "danger-full-access" : "read-only",
         approvalPolicy: "never",
         ephemeral: true,
         baseInstructions: systemPrompt || null,
-        developerInstructions: "Converse como a identidade fornecida pela PULSO. Não execute comandos, não altere arquivos e não use ferramentas. Responda apenas em texto ao pedido humano.",
+        developerInstructions: integral ? integralDeveloperInstructions() : restrictedDeveloperInstructions(),
       });
       threadId = threadResult?.thread?.id;
       invariant(threadId, "codex_thread_id_missing");

@@ -88,6 +88,8 @@ export {
 // v0.5 Runtime Spine exports
 export { PulsoRuntimeService } from "./runtime/pulso-runtime-service.mjs";
 export { SecretRefResolver } from "./runtime/secret-ref-resolver.mjs";
+export { AccessModeStore, ACCESS_MODES } from "./runtime/access-mode-store.mjs";
+export { PrivateMemoryProvider } from "./memory/private-memory-provider.mjs";
 export { ProviderRouter, ProviderRegistry } from "./runtime/provider-router.mjs";
 export { DurableOutbox } from "./runtime/durable-outbox.mjs";
 export {

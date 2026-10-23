@@ -60,6 +60,7 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   assert.equal(merged.bundle.externalBin.includes('bin/kokoro_runner'), true);
   assert.equal(merged.bundle.externalBin.includes('binaries/pulso-node'), true);
   assert.equal(merged.bundle.externalBin.includes('binaries/pulso-codex'), true);
+  assert.equal(merged.bundle.externalBin.includes('binaries/codex-code-mode-host'), true);
 
   // 3. Current resources + Core resources preserved
   assert.ok(Array.isArray(merged.bundle?.resources));

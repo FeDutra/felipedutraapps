@@ -18,6 +18,8 @@ export const BRIDGE_METHODS = Object.freeze([
   'provider.subscription.models.list',
   'identity.inspect',
   'identity.private.install',
+  'access.mode.read',
+  'access.mode.set',
   'legacy.import.plan',
   'legacy.import.apply',
   'outbox.enqueue',

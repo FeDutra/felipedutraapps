@@ -30,6 +30,8 @@ export const BRIDGE_METHODS = Object.freeze([
   'provider.subscription.models.list',
   'identity.inspect',
   'identity.private.install',
+  'access.mode.read',
+  'access.mode.set',
   'legacy.import.plan',
   'legacy.import.apply',
   'outbox.enqueue',
@@ -341,6 +343,23 @@ export interface PulsoProviderHealth {
   readonly detail: string;
   readonly authSource?: Readonly<Record<string, unknown>>;
   readonly error?: Readonly<{ readonly code?: string; readonly message?: string }>;
+}
+
+export interface PulsoAccessModeReceipt {
+  readonly mode: 'restricted' | 'integral';
+  readonly configured: boolean;
+  readonly updatedAt: string | null;
+  readonly capabilities: Readonly<{
+    filesystem: string;
+    shell: boolean;
+    network: boolean;
+    web: boolean;
+    apps: boolean;
+    notion: boolean;
+    plugins: boolean;
+    privateIdentity: boolean;
+    transversalMemory: boolean;
+  }>;
 }
 
 export interface PulsoCoreClientOptions {
@@ -763,6 +782,17 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
       requestId?: string
     ): Promise<PulsoCoreResult<Readonly<Record<string, unknown>>>> {
       return request('provider.subscription.models.list', { providerId }, requestId);
+    },
+
+    readAccessMode(requestId?: string): Promise<PulsoCoreResult<PulsoAccessModeReceipt>> {
+      return request<PulsoAccessModeReceipt>('access.mode.read', {}, requestId);
+    },
+
+    setAccessMode(
+      mode: 'restricted' | 'integral',
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoAccessModeReceipt>> {
+      return request<PulsoAccessModeReceipt>('access.mode.set', { mode }, requestId);
     },
 
     liveBootstrap(requestId?: string): Promise<PulsoCoreResult<PulsoLiveBootstrapSnapshot>> {

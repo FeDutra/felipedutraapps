@@ -109,11 +109,14 @@ jobs:
           file "$app/Contents/MacOS/$executable" | grep -q 'x86_64'
           pulso_node="$(find "$app/Contents/MacOS" -name 'pulso-node*' -type f -perm -111 -print -quit)"
           pulso_codex="$(find "$app/Contents/MacOS" -name 'pulso-codex*' -type f -perm -111 -print -quit)"
+          code_mode_host="$(find "$app/Contents/MacOS" -name 'codex-code-mode-host*' -type f -perm -111 -print -quit)"
           kokoro_runner="$(find "$app/Contents/MacOS" -name 'kokoro_runner*' -type f -perm -111 -print -quit)"
           test -n "$pulso_node" || { echo 'Missing executable pulso-node sidecar' >&2; exit 1; }
           test -n "$pulso_codex" || { echo 'Missing executable official Codex sidecar' >&2; exit 1; }
+          test -n "$code_mode_host" || { echo 'Missing executable Codex Code Mode host' >&2; exit 1; }
           test -n "$kokoro_runner" || { echo 'Missing executable Kokoro sidecar' >&2; exit 1; }
           file "$pulso_codex" | grep -q 'x86_64' || { echo 'Codex sidecar is not Intel x86_64' >&2; exit 1; }
+          file "$code_mode_host" | grep -q 'x86_64' || { echo 'Codex Code Mode host is not Intel x86_64' >&2; exit 1; }
           codex_version="$("$pulso_codex" --version)"
           test "$codex_version" = "codex-cli 0.163.0" || { echo "Unexpected Codex version: $codex_version" >&2; exit 1; }
           test -f "$app/Contents/Resources/resources/kokoro-v0_19.onnx" || { echo 'Missing Kokoro model' >&2; exit 1; }
@@ -132,6 +135,7 @@ jobs:
             echo "core_source_commit=$(tr -d '\n' < vendor/pulso-core/PULSO_CORE_SOURCE_COMMIT)"
             echo "codex_version=$codex_version"
             echo "codex_sha256=$(shasum -a 256 "$pulso_codex" | awk '{print $1}')"
+            echo "codex_code_mode_host_sha256=$(shasum -a 256 "$code_mode_host" | awk '{print $1}')"
           } > release-provenance/manifest.txt
           ditto -c -k --sequesterRsrc --keepParent "$app" release-provenance/pulso-next-preview-v0.9.0.zip
           shasum -a 256 release-provenance/pulso-next-preview-v0.9.0.zip > release-provenance/SHA256SUMS

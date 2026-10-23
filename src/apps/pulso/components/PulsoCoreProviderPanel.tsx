@@ -3,6 +3,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
+import { pulsoCoreClient } from '../services/pulsoCoreClient';
 import type {
   PulsoProviderAdapterKind,
   PulsoProviderConfig,
@@ -65,6 +66,7 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
   const [account, setAccount] = React.useState<{ email: string | null; planType: string } | null>(null);
   const [message, setMessage] = React.useState('');
   const [error, setError] = React.useState('');
+  const [accessMode, setAccessMode] = React.useState<'restricted' | 'integral'>('restricted');
 
   React.useEffect(() => {
     if (!open) return;
@@ -75,6 +77,11 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
     setMessage('');
     setHealth(null);
     setAccount(null);
+    pulsoCoreClient.readAccessMode()
+      .then((result) => {
+        if (result.ok) setAccessMode(result.result.mode);
+      })
+      .catch(() => {});
     const active = saved || config;
     if (active.adapterKind === 'codex_subscription') {
       pulsoCoreProvider.configure(active)
@@ -191,6 +198,25 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
     }
   };
 
+  const toggleAccessMode = async () => {
+    setBusy('save');
+    setError('');
+    setMessage('');
+    try {
+      const next = accessMode === 'integral' ? 'restricted' : 'integral';
+      const result = await pulsoCoreClient.setAccessMode(next);
+      if (!result.ok) throw new Error(result.error.message);
+      setAccessMode(result.result.mode);
+      setMessage(next === 'integral'
+        ? 'modo integral ativo · identidade, memória, Notion e execução liberados'
+        : 'modo restrito ativo · ferramentas e execução desligadas');
+    } catch (cause: any) {
+      setError(cause?.message || String(cause));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const inputClass = 'w-full bg-white/[0.045] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-[#fbf9f5] placeholder-white/25 focus:outline-none focus:border-white/25 transition-colors';
   const labelClass = 'text-[9px] tracking-[0.18em] text-[#fbf9f5]/42 uppercase';
 
@@ -256,6 +282,34 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
           <div className="border-l border-white/20 pl-3 py-1 text-[10px] leading-relaxed text-[#fbf9f5]/60">
             <span className="block">{account.email || 'conta ChatGPT'}</span>
             <span className="block mt-1 text-[#fbf9f5]/30">plano {account.planType} · credencial no Keychain</span>
+          </div>
+        )}
+
+        {config.adapterKind === 'codex_subscription' && (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <span className={labelClass}>acesso da lótus</span>
+                <span className="block mt-1 text-[11px] text-[#fbf9f5]/75">
+                  {accessMode === 'integral' ? 'integral' : 'restrito'}
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={accessMode === 'integral'}
+                onClick={toggleAccessMode}
+                disabled={busy !== null}
+                className={`relative h-6 w-11 rounded-full border transition-colors ${accessMode === 'integral' ? 'bg-red-500/65 border-red-300/50' : 'bg-white/5 border-white/15'}`}
+              >
+                <span className={`absolute top-0.5 h-[1.125rem] w-[1.125rem] rounded-full bg-[#fbf9f5] transition-transform ${accessMode === 'integral' ? 'translate-x-[1.25rem]' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            <p className="mt-2 text-[9px] leading-relaxed text-[#fbf9f5]/35">
+              {accessMode === 'integral'
+                ? 'memória privada, arquivos, web, Notion, conectores e execução disponíveis'
+                : 'somente conversa; ferramentas e alterações permanecem bloqueadas'}
+            </p>
           </div>
         )}
 

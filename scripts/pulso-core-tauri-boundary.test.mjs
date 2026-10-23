@@ -21,6 +21,7 @@ import {
 } from './prepare-pulso-core-sidecar.mjs';
 import {
   prepareCodexSidecar,
+  CODEX_CODE_MODE_HOST_BINARY_NAME,
   CODEX_BINARY_NAME,
 } from './prepare-codex-sidecar.mjs';
 
@@ -133,20 +134,26 @@ test('prepareCodexSidecar vendors only an explicit Intel binary with executable 
   );
 
   const tinyBin = path.join(tempRoot, 'tiny-codex');
+  const tinyHost = path.join(tempRoot, 'tiny-code-mode-host');
   writeFileSync(tinyBin, 'tiny', 'utf8');
+  writeFileSync(tinyHost, 'tiny', 'utf8');
   assert.throws(
-    () => prepareCodexSidecar({ sourceBin: tinyBin, targetDir: binariesDir, minSizeBytes: 8 }),
+    () => prepareCodexSidecar({ sourceBin: tinyBin, codeModeHostSourceBin: tinyHost, targetDir: binariesDir, minSizeBytes: 8, codeModeHostMinSizeBytes: 1 }),
     /Codex binary size must be greater than 8 bytes/
   );
 
   const prepared = prepareCodexSidecar({
     sourceBin: process.execPath,
+    codeModeHostSourceBin: process.execPath,
     targetDir: binariesDir,
     minSizeBytes: 1024 * 1024,
+    codeModeHostMinSizeBytes: 1024 * 1024,
   });
   assert.equal(prepared.targetFile, path.join(binariesDir, CODEX_BINARY_NAME));
   assert.ok(prepared.size > 1024 * 1024);
   assert.equal(statSync(prepared.targetFile).mode & 0o111, 0o111);
+  assert.equal(prepared.codeModeHostTargetFile, path.join(binariesDir, CODEX_CODE_MODE_HOST_BINARY_NAME));
+  assert.equal(statSync(prepared.codeModeHostTargetFile).mode & 0o111, 0o111);
 
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -253,6 +260,7 @@ test('Tauri configuration preserves bundled sidecars while Kokoro starts only on
     'bin/kokoro_runner',
     'binaries/pulso-node',
     'binaries/pulso-codex',
+    'binaries/codex-code-mode-host',
   ]);
   assert.deepEqual(tauriConf.bundle.resources, [
     'resources/*',
