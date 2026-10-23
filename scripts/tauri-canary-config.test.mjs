@@ -88,3 +88,8 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   assert.equal(merged.app.windows[0].height, 600);
   assert.equal(merged.app.windows[0].fullscreen, false);
 });
+
+test('Alpha CI publishes the isolated app bundle without depending on fragile DMG creation', () => {
+  const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'tauri-build.yml'), 'utf8');
+  assert.match(workflow, /Build isolated Alpha bundle[\s\S]*--bundles app[\s\S]*tauri\.canary\.conf\.json/);
+});

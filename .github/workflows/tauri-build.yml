@@ -58,6 +58,7 @@ jobs:
         run: >-
           npx tauri build
           --target x86_64-apple-darwin
+          --bundles app
           --config src-tauri/tauri.canary.conf.json
 
       - name: Generate release provenance manifest
