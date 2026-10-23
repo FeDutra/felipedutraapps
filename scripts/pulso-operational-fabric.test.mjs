@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -129,4 +129,19 @@ test('transporte por pasta move bundle assinado e mantém importação idempoten
   const sharedA = path.join(a.dir, 'peer'); const sharedB = path.join(b.dir, 'peer'); const transportA = new PeerFolderTransport({ syncService: syncA }); const transportB = new PeerFolderTransport({ syncService: syncB }); transportA.configure(sharedA); transportB.configure(sharedB);
   const pushed = transportA.push(syncB.deviceManifest().deviceId); copyFileSync(pushed.transportPath, path.join(sharedB, 'inbox', path.basename(pushed.transportPath)));
   const pulled = transportB.pull(); assert.equal(pulled.receipts[0].receipt.imported, 1); assert.equal(syncB.status().replicatedEvents, 1); a.close(); b.close();
+});
+
+test('transporte por pasta restaura configuração depois de abertura fria', () => {
+  const f = fixture('sync-transport-restore');
+  const sync = new DeviceSyncService({ store: f.store, dataDir: f.dir, identity: syncIdentity('macbook') });
+  const configPath = path.join(f.dir, 'sync', 'transport.json');
+  const rootDir = path.join(f.dir, 'peer-folder');
+  const first = new PeerFolderTransport({ syncService: sync, configPath });
+  assert.equal(first.status().configured, false);
+  first.configure(rootDir);
+  const restored = new PeerFolderTransport({ syncService: sync, configPath });
+  assert.equal(restored.status().configured, true);
+  assert.equal(restored.status().rootDir, rootDir);
+  assert.equal(statSync(configPath).mode & 0o077, 0);
+  f.close();
 });

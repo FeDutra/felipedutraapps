@@ -127,7 +127,8 @@ export class PulsoDesktopBridge {
     });
     this.syncTransport = options.syncTransport || new PeerFolderTransport({
       syncService: this.sync,
-      rootDir: options.syncFolder || null,
+      rootDir: options.syncFolder || join(this.dataDir, "sync", "peer-folder"),
+      configPath: join(this.dataDir, "sync", "transport.json"),
     });
     this.liveMemory = options.liveMemory || new LiveMemoryService({ store: this.store });
     this.skills = options.skillRegistry || new SkillRegistryService({
