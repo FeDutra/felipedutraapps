@@ -8,13 +8,13 @@ function tokens(value) {
   return new Set(String(value || "").toLocaleLowerCase("pt-BR").match(WORD) || []);
 }
 
-function markdownFiles(root) {
+function markdownFiles(root, ignoredDirectories) {
   if (!existsSync(root)) return [];
   const files = [];
   const visit = directory => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
-      if (entry.isDirectory()) visit(path);
+      if (entry.isDirectory() && !ignoredDirectories.has(entry.name)) visit(path);
       else if (entry.isFile() && /\.(md|txt|json)$/i.test(entry.name)) files.push(path);
     }
   };
@@ -46,17 +46,18 @@ function chunks(text, maxChars) {
 }
 
 export class PrivateMemoryProvider {
-  constructor({ rootDir, maxResults = 8, chunkChars = 2600 } = {}) {
+  constructor({ rootDir, maxResults = 8, chunkChars = 2600, ignoredDirectories = ["archive"] } = {}) {
     invariant(typeof rootDir === "string" && rootDir.trim(), "private_memory_root_required");
     this.rootDir = rootDir;
     this.maxResults = maxResults;
     this.chunkChars = chunkChars;
+    this.ignoredDirectories = new Set(ignoredDirectories);
   }
 
   async retrieve({ sessionId = null, input = "" } = {}) {
     const query = tokens(input);
     const candidates = [];
-    for (const path of markdownFiles(this.rootDir)) {
+    for (const path of markdownFiles(this.rootDir, this.ignoredDirectories)) {
       const source = relative(this.rootDir, path);
       const modifiedAt = statSync(path).mtime.toISOString();
       chunks(readFileSync(path, "utf8"), this.chunkChars).forEach((content, index) => {

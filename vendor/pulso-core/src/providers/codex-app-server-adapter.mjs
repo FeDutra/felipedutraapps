@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 
@@ -36,6 +36,48 @@ function ensureProfileDirectory(codexHome) {
   }
   chmodSync(configPath, 0o600);
   return configPath;
+}
+
+function privateSkillDirectories(root) {
+  if (!root || !existsSync(root)) return [];
+  const found = [];
+  const visit = directory => {
+    if (existsSync(join(directory, "SKILL.md"))) {
+      found.push(directory);
+      return;
+    }
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) visit(join(directory, entry.name));
+    }
+  };
+  visit(root);
+  return found.sort();
+}
+
+function hardenSkillTree(root) {
+  const entry = statSync(root);
+  chmodSync(root, entry.isDirectory() ? 0o700 : 0o600);
+  if (!entry.isDirectory()) return;
+  for (const name of readdirSync(root)) hardenSkillTree(join(root, name));
+}
+
+export function installPrivateSkills({ privateContextRoot, codexHome } = {}) {
+  const archiveRoot = join(privateContextRoot || "", "archive", "skills");
+  if (!privateContextRoot || !existsSync(archiveRoot)) return { installed: 0, skills: [] };
+  const destinationRoot = join(codexHome, "skills");
+  mkdirSync(destinationRoot, { recursive: true, mode: 0o700 });
+  const installed = [];
+  for (const source of privateSkillDirectories(archiveRoot)) {
+    const relativeSource = source.slice(archiveRoot.length + 1);
+    const safeName = `pulso-${relativeSource}`.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-");
+    const destination = join(destinationRoot, safeName);
+    cpSync(source, destination, { recursive: true, force: true });
+    hardenSkillTree(destination);
+    installed.push({ name: safeName, source: relativeSource });
+  }
+  const manifestPath = join(destinationRoot, ".pulso-managed.json");
+  writeFileSync(manifestPath, JSON.stringify({ schemaVersion: 1, installed }, null, 2) + "\n", { mode: 0o600 });
+  return { installed: installed.length, skills: installed };
 }
 
 function integralDeveloperInstructions() {
@@ -142,6 +184,7 @@ export class CodexAppServerClient {
     profileId = "personal",
     profilesRoot,
     workspaceDir = null,
+    privateContextRoot = null,
     processFactory = spawn,
     requestTimeoutMs = DEFAULT_TIMEOUT_MS,
     turnTimeoutMs = TURN_TIMEOUT_MS,
@@ -154,6 +197,7 @@ export class CodexAppServerClient {
     this.profileId = safeProfileId(profileId);
     this.codexHome = resolve(profilesRoot, this.profileId);
     this.workspaceDir = resolve(workspaceDir || join(this.codexHome, "workspace"));
+    this.privateContextRoot = privateContextRoot ? resolve(privateContextRoot) : null;
     this.processFactory = processFactory;
     this.requestTimeoutMs = requestTimeoutMs;
     this.turnTimeoutMs = turnTimeoutMs;
@@ -172,6 +216,7 @@ export class CodexAppServerClient {
     if (this.initialized && this.child) return;
     invariant(existsSync(this.binaryPath), "codex_binary_not_found");
     ensureProfileDirectory(this.codexHome);
+    installPrivateSkills({ privateContextRoot: this.privateContextRoot, codexHome: this.codexHome });
     mkdirSync(this.workspaceDir, { recursive: true, mode: 0o700 });
 
     this.child = this.processFactory(this.binaryPath, ["app-server", "--listen", "stdio://"], {

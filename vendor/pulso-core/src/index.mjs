@@ -52,6 +52,8 @@ export {
 
 // v0.4 Sovereign Agent Foundry exports
 export { AgentFoundryService } from "./agents/agent-foundry-service.mjs";
+export { ConstellationImporter } from "./agents/constellation-importer.mjs";
+export { DeviceSyncService, canonicalStringify } from "./sync/device-sync-service.mjs";
 export { AgentSupervisor } from "./agents/agent-supervisor.mjs";
 export {
   emptyAgentFoundryState,
@@ -90,6 +92,7 @@ export { PulsoRuntimeService } from "./runtime/pulso-runtime-service.mjs";
 export { SecretRefResolver } from "./runtime/secret-ref-resolver.mjs";
 export { AccessModeStore, ACCESS_MODES } from "./runtime/access-mode-store.mjs";
 export { PrivateMemoryProvider } from "./memory/private-memory-provider.mjs";
+export { PrivateArchiveService } from "./archive/private-archive-service.mjs";
 export { ProviderRouter, ProviderRegistry } from "./runtime/provider-router.mjs";
 export { DurableOutbox } from "./runtime/durable-outbox.mjs";
 export {
@@ -107,7 +110,8 @@ export {
 } from "./providers/model-adapters.mjs";
 export {
   CodexAppServerClient,
-  CodexSubscriptionAdapter
+  CodexSubscriptionAdapter,
+  installPrivateSkills
 } from "./providers/codex-app-server-adapter.mjs";
 export {
   SECRET_REF_SCHEMES,

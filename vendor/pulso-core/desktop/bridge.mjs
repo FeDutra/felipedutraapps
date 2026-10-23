@@ -21,7 +21,10 @@ import {
   LotusIdentityService,
   AccessModeStore,
   PrivateMemoryProvider,
+  PrivateArchiveService,
   LegacyImportService,
+  ConstellationImporter,
+  DeviceSyncService,
   pulsoId,
 } from "../src/index.mjs";
 
@@ -104,7 +107,18 @@ export class PulsoDesktopBridge {
     this.privateMemory = options.memoryProvider || new PrivateMemoryProvider({
       rootDir: join(this.dataDir, "private-context"),
     });
+    this.privateArchive = options.archiveService || new PrivateArchiveService({
+      rootDir: join(this.dataDir, "private-context", "archive"),
+    });
     this.legacyImport = options.legacyImport || new LegacyImportService({ live: this.live, store: this.store });
+    this.constellation = options.constellationImporter || new ConstellationImporter({
+      foundry: this.controlPlane.foundry,
+      snapshotPath: join(this.dataDir, "private-context", "agent-constellation.json"),
+    });
+    this.sync = options.syncService || new DeviceSyncService({
+      store: this.store,
+      dataDir: this.dataDir,
+    });
     this.conversations =
       options.conversations ||
       new LiveConversationService({
@@ -141,7 +155,8 @@ export class PulsoDesktopBridge {
             binaryPath,
             profileId,
             profilesRoot: join(this.dataDir, "provider-profiles", "codex"),
-            workspaceDir: join(this.dataDir, "provider-workspaces", "codex", profileId),
+            workspaceDir: join(this.dataDir, "private-context"),
+            privateContextRoot: join(this.dataDir, "private-context"),
             accessModeStore: this.accessMode,
           });
       this.codexClients.set(params.providerId, client);
@@ -311,6 +326,101 @@ export class PulsoDesktopBridge {
         await this.initialize();
         const backupPath = join(this.dataDir, "backups", `before-legacy-import-${Date.now()}.sqlite`);
         return await this.legacyImport.apply(params.snapshot, { backupPath });
+      }
+      case "agent.constellation.plan": {
+        await this.initialize();
+        return this.constellation.plan();
+      }
+      case "agent.constellation.apply": {
+        await this.initialize();
+        return await this.constellation.apply();
+      }
+      case "sync.status": {
+        await this.initialize();
+        return this.sync.status();
+      }
+      case "sync.device.manifest": {
+        await this.initialize();
+        return this.sync.deviceManifest();
+      }
+      case "sync.device.trust": {
+        await this.initialize();
+        return this.sync.trustDevice(params.manifest, { expectedFingerprint: params.expectedFingerprint });
+      }
+      case "sync.device.revoke": {
+        await this.initialize();
+        return this.sync.revokeDevice(params.deviceId);
+      }
+      case "sync.bundle.export": {
+        await this.initialize();
+        return this.sync.exportBundle({
+          targetDeviceId: params.targetDeviceId || null,
+          outputPath: params.outputPath || null,
+        });
+      }
+      case "sync.bundle.import": {
+        await this.initialize();
+        const receipt = this.sync.importBundle({
+          bundle: params.bundle || null,
+          bundlePath: params.bundlePath || null,
+        });
+        this.controlPlane.restore();
+        await this.live.restore();
+        return receipt;
+      }
+      case "archive.status": {
+        await this.initialize();
+        return this.privateArchive.status();
+      }
+      case "archive.search": {
+        await this.initialize();
+        return this.privateArchive.search(params);
+      }
+      case "agent.create_blueprint": {
+        await this.initialize();
+        return await this.controlPlane.foundry.createBlueprint(params.blueprint || params, {
+          idempotencyKey: params.idempotencyKey || null,
+        });
+      }
+      case "agent.publish_revision": {
+        await this.initialize();
+        return await this.controlPlane.foundry.reviseBlueprint(params.revision || params, {
+          idempotencyKey: params.idempotencyKey || null,
+        });
+      }
+      case "agent.materialize": {
+        await this.initialize();
+        return await this.controlPlane.foundry.materializeAgent(params.instance || params, {
+          idempotencyKey: params.idempotencyKey || null,
+        });
+      }
+      case "agent.transition": {
+        await this.initialize();
+        const action = params.action;
+        const options = {
+          reason: params.reason || "user_requested",
+          idempotencyKey: params.idempotencyKey || null,
+        };
+        if (action === "activate") return await this.controlPlane.foundry.activateAgent(params.agentId, options);
+        if (action === "pause") return await this.controlPlane.foundry.pauseAgent(params.agentId, options);
+        if (action === "resume") return await this.controlPlane.foundry.resumeAgent(params.agentId, options);
+        if (action === "drain") return await this.controlPlane.foundry.drainAgent(params.agentId, options);
+        if (action === "retire") return await this.controlPlane.foundry.retireAgent(params.agentId, options);
+        const error = new Error("unsupported_agent_transition:" + action);
+        error.code = "INVALID_PARAMS";
+        throw error;
+      }
+      case "agent.list": {
+        await this.initialize();
+        return this.controlPlane.foundry.list(params.resource || "agents", params.query || {});
+      }
+      case "agent.get": {
+        await this.initialize();
+        return this.controlPlane.foundry.get(params.resource || "agent", params.id);
+      }
+      case "audit.list": {
+        await this.initialize();
+        return this.controlPlane.list("audit", params || {});
       }
       case "runtime.start": {
         await this.initialize();

@@ -1,3 +1,34 @@
+# Rollback — constelação local e sincronização entre dispositivos (23/10/2026)
+
+- Baseline instalada na Next Preview: `726ecb3124759dfebafa8394296139c21d4b9803`.
+- Escopo: importar a constelação configurada como blueprints/agentes locais,
+  empacotar formação e memória fora do Git e replicar eventos por bundles
+  assinados entre dispositivos confiáveis.
+- A PULSO estável, o Firebase, o Firestore, a VPS e o runtime OpenClaw não são
+  alterados por esta promoção.
+- O esquema SQLite recebe apenas tabelas aditivas `sync_*`; uma versão anterior
+  as ignora. O banco vivo nunca é copiado entre máquinas.
+
+## Reversão do aplicativo
+
+1. Encerrar somente a Next Preview e seus sidecars.
+2. Preservar o bundle novo e o banco como artefatos datados; não apagar.
+3. Restaurar o bundle da baseline `726ecb31…` guardado antes da promoção.
+4. Restaurar o pacote privado anterior, ou mover o novo para quarentena
+   recuperável.
+5. Reabrir a Preview e conferir título, recibo WebView → Tauri → Core,
+   integridade do SQLite e autenticação ChatGPT.
+
+## Reversão da sincronização
+
+1. Revogar o par em `sync_devices`; não apagar a identidade do dispositivo.
+2. Interromper exportações/importações de bundles.
+3. Preservar `sync/outbox`, `sync/inbox` e `sync/conflicts` para auditoria.
+4. Eventos já importados continuam no journal; qualquer reversão de conteúdo
+   deve ser feita por evento compensatório, nunca por edição direta do SQLite.
+
+---
+
 # Rollback — PULSO Core v0.9: identidade soberana e migração (21/10/2026)
 
 - Baseline de produto: RC4 `7d0904d2e7f9a64af8eb15b88c6d4338fc172a13`.
