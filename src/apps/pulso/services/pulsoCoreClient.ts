@@ -43,6 +43,9 @@ export const BRIDGE_METHODS = Object.freeze([
   'agent.transition',
   'agent.list',
   'agent.get',
+  'agent.run.start',
+  'agent.run.cancel',
+  'agent.delegate',
   'agent.constellation.plan',
   'agent.constellation.apply',
   'sync.status',
@@ -51,6 +54,32 @@ export const BRIDGE_METHODS = Object.freeze([
   'sync.device.revoke',
   'sync.bundle.export',
   'sync.bundle.import',
+  'sync.folder.configure',
+  'sync.folder.status',
+  'sync.folder.push',
+  'sync.folder.pull',
+  'memory.remember',
+  'memory.search',
+  'memory.list',
+  'memory.forget',
+  'skill.status',
+  'skill.list',
+  'skill.set_enabled',
+  'automation.status',
+  'automation.import',
+  'automation.create',
+  'automation.update',
+  'automation.list',
+  'automation.runs',
+  'automation.run',
+  'automation.tick',
+  'channel.register',
+  'channel.webhook.configure',
+  'channel.whatsapp.configure',
+  'channel.list',
+  'channel.receive',
+  'channel.send',
+  'channel.history',
   'archive.status',
   'archive.search',
   'audit.list',
@@ -221,6 +250,14 @@ export interface PulsoCoreBootstrapSnapshot {
   }> | null;
   readonly health: PulsoRuntimeHealth;
   readonly live: PulsoLiveBootstrapSnapshot;
+  readonly operations?: Readonly<{
+    readonly agents?: Readonly<{ readonly total?: number; readonly runs?: number }>;
+    readonly memory?: Readonly<{ readonly total?: number }>;
+    readonly skills?: Readonly<{ readonly total?: number; readonly enabled?: number }>;
+    readonly automations?: Readonly<{ readonly total?: number; readonly enabled?: number; readonly runs?: number }>;
+    readonly channels?: Readonly<{ readonly total?: number; readonly ready?: number }>;
+    readonly sync?: Readonly<{ readonly configured?: boolean; readonly status?: string; readonly conflicts?: number }>;
+  }>;
 }
 
 export interface PulsoCreateAreaParams {
