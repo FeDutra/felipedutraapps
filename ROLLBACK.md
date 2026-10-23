@@ -1088,3 +1088,19 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 3. Não apagar nem alterar o banco SQLite soberano (`pulso-core.sqlite`).
 4. Não apagar nem alterar as credenciais salvas no Keychain do macOS (`PULSO Core` / `codex-fe`).
 5. Não tocar na `/Applications/PULSO.app` (PULSO 0.1.1) atual, no Firebase Hosting, nas Firestore rules ou nas máquinas de produção.
+# Rollback — bloco operacional local-first completo (23/10/2026)
+
+- Baseline instalada e preservada: `275bb87d8847414b5539554c7621085c58e9e48e` (`feature/pulso-core-v0.9-full-access`).
+- Escopo desta frente: executor real de agentes, memória viva, catálogo de habilidades, automações locais, canais locais/adapters e transporte de sincronização entre dispositivos.
+- A PULSO estável, o banco vigente e os pacotes privados instalados no MacBook não serão alterados durante desenvolvimento e testes no VPS.
+- A promoção no MacBook só poderá ocorrer por bundle Intel validado, backup consistente do SQLite e preservação do aplicativo anterior.
+
+## Reversão
+
+1. Encerrar somente `PULSO Next Preview.app` e seus filhos.
+2. Mover o bundle novo para um caminho datado de contingência.
+3. Restaurar o bundle `275bb87d…` preservado durante a promoção.
+4. Restaurar o SQLite e o contexto privado do backup transacional criado imediatamente antes da instalação.
+5. Não alterar nem encerrar `/Applications/PULSO.app`.
+
+---

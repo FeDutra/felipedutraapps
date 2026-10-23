@@ -92,7 +92,13 @@ export { PulsoRuntimeService } from "./runtime/pulso-runtime-service.mjs";
 export { SecretRefResolver } from "./runtime/secret-ref-resolver.mjs";
 export { AccessModeStore, ACCESS_MODES } from "./runtime/access-mode-store.mjs";
 export { PrivateMemoryProvider } from "./memory/private-memory-provider.mjs";
+export { LiveMemoryService } from "./memory/live-memory-service.mjs";
 export { PrivateArchiveService } from "./archive/private-archive-service.mjs";
+export { SkillRegistryService } from "./skills/skill-registry-service.mjs";
+export { ChannelHubService, LoopbackChannelAdapter, WebhookChannelAdapter, WhatsAppLocalChannelAdapter } from "./channels/channel-hub-service.mjs";
+export { AutomationService } from "./automations/automation-service.mjs";
+export { AgentExecutionService } from "./agents/agent-execution-service.mjs";
+export { PeerFolderTransport } from "./sync/peer-folder-transport.mjs";
 export { ProviderRouter, ProviderRegistry } from "./runtime/provider-router.mjs";
 export { DurableOutbox } from "./runtime/durable-outbox.mjs";
 export {

@@ -25,6 +25,12 @@ import {
   LegacyImportService,
   ConstellationImporter,
   DeviceSyncService,
+  PeerFolderTransport,
+  LiveMemoryService,
+  SkillRegistryService,
+  ChannelHubService,
+  AutomationService,
+  AgentExecutionService,
   pulsoId,
 } from "../src/index.mjs";
 
@@ -119,6 +125,32 @@ export class PulsoDesktopBridge {
       store: this.store,
       dataDir: this.dataDir,
     });
+    this.syncTransport = options.syncTransport || new PeerFolderTransport({
+      syncService: this.sync,
+      rootDir: options.syncFolder || null,
+    });
+    this.liveMemory = options.liveMemory || new LiveMemoryService({ store: this.store });
+    this.skills = options.skillRegistry || new SkillRegistryService({
+      store: this.store,
+      rootDir: join(this.dataDir, "private-context", "archive", "skills"),
+    });
+    this.channels = options.channelHub || new ChannelHubService({ store: this.store });
+    this.agentExecutor = options.agentExecutor || new AgentExecutionService({
+      foundry: this.controlPlane.foundry,
+      runtime: this.runtime,
+      memory: this.liveMemory,
+      skills: this.skills,
+    });
+    this.automations = options.automationService || new AutomationService({
+      store: this.store,
+      snapshotPath: join(this.dataDir, "private-context", "archive", "automations.json"),
+      executor: async (job, input) => {
+        if (job.agentId) return this.agentExecutor.execute({ agentId: job.agentId, prompt: input?.prompt || job.task, activate: true });
+        const completion = await this.runtime.routeCompletion({ prompt: input?.prompt || job.task, taskId: `automation:${job.automationId}` });
+        if (job.channelId) await this.channels.send({ channelId: job.channelId, text: completion.text });
+        return { text: completion.text, providerId: completion.providerId, model: completion.model };
+      },
+    });
     this.conversations =
       options.conversations ||
       new LiveConversationService({
@@ -126,7 +158,22 @@ export class PulsoDesktopBridge {
         live: this.live,
         router: this.controlPlane.router,
         identityService: this.identity,
-        memoryProvider: query => this.privateMemory.retrieve(query),
+        memoryProvider: async query => {
+          const [privateResult, liveResult] = await Promise.all([
+            this.privateMemory.retrieve(query),
+            Promise.resolve(this.liveMemory.search({ query: query.input, limit: 8 })),
+          ]);
+          return {
+            provider: "pulso-memory-federation",
+            results: [
+              ...(liveResult.results || []),
+              ...(privateResult.results || []),
+            ].slice(0, 12),
+          };
+        },
+        memoryRecorder: input => this.liveMemory.remember(input),
+        agentExecutor: this.agentExecutor,
+        agentFoundry: this.controlPlane.foundry,
       });
     this.turnQueues = new Map();
     this.turnExecutions = new Map();
@@ -134,6 +181,7 @@ export class PulsoDesktopBridge {
 
     this.initialized = false;
     this.closed = false;
+    this.automationTimer = null;
   }
 
   createModelAdapter(params, secretRef) {
@@ -214,6 +262,17 @@ export class PulsoDesktopBridge {
       await this.controlPlane.initDefaults();
     }
     await this.live.ensureRestored();
+    this.liveMemory.restore();
+    this.skills.restore();
+    this.channels.restore();
+    this.automations.restore();
+    this.automations.importSnapshot();
+    if (!this.automationTimer) {
+      this.automationTimer = setInterval(() => {
+        this.automations.tick().catch(() => {});
+      }, 30_000);
+      this.automationTimer.unref?.();
+    }
     this.initialized = true;
   }
 
@@ -266,6 +325,12 @@ export class PulsoDesktopBridge {
       case "bootstrap": {
         await this.initialize();
         const liveData = await this.live.bootstrap();
+        let syncStatus;
+        try {
+          syncStatus = this.sync.status();
+        } catch (error) {
+          syncStatus = { configured: false, status: "needs_device_identity", detail: error?.message || String(error) };
+        }
         const result = {
           dataDir: this.dataDir,
           dbPath: this.dbPath,
@@ -276,6 +341,14 @@ export class PulsoDesktopBridge {
           live: liveData,
           identity: this.identity.resolve().receipt,
           access: this.accessMode.read(),
+          operations: {
+            agents: { total: this.controlPlane.foundry.list("agents").length, runs: this.controlPlane.foundry.list("runs").length },
+            memory: { total: this.liveMemory.list().length },
+            skills: this.skills.status(),
+            automations: this.automations.status(),
+            channels: { total: this.channels.list().length, ready: this.channels.list().filter(item => item.status === "ready").length },
+            sync: { ...syncStatus, transport: this.syncTransport.status() },
+          },
         };
         if (
           this.secretResolver &&
@@ -417,6 +490,139 @@ export class PulsoDesktopBridge {
       case "agent.get": {
         await this.initialize();
         return this.controlPlane.foundry.get(params.resource || "agent", params.id);
+      }
+      case "agent.run.start": {
+        await this.initialize();
+        return await this.agentExecutor.execute(params);
+      }
+      case "agent.run.cancel": {
+        await this.initialize();
+        return await this.agentExecutor.cancel(params.runId, params.reason || "user_requested");
+      }
+      case "agent.delegate": {
+        await this.initialize();
+        return await this.agentExecutor.delegate(params);
+      }
+      case "memory.remember": {
+        await this.initialize();
+        return this.liveMemory.remember(params, { idempotencyKey: params.idempotencyKey || null });
+      }
+      case "memory.search": {
+        await this.initialize();
+        return this.liveMemory.search(params);
+      }
+      case "memory.list": {
+        await this.initialize();
+        return this.liveMemory.list(params);
+      }
+      case "memory.forget": {
+        await this.initialize();
+        return this.liveMemory.forget(params.memoryId, { reason: params.reason || "user_requested" });
+      }
+      case "skill.status": {
+        await this.initialize();
+        return this.skills.status();
+      }
+      case "skill.list": {
+        await this.initialize();
+        return this.skills.list(params);
+      }
+      case "skill.set_enabled": {
+        await this.initialize();
+        return this.skills.setEnabled(params.skillId, params.enabled);
+      }
+      case "automation.status": {
+        await this.initialize();
+        return this.automations.status();
+      }
+      case "automation.import": {
+        await this.initialize();
+        return this.automations.importSnapshot();
+      }
+      case "automation.create": {
+        await this.initialize();
+        return this.automations.create(params);
+      }
+      case "automation.update": {
+        await this.initialize();
+        return this.automations.update(params.automationId, params.patch || params);
+      }
+      case "automation.list": {
+        await this.initialize();
+        return this.automations.list(params);
+      }
+      case "automation.runs": {
+        await this.initialize();
+        return this.automations.listRuns(params);
+      }
+      case "automation.run": {
+        await this.initialize();
+        return await this.automations.runNow(params.automationId, { reason: params.reason || "manual", input: params.input || null });
+      }
+      case "automation.tick": {
+        await this.initialize();
+        return await this.automations.tick(params);
+      }
+      case "channel.register": {
+        await this.initialize();
+        return this.channels.register(params);
+      }
+      case "channel.webhook.configure": {
+        await this.initialize();
+        if (this.accessMode.read().mode !== "integral") {
+          const error = new Error("integral_access_required");
+          error.code = "ACCESS_DENIED";
+          throw error;
+        }
+        return this.channels.configureWebhook(params);
+      }
+      case "channel.whatsapp.configure": {
+        await this.initialize();
+        if (this.accessMode.read().mode !== "integral") {
+          const error = new Error("integral_access_required");
+          error.code = "ACCESS_DENIED";
+          throw error;
+        }
+        return this.channels.configureWhatsAppLocal(params);
+      }
+      case "channel.list": {
+        await this.initialize();
+        return this.channels.list();
+      }
+      case "channel.receive": {
+        await this.initialize();
+        return this.channels.receive(params);
+      }
+      case "channel.send": {
+        await this.initialize();
+        return await this.channels.send(params);
+      }
+      case "channel.history": {
+        await this.initialize();
+        return this.channels.history(params);
+      }
+      case "sync.folder.configure": {
+        await this.initialize();
+        return this.syncTransport.configure(params.rootDir);
+      }
+      case "sync.folder.status": {
+        await this.initialize();
+        return this.syncTransport.status();
+      }
+      case "sync.folder.push": {
+        await this.initialize();
+        return this.syncTransport.push(params.targetDeviceId);
+      }
+      case "sync.folder.pull": {
+        await this.initialize();
+        const receipt = this.syncTransport.pull();
+        this.controlPlane.restore();
+        await this.live.restore();
+        this.liveMemory.restore();
+        this.skills.restore();
+        this.automations.restore();
+        this.channels.restore();
+        return receipt;
       }
       case "audit.list": {
         await this.initialize();
@@ -743,6 +949,10 @@ export class PulsoDesktopBridge {
       return;
     }
     this.closed = true;
+    if (this.automationTimer) {
+      clearInterval(this.automationTimer);
+      this.automationTimer = null;
+    }
     for (const run of this.conversations.listRuns()) {
       if (!["completed", "failed", "cancelled", "interrupted"].includes(run.status)) {
         try { await this.conversations.cancelRun(run.id, { reason: "bridge_shutdown" }); } catch {}

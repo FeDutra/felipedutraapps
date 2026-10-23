@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
 import { pulsoCoreClient } from '../services/pulsoCoreClient';
 import type {
+  PulsoCoreBootstrapSnapshot,
   PulsoProviderAdapterKind,
   PulsoProviderConfig,
   PulsoProviderHealth,
@@ -67,6 +68,7 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
   const [message, setMessage] = React.useState('');
   const [error, setError] = React.useState('');
   const [accessMode, setAccessMode] = React.useState<'restricted' | 'integral'>('restricted');
+  const [operations, setOperations] = React.useState<NonNullable<PulsoCoreBootstrapSnapshot['operations']> | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
@@ -82,6 +84,11 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
         if (result.ok) setAccessMode(result.result.mode);
       })
       .catch(() => {});
+    pulsoCoreClient.bootstrap()
+      .then((result) => {
+        if (result.ok) setOperations(result.result.operations || null);
+      })
+      .catch(() => setOperations(null));
     const active = saved || config;
     if (active.adapterKind === 'codex_subscription') {
       pulsoCoreProvider.configure(active)
@@ -249,6 +256,21 @@ export function PulsoCoreProviderPanel({ open, onClose, onConfigured }: PulsoCor
             <label className={labelClass}>perfil de assinatura</label>
             <span className="block text-[11px] text-[#fbf9f5]/72">Fe · pessoal</span>
             <p className="text-[9px] leading-relaxed text-[#fbf9f5]/32">Primeira rodada: uma assinatura isolada. Despertar e Mila entram depois da prova de separação entre contas; nenhuma credencial será copiada ou compartilhada.</p>
+          </div>
+        )}
+
+        {operations && (
+          <div className="border-l border-white/15 pl-3 py-1 text-[9px] leading-relaxed text-[#fbf9f5]/42">
+            <span className={labelClass}>tecido operacional</span>
+            <span className="block mt-1">
+              {operations.agents?.total || 0} agentes · {operations.skills?.enabled || 0} habilidades · {operations.memory?.total || 0} memórias vivas
+            </span>
+            <span className="block">
+              {operations.automations?.enabled || 0}/{operations.automations?.total || 0} automações ativas · {operations.channels?.ready || 0} canais prontos
+            </span>
+            <span className="block">
+              sync {operations.sync?.configured ? 'configurado' : 'aguardando par'} · {operations.sync?.conflicts || 0} conflitos
+            </span>
           </div>
         )}
 

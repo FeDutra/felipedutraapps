@@ -21,7 +21,7 @@ function errorDescriptor(error) {
 }
 
 export class LiveConversationService {
-  constructor({ store, live, router, identityService = null, memoryProvider = null, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
+  constructor({ store, live, router, identityService = null, memoryProvider = null, memoryRecorder = null, agentExecutor = null, agentFoundry = null, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
     invariant(store, "event_store_required");
     invariant(live, "live_service_required");
     invariant(router, "provider_router_required");
@@ -30,10 +30,33 @@ export class LiveConversationService {
     this.router = router;
     this.identityService = identityService;
     this.memoryProvider = memoryProvider;
+    this.memoryRecorder = memoryRecorder;
+    this.agentExecutor = agentExecutor;
+    this.agentFoundry = agentFoundry;
     this.clock = clock;
     this.idGenerator = idGenerator;
     this.activeRuns = new Map();
     this.inflightIdempotency = new Map();
+  }
+
+  async #recordExplicitMemory({ sessionId, humanText, assistantText }) {
+    if (!this.memoryRecorder || !/(?:\blembre\b|\bnão esqueça\b|\bregistre\b|\bdecid(?:i|imos|ido)\b|\bfica decidido\b)/iu.test(String(humanText || ""))) return null;
+    const title = String(humanText || "Memória da conversa").replace(/\s+/g, " ").trim().slice(0, 120);
+    const content = `Fe: ${String(humanText || "").trim()}\n\nResposta: ${String(assistantText || "").trim()}`.slice(0, 12000);
+    return await this.memoryRecorder({ title, content, tags: ["conversa", sessionId], source: { kind: "live-session", sessionId } });
+  }
+
+  #resolveMention(text, explicitAgentId = null) {
+    if (!this.agentFoundry) return null;
+    if (explicitAgentId) return this.agentFoundry.get("agent", explicitAgentId) ? explicitAgentId : null;
+    const match = String(text || "").match(/^@([\p{L}\p{N}._-]+)/u);
+    if (!match) return null;
+    const needle = match[1].toLowerCase();
+    for (const instance of this.agentFoundry.list("agents")) {
+      const blueprint = this.agentFoundry.get("blueprint", instance.blueprintId);
+      if (String(instance.agentId).toLowerCase() === needle || String(blueprint?.name || "").toLowerCase() === needle) return instance.agentId;
+    }
+    return null;
   }
 
   async ensureReady() {
@@ -163,6 +186,7 @@ export class LiveConversationService {
     }
 
     const runId = params.runId || this.idGenerator("live_run");
+    const specialistAgentId = this.#resolveMention(humanMessage.texto, params.agentId || null);
     const correlationId = params.correlationId || runId;
     const createdAt = this.clock();
     const run = validateConversationRun({
@@ -255,7 +279,9 @@ export class LiveConversationService {
         content: message.texto
       }));
       if (systemPrompt) history.unshift({ role: "system", content: systemPrompt });
-      const stream = this.router.stream({
+      const stream = specialistAgentId && this.agentExecutor
+        ? null
+        : this.router.stream({
         sessionId,
         agentId: LIVE_DEFAULT_IDENTITY,
         turnId: runId,
@@ -264,7 +290,25 @@ export class LiveConversationService {
         signal: controller.signal
       });
 
-      for await (const envelope of stream) {
+      if (specialistAgentId && this.agentExecutor) {
+        const instance = this.agentFoundry.get("agent", specialistAgentId);
+        const blueprint = instance ? this.agentFoundry.get("blueprint", instance.blueprintId) : null;
+        const objective = humanMessage.texto.replace(/^@[\p{L}\p{N}._-]+\s*/u, "").trim() || humanMessage.texto;
+        const specialist = await this.agentExecutor.execute({ agentId: specialistAgentId, prompt: objective, sessionId, parentRunId: runId, activate: true });
+        const attributedText = `**${blueprint?.name || specialistAgentId}**\n\n${specialist.output}`;
+        const current = this.getRun(runId);
+        this.#append([this.#runDraft({
+          type: "live.conversation_run.delta_appended",
+          runId,
+          correlationId,
+          occurredAt: this.clock(),
+          payload: { index: current.deltasCount, text: attributedText }
+        })]);
+        await options.onEnvelope?.({ type: "conversation.delta", runId, index: current.deltasCount, text: attributedText, accumulatedText: this.getRun(runId).accumulatedText, agentId: specialistAgentId });
+        completion = { type: "model.completed", text: attributedText, outputText: attributedText, providerId: specialist.providerId, model: specialist.model, agentId: specialistAgentId, agentRunId: specialist.run.agentRunId };
+      }
+
+      for await (const envelope of stream || []) {
         if (controller.signal.aborted) {
           const cancelled = new Error("conversation_cancelled");
           cancelled.code = "conversation_cancelled";
@@ -312,6 +356,8 @@ export class LiveConversationService {
         providerId: completion.providerId,
         model: completion.model,
         routingReceipt,
+        agentId: completion.agentId || LIVE_DEFAULT_IDENTITY,
+        agentRunId: completion.agentRunId || null,
         completedAt
       };
       assertNoSecrets(receipt);
@@ -371,6 +417,7 @@ export class LiveConversationService {
         })
       ];
       this.#appendAtomic(finalDrafts);
+      await this.#recordExplicitMemory({ sessionId, humanText: humanMessage.texto, assistantText: finalText }).catch(() => null);
       const completedRun = validateConversationRun(this.getRun(runId));
       await options.onEnvelope?.({ type: "conversation.completed", run: completedRun, receipt });
       return completedRun;
