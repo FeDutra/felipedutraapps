@@ -47,7 +47,7 @@ export function ExecutionTargetSelector({ devices, value, localOrigin, onChange 
       <button
         type="button"
         onClick={() => setOpen(current => !current)}
-        aria-label="Escolher máquina de execução"
+        aria-label="Definir preferência de máquina"
         aria-expanded={open}
         className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${
           value === 'auto'
@@ -71,7 +71,7 @@ export function ExecutionTargetSelector({ devices, value, localOrigin, onChange 
           <button
             type="button"
             onClick={() => { onChange('auto'); setOpen(false); }}
-            aria-label="Destino automático"
+            aria-label="Automático: usar qualquer Mac confiável disponível"
             aria-pressed={value === 'auto'}
             className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${value === 'auto' ? 'scale-[1.04] text-white drop-shadow-[0_0_5px_rgba(255,255,255,.32)]' : 'text-white/28 hover:text-white/62'}`}
           >

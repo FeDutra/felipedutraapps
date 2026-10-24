@@ -1512,11 +1512,11 @@ export default function LivePage() {
 
   const selectExecutionTarget = React.useCallback((target: PulsoExecutionTarget) => {
     setExecutionTarget(target);
-    if (typeof window !== 'undefined') writeExecutionTarget(target, window.sessionStorage);
+    if (typeof window !== 'undefined') writeExecutionTarget(target, window.localStorage);
   }, []);
 
   React.useEffect(() => {
-    setExecutionTarget(readExecutionTarget(window.sessionStorage));
+    setExecutionTarget(readExecutionTarget(window.localStorage));
     void readLocalDeviceOrigin().then(status => {
       setLocalDeviceOrigin(status.configured && status.deviceKey ? status.deviceKey : null);
     });

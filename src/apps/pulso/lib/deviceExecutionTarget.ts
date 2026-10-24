@@ -93,6 +93,9 @@ export function readExecutionTarget(storage?: Storage): PulsoExecutionTarget {
   return value === 'imac' || value === 'macbook' ? value : 'auto';
 }
 
+// A escolha manual é uma preferência durável, não uma autorização exclusiva.
+// O runtime pode usar o outro Mac confiável quando ele estiver disponível e a
+// máquina preferida não estiver operável.
 export function writeExecutionTarget(target: PulsoExecutionTarget, storage?: Storage) {
   storage?.setItem('pulso_execution_target_v1', target);
 }
