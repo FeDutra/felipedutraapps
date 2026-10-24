@@ -30,8 +30,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `(function(){
               try {
-                var physicalPath = '/pulso/live/index.html';
-                if (window.location.protocol !== 'tauri:' || window.location.pathname !== physicalPath) return;
+                var physicalPath = window.location.pathname;
+                var desktopEntries = ['/pulso-desktop.html', '/pulso/live/index.html'];
+                if (window.location.protocol !== 'tauri:' || desktopEntries.indexOf(physicalPath) === -1) return;
                 var preservePhysicalEntry = function(method) {
                   var original = window.history[method].bind(window.history);
                   window.history[method] = function(state, title, url) {

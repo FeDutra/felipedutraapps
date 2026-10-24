@@ -359,10 +359,12 @@ test('Structural and visual non-regression: PulsoCoreCanary is sr-only output an
   );
 });
 
-test('Desktop packaged entry keeps the physical index.html URL during Next hydration', () => {
+test('Desktop packaged entry keeps either supported physical URL during Next hydration', () => {
   const rootLayout = readFileSync(path.join(repoRoot, 'src/app/layout.tsx'), 'utf8');
 
-  assert.match(rootLayout, /physicalPath = '\/pulso\/live\/index\.html'/);
+  assert.match(rootLayout, /physicalPath = window\.location\.pathname/);
+  assert.match(rootLayout, /'\/pulso-desktop\.html'/);
+  assert.match(rootLayout, /'\/pulso\/live\/index\.html'/);
   assert.match(rootLayout, /preservePhysicalEntry\('pushState'\)/);
   assert.match(rootLayout, /preservePhysicalEntry\('replaceState'\)/);
   assert.match(rootLayout, /window\.location\.protocol !== 'tauri:'/);
@@ -380,10 +382,10 @@ test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   assert.match(authGateSource, /return;/);
 });
 
-test('Next Preview starts from the concrete exported live asset', () => {
+test('Next Preview starts from the root-level macOS-compatible live asset', () => {
   const canaryConfig = JSON.parse(
     readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json'), 'utf8')
   );
 
-  assert.equal(canaryConfig.app.windows[0].url, 'pulso/live/index.html');
+  assert.equal(canaryConfig.app.windows[0].url, 'pulso-desktop.html');
 });

@@ -1,3 +1,30 @@
+# Rollback — entrada raiz compatível com WKWebView do macOS 14 (24/10/2026)
+
+- Baseline: `747d1f373229d28c47f9e829fa20f4213d0a7e27`.
+- Escopo: copiar o export canônico de `/pulso/live/index.html` para
+  `/pulso-desktop.html`, iniciar a Next Preview por esse asset físico no nível
+  raiz e preservar esse endereço durante a hidratação do Next.
+- Motivo: no macOS 14.8.2, a WKWebView falha antes da hidratação ao usar um HTML
+  aninhado como documento principal; o mesmo bundle abre no macOS 15.6.1.
+- Banco, identidade, agentes, memória, automações, canais e PULSO estável não
+  são modificados por esta mudança.
+
+## Reversão de código
+
+1. Voltar a configuração canária e `canonical_live_url()` para
+   `pulso/live/index.html`.
+2. Retirar o pós-build `prepare-pulso-desktop-entry.mjs`.
+3. Gerar novamente o bundle Intel a partir da baseline `747d1f37…`.
+
+## Reversão no iMac
+
+1. Encerrar somente a PULSO Next Preview e seu Core.
+2. Preservar o bundle corrigido para auditoria.
+3. Restaurar o `.app` guardado no rollback datado criado antes da promoção.
+4. Reabrir e conferir SQLite; não apagar nem restaurar o diretório de dados.
+
+---
+
 # Rollback — constelação local e sincronização entre dispositivos (23/10/2026)
 
 - Baseline instalada na Next Preview: `726ecb3124759dfebafa8394296139c21d4b9803`.

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/prepare-pulso-desktop-entry.mjs",
     "start": "next start",
     "lint": "eslint",
     "pulso:web": "next dev -p 3001",
