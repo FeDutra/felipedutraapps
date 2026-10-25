@@ -10,10 +10,12 @@ if (!destinationStat.isFile() || destinationStat.size === 0) {
   throw new Error(`PULSO desktop root entry is unavailable: ${destination}`);
 }
 
-const html = await readFile(destination, 'utf8');
-if (!html.includes('/pulso/live')) {
+await readFile(destination, 'utf8');
+const liveEntry = path.join(repoRoot, 'out', 'pulso', 'live', 'index.html');
+const liveEntryStat = await stat(liveEntry);
+if (!liveEntryStat.isFile() || liveEntryStat.size === 0) {
   throw new Error(
-    'PULSO desktop bootstrap does not contain the canonical live destination'
+    `PULSO canonical live destination is unavailable: ${liveEntry}`
   );
 }
 

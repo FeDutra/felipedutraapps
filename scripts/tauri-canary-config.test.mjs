@@ -102,7 +102,7 @@ test('Production Desktop build preserves the stable two-stage Tauri bootstrap', 
 
   assert.match(packageJson.scripts.build, /prepare-pulso-desktop-entry\.mjs/);
   assert.match(prepareScript, /'out', 'index\.html'/);
-  assert.match(prepareScript, /\/pulso\/live/);
+  assert.match(prepareScript, /'pulso', 'live', 'index\.html'/);
   assert.doesNotMatch(prepareScript, /copyFile/);
   assert.match(rootPage, /useRouter/);
   assert.match(rootPage, /router\.replace\('\/pulso\/live\/'\)/);
