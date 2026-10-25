@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.join(repoRoot, 'out', 'pulso', 'live', 'index.html');
-const destination = path.join(repoRoot, 'out', 'pulso-desktop.html');
+const destination = path.join(repoRoot, 'out', 'index.html');
 
 const sourceStat = await stat(source);
 if (!sourceStat.isFile() || sourceStat.size === 0) {
@@ -18,4 +18,4 @@ if (destinationStat.size !== sourceStat.size) {
   throw new Error('PULSO desktop root entry did not preserve the exported live document');
 }
 
-console.log(`Prepared macOS-compatible desktop entry: ${destination}`);
+console.log(`Prepared default Tauri desktop entry: ${destination}`);

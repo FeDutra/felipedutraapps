@@ -76,20 +76,19 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window starts from the root-level copy of the concrete live asset and remains resizable.
-  // WKWebView 14 does not reliably open a nested HTML asset as the main document.
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'pulso-desktop.html');
+  // 5. Window starts from Tauri's default packaged entry and remains resizable.
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'index.html');
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, 'pulso-desktop.html');
+  assert.equal(merged.app.windows[0].url, 'index.html');
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
   assert.equal(merged.app.windows[0].fullscreen, false);
 });
 
-test('Production build materializes the canonical live export at the root desktop entry', () => {
+test('Production build materializes the canonical live export at Tauri default entry', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const prepareScript = readFileSync(
     path.join(repoRoot, 'scripts', 'prepare-pulso-desktop-entry.mjs'),
@@ -98,7 +97,7 @@ test('Production build materializes the canonical live export at the root deskto
 
   assert.match(packageJson.scripts.build, /prepare-pulso-desktop-entry\.mjs/);
   assert.match(prepareScript, /'out', 'pulso', 'live', 'index\.html'/);
-  assert.match(prepareScript, /'out', 'pulso-desktop\.html'/);
+  assert.match(prepareScript, /'out', 'index\.html'/);
   assert.match(prepareScript, /await copyFile\(source, destination\)/);
 });
 

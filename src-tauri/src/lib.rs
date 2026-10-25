@@ -53,10 +53,11 @@ fn is_pretty_live_route(url: &tauri::Url) -> bool {
 }
 
 fn canonical_live_url() -> tauri::Url {
-    // Point at the concrete asset embedded by the Next.js static export.
-    // WKWebView does not consistently map the pretty directory URL
-    // `/pulso/live/` to its packaged `index.html` file.
-    tauri::Url::parse("tauri://localhost/pulso-desktop.html")
+    // Use Tauri's default packaged entry. WKWebView on macOS 14 can commit the
+    // custom protocol document and still replace a custom-named root asset
+    // with its native error surface. The default index path is also the path
+    // already proven by the stable PULSO on this operating system.
+    tauri::Url::parse("tauri://localhost/index.html")
         .expect("the canonical PULSO live URL must be valid")
 }
 
@@ -487,7 +488,7 @@ mod navigation_guard_tests {
 
         assert_eq!(
             recovery_url.as_str(),
-            "tauri://localhost/pulso-desktop.html"
+            "tauri://localhost/index.html"
         );
         assert!(is_navigation_allowed_for_environment(&recovery_url, false));
     }

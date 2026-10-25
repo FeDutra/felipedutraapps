@@ -1131,3 +1131,9 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 5. Não alterar nem encerrar `/Applications/PULSO.app`.
 
 ---
+# macOS 14 default Tauri entry · 25/10/2026
+
+- **Mudança:** a candidata Desktop passa a materializar a HOME canônica em `out/index.html` e abre `index.html`, a entrada padrão do Tauri. A URL de recuperação nativa aponta para o mesmo asset.
+- **Motivo:** no iMac com macOS 14.8.2, a WKWebView carregava o documento e recursos de `pulso-desktop.html`, mas substituía a janela pela superfície nativa “This page couldn’t load”. A PULSO estável prova `index.html` no mesmo host.
+- **Reversão de código:** reverter o commit desta mudança restaura `pulso-desktop.html` em script, configuração, guard e testes.
+- **Reversão da instalação:** preservar o `.app` anterior e o banco antes da promoção; restaurar apenas o bundle anterior em `/Applications/PULSO Next Preview.app`. Não substituir o diretório de dados.

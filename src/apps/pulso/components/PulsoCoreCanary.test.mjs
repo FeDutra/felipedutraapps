@@ -363,6 +363,7 @@ test('Desktop packaged entry keeps either supported physical URL during Next hyd
   const rootLayout = readFileSync(path.join(repoRoot, 'src/app/layout.tsx'), 'utf8');
 
   assert.match(rootLayout, /physicalPath = window\.location\.pathname/);
+  assert.match(rootLayout, /'\/index\.html'/);
   assert.match(rootLayout, /'\/pulso-desktop\.html'/);
   assert.match(rootLayout, /'\/pulso\/live\/index\.html'/);
   assert.match(rootLayout, /preservePhysicalEntry\('pushState'\)/);
@@ -382,10 +383,10 @@ test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   assert.match(authGateSource, /return;/);
 });
 
-test('Next Preview starts from the root-level macOS-compatible live asset', () => {
+test('Next Preview starts from Tauri default packaged entry', () => {
   const canaryConfig = JSON.parse(
     readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json'), 'utf8')
   );
 
-  assert.equal(canaryConfig.app.windows[0].url, 'pulso-desktop.html');
+  assert.equal(canaryConfig.app.windows[0].url, 'index.html');
 });
