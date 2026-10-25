@@ -203,6 +203,7 @@ fn start_desktop_http(app: &tauri::AppHandle) -> Result<String, String> {
         .resource_dir()
         .map_err(|error| format!("desktop resource directory unavailable: {error}"))?;
     let root = [
+        resource_dir.join("resources").join("web"),
         resource_dir.join("_up_").join("out"),
         resource_dir.join("out"),
         resource_dir.join("web"),
