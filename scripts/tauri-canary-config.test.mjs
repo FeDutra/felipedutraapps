@@ -144,6 +144,8 @@ test('Alpha CI publishes the isolated app bundle without depending on fragile DM
   assert.match(workflow, /Build isolated Alpha bundle[\s\S]*--bundles app[\s\S]*tauri\.canary\.conf\.json/);
   assert.match(workflow, /test -s out\/index\.html/);
   assert.match(workflow, /test -s out\/pulso\/live\/index\.html/);
+  assert.match(workflow, /Contents\/Resources\/resources\/web\/index\.html/);
+  assert.match(workflow, /Contents\/Resources\/resources\/web\/pulso\/live\/index\.html/);
   assert.match(intelWorkflow, /Contents\/Resources\/resources\/web\/index\.html/);
   assert.match(intelWorkflow, /Contents\/Resources\/resources\/web\/pulso\/live\/index\.html/);
 });
