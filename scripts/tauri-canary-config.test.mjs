@@ -106,6 +106,10 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.match(prepareScript, /'pulso', 'live', 'index\.html'/);
   assert.doesNotMatch(prepareScript, /copyFile/);
   assert.match(prepareScript, /data-pulso-desktop-root/);
+  assert.match(prepareScript, /data-pulso-immutable-history/);
+  assert.match(prepareScript, /Object\.defineProperty\(h,"pushState"/);
+  assert.match(prepareScript, /Object\.defineProperty\(h,"replaceState"/);
+  assert.match(prepareScript, /html\.replace\('<head>'/);
   assert.doesNotMatch(rootPage, /useRouter/);
   assert.doesNotMatch(rootPage, /router\.replace/);
   assert.match(rootPage, /<LivePage \/>/);
