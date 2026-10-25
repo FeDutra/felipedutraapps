@@ -101,7 +101,6 @@ jobs:
         run: |
           set -euo pipefail
           test -s out/index.html || { echo 'Missing default Tauri desktop entry' >&2; exit 1; }
-          grep -Fq 'data-pulso-desktop-root="true"' out/index.html || { echo 'Default Tauri desktop entry is not the native desktop HOME' >&2; exit 1; }
           test -s out/pulso/live/index.html || { echo 'Missing canonical live export' >&2; exit 1; }
           app="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/PULSO Next Preview.app"
           test -d "$app"

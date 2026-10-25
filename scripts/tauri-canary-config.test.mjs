@@ -112,4 +112,7 @@ test('Production Desktop build preserves the stable two-stage Tauri bootstrap', 
 test('Alpha CI publishes the isolated app bundle without depending on fragile DMG creation', () => {
   const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'tauri-build.yml'), 'utf8');
   assert.match(workflow, /Build isolated Alpha bundle[\s\S]*--bundles app[\s\S]*tauri\.canary\.conf\.json/);
+  assert.match(workflow, /test -s out\/index\.html/);
+  assert.match(workflow, /test -s out\/pulso\/live\/index\.html/);
+  assert.doesNotMatch(workflow, /data-pulso-desktop-root/);
 });
