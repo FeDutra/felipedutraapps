@@ -2,8 +2,9 @@ use base64::Engine;
 use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -22,6 +23,7 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
 (() => {
   const protocol = window.location.protocol;
   const hostname = window.location.hostname;
+  if (protocol === "http:" && hostname === "127.0.0.1" && window.location.port === "14322") return;
 
   const nativeStateDescriptor = Object.getOwnPropertyDescriptor(History.prototype, "state");
   let virtualState = null;
@@ -121,6 +123,110 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
   }), 0);
 })();
 "#;
+
+const PULSO_DESKTOP_HTTP_PORT: u16 = 14322;
+
+fn desktop_content_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|value| value.to_str()).unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "json" => "application/json; charset=utf-8",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "ico" => "image/x-icon",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "mp4" => "video/mp4",
+        "wasm" => "application/wasm",
+        _ => "application/octet-stream",
+    }
+}
+
+fn desktop_static_path(root: &Path, request_path: &str) -> Option<PathBuf> {
+    let raw = request_path.split('?').next().unwrap_or("/");
+    if raw.contains("..") || raw.contains('%') || raw.contains('\\') {
+        return None;
+    }
+    let relative = raw.trim_start_matches('/');
+    let mut candidate = if relative.is_empty() {
+        root.join("index.html")
+    } else {
+        root.join(relative)
+    };
+    if candidate.is_dir() {
+        candidate = candidate.join("index.html");
+    } else if !candidate.exists() && candidate.extension().is_none() {
+        let html = candidate.with_extension("html");
+        candidate = if html.exists() { html } else { candidate.join("index.html") };
+    }
+    candidate.is_file().then_some(candidate)
+}
+
+fn serve_desktop_connection(mut stream: TcpStream, root: &Path) -> std::io::Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+    let mut request = [0_u8; 8192];
+    let read = stream.read(&mut request)?;
+    let line = String::from_utf8_lossy(&request[..read]);
+    let mut parts = line.lines().next().unwrap_or("").split_whitespace();
+    let method = parts.next().unwrap_or("");
+    let path = parts.next().unwrap_or("/");
+    if method != "GET" && method != "HEAD" {
+        stream.write_all(b"HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")?;
+        return Ok(());
+    }
+    let Some(file_path) = desktop_static_path(root, path) else {
+        stream.write_all(b"HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")?;
+        return Ok(());
+    };
+    let body = fs::read(&file_path)?;
+    let headers = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        desktop_content_type(&file_path),
+        body.len()
+    );
+    stream.write_all(headers.as_bytes())?;
+    if method != "HEAD" {
+        stream.write_all(&body)?;
+    }
+    Ok(())
+}
+
+fn start_desktop_http(app: &tauri::AppHandle) -> Result<String, String> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("desktop resource directory unavailable: {error}"))?;
+    let root = [
+        resource_dir.join("_up_").join("out"),
+        resource_dir.join("out"),
+        resource_dir.join("web"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.join("index.html").is_file())
+    .ok_or_else(|| format!("desktop web root unavailable under {}", resource_dir.display()))?;
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, PULSO_DESKTOP_HTTP_PORT))
+        .map_err(|error| format!("desktop HTTP listener unavailable: {error}"))?;
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    let root = root.clone();
+                    std::thread::spawn(move || {
+                        let _ = serve_desktop_connection(stream, &root);
+                    });
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    Ok(format!("http://127.0.0.1:{PULSO_DESKTOP_HTTP_PORT}/"))
+}
 
 mod agent;
 pub mod pulso_core;
@@ -406,6 +512,17 @@ pub fn run() {
           tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
             .build(),
+        )?;
+      }
+
+      if app.config().identifier.ends_with(".next-preview") {
+        let url = start_desktop_http(app.handle())?;
+        let window = app
+          .get_webview_window("main")
+          .ok_or_else(|| "PULSO main window is unavailable".to_string())?;
+        window.navigate(
+          url.parse()
+            .map_err(|error| format!("desktop HTTP URL is invalid: {error}"))?,
         )?;
       }
 
