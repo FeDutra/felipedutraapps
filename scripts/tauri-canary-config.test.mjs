@@ -100,6 +100,10 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
     'utf8'
   );
   const rootPage = readFileSync(path.join(repoRoot, 'src', 'app', 'page.tsx'), 'utf8');
+  const tauriLib = readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'),
+    'utf8'
+  );
 
   assert.match(packageJson.scripts.build, /prepare-pulso-desktop-entry\.mjs/);
   assert.match(prepareScript, /'out', 'index\.html'/);
@@ -107,6 +111,10 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.doesNotMatch(prepareScript, /copyFile/);
   assert.match(prepareScript, /data-pulso-desktop-root/);
   assert.match(prepareScript, /data-pulso-immutable-history/);
+  assert.match(tauriLib, /append_invoke_initialization_script\(PULSO_DESKTOP_HISTORY_GUARD\)/);
+  assert.match(tauriLib, /History\.prototype, "pushState"/);
+  assert.match(tauriLib, /History\.prototype, "replaceState"/);
+  assert.match(tauriLib, /__PULSO_DESKTOP_HISTORY_GUARD__/);
   assert.match(prepareScript, /Object\.defineProperty\(h,"pushState"/);
   assert.match(prepareScript, /Object\.defineProperty\(h,"replaceState"/);
   assert.match(prepareScript, /html\.replace\('<head>'/);

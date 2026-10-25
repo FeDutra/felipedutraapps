@@ -13,6 +13,39 @@ use tauri_plugin_shell::ShellExt;
 
 const KOKORO_PORT: u16 = 14321;
 
+// Next's client router normalizes the physical document URL with the History
+// API during hydration. WKWebView on macOS 14 turns that same-document change
+// on the bundled `tauri://` document into its native error page. This script is
+// injected by Wry at document start, before any page script, and blocks only
+// that unsupported mutation inside the packaged desktop protocol.
+const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
+(() => {
+  if (window.location.protocol !== "tauri:") return;
+
+  const noop = function () { return undefined; };
+  const lock = (target, key) => {
+    try {
+      Object.defineProperty(target, key, {
+        value: noop,
+        configurable: false,
+        writable: false,
+      });
+    } catch (_) {}
+  };
+
+  lock(History.prototype, "pushState");
+  lock(History.prototype, "replaceState");
+  lock(window.history, "pushState");
+  lock(window.history, "replaceState");
+
+  Object.defineProperty(window, "__PULSO_DESKTOP_HISTORY_GUARD__", {
+    value: true,
+    configurable: false,
+    writable: false,
+  });
+})();
+"#;
+
 mod agent;
 pub mod pulso_core;
 use agent::local_machine::{execute_applescript, local_music_play, local_open_url};
@@ -237,6 +270,7 @@ fn execute_long_command_stream(app: tauri::AppHandle, command: &str) -> Result<(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+    .append_invoke_initialization_script(PULSO_DESKTOP_HISTORY_GUARD)
     .manage(Mutex::new(BridgeManager::default()))
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_http::init())
