@@ -80,13 +80,13 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window uses Tauri's default root URL. The root document is compiled as
-  // the HOME itself, so WKWebView 14 never receives a History API transition.
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, undefined);
+  // 5. The desktop window starts neutral while the native setup binds the
+  // private loopback server and then navigates to its verified HOME origin.
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'about:blank');
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, undefined);
+  assert.equal(merged.app.windows[0].url, 'about:blank');
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
@@ -121,6 +121,10 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.doesNotMatch(tauriLib, /nativeMethod\.call/);
   assert.match(tauriLib, /desktop_boot_probe/);
   assert.match(tauriLib, /unhandled-rejection/);
+  assert.match(tauriLib, /TcpListener::bind\(\(Ipv4Addr::LOCALHOST, PULSO_DESKTOP_HTTP_PORT\)\)/);
+  assert.match(tauriLib, /http:\/\/127\.0\.0\.1:\{PULSO_DESKTOP_HTTP_PORT\}\//);
+  assert.match(tauriLib, /window\.navigate/);
+  assert.match(prepareScript, /location\.hostname==="127\.0\.0\.1"/);
   assert.match(prepareScript, /Object\.defineProperty\(h,"pushState"/);
   assert.match(prepareScript, /Object\.defineProperty\(h,"replaceState"/);
   assert.match(prepareScript, /html\.replace\('<head>'/);

@@ -32,7 +32,7 @@ if (!liveEntryStat.isFile() || liveEntryStat.size === 0) {
 // The desktop shell is a single sovereign surface; routing happens inside
 // PULSO, not by changing the container URL. Install the guard before any Next
 // script executes and keep the physical document URL immutable.
-const immutableHistoryGuard = `<script data-pulso-immutable-history="true">(()=>{const h=history,d=Object.getOwnPropertyDescriptor(History.prototype,"state");let s=null;try{s=d?.get?.call(h)??h.state}catch{}const set=v=>{s=v};try{Object.defineProperty(h,"state",{get:()=>s,configurable:false});Object.defineProperty(h,"pushState",{value:set,configurable:false,writable:false});Object.defineProperty(h,"replaceState",{value:set,configurable:false,writable:false})}catch{h.pushState=set;h.replaceState=set}})();</script>`;
+const immutableHistoryGuard = `<script data-pulso-immutable-history="true">(()=>{if(location.protocol==="http:"&&location.hostname==="127.0.0.1"&&location.port==="14322")return;const h=history,d=Object.getOwnPropertyDescriptor(History.prototype,"state");let s=null;try{s=d?.get?.call(h)??h.state}catch{}const set=v=>{s=v};try{Object.defineProperty(h,"state",{get:()=>s,configurable:false});Object.defineProperty(h,"pushState",{value:set,configurable:false,writable:false});Object.defineProperty(h,"replaceState",{value:set,configurable:false,writable:false})}catch{h.pushState=set;h.replaceState=set}})();</script>`;
 
 if (!html.includes('data-pulso-immutable-history="true"')) {
   if (!html.includes('<head>')) {

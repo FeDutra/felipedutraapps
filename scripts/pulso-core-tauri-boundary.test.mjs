@@ -265,6 +265,7 @@ test('Tauri configuration preserves bundled sidecars while Kokoro starts only on
   assert.deepEqual(tauriConf.bundle.resources, [
     'resources/*',
     'resources/core/**/*',
+    '../out/**/*',
   ]);
 
   const libRs = readFileSync(
