@@ -80,12 +80,13 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window starts from Tauri's default packaged entry and remains resizable.
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'index.html');
+  // 5. Window starts from the concrete exported HOME asset and remains resizable.
+  // This avoids Next 16 client-side directory navigation on WKWebView 14.
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'pulso/live/index.html');
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, 'index.html');
+  assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
