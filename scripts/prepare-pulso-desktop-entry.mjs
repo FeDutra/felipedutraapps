@@ -11,10 +11,10 @@ if (!destinationStat.isFile() || destinationStat.size === 0) {
 }
 
 const html = await readFile(destination, 'utf8');
-if (!html.includes('data-pulso-desktop-root="true"')) {
+if (!html.includes('/pulso/live')) {
   throw new Error(
-    'PULSO desktop root was not compiled natively; refusing to copy an anointed nested route'
+    'PULSO desktop bootstrap does not contain the canonical live destination'
   );
 }
 
-console.log(`Verified native Tauri desktop root entry: ${destination}`);
+console.log(`Verified Tauri desktop bootstrap entry: ${destination}`);

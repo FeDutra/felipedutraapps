@@ -92,7 +92,7 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   assert.equal(merged.app.windows[0].fullscreen, false);
 });
 
-test('Production Desktop build compiles the PULSO HOME natively at Tauri default entry', () => {
+test('Production Desktop build preserves the stable two-stage Tauri bootstrap', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const prepareScript = readFileSync(
     path.join(repoRoot, 'scripts', 'prepare-pulso-desktop-entry.mjs'),
@@ -102,11 +102,11 @@ test('Production Desktop build compiles the PULSO HOME natively at Tauri default
 
   assert.match(packageJson.scripts.build, /prepare-pulso-desktop-entry\.mjs/);
   assert.match(prepareScript, /'out', 'index\.html'/);
-  assert.match(prepareScript, /data-pulso-desktop-root/);
+  assert.match(prepareScript, /\/pulso\/live/);
   assert.doesNotMatch(prepareScript, /copyFile/);
-  assert.match(rootPage, /NEXT_PUBLIC_PULSO_DESKTOP_BUILD/);
-  assert.match(rootPage, /data-pulso-desktop-root="true"/);
-  assert.match(rootPage, /<LivePage \/>/);
+  assert.match(rootPage, /useRouter/);
+  assert.match(rootPage, /router\.replace\('\/pulso\/live\/'\)/);
+  assert.doesNotMatch(rootPage, /<LivePage \/>/);
 });
 
 test('Alpha CI publishes the isolated app bundle without depending on fragile DMG creation', () => {
