@@ -1137,3 +1137,11 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Motivo:** no iMac com macOS 14.8.2, a WKWebView carregava o documento e recursos de `pulso-desktop.html`, mas substituía a janela pela superfície nativa “This page couldn’t load”. A PULSO estável prova `index.html` no mesmo host.
 - **Reversão de código:** reverter o commit desta mudança restaura `pulso-desktop.html` em script, configuração, guard e testes.
 - **Reversão da instalação:** preservar o `.app` anterior e o banco antes da promoção; restaurar apenas o bundle anterior em `/Applications/PULSO Next Preview.app`. Não substituir o diretório de dados.
+
+---
+# macOS 14 internal History API navigation · 25/10/2026
+
+- **Mudança:** a barreira nativa permite todos os caminhos da origem empacotada confiável `tauri://localhost`, inclusive o estado `/pulso/live` aplicado pelo Next durante a hidratação. Origens externas, hosts Tauri estrangeiros e esquemas não web continuam recusados.
+- **Motivo:** rejeitar a transição de mesmo documento feita pela History API leva a WKWebView 14 a substituir uma página já carregada pela superfície nativa “This page couldn’t load”.
+- **Reversão de código:** reverter o commit desta mudança restaura a recusa especial de `/pulso/live` e a recarga atrasada do asset físico.
+- **Reversão da instalação:** restaurar somente o bundle anterior preservado; não substituir o SQLite nem o contexto privado.

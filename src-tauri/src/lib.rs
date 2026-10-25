@@ -46,33 +46,6 @@ pub fn is_navigation_allowed(url: &tauri::Url) -> bool {
     is_navigation_allowed_for_environment(url, cfg!(debug_assertions))
 }
 
-fn is_pretty_live_route(url: &tauri::Url) -> bool {
-    url.scheme() == "tauri"
-        && matches!(url.host_str(), Some("localhost") | None)
-        && matches!(url.path(), "/pulso/live" | "/pulso/live/")
-}
-
-fn canonical_live_url() -> tauri::Url {
-    // Use Tauri's default packaged entry. WKWebView on macOS 14 can commit the
-    // custom protocol document and still replace a custom-named root asset
-    // with its native error surface. The default index path is also the path
-    // already proven by the stable PULSO on this operating system.
-    tauri::Url::parse("tauri://localhost/index.html")
-        .expect("the canonical PULSO live URL must be valid")
-}
-
-fn restore_canonical_live_route(webview: tauri::Webview) {
-    // WKWebView can replace the current document with its native
-    // “This page couldn’t load” surface even when a navigation is rejected.
-    // Recover on the dispatcher after the rejected navigation has unwound.
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(40));
-        if let Err(error) = webview.navigate(canonical_live_url()) {
-            eprintln!("pulso-navigation-guard: falha ao restaurar a rota interna: {error}");
-        }
-    });
-}
-
 fn kokoro_is_ready() -> bool {
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), KOKORO_PORT);
     TcpStream::connect_timeout(&address, Duration::from_millis(120)).is_ok()
@@ -286,20 +259,17 @@ pub fn run() {
     tauri::Builder::default()
     .plugin(
       plugin::Builder::<tauri::Wry>::new("pulso-navigation-guard")
-        .on_navigation(|webview, url| {
-          let pretty_live_route = is_pretty_live_route(url);
-          let allowed = is_navigation_allowed(url) && !pretty_live_route;
+        .on_navigation(|_webview, url| {
+          // Every path inside the packaged Tauri origin is internal product
+          // state. Next changes the visible URL from the physical index asset
+          // to /pulso/live through History API during hydration. Rejecting
+          // that same-document transition makes WKWebView 14 replace an
+          // otherwise healthy page with its native error surface.
+          let allowed = is_navigation_allowed(url);
           if !allowed {
             // Intencionalmente não registramos a URL para impedir vazamento
             // de parâmetros sensíveis (como tokens de autenticação/OAuth).
-            if pretty_live_route {
-              eprintln!(
-                "pulso-navigation-guard: rota interna bonita restaurada para o asset físico"
-              );
-            } else {
-              eprintln!("pulso-navigation-guard: navegação externa recusada pela barreira nativa");
-            }
-            restore_canonical_live_route(webview.clone());
+            eprintln!("pulso-navigation-guard: navegação externa recusada pela barreira nativa");
           }
           allowed
         })
@@ -351,10 +321,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod navigation_guard_tests {
-    use super::{
-        canonical_live_url, is_navigation_allowed, is_navigation_allowed_for_environment,
-        is_pretty_live_route,
-    };
+    use super::{is_navigation_allowed, is_navigation_allowed_for_environment};
     use tauri::Url;
 
     #[test]
@@ -483,22 +450,8 @@ mod navigation_guard_tests {
     }
 
     #[test]
-    fn recovery_target_is_the_packaged_live_route() {
-        let recovery_url = canonical_live_url();
-
-        assert_eq!(
-            recovery_url.as_str(),
-            "tauri://localhost/index.html"
-        );
-        assert!(is_navigation_allowed_for_environment(&recovery_url, false));
-    }
-
-    #[test]
-    fn recovers_pretty_live_route_to_physical_packaged_entry() {
+    fn permits_pretty_live_route_as_internal_history_state() {
         let pretty = Url::parse("tauri://localhost/pulso/live/").unwrap();
-        let physical = canonical_live_url();
-
-        assert!(is_pretty_live_route(&pretty));
-        assert!(!is_pretty_live_route(&physical));
+        assert!(is_navigation_allowed_for_environment(&pretty, false));
     }
 }
