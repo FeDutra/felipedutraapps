@@ -108,7 +108,8 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.match(packageJson.scripts.build, /prepare-pulso-desktop-entry\.mjs/);
   assert.match(prepareScript, /'out', 'index\.html'/);
   assert.match(prepareScript, /'pulso', 'live', 'index\.html'/);
-  assert.doesNotMatch(prepareScript, /copyFile/);
+  assert.match(prepareScript, /'src-tauri', 'resources', 'web'/);
+  assert.match(prepareScript, /await cp\(path\.join\(repoRoot, 'out'\), desktopWebResource/);
   assert.match(prepareScript, /data-pulso-desktop-root/);
   assert.match(prepareScript, /data-pulso-immutable-history/);
   assert.match(tauriLib, /append_invoke_initialization_script\(PULSO_DESKTOP_HISTORY_GUARD\)/);
@@ -136,7 +137,13 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
 
 test('Alpha CI publishes the isolated app bundle without depending on fragile DMG creation', () => {
   const workflow = readFileSync(path.join(repoRoot, '.github', 'workflows', 'tauri-build.yml'), 'utf8');
+  const intelWorkflow = readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pulso-desktop-alpha-v0.8.yml'),
+    'utf8'
+  );
   assert.match(workflow, /Build isolated Alpha bundle[\s\S]*--bundles app[\s\S]*tauri\.canary\.conf\.json/);
   assert.match(workflow, /test -s out\/index\.html/);
   assert.match(workflow, /test -s out\/pulso\/live\/index\.html/);
+  assert.match(intelWorkflow, /Contents\/Resources\/resources\/web\/index\.html/);
+  assert.match(intelWorkflow, /Contents\/Resources\/resources\/web\/pulso\/live\/index\.html/);
 });

@@ -68,6 +68,8 @@ jobs:
           core_marker="$app/Contents/Resources/resources/core/PULSO_CORE_SOURCE_COMMIT"
           test -f "$core_marker" || core_marker="$app/Contents/Resources/core/PULSO_CORE_SOURCE_COMMIT"
           test -f "$core_marker" || { echo 'Missing bundled Core provenance marker' >&2; exit 1; }
+          test -s "$app/Contents/Resources/resources/web/index.html" || { echo 'Missing physical loopback HOME entry' >&2; exit 1; }
+          test -s "$app/Contents/Resources/resources/web/pulso/live/index.html" || { echo 'Missing physical loopback live entry' >&2; exit 1; }
 
       - name: Write release provenance
         shell: bash
