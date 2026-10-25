@@ -14,21 +14,29 @@ use tauri_plugin_shell::ShellExt;
 const KOKORO_PORT: u16 = 14321;
 
 // Next's client router normalizes the physical document URL with the History
-// API during hydration. WKWebView on macOS 14 turns that same-document change
-// on the bundled `tauri://` document into its native error page. This script is
-// injected by Wry at document start, before any page script, and blocks only
-// that unsupported mutation inside the packaged desktop protocol.
+// API during hydration. WKWebView on macOS 14 turns any native History API
+// mutation on the packaged document into its error page. This script is
+// injected by Wry at document start, before any page script. It gives Next the
+// mutable router state it expects without calling WebKit's native History API.
 const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
 (() => {
-  if (window.location.protocol !== "tauri:") return;
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  const isPackagedDesktop = protocol === "tauri:" ||
+    ((protocol === "http:" || protocol === "https:") &&
+      (hostname === "tauri.localhost" || hostname === "localhost"));
+  if (!isPackagedDesktop) return;
 
-  const nativePushState = History.prototype.pushState;
-  const nativeReplaceState = History.prototype.replaceState;
-  const preservePhysicalUrl = (nativeMethod) => function (state, title) {
-    return nativeMethod.call(this, state, title, window.location.href);
+  const nativeStateDescriptor = Object.getOwnPropertyDescriptor(History.prototype, "state");
+  let virtualState = null;
+  try {
+    virtualState = nativeStateDescriptor?.get?.call(window.history) ?? window.history.state;
+  } catch (_) {}
+
+  const updateVirtualState = function (state) {
+    virtualState = state;
+    return undefined;
   };
-  const guardedPushState = preservePhysicalUrl(nativePushState);
-  const guardedReplaceState = preservePhysicalUrl(nativeReplaceState);
   const lock = (target, key, value) => {
     try {
       Object.defineProperty(target, key, {
@@ -39,10 +47,26 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
     } catch (_) {}
   };
 
-  lock(History.prototype, "pushState", guardedPushState);
-  lock(History.prototype, "replaceState", guardedReplaceState);
-  lock(window.history, "pushState", guardedPushState);
-  lock(window.history, "replaceState", guardedReplaceState);
+  lock(History.prototype, "pushState", updateVirtualState);
+  lock(History.prototype, "replaceState", updateVirtualState);
+  lock(window.history, "pushState", updateVirtualState);
+  lock(window.history, "replaceState", updateVirtualState);
+  try {
+    Object.defineProperty(window.history, "state", {
+      get: () => virtualState,
+      configurable: false,
+    });
+  } catch (_) {
+    try {
+      Object.defineProperty(History.prototype, "state", {
+        get() {
+          if (this === window.history) return virtualState;
+          return nativeStateDescriptor?.get?.call(this) ?? null;
+        },
+        configurable: false,
+      });
+    } catch (_) {}
+  }
 
   Object.defineProperty(window, "__PULSO_DESKTOP_HISTORY_GUARD__", {
     value: true,
@@ -51,13 +75,20 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
   });
 
   const report = (stage, detail = {}) => {
-    try {
-      const invoke = window.__TAURI_INTERNALS__?.invoke;
-      if (typeof invoke !== "function") return;
-      void invoke("desktop_boot_probe", {
-        payload: JSON.stringify({ stage, href: window.location.href, detail }),
-      }).catch(() => {});
-    } catch (_) {}
+    const payload = JSON.stringify({ stage, href: window.location.href, detail });
+    let attempts = 0;
+    const send = () => {
+      try {
+        const invoke = window.__TAURI_INTERNALS__?.invoke;
+        if (typeof invoke === "function") {
+          void invoke("desktop_boot_probe", { payload }).catch(() => {});
+          return;
+        }
+      } catch (_) {}
+      attempts += 1;
+      if (attempts < 50) setTimeout(send, 50);
+    };
+    send();
   };
 
   window.addEventListener("error", (event) => {
@@ -88,6 +119,9 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
   }, { once: true });
   setTimeout(() => report("guard-installed", {
     hasTauriInvoke: typeof window.__TAURI_INTERNALS__?.invoke === "function",
+    protocol,
+    hostname,
+    virtualState: true,
   }), 0);
 })();
 "#;
