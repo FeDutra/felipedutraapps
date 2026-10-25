@@ -2,7 +2,7 @@ use base64::Engine;
 use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::process::Stdio;
 use std::sync::Mutex;
@@ -22,27 +22,73 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
 (() => {
   if (window.location.protocol !== "tauri:") return;
 
-  const noop = function () { return undefined; };
-  const lock = (target, key) => {
+  const nativePushState = History.prototype.pushState;
+  const nativeReplaceState = History.prototype.replaceState;
+  const preservePhysicalUrl = (nativeMethod) => function (state, title) {
+    return nativeMethod.call(this, state, title, window.location.href);
+  };
+  const guardedPushState = preservePhysicalUrl(nativePushState);
+  const guardedReplaceState = preservePhysicalUrl(nativeReplaceState);
+  const lock = (target, key, value) => {
     try {
       Object.defineProperty(target, key, {
-        value: noop,
+        value,
         configurable: false,
         writable: false,
       });
     } catch (_) {}
   };
 
-  lock(History.prototype, "pushState");
-  lock(History.prototype, "replaceState");
-  lock(window.history, "pushState");
-  lock(window.history, "replaceState");
+  lock(History.prototype, "pushState", guardedPushState);
+  lock(History.prototype, "replaceState", guardedReplaceState);
+  lock(window.history, "pushState", guardedPushState);
+  lock(window.history, "replaceState", guardedReplaceState);
 
   Object.defineProperty(window, "__PULSO_DESKTOP_HISTORY_GUARD__", {
     value: true,
     configurable: false,
     writable: false,
   });
+
+  const report = (stage, detail = {}) => {
+    try {
+      const invoke = window.__TAURI_INTERNALS__?.invoke;
+      if (typeof invoke !== "function") return;
+      void invoke("desktop_boot_probe", {
+        payload: JSON.stringify({ stage, href: window.location.href, detail }),
+      }).catch(() => {});
+    } catch (_) {}
+  };
+
+  window.addEventListener("error", (event) => {
+    report("window-error", {
+      message: String(event.message || ""),
+      filename: String(event.filename || ""),
+      line: event.lineno || 0,
+      column: event.colno || 0,
+      stack: String(event.error?.stack || "").slice(0, 8000),
+    });
+  }, true);
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    report("unhandled-rejection", {
+      message: String(reason?.message || reason || ""),
+      stack: String(reason?.stack || "").slice(0, 8000),
+    });
+  }, true);
+  document.addEventListener("DOMContentLoaded", () => {
+    report("dom-content-loaded", {
+      htmlId: document.documentElement.id || "",
+      body: String(document.body?.innerText || "").slice(0, 1000),
+    });
+    setTimeout(() => report("post-hydration", {
+      htmlId: document.documentElement.id || "",
+      body: String(document.body?.innerText || "").slice(0, 1000),
+    }), 1500);
+  }, { once: true });
+  setTimeout(() => report("guard-installed", {
+    hasTauriInvoke: typeof window.__TAURI_INTERNALS__?.invoke === "function",
+  }), 0);
 })();
 "#;
 
@@ -267,6 +313,32 @@ fn execute_long_command_stream(app: tauri::AppHandle, command: &str) -> Result<(
     Ok(())
 }
 
+#[tauri::command]
+fn desktop_boot_probe(app: tauri::AppHandle, payload: &str) -> Result<(), String> {
+    if payload.is_empty() || payload.len() > 16_384 {
+        return Err("desktop boot probe payload is invalid".to_string());
+    }
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("desktop boot probe directory unavailable: {error}"))?;
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|error| format!("desktop boot probe directory could not be created: {error}"))?;
+    let path = app_data_dir.join("desktop-boot-probe.log");
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| format!("desktop boot probe could not be opened: {error}"))?;
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "system clock is invalid".to_string())?
+        .as_millis();
+    let safe_payload = payload.replace(['\n', '\r', '\0'], " ");
+    writeln!(file, "{timestamp_ms}\t{safe_payload}")
+        .map_err(|error| format!("desktop boot probe could not be written: {error}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -280,6 +352,7 @@ pub fn run() {
       local_music_play,
       execute_shell_command,
       execute_long_command_stream,
+      desktop_boot_probe,
       local_presence_read,
       local_device_origin_status,
       local_device_origin_assert,
