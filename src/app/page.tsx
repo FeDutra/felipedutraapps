@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Leaf, CheckCircle2, Home, ArrowRight, User, Settings, Sparkles, Activity } from 'lucide-react';
 import GlassCard from '@/shared/components/GlassCard';
+import LivePage from '@/apps/pulso/pages/LivePage';
+import { PulsoCoreCanary } from '@/apps/pulso/components/PulsoCoreCanary';
+
+const IS_PULSO_DESKTOP_BUILD = process.env.NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '1';
 
 export default function EdenCentral() {
   const router = useRouter();
@@ -23,10 +27,23 @@ export default function EdenCentral() {
       );
     };
 
-    if (checkIsTauri()) {
+    if (!IS_PULSO_DESKTOP_BUILD && checkIsTauri()) {
       router.replace('/pulso/live/');
     }
   }, [router]);
+
+  if (IS_PULSO_DESKTOP_BUILD) {
+    return (
+      <div data-pulso-desktop-root="true" className="contents">
+        <React.Suspense fallback={
+          <div className="theme-her h-[100dvh] overflow-hidden" aria-label="Abrindo Pulso" />
+        }>
+          <LivePage />
+          <PulsoCoreCanary />
+        </React.Suspense>
+      </div>
+    );
+  }
 
   const apps = [
     {

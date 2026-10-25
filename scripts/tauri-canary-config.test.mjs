@@ -41,6 +41,10 @@ test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   assert.equal(baseConfig.app.windows[0].title, 'PULSO | Lótus Live');
   assert.equal(baseConfig.app.windows[0].resizable, true);
   assert.equal(baseConfig.app.windows[0].url, undefined);
+  assert.equal(
+    baseConfig.build.beforeBuildCommand,
+    'NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1 npm run build'
+  );
 });
 
 test('Merged base + tauri.canary.conf.json isolates canary identity, starts from the packaged live asset, and preserves the Desktop bundle contract', () => {
@@ -88,17 +92,21 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   assert.equal(merged.app.windows[0].fullscreen, false);
 });
 
-test('Production build materializes the canonical live export at Tauri default entry', () => {
+test('Production Desktop build compiles the PULSO HOME natively at Tauri default entry', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const prepareScript = readFileSync(
     path.join(repoRoot, 'scripts', 'prepare-pulso-desktop-entry.mjs'),
     'utf8'
   );
+  const rootPage = readFileSync(path.join(repoRoot, 'src', 'app', 'page.tsx'), 'utf8');
 
   assert.match(packageJson.scripts.build, /prepare-pulso-desktop-entry\.mjs/);
-  assert.match(prepareScript, /'out', 'pulso', 'live', 'index\.html'/);
   assert.match(prepareScript, /'out', 'index\.html'/);
-  assert.match(prepareScript, /await copyFile\(source, destination\)/);
+  assert.match(prepareScript, /data-pulso-desktop-root/);
+  assert.doesNotMatch(prepareScript, /copyFile/);
+  assert.match(rootPage, /NEXT_PUBLIC_PULSO_DESKTOP_BUILD/);
+  assert.match(rootPage, /data-pulso-desktop-root="true"/);
+  assert.match(rootPage, /<LivePage \/>/);
 });
 
 test('Alpha CI publishes the isolated app bundle without depending on fragile DMG creation', () => {

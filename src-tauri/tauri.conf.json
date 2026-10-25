@@ -7,7 +7,7 @@
     "frontendDist": "../out",
     "devUrl": "http://localhost:3001/pulso/live?pulso_tauri_dev=1",
     "beforeDevCommand": "npm run pulso:web",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1 npm run build"
   },
   "app": {
     "windows": [

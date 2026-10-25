@@ -1145,3 +1145,11 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Motivo:** rejeitar a transição de mesmo documento feita pela History API leva a WKWebView 14 a substituir uma página já carregada pela superfície nativa “This page couldn’t load”.
 - **Reversão de código:** reverter o commit desta mudança restaura a recusa especial de `/pulso/live` e a recarga atrasada do asset físico.
 - **Reversão da instalação:** restaurar somente o bundle anterior preservado; não substituir o SQLite nem o contexto privado.
+
+---
+# HOME desktop compilada nativamente na raiz · 25/10/2026
+
+- **Mudança:** builds Tauri definem `NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1`; a rota raiz compila a `LivePage` e o canário do Core diretamente em `out/index.html`. O pós-build apenas verifica o marcador da HOME e não copia mais HTML de `/pulso/live` sobre a raiz.
+- **Motivo:** copiar uma página compilada para uma rota aninhada preserva no runtime do Next o estado `/pulso/live`; a hidratação tenta reconciliar esse estado pela History API, comportamento que termina na superfície nativa de erro da WKWebView 14.
+- **Reversão de código:** reverter o commit desta mudança restaura o redirecionamento Tauri da rota raiz e o pós-build que copia `out/pulso/live/index.html`.
+- **Reversão da instalação:** restaurar apenas o `.app` anterior; preservar banco e contexto privado.

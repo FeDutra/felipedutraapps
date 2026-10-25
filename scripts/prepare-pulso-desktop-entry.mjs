@@ -1,21 +1,20 @@
-import { copyFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = path.join(repoRoot, 'out', 'pulso', 'live', 'index.html');
 const destination = path.join(repoRoot, 'out', 'index.html');
 
-const sourceStat = await stat(source);
-if (!sourceStat.isFile() || sourceStat.size === 0) {
-  throw new Error(`PULSO desktop source entry is unavailable: ${source}`);
-}
-
-await copyFile(source, destination);
-
 const destinationStat = await stat(destination);
-if (destinationStat.size !== sourceStat.size) {
-  throw new Error('PULSO desktop root entry did not preserve the exported live document');
+if (!destinationStat.isFile() || destinationStat.size === 0) {
+  throw new Error(`PULSO desktop root entry is unavailable: ${destination}`);
 }
 
-console.log(`Prepared default Tauri desktop entry: ${destination}`);
+const html = await readFile(destination, 'utf8');
+if (!html.includes('data-pulso-desktop-root="true"')) {
+  throw new Error(
+    'PULSO desktop root was not compiled natively; refusing to copy an anointed nested route'
+  );
+}
+
+console.log(`Verified native Tauri desktop root entry: ${destination}`);
