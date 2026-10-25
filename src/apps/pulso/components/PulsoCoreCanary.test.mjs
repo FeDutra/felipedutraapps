@@ -359,14 +359,16 @@ test('Structural and visual non-regression: PulsoCoreCanary is sr-only output an
   );
 });
 
-test('Desktop packaged entry uses the same two-stage bootstrap proven by stable PULSO', () => {
+test('Desktop packaged entry renders HOME at the immutable Tauri root', () => {
   const rootLayout = readFileSync(path.join(repoRoot, 'src/app/layout.tsx'), 'utf8');
   const rootPage = readFileSync(path.join(repoRoot, 'src/app/page.tsx'), 'utf8');
 
   assert.doesNotMatch(rootLayout, /history\.(?:pushState|replaceState)/);
-  assert.match(rootPage, /router\.replace\('\/pulso\/live\/'\)/);
-  assert.match(rootPage, /useRouter/);
-  assert.doesNotMatch(rootPage, /data-pulso-desktop-root="true"/);
+  assert.doesNotMatch(rootPage, /router\.replace/);
+  assert.doesNotMatch(rootPage, /useRouter/);
+  assert.match(rootPage, /data-pulso-desktop-root="true"/);
+  assert.match(rootPage, /<LivePage \/>/);
+  assert.match(rootPage, /<PulsoCoreCanary \/>/);
 });
 
 test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
@@ -381,10 +383,10 @@ test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   assert.match(authGateSource, /return;/);
 });
 
-test('Next Preview starts directly from the canonical packaged HOME directory', () => {
+test('Next Preview inherits Tauri default root instead of mutating navigation', () => {
   const canaryConfig = JSON.parse(
     readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json'), 'utf8')
   );
 
-  assert.equal(canaryConfig.app.windows[0].url, 'pulso/live/');
+  assert.equal(canaryConfig.app.windows[0].url, undefined);
 });

@@ -1149,7 +1149,7 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 ---
 # HOME desktop compilada nativamente na raiz · 25/10/2026
 
-- **Mudança:** builds Tauri definem `NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1`; a rota raiz compila a `LivePage` e o canário do Core diretamente em `out/index.html`. O pós-build apenas verifica o marcador da HOME e não copia mais HTML de `/pulso/live` sobre a raiz.
-- **Motivo:** copiar uma página compilada para uma rota aninhada preserva no runtime do Next o estado `/pulso/live`; a hidratação tenta reconciliar esse estado pela History API, comportamento que termina na superfície nativa de erro da WKWebView 14.
-- **Reversão de código:** reverter o commit desta mudança restaura o redirecionamento Tauri da rota raiz e o pós-build que copia `out/pulso/live/index.html`.
+- **Mudança:** builds Tauri definem `NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1`; a rota raiz compila a `LivePage` e o canário do Core diretamente em `out/index.html`. A janela não declara `url`, portanto o Tauri abre sua origem raiz padrão sem expor `/index.html`; o pós-build verifica o marcador da HOME e não copia HTML de `/pulso/live` sobre a raiz.
+- **Motivo:** qualquer combinação anterior ainda deixava uma transição de History API: `/index.html → /`, `/ → /pulso/live/` ou `/pulso/live/index.html → /pulso/live/`. No WKWebView 14 essa transição é promovida a uma carga inválida. A nova entrada nasce e permanece na raiz, sem redirect, `router.replace`, `pushState` ou `replaceState`.
+- **Reversão de código:** reverter o commit desta mudança restaura o redirecionamento Tauri da rota raiz e/ou a URL explícita da janela.
 - **Reversão da instalação:** restaurar apenas o `.app` anterior; preservar banco e contexto privado.

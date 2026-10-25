@@ -47,7 +47,7 @@ test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   );
 });
 
-test('Merged base + tauri.canary.conf.json isolates canary identity, starts from the canonical live directory, and preserves the Desktop bundle contract', () => {
+test('Merged base + tauri.canary.conf.json isolates canary identity, uses the default root entry, and preserves the Desktop bundle contract', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
   const canaryPatch = JSON.parse(readFileSync(canaryPath, 'utf8'));
   const merged = mergeTauriConfig(baseConfig, canaryPatch);
@@ -80,21 +80,20 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window starts from the canonical exported HOME directory and remains resizable.
-  // Starting from the explicit index.html makes Next 16 canonicalize the URL via
-  // History API; WKWebView 14 then promotes that transition to an invalid load.
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'pulso/live/');
+  // 5. Window uses Tauri's default root URL. The root document is compiled as
+  // the HOME itself, so WKWebView 14 never receives a History API transition.
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, undefined);
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, 'pulso/live/');
+  assert.equal(merged.app.windows[0].url, undefined);
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
   assert.equal(merged.app.windows[0].fullscreen, false);
 });
 
-test('Production Desktop build preserves the stable two-stage Tauri bootstrap', () => {
+test('Production Desktop build compiles the HOME natively at the default Tauri root', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const prepareScript = readFileSync(
     path.join(repoRoot, 'scripts', 'prepare-pulso-desktop-entry.mjs'),
@@ -106,9 +105,11 @@ test('Production Desktop build preserves the stable two-stage Tauri bootstrap', 
   assert.match(prepareScript, /'out', 'index\.html'/);
   assert.match(prepareScript, /'pulso', 'live', 'index\.html'/);
   assert.doesNotMatch(prepareScript, /copyFile/);
-  assert.match(rootPage, /useRouter/);
-  assert.match(rootPage, /router\.replace\('\/pulso\/live\/'\)/);
-  assert.doesNotMatch(rootPage, /<LivePage \/>/);
+  assert.match(prepareScript, /data-pulso-desktop-root/);
+  assert.doesNotMatch(rootPage, /useRouter/);
+  assert.doesNotMatch(rootPage, /router\.replace/);
+  assert.match(rootPage, /<LivePage \/>/);
+  assert.match(rootPage, /<PulsoCoreCanary \/>/);
 });
 
 test('Alpha CI publishes the isolated app bundle without depending on fragile DMG creation', () => {
@@ -116,5 +117,4 @@ test('Alpha CI publishes the isolated app bundle without depending on fragile DM
   assert.match(workflow, /Build isolated Alpha bundle[\s\S]*--bundles app[\s\S]*tauri\.canary\.conf\.json/);
   assert.match(workflow, /test -s out\/index\.html/);
   assert.match(workflow, /test -s out\/pulso\/live\/index\.html/);
-  assert.doesNotMatch(workflow, /data-pulso-desktop-root/);
 });
