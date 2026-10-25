@@ -319,17 +319,11 @@ test('Tauri configuration preserves bundled sidecars while Kokoro starts only on
   assert.match(pulsoCoreRs, /secret_receipt_never_contains_raw_secret_material/);
   assert.match(libRs, /store_provider_secret/);
   assert.match(libRs, /hydrate_provider_secret/);
-  assert.match(libRs, /"pulso-navigation-guard"/);
-  assert.match(libRs, /\.on_navigation\(/);
-  assert.match(libRs, /pub fn is_navigation_allowed/);
-
-  // A barreira de navegação deve ser registrada antes dos plugins de shell e http
-  const guardIndex = libRs.indexOf('pulso-navigation-guard');
-  const shellIndex = libRs.indexOf('tauri_plugin_shell::init()');
-  const httpIndex = libRs.indexOf('tauri_plugin_http::init()');
-  assert.ok(guardIndex > 0);
-  assert.ok(guardIndex < shellIndex);
-  assert.ok(guardIndex < httpIndex);
+  // A WKWebView 14 deve receber o ciclo nativo padrão do Tauri. Uma barreira
+  // customizada de on_navigation substituía a HOME já carregada pela página
+  // nativa de erro no macOS 14.
+  assert.doesNotMatch(libRs, /pulso-navigation-guard/);
+  assert.doesNotMatch(libRs, /\.on_navigation\(/);
 
   // Prova de ausência de vazamento de URL em saídas e logs
   assert.doesNotMatch(libRs, /(println!|eprintln!|log::\w+)\([^)]*\burl\b/);
@@ -351,33 +345,24 @@ test('desktop UI startup does not depend on Kokoro becoming ready before the Web
   assert.match(ttsAdapter, /if \(isKokoro && \(!wasKokoro \|\| oldVoice !== this\.preferences\.voiceName\)\) \{\s*this\.warmup\(\)/);
 });
 
-test('native navigation barrier strictly confines webview to packaged tauri origin, allows debug localhost only, and does not leak URLs', () => {
+test('desktop WebView uses Tauri default navigation while external URLs stay behind the validated Arc command', () => {
   const libRs = readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'),
     'utf8'
   );
 
-  // Pure function for navigation policy
-  assert.match(libRs, /pub fn is_navigation_allowed_for_environment\(/);
-  assert.match(libRs, /pub fn is_navigation_allowed\(/);
+  assert.doesNotMatch(libRs, /pulso-navigation-guard/);
+  assert.doesNotMatch(libRs, /\.on_navigation\(/);
 
-  // Packaged origin permitted
-  assert.match(libRs, /scheme == "tauri"/);
-  assert.match(libRs, /matches!\(url\.host_str\(\), Some\("localhost"\)/);
-
-  // Localhost restricted to debug
-  assert.match(
-    libRs,
-    /allow_debug_localhost && \(scheme == "http" \|\| scheme == "https"\)/
+  const localMachineRs = readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'agent', 'local_machine.rs'),
+    'utf8'
   );
-  assert.match(libRs, /Some\("localhost"\) \| Some\("127\.0\.0\.1"\)/);
-
-  // Unit tests present in Rust
-  assert.match(libRs, /mod navigation_(guard|boundary)_tests/);
-  assert.match(libRs, /permits_internal_packaged_tauri_origin/);
-  assert.match(libRs, /refuses_external_https_and_oauth_navigation/);
-  assert.match(libRs, /(conditions|restricts)_localhost/);
-  assert.match(libRs, /refuses_non_web_schemes_and_foreign_tauri_hosts/);
+  assert.match(localMachineRs, /fn validate_external_url\(/);
+  assert.match(localMachineRs, /Apenas URLs HTTP\(S\)/);
+  assert.match(localMachineRs, /Command::new\("\/usr\/bin\/open"\)/);
+  assert.match(localMachineRs, /\.arg\("-a"\)/);
+  assert.match(localMachineRs, /\.arg\("Arc"\)/);
 
   // Strict check on logging: no URL leaking
   assert.doesNotMatch(libRs, /(println!|eprintln!|log::\w+)\([^)]*\burl\b/);
