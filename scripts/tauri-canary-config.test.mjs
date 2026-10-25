@@ -47,7 +47,7 @@ test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   );
 });
 
-test('Merged base + tauri.canary.conf.json isolates canary identity, starts from the packaged live asset, and preserves the Desktop bundle contract', () => {
+test('Merged base + tauri.canary.conf.json isolates canary identity, starts from the canonical live directory, and preserves the Desktop bundle contract', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
   const canaryPatch = JSON.parse(readFileSync(canaryPath, 'utf8'));
   const merged = mergeTauriConfig(baseConfig, canaryPatch);
@@ -80,13 +80,14 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, starts from
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Window starts from the concrete exported HOME asset and remains resizable.
-  // This avoids Next 16 client-side directory navigation on WKWebView 14.
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'pulso/live/index.html');
+  // 5. Window starts from the canonical exported HOME directory and remains resizable.
+  // Starting from the explicit index.html makes Next 16 canonicalize the URL via
+  // History API; WKWebView 14 then promotes that transition to an invalid load.
+  assert.equal(canaryPatch.app?.windows?.[0]?.url, 'pulso/live/');
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 1);
   assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
+  assert.equal(merged.app.windows[0].url, 'pulso/live/');
   assert.equal(merged.app.windows[0].resizable, true);
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
