@@ -117,7 +117,7 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.match(tauriLib, /__PULSO_DESKTOP_HISTORY_GUARD__/);
   assert.match(tauriLib, /let virtualState = null/);
   assert.match(tauriLib, /get: \(\) => virtualState/);
-  assert.match(tauriLib, /hostname === "tauri\.localhost"/);
+  assert.doesNotMatch(tauriLib, /if \(!isPackagedDesktop\) return/);
   assert.doesNotMatch(tauriLib, /nativeMethod\.call/);
   assert.match(tauriLib, /desktop_boot_probe/);
   assert.match(tauriLib, /unhandled-rejection/);

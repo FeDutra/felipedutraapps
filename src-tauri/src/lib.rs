@@ -22,10 +22,6 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
 (() => {
   const protocol = window.location.protocol;
   const hostname = window.location.hostname;
-  const isPackagedDesktop = protocol === "tauri:" ||
-    ((protocol === "http:" || protocol === "https:") &&
-      (hostname === "tauri.localhost" || hostname === "localhost"));
-  if (!isPackagedDesktop) return;
 
   const nativeStateDescriptor = Object.getOwnPropertyDescriptor(History.prototype, "state");
   let virtualState = null;
