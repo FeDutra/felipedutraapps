@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -114,6 +114,20 @@ test('menção a especialista no chat executa agente real e atribui a resposta',
   assert.equal(run.status, 'completed'); assert.equal(prompt, 'construa a direção'); assert.match(run.accumulatedText, /\*\*FORMA\*\*/); assert.match(live.listMessages(boot.activeSessionId).at(-1).texto, /direção entregue/); f.close();
 });
 
+test('sessão de especialista mantém vínculo e executa o agente sem menção explícita', async () => {
+  const f = fixture('conversation-bound-agent'); const live = new LiveService({ store: f.store }); await live.bootstrap();
+  const session = await live.createSession({ id: 'sessao_ritmo', areaId: 'area_pulso', titulo: 'RITMO', agentId: 'agent_audiovisual' });
+  const foundry = {
+    list(kind) { return kind === 'agents' ? [{ agentId: 'agent_audiovisual', blueprintId: 'bp_ritmo' }] : []; },
+    get(kind, id) { if (kind === 'agent' && id === 'agent_audiovisual') return { agentId: id, blueprintId: 'bp_ritmo' }; if (kind === 'blueprint' && id === 'bp_ritmo') return { blueprintId: id, name: 'RITMO' }; return null; },
+  };
+  let routedAgent = null; const executor = { async execute(input) { routedAgent = input.agentId; return { output: 'corte audiovisual pronto', providerId: 'codex-fe', model: 'gpt-test', run: { agentRunId: 'run_ritmo', status: 'succeeded' } }; } };
+  const conversation = new LiveConversationService({ store: f.store, live, router: { resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; } }, agentExecutor: executor, agentFoundry: foundry });
+  const run = await conversation.startTurn({ sessionId: session.id, text: 'organize o corte' });
+  const assistant = live.listMessages(session.id).at(-1);
+  assert.equal(run.status, 'completed'); assert.equal(routedAgent, 'agent_audiovisual'); assert.equal(assistant.agentId, 'agent_audiovisual'); assert.match(assistant.texto, /RITMO/); f.close();
+});
+
 test('conversa registra memória viva apenas quando Fe explicita decisão ou pedido de lembrar', async () => {
   const f = fixture('conversation-memory'); const live = new LiveService({ store: f.store }); const boot = await live.bootstrap(); const recorded = [];
   const foundry = { list() { return [{ agentId: 'agent_forma', blueprintId: 'bp_forma' }]; }, get(kind) { return kind === 'agent' ? { agentId: 'agent_forma', blueprintId: 'bp_forma' } : { name: 'FORMA' }; } };
@@ -126,9 +140,14 @@ test('transporte por pasta move bundle assinado e mantém importação idempoten
   const a = fixture('sync-a'); const b = fixture('sync-b'); const syncA = new DeviceSyncService({ store: a.store, dataDir: a.dir, identity: syncIdentity('macbook') }); const syncB = new DeviceSyncService({ store: b.store, dataDir: b.dir, identity: syncIdentity('imac') });
   syncA.trustDevice(syncB.deviceManifest()); syncB.trustDevice(syncA.deviceManifest());
   a.store.append([eventDraft({ type: 'memory.item_written', aggregateType: 'memory_item', aggregateId: 'mem_sync', correlationId: 'corr_sync', actor: { kind: 'human', id: 'fe' }, payload: { memoryId: 'mem_sync', content: 'sincronizada' } })]);
-  const sharedA = path.join(a.dir, 'peer'); const sharedB = path.join(b.dir, 'peer'); const transportA = new PeerFolderTransport({ syncService: syncA }); const transportB = new PeerFolderTransport({ syncService: syncB }); transportA.configure(sharedA); transportB.configure(sharedB);
-  const pushed = transportA.push(syncB.deviceManifest().deviceId); copyFileSync(pushed.transportPath, path.join(sharedB, 'inbox', path.basename(pushed.transportPath)));
-  const pulled = transportB.pull(); assert.equal(pulled.receipts[0].receipt.imported, 1); assert.equal(syncB.status().replicatedEvents, 1); a.close(); b.close();
+  const shared = path.join(a.dir, 'peer'); const transportA = new PeerFolderTransport({ syncService: syncA }); const transportB = new PeerFolderTransport({ syncService: syncB }); transportA.configure(shared); transportB.configure(shared);
+  transportA.publishPresence(); transportB.publishPresence();
+  assert.equal(transportA.readPresence()[0].deviceKey, 'imac');
+  assert.equal(transportB.readPresence()[0].deviceKey, 'macbook');
+  const pushed = transportA.push(syncB.deviceManifest().deviceId); assert.equal(pushed.events, 1); assert.equal(pushed.skipped, false);
+  const pulled = transportB.pull(); assert.equal(pulled.imported, 1); assert.equal(syncB.status().replicatedEvents, 1);
+  const replay = transportB.pull(); assert.equal(replay.imported, 0); assert.equal(replay.receipts[0].receipt.replay, true);
+  const delta = transportA.push(syncB.deviceManifest().deviceId); assert.equal(delta.skipped, true); assert.equal(delta.events, 0); a.close(); b.close();
 });
 
 test('transporte por pasta restaura configuração depois de abertura fria', () => {
@@ -144,4 +163,18 @@ test('transporte por pasta restaura configuração depois de abertura fria', () 
   assert.equal(restored.status().rootDir, rootDir);
   assert.equal(statSync(configPath).mode & 0o077, 0);
   f.close();
+});
+
+test('desktop mantém Core canônico e usa OpenClaw como executor operacional com recibo persistido', () => {
+  const liveSource = readFileSync(new URL('../src/apps/pulso/pages/LivePage.tsx', import.meta.url), 'utf8');
+  const bridgeSource = readFileSync(new URL('./pulso/operator-bridge.mjs', import.meta.url), 'utf8');
+  assert.match(liveSource, /NEXT_PUBLIC_PULSO_CORE_EXECUTOR !== 'local'/);
+  assert.match(liveSource, /openclaw_\$\{req\.id\}_assistant/);
+  assert.match(liveSource, /pulsoCoreClient\.appendMessage/);
+  assert.match(bridgeSource, /callGatewayFromCli\('cron\.list'/);
+  assert.match(bridgeSource, /unsupported_operator_command/);
+  assert.match(bridgeSource, /db\.runTransaction/);
+  assert.match(bridgeSource, /current\.data\(\)\?\.status !== 'pending'/);
+  assert.match(bridgeSource, /function sanitizeSchedule/);
+  assert.match(bridgeSource, /function sanitizeText/);
 });

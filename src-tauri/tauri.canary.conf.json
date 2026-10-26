@@ -3,6 +3,11 @@
   "productName": "PULSO Next Preview",
   "version": "0.9.0",
   "identifier": "com.felipedutraapps.pulso.next-preview",
+  "bundle": {
+    "icon": [
+      "icons/pulso-next-official.icns"
+    ]
+  },
   "app": {
     "windows": [
       {

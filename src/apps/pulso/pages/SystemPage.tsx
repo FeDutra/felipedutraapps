@@ -12,19 +12,26 @@ import {
   PlugZap,
   ShieldCheck,
   Terminal,
+  CalendarClock,
+  Play,
+  Pause,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { authService } from '@/shared/services/authService';
 import {
   operatorControlService,
   OperatorApprovalProjection,
   OperatorRuntimeProjection,
+  OperatorAutomationProjection,
 } from '../services/operatorControlService';
 
-type SystemSection = 'decisions' | 'state' | 'connections' | 'keys';
+type SystemSection = 'decisions' | 'routines' | 'state' | 'connections' | 'keys';
 const BUILD_REVISION = process.env.NEXT_PUBLIC_PULSO_BUILD_REVISION || 'local';
 
 const SECTIONS: Array<{ id: SystemSection; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> }> = [
   { id: 'decisions', label: 'Decisões', icon: ShieldCheck },
+  { id: 'routines', label: 'Rotinas', icon: CalendarClock },
   { id: 'state', label: 'Estado', icon: Activity },
   { id: 'connections', label: 'Integrações', icon: PlugZap },
   { id: 'keys', label: 'Chaves e políticas', icon: KeyRound },
@@ -172,12 +179,17 @@ export default function SystemPage() {
   const [section, setSection] = React.useState<SystemSection>('decisions');
   const [approvals, setApprovals] = React.useState<OperatorApprovalProjection[]>([]);
   const [runtime, setRuntime] = React.useState<OperatorRuntimeProjection | null>(null);
+  const [automations, setAutomations] = React.useState<OperatorAutomationProjection[]>([]);
+  const [automationBusy, setAutomationBusy] = React.useState<string | null>(null);
+  const [showAutomationForm, setShowAutomationForm] = React.useState(false);
+  const [automationDraft, setAutomationDraft] = React.useState({ name: '', cron: '0 9 * * *', message: '' });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let stopApprovals: () => void = () => {};
     let stopRuntime: () => void = () => {};
+    let stopAutomations: () => void = () => {};
     let alive = true;
 
     authService.ensurePulsoAuthReady().then(() => {
@@ -193,6 +205,7 @@ export default function SystemPage() {
         },
       );
       stopRuntime = operatorControlService.subscribeRuntime(setRuntime, cause => setError(cause.message));
+      stopAutomations = operatorControlService.subscribeAutomations(setAutomations, cause => setError(cause.message));
     }).catch(cause => {
       setError(cause instanceof Error ? cause.message : 'Falha ao autenticar a superfície operacional.');
       setLoading(false);
@@ -202,11 +215,36 @@ export default function SystemPage() {
       alive = false;
       stopApprovals();
       stopRuntime();
+      stopAutomations();
     };
   }, []);
 
   const pending = approvals.filter(item => item.status === 'pending' || item.status === 'resolving');
   const recent = approvals.filter(item => item.status !== 'pending' && item.status !== 'resolving').slice(0, 8);
+
+  const requestAutomation = async (key: string, command: Parameters<typeof operatorControlService.requestAutomationCommand>[0]) => {
+    setAutomationBusy(key); setError(null);
+    try { await operatorControlService.requestAutomationCommand(command); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível comandar a rotina.'); }
+    finally { setAutomationBusy(null); }
+  };
+
+  const createAutomation = async () => {
+    if (!automationDraft.name.trim() || !automationDraft.message.trim() || !automationDraft.cron.trim()) return;
+    await requestAutomation('create', {
+      action: 'create',
+      job: {
+        name: automationDraft.name.trim(),
+        enabled: false,
+        schedule: { kind: 'cron', expr: automationDraft.cron.trim(), tz: 'America/Sao_Paulo' },
+        sessionTarget: 'isolated',
+        payload: { kind: 'agentTurn', message: automationDraft.message.trim() },
+        delivery: { mode: 'none' },
+      },
+    });
+    setAutomationDraft({ name: '', cron: '0 9 * * *', message: '' });
+    setShowAutomationForm(false);
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0d0d0e] text-[#fbf9f5]">
@@ -300,6 +338,44 @@ export default function SystemPage() {
               <span><span className="mr-3 font-mono text-white/25">↗</span>Ver sinais de saúde legados</span>
               <Activity size={14} />
             </Link>
+          </div>
+        ) : null}
+
+        {section === 'routines' ? (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-light">Agenda operacional da OpenClaw</h2>
+                <p className="mt-1 text-xs text-white/35">{automations.filter(item => item.enabled).length} ativas · {automations.length} totais · Gateway como fonte canônica</p>
+              </div>
+              <button type="button" onClick={() => setShowAutomationForm(value => !value)} className="flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-white/60 hover:bg-white/8">
+                <Plus size={12} /> nova rotina
+              </button>
+            </div>
+            {showAutomationForm ? (
+              <div className="grid gap-3 rounded-[24px] border border-white/10 bg-black/18 p-5 backdrop-blur-2xl md:grid-cols-2">
+                <input value={automationDraft.name} onChange={event => setAutomationDraft(value => ({ ...value, name: event.target.value }))} placeholder="nome da rotina" className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs outline-none" />
+                <input value={automationDraft.cron} onChange={event => setAutomationDraft(value => ({ ...value, cron: event.target.value }))} placeholder="cron · 0 9 * * *" className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono text-xs outline-none" />
+                <textarea value={automationDraft.message} onChange={event => setAutomationDraft(value => ({ ...value, message: event.target.value }))} placeholder="o que a rotina deve fazer" className="min-h-24 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs outline-none md:col-span-2" />
+                <button type="button" disabled={automationBusy === 'create'} onClick={createAutomation} className="rounded-full border border-emerald-200/20 px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-emerald-100 disabled:opacity-40">criar pausada</button>
+              </div>
+            ) : null}
+            <div className="grid gap-3">
+              {automations.map(job => (
+                <article key={job.id} className="flex flex-col gap-4 rounded-[22px] border border-white/8 bg-black/14 p-4 backdrop-blur-xl md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${job.enabled ? 'bg-emerald-300' : 'bg-white/20'}`} /><h3 className="truncate text-sm font-light text-white/75">{job.name}</h3></div>
+                    <p className="mt-2 truncate font-mono text-[9px] uppercase tracking-wider text-white/25">{job.payloadKind || 'job'} · {job.ownerAgentId || 'sistema'} · próxima {formatTime(job.nextRunAtMs, true)}</p>
+                    {job.lastError ? <p className="mt-2 text-xs text-rose-200/65">{job.lastError}</p> : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button type="button" title={job.enabled ? 'Pausar' : 'Ativar'} disabled={automationBusy === job.id} onClick={() => requestAutomation(job.id, { action: 'update', automationId: job.id, patch: { enabled: !job.enabled } })} className="rounded-full border border-white/10 p-2 text-white/45 hover:text-white"><span className="sr-only">{job.enabled ? 'Pausar' : 'Ativar'}</span>{job.enabled ? <Pause size={13} /> : <Play size={13} />}</button>
+                    <button type="button" title="Executar agora" disabled={automationBusy === job.id} onClick={() => requestAutomation(job.id, { action: 'run', automationId: job.id })} className="rounded-full border border-white/10 p-2 text-white/45 hover:text-white"><Play size={13} /></button>
+                    <button type="button" title="Remover" disabled={automationBusy === job.id} onClick={() => requestAutomation(job.id, { action: 'remove', automationId: job.id })} className="rounded-full border border-rose-200/10 p-2 text-rose-200/35 hover:text-rose-100"><Trash2 size={13} /></button>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         ) : null}
 

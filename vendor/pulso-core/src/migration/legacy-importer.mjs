@@ -77,6 +77,7 @@ export function normalizeLegacySnapshot(snapshot) {
       areaId,
       titulo: required(record.titulo ?? record.title ?? record.label, "legacy_session_title_required"),
       identityId: "lotus",
+      agentId: record.agentId || null,
       estado: record.archived === true ? "archived" : "active",
       createdAt: timestamp(record.createdAt, source.exportedAt),
       updatedAt: timestamp(record.updatedAt, record.createdAt || source.exportedAt),

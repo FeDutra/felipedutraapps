@@ -952,6 +952,7 @@ import {
   readLocalDeviceOrigin,
   readExecutionTarget,
   writeExecutionTarget,
+  PULSO_DEVICE_IDENTITIES,
   type PulsoDeviceProjection,
   type PulsoExecutionTarget,
 } from '../lib/deviceExecutionTarget';
@@ -1039,7 +1040,7 @@ import { sessionsService } from '../services/sessionsService';
 import { pulsoCoreConversation } from '../services/pulsoCoreConversation';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
 import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
-import type { PulsoLiveArea, PulsoLiveMessage, PulsoLiveSession } from '../services/pulsoCoreClient';
+import { pulsoCoreClient, type PulsoLiveArea, type PulsoLiveMessage, type PulsoLiveSession } from '../services/pulsoCoreClient';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
 const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
@@ -1160,7 +1161,8 @@ const coreSessionToContextNode = (session: PulsoLiveSession): PulsoContextNode =
   subareaId: session.id.replace(/^[^_]+_/, ''),
   contextId: session.id,
   chatId: 'default',
-  openclawSessionKey: `agent:main:pulso:${session.id}`,
+  openclawSessionKey: `agent:${session.agentId?.replace(/^agent_/, '') || 'main'}:pulso:${session.id}`,
+  agentId: session.agentId?.replace(/^agent_/, '') || 'main',
   label: session.titulo,
   archived: session.estado === 'archived',
   isDefault: false,
@@ -1517,6 +1519,10 @@ export type UnifiedVoiceState =
 export default function LivePage() {
   const router = useRouter();
   const coreDesktopEnabled = React.useMemo(() => pulsoCoreConversation.isAvailable(), []);
+  // Durante a transição, o Core é a fonte local/sincronizada e a OpenClaw é
+  // o executor operacional com ferramentas, canais, jobs e watchdogs.
+  const coreOperationalExecutorEnabled = coreDesktopEnabled
+    && process.env.NEXT_PUBLIC_PULSO_CORE_EXECUTOR !== 'local';
   const [coreReady, setCoreReady] = React.useState(false);
   const [coreMessagesByContext, setCoreMessagesByContext] = React.useState<Record<string, Message[]>>({});
   const [state, setState] = React.useState<any>(null);
@@ -1528,7 +1534,10 @@ export default function LivePage() {
   const [inputHeight, setInputHeight] = React.useState(36);
   const [windowWidth, setWindowWidth] = React.useState<number>(1024);
   const [windowHeight, setWindowHeight] = React.useState<number>(768);
-  const [devicePresence, setDevicePresence] = React.useState<PulsoDeviceProjection[]>([]);
+  const [operatorDevicePresence, setOperatorDevicePresence] = React.useState<PulsoDeviceProjection[]>([]);
+  const [syncDevicePresence, setSyncDevicePresence] = React.useState<PulsoDeviceProjection[]>([]);
+  const [deviceSyncState, setDeviceSyncState] = React.useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [lastDeviceSyncAt, setLastDeviceSyncAt] = React.useState<string | null>(null);
   const [executionTarget, setExecutionTarget] = React.useState<PulsoExecutionTarget>('auto');
   const [localDeviceOrigin, setLocalDeviceOrigin] = React.useState<'imac' | 'macbook' | null>(null);
 
@@ -1545,9 +1554,85 @@ export default function LivePage() {
   }, []);
 
   React.useEffect(() => operatorControlService.subscribeRuntime(
-    runtime => setDevicePresence(runtime?.devices || []),
+    runtime => setOperatorDevicePresence(runtime?.devices || []),
     subscriptionError => console.warn('[PULSO_DEVICE_PRESENCE]', subscriptionError.message),
   ), []);
+
+  const refreshPeerSync = React.useCallback(async (manual = false) => {
+    if (!coreDesktopEnabled) return;
+    if (manual) setDeviceSyncState('syncing');
+    const syncResult = manual
+      ? await pulsoCoreClient.request<Record<string, unknown>>('sync.folder.sync')
+      : null;
+    if (syncResult && !syncResult.ok) {
+      setDeviceSyncState('error');
+      return;
+    }
+    const statusResult = await pulsoCoreClient.request<Record<string, unknown>>('sync.folder.status');
+    if (!statusResult.ok) {
+      if (manual) setDeviceSyncState('error');
+      return;
+    }
+    const status = statusResult.result as {
+      configured?: boolean;
+      localDeviceId?: string | null;
+      lastSyncAt?: string | null;
+      presence?: Array<{ deviceKey?: string; observedAt?: string }>;
+    };
+    if (!status.configured) {
+      setSyncDevicePresence([]);
+      setLastDeviceSyncAt(null);
+      setDeviceSyncState(manual ? 'error' : 'idle');
+      return;
+    }
+    const now = Date.now();
+    const projections: PulsoDeviceProjection[] = [];
+    if (localDeviceOrigin) {
+      projections.push({
+        key: localDeviceOrigin,
+        nodeId: PULSO_DEVICE_IDENTITIES[localDeviceOrigin].nodeId,
+        connected: true,
+        operable: true,
+        lastSeenAtMs: now,
+      });
+    }
+    for (const peer of status.presence || []) {
+      if (peer.deviceKey !== 'imac' && peer.deviceKey !== 'macbook') continue;
+      const observedAtMs = peer.observedAt ? Date.parse(peer.observedAt) : 0;
+      projections.push({
+        key: peer.deviceKey,
+        nodeId: PULSO_DEVICE_IDENTITIES[peer.deviceKey].nodeId,
+        connected: Number.isFinite(observedAtMs) && now - observedAtMs <= 45_000,
+        operable: Number.isFinite(observedAtMs) && now - observedAtMs <= 45_000,
+        lastSeenAtMs: observedAtMs || null,
+      });
+    }
+    setSyncDevicePresence(projections);
+    setLastDeviceSyncAt(status.lastSyncAt || new Date().toISOString());
+    setDeviceSyncState('synced');
+  }, [coreDesktopEnabled, localDeviceOrigin]);
+
+  React.useEffect(() => {
+    if (!coreDesktopEnabled) return;
+    void refreshPeerSync(false);
+    const timer = window.setInterval(() => void refreshPeerSync(false), 10_000);
+    const handleOnline = () => void refreshPeerSync(true);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [coreDesktopEnabled, refreshPeerSync]);
+
+  const devicePresence = React.useMemo(() => {
+    const merged = new Map<'imac' | 'macbook', PulsoDeviceProjection>();
+    for (const device of operatorDevicePresence) merged.set(device.key, device);
+    for (const device of syncDevicePresence) {
+      const current = merged.get(device.key);
+      if (!current || device.connected || (device.lastSeenAtMs || 0) > (current.lastSeenAtMs || 0)) merged.set(device.key, device);
+    }
+    return [...merged.values()];
+  }, [operatorDevicePresence, syncDevicePresence]);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1583,6 +1668,7 @@ export default function LivePage() {
 
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [lastSentRequestsByContext, setLastSentRequestsByContext] = React.useState<Record<string, string>>({});
+  const coreOpenClawPendingRef = React.useRef(new Map<string, { sessionId: string; text: string }>());
   const [contextTypingStates, setContextTypingStates] = React.useState<Record<string, boolean>>({});
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [presenceMode, setPresenceMode] = React.useState(false);
@@ -2356,6 +2442,10 @@ export default function LivePage() {
       text: item.texto,
       timestamp: new Date(item.createdAt),
       contextId,
+      agentId: item.agentId?.replace(/^agent_/, '') || undefined,
+      assistantName: item.agentId
+        ? resolveAssistantIdentity({ agentId: item.agentId.replace(/^agent_/, '') }).name
+        : undefined,
     }))
   ), []);
 
@@ -2380,6 +2470,9 @@ export default function LivePage() {
         id: session.contextId,
         areaId: session.areaId,
         titulo: session.label,
+        agentId: session.agentId && session.agentId !== 'main'
+          ? `agent_${session.agentId.replace(/^agent_/, '')}`
+          : null,
       }))
     ).then(() => {
       if (cancelled) return;
@@ -3356,6 +3449,9 @@ export default function LivePage() {
   // Load database state once
   React.useEffect(() => {
     if (coreDesktopEnabled) {
+      void authService.ensurePulsoAuthReady().catch(error => {
+        console.error('[PULSO_CORE_OPERATOR_AUTH_FAILED]', error);
+      });
       setLoading(false);
       return;
     }
@@ -3537,7 +3633,7 @@ export default function LivePage() {
 
   // Real-time Firestore requests listener (Golden Path to OpenClaw usage)
   React.useEffect(() => {
-    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
+    const isFirestore = coreOperationalExecutorEnabled || (!coreDesktopEnabled && pulsoService.getDataMode() === 'firestore');
     if (!isFirestore) return;
     if (!db) return;
     if (!activeContextNode.contextId || activeContextNode.contextId === 'loading' || activeContextNode.contextId === LOADING_PLACEHOLDER_NODE.contextId) {
@@ -3822,6 +3918,19 @@ export default function LivePage() {
 
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
             if (isAcceptedStatus && (hasRealResponse || responseAttachments.length > 0)) {
+              const pendingCoreMirror = coreOpenClawPendingRef.current.get(req.id);
+              if (pendingCoreMirror && hasRealResponse) {
+                const agentId = assistantIdentity.agentId === 'main' ? null : `agent_${assistantIdentity.agentId}`;
+                void pulsoCoreClient.appendMessage({
+                  id: `openclaw_${req.id}_assistant`,
+                  sessionId: pendingCoreMirror.sessionId,
+                  role: 'assistant',
+                  texto: responseText,
+                  estado: 'persisted',
+                  agentId,
+                  idempotencyKey: `openclaw:${req.id}:assistant`,
+                }).finally(() => coreOpenClawPendingRef.current.delete(req.id));
+              }
               console.log('[PULSO_RESPONSE_RENDERED]', { requestId: req.id, responseText });
               chatHistory.push({
                 id: `lotus-${req.id}`,
@@ -3940,7 +4049,7 @@ export default function LivePage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [coreDesktopEnabled, db, loading, activeContextNode]);
+  }, [coreDesktopEnabled, coreOperationalExecutorEnabled, db, loading, activeContextNode]);
 
   // ── Sincronização em Tempo Real Global de Estados Conversacionais e Compromissos ──
   React.useEffect(() => {
@@ -4583,7 +4692,7 @@ export default function LivePage() {
       voiceReplyRequestsRef.current.add(preGeneratedReqId);
     }
 
-    if (coreDesktopEnabled) {
+    if (coreDesktopEnabled && !coreOperationalExecutorEnabled) {
       if (!coreReady) {
         const unavailableMessage: Message = {
           id: `lotus-core-unavailable-${preGeneratedReqId}`,
@@ -4699,6 +4808,18 @@ export default function LivePage() {
             : {}),
         }
       });
+
+      if (coreOperationalExecutorEnabled && newRequest.id) {
+        coreOpenClawPendingRef.current.set(newRequest.id, { sessionId: sendingContextId, text: messageText });
+        void pulsoCoreClient.appendMessage({
+          id: `openclaw_${newRequest.id}_human`,
+          sessionId: sendingContextId,
+          role: 'human',
+          texto: messageText,
+          estado: 'persisted',
+          idempotencyKey: `openclaw:${newRequest.id}:human`,
+        });
+      }
 
       // t2: Moment request vira queued_for_openclaw in Firestore
       if (latencyMapRef.current[newRequest.id]) {
@@ -7508,8 +7629,8 @@ ${data.transcription}`, {
                   <SecondaryChatPane
                     contextNode={contextNode}
                     areaIcon={getAreaIcon({ id: contextNode.areaId, name: dynamicAreas.find(a => a.id === contextNode.areaId)?.name || '' })}
-                    messagesOverride={coreDesktopEnabled ? (coreMessagesByContext[contextNode.contextId] || []) : undefined}
-                    isPendingOverride={coreDesktopEnabled ? Boolean(contextTypingStates[contextNode.contextId]) : undefined}
+                    messagesOverride={coreDesktopEnabled && !coreOperationalExecutorEnabled ? (coreMessagesByContext[contextNode.contextId] || []) : undefined}
+                    isPendingOverride={coreDesktopEnabled && !coreOperationalExecutorEnabled ? Boolean(contextTypingStates[contextNode.contextId]) : undefined}
                     onClose={() => closeSplitPane(contextNode.contextId)}
                     isFocused={sendTargetContextNode.contextId === contextNode.contextId}
                     onFocus={(shouldFocusComposer = true) => {
@@ -7934,6 +8055,9 @@ ${data.transcription}`, {
 
       <DevicePresenceRail
         devices={devicePresence}
+        syncState={deviceSyncState}
+        lastSyncAt={lastDeviceSyncAt}
+        onSync={() => void refreshPeerSync(true)}
       />
 
       {/* Badge flutuante mobile: quando uma área não visível apita, mostra só

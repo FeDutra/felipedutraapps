@@ -46,6 +46,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'sync.folder.status',
   'sync.folder.push',
   'sync.folder.pull',
+  'sync.folder.sync',
   'memory.remember',
   'memory.search',
   'memory.list',

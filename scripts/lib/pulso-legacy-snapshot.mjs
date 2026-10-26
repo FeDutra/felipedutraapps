@@ -26,6 +26,15 @@ function titleFromContext(id) {
   return tail.replace(/[-_]+/g, " ").trim() || id;
 }
 
+function agentFromSession(data) {
+  const explicit = text(data.agentId);
+  if (explicit && explicit !== "main") return explicit.startsWith("agent_") ? explicit : `agent_${explicit}`;
+  const sessionKey = text(data.openclawSessionKey);
+  const match = sessionKey.match(/^agent:([^:]+):/);
+  if (!match || match[1] === "main") return null;
+  return match[1].startsWith("agent_") ? match[1] : `agent_${match[1]}`;
+}
+
 function inferAreaId(data, contextId, areaIds) {
   const explicit = text(data.areaId);
   if (areaIds.has(explicit)) return explicit;
@@ -86,6 +95,7 @@ export function buildLegacySnapshot({ projectId, workspaceId, exportedAt, areaDo
       id,
       areaId,
       title,
+      agentId: agentFromSession(data),
       archived: data.archived === true || data.status === "archived",
       createdAt: asIso(data.createdAt, exportedAt),
       updatedAt: asIso(data.updatedAt, exportedAt)
@@ -103,6 +113,7 @@ export function buildLegacySnapshot({ projectId, workspaceId, exportedAt, areaDo
       sourceId: id,
       areaId,
       title: text(data.meta?.sessionLabel) || text(data.sessionLabel) || titleFromContext(id),
+      agentId: agentFromSession(data),
       archived: false,
       createdAt: asIso(data.createdAt, asIso(data.requestedAt, exportedAt)),
       updatedAt: asIso(data.updatedAt, exportedAt),

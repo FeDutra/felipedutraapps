@@ -33,6 +33,27 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const SENSITIVE_KEY = /^(?:authorization|cookie|set-cookie|password|passwd|access_?token|refresh_?token|api_?key|client_?secret|private_?key|privateKeyPkcs8Base64)$/i;
+const SENSITIVE_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+\/-]{20,}|\bsk-[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAIza[A-Za-z0-9_-]{25,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/;
+
+function sensitivePaths(value, path = "$", hits = []) {
+  if (hits.length >= 20) return hits;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => sensitivePaths(item, `${path}[${index}]`, hits));
+    return hits;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, item] of Object.entries(value)) {
+      const nextPath = `${path}.${key}`;
+      if (SENSITIVE_KEY.test(key) && item !== null && item !== "") hits.push(nextPath);
+      else sensitivePaths(item, nextPath, hits);
+    }
+    return hits;
+  }
+  if (typeof value === "string" && SENSITIVE_VALUE.test(value)) hits.push(path);
+  return hits;
+}
+
 function eventFromRow(row) {
   return {
     eventId: row.event_id,
@@ -108,6 +129,15 @@ export class DeviceSyncService {
       " envelope_json TEXT NOT NULL,",
       " created_at TEXT NOT NULL",
       ");",
+      "CREATE TABLE IF NOT EXISTS sync_processed_bundles (",
+      " bundle_id TEXT PRIMARY KEY,",
+      " source_device_id TEXT NOT NULL,",
+      " digest TEXT NOT NULL,",
+      " imported_at TEXT NOT NULL,",
+      " imported_events INTEGER NOT NULL,",
+      " duplicate_events INTEGER NOT NULL,",
+      " conflict_events INTEGER NOT NULL",
+      ");",
       "CREATE INDEX IF NOT EXISTS idx_sync_origin_device ON sync_event_origin(origin_device_id, origin_sequence);",
     ].join("\n"));
   }
@@ -148,6 +178,44 @@ export class DeviceSyncService {
       publicKeySpkiBase64: identity.publicKeySpkiBase64,
       fingerprint: identity.fingerprint,
     };
+  }
+
+  createPresence() {
+    const identity = this.#identity();
+    const unsigned = {
+      schemaVersion: 1,
+      source: this.deviceManifest(),
+      observedAt: this.#now(),
+    };
+    const digest = sha256(canonicalStringify(unsigned));
+    const signature = sign(null, Buffer.from(digest, "hex"), identity.privateKey).toString("base64");
+    return { ...unsigned, digest, signature };
+  }
+
+  acceptPresence(presence) {
+    invariant(presence?.schemaVersion === 1, "unsupported_sync_presence");
+    const local = this.deviceManifest();
+    const trusted = presence.source.deviceId === local.deviceId
+      ? { public_key_spki_base64: local.publicKeySpkiBase64, trust_state: "trusted" }
+      : this.store.db.prepare(
+          "SELECT public_key_spki_base64,trust_state FROM sync_devices WHERE device_id=?"
+        ).get(presence.source.deviceId);
+    invariant(trusted?.trust_state === "trusted", "sync_presence_source_not_trusted");
+    const unsigned = { schemaVersion: presence.schemaVersion, source: presence.source, observedAt: presence.observedAt };
+    const digest = sha256(canonicalStringify(unsigned));
+    invariant(digest === presence.digest, "sync_presence_digest_mismatch");
+    const publicKey = createPublicKey({
+      key: Buffer.from(trusted.public_key_spki_base64, "base64"),
+      format: "der",
+      type: "spki",
+    });
+    invariant(verify(null, Buffer.from(digest, "hex"), publicKey, Buffer.from(presence.signature, "base64")), "sync_presence_signature_invalid");
+    invariant(Number.isFinite(Date.parse(presence.observedAt)), "sync_presence_time_invalid");
+    if (presence.source.deviceId !== local.deviceId) {
+      this.store.db.prepare("UPDATE sync_devices SET last_seen_at=? WHERE device_id=?")
+        .run(presence.observedAt, presence.source.deviceId);
+    }
+    return { deviceId: presence.source.deviceId, deviceKey: presence.source.deviceKey, observedAt: presence.observedAt, fingerprint: presence.source.fingerprint };
   }
 
   trustDevice(manifest, { expectedFingerprint } = {}) {
@@ -228,7 +296,7 @@ export class DeviceSyncService {
     return { configured: true, localDevice: manifest, trustedDevices: trusted, replicatedEvents: eventCount, conflicts: conflictCount };
   }
 
-  exportBundle({ targetDeviceId = null, outputPath = null } = {}) {
+  exportBundle({ targetDeviceId = null, outputPath = null, afterByOrigin = {} } = {}) {
     this.#backfillLocalOrigins();
     const identity = this.#identity();
     const rows = this.store.db.prepare([
@@ -236,7 +304,11 @@ export class DeviceSyncService {
       "FROM events e JOIN sync_event_origin o ON o.event_id=e.event_id",
       "ORDER BY o.origin_device_id,o.origin_sequence",
     ].join(" ")).all();
-    const events = rows.map(row => ({
+    const events = rows.filter(row => {
+      if (targetDeviceId && row.origin_device_id === targetDeviceId) return false;
+      const after = Number(afterByOrigin?.[row.origin_device_id] || 0);
+      return Number(row.origin_sequence) > after;
+    }).map(row => ({
       originDeviceId: row.origin_device_id,
       originSequence: row.origin_sequence,
       eventHash: row.event_hash,
@@ -252,12 +324,33 @@ export class DeviceSyncService {
       source: this.deviceManifest(),
       events,
     };
+    const secretHits = sensitivePaths(unsigned);
+    if (secretHits.length > 0) {
+      const quarantineId = pulsoId("sync_quarantine");
+      atomicWriteJson(join(this.syncDir, "quarantine", `${quarantineId}.json`), {
+        schemaVersion: 1,
+        quarantineId,
+        createdAt,
+        targetDeviceId,
+        eventCount: events.length,
+        sensitivePaths: secretHits,
+        reason: "sensitive_content_detected",
+      });
+      const error = new Error("sync_bundle_sensitive_content_detected");
+      error.code = "SYNC_SENSITIVE_CONTENT";
+      throw error;
+    }
     const digest = sha256(canonicalStringify(unsigned));
     const signature = sign(null, Buffer.from(digest, "hex"), identity.privateKey).toString("base64");
     const bundle = { ...unsigned, digest, signature };
     const destination = outputPath || join(this.syncDir, "outbox", `${bundleId}.json`);
     atomicWriteJson(destination, bundle);
-    return { bundleId, path: destination, digest, events: events.length, sourceDeviceId: identity.deviceId, targetDeviceId };
+    const sourceCursors = Object.fromEntries(events.reduce((entries, envelope) => {
+      const current = Number(entries.get(envelope.originDeviceId) || 0);
+      entries.set(envelope.originDeviceId, Math.max(current, Number(envelope.originSequence)));
+      return entries;
+    }, new Map()));
+    return { bundleId, path: destination, digest, events: events.length, sourceCursors, sourceDeviceId: identity.deviceId, targetDeviceId };
   }
 
   #recordConflict(bundle, envelope, reason) {
@@ -315,6 +408,24 @@ export class DeviceSyncService {
       type: "spki",
     });
     invariant(verify(null, Buffer.from(digest, "hex"), publicKey, Buffer.from(parsed.signature, "base64")), "sync_bundle_signature_invalid");
+
+    const processed = this.store.db.prepare(
+      "SELECT digest,imported_events,duplicate_events,conflict_events,imported_at FROM sync_processed_bundles WHERE bundle_id=?"
+    ).get(parsed.bundleId);
+    if (processed) {
+      invariant(processed.digest === digest, "sync_bundle_id_digest_mismatch");
+      return {
+        bundleId: parsed.bundleId,
+        sourceDeviceId: parsed.source.deviceId,
+        imported: 0,
+        duplicates: parsed.events.length,
+        conflicts: 0,
+        total: parsed.events.length,
+        replay: true,
+        firstImportedAt: processed.imported_at,
+        integrity: this.store.verifyIntegrity(),
+      };
+    }
 
     let imported = 0;
     let duplicates = 0;
@@ -387,6 +498,18 @@ export class DeviceSyncService {
       this.store.db.prepare("UPDATE sync_devices SET last_seen_at=? WHERE device_id=?")
         .run(this.#now(), parsed.source.deviceId);
     }
+    this.store.db.prepare([
+      "INSERT INTO sync_processed_bundles(bundle_id,source_device_id,digest,imported_at,imported_events,duplicate_events,conflict_events)",
+      "VALUES(?,?,?,?,?,?,?)",
+    ].join(" ")).run(
+      parsed.bundleId,
+      parsed.source.deviceId,
+      digest,
+      this.#now(),
+      imported,
+      duplicates,
+      conflicts,
+    );
     return {
       bundleId: parsed.bundleId,
       sourceDeviceId: parsed.source.deviceId,
@@ -394,6 +517,7 @@ export class DeviceSyncService {
       duplicates,
       conflicts,
       total: parsed.events.length,
+      replay: false,
       integrity: this.store.verifyIntegrity(),
     };
   }

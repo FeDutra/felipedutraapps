@@ -37,6 +37,7 @@ export function applyLiveEvent(state, event) {
         areaId: p.areaId,
         titulo: p.titulo ?? p.title,
         identityId: p.identityId || "lotus",
+        agentId: p.agentId || null,
         estado: p.estado || "active",
         createdAt: p.createdAt || event.occurredAt,
         updatedAt: p.updatedAt || event.occurredAt,
@@ -64,6 +65,7 @@ export function applyLiveEvent(state, event) {
         texto: p.texto ?? p.text,
         estado: p.estado || (p.role === "human" ? "awaiting_provider" : "persisted"),
         createdAt: p.createdAt || event.occurredAt,
+        agentId: p.agentId || null,
         provenance: p.provenance ?? null
       };
       state.messages.set(message.id, message);

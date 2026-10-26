@@ -58,6 +58,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'sync.folder.status',
   'sync.folder.push',
   'sync.folder.pull',
+  'sync.folder.sync',
   'memory.remember',
   'memory.search',
   'memory.list',
@@ -199,6 +200,7 @@ export interface PulsoLiveSession {
   readonly areaId: string;
   readonly titulo: string;
   readonly identityId: 'lotus';
+  readonly agentId?: string | null;
   readonly estado: PulsoLiveEntityState;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -211,6 +213,7 @@ export interface PulsoLiveMessage {
   readonly texto: string;
   readonly estado: PulsoLiveMessageState;
   readonly createdAt: string;
+  readonly agentId?: string | null;
 }
 
 export interface PulsoLiveSelection {
@@ -273,6 +276,7 @@ export interface PulsoCreateSessionParams {
   id?: string;
   areaId: string;
   titulo: string;
+  agentId?: string | null;
   estado?: PulsoLiveEntityState;
   idempotencyKey?: string;
 }
@@ -294,6 +298,7 @@ export interface PulsoAppendMessageParams {
   role: PulsoLiveMessageRole;
   texto: string;
   estado?: PulsoLiveMessageState;
+  agentId?: string | null;
   idempotencyKey?: string;
 }
 

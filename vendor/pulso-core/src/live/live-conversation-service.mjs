@@ -59,6 +59,18 @@ export class LiveConversationService {
     return null;
   }
 
+  #resolveSessionAgent(session) {
+    if (!this.agentFoundry || !session) return null;
+    if (session.agentId && this.agentFoundry.get("agent", session.agentId)) return session.agentId;
+    const title = String(session.titulo || "").trim().toLocaleLowerCase("pt-BR");
+    if (!title) return null;
+    for (const instance of this.agentFoundry.list("agents")) {
+      const blueprint = this.agentFoundry.get("blueprint", instance.blueprintId);
+      if (String(blueprint?.name || "").trim().toLocaleLowerCase("pt-BR") === title) return instance.agentId;
+    }
+    return null;
+  }
+
   async ensureReady() {
     await this.live.ensureRestored();
   }
@@ -186,7 +198,11 @@ export class LiveConversationService {
     }
 
     const runId = params.runId || this.idGenerator("live_run");
-    const specialistAgentId = this.#resolveMention(humanMessage.texto, params.agentId || null);
+    const session = this.live.getSession(sessionId);
+    const specialistAgentId = this.#resolveMention(
+      humanMessage.texto,
+      params.agentId || this.#resolveSessionAgent(session)
+    );
     const correlationId = params.correlationId || runId;
     const createdAt = this.clock();
     const run = validateConversationRun({
@@ -271,7 +287,6 @@ export class LiveConversationService {
     let routingReceipt = null;
     let completion = null;
     try {
-      const session = this.live.getSession(sessionId);
       const memory = this.memoryProvider ? await this.memoryProvider({ sessionId, input: humanMessage.texto }) : null;
       const systemPrompt = this.identityService?.composeSystemPrompt({ session, memory }) ?? null;
       const history = this.live.listMessages(sessionId).map(message => ({
@@ -377,6 +392,7 @@ export class LiveConversationService {
             role: "assistant",
             texto: finalText,
             estado: "persisted",
+            agentId: completion.agentId || null,
             createdAt: completedAt
           }
         }),

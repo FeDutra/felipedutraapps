@@ -103,6 +103,7 @@ export function validateSession(session, existingAreaIds = null) {
     areaId: session.areaId.trim(),
     titulo: titulo.trim(),
     identityId: LIVE_DEFAULT_IDENTITY,
+    agentId: session.agentId ? requiredText(session.agentId, "session_agent_id_invalid") : null,
     estado,
     createdAt: timestamp,
     updatedAt: session.updatedAt || timestamp,
@@ -130,6 +131,7 @@ export function validateMessage(message, existingSessionIds = null) {
     texto: texto.trim(),
     estado,
     createdAt: timestamp,
+    agentId: message.agentId ? requiredText(message.agentId, "message_agent_id_invalid") : null,
     provenance: validateProvenance(message.provenance)
   };
 }

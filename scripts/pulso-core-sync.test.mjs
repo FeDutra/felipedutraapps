@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -97,11 +97,12 @@ test('bundle assinado replica eventos, é idempotente e não contém chave priva
   assert.equal(secondImport.imported, 0);
   assert.equal(secondImport.duplicates, 1);
   assert.equal(secondImport.conflicts, 0);
+  assert.equal(secondImport.replay, true);
 
   const returnBundle = b.sync.exportBundle({ targetDeviceId: a.sync.deviceManifest().deviceId });
   const returnImport = a.sync.importBundle({ bundlePath: returnBundle.path });
   assert.equal(returnImport.imported, 0);
-  assert.equal(returnImport.duplicates, 1);
+  assert.equal(returnImport.duplicates, 0);
   assert.equal(a.store.verifyIntegrity().ok, true);
   assert.equal(b.store.verifyIntegrity().ok, true);
 
@@ -126,6 +127,23 @@ test('edição concorrente não sobrescreve: entra em quarentena de conflito', (
 
   a.store.close();
   b.store.close();
+  rmSync(a.dataDir, { recursive: true, force: true });
+  rmSync(b.dataDir, { recursive: true, force: true });
+});
+
+test('exportação falha fechada quando a projeção contém segredo', () => {
+  const a = fixture('macbook', 'secret-scan');
+  const b = fixture('imac', 'secret-scan');
+  a.sync.trustDevice(b.sync.deviceManifest());
+  appendMessage(a.store, 'evt_secret', 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456');
+  assert.throws(
+    () => a.sync.exportBundle({ targetDeviceId: b.sync.deviceManifest().deviceId }),
+    error => error?.code === 'SYNC_SENSITIVE_CONTENT',
+  );
+  const quarantine = path.join(a.dataDir, 'sync', 'quarantine');
+  const receipt = readFileSync(path.join(quarantine, readdirSync(quarantine)[0]), 'utf8');
+  assert.doesNotMatch(receipt, /abcdefghijklmnopqrstuvwxyz123456/);
+  a.store.close(); b.store.close();
   rmSync(a.dataDir, { recursive: true, force: true });
   rmSync(b.dataDir, { recursive: true, force: true });
 });

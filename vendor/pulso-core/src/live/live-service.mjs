@@ -203,6 +203,7 @@ export class LiveService {
         invariant(existingSession, "idempotent_session_not_found:" + existingEntityId);
         invariant(existingSession.areaId === validated.areaId, "idempotency_payload_mismatch:areaId");
         invariant(existingSession.titulo === validated.titulo, "idempotency_payload_mismatch:titulo");
+        invariant((existingSession.agentId || null) === (validated.agentId || null), "idempotency_payload_mismatch:agentId");
         return existingSession;
       }
     }
@@ -223,6 +224,7 @@ export class LiveService {
         areaId: validated.areaId,
         titulo: validated.titulo,
         identityId: validated.identityId,
+        agentId: validated.agentId,
         estado: validated.estado,
         createdAt: validated.createdAt,
         updatedAt: validated.updatedAt
@@ -245,6 +247,7 @@ export class LiveService {
       invariant(existingSession, "idempotent_session_not_found:" + result.entityId);
       invariant(existingSession.areaId === validated.areaId, "idempotency_payload_mismatch:areaId");
       invariant(existingSession.titulo === validated.titulo, "idempotency_payload_mismatch:titulo");
+      invariant((existingSession.agentId || null) === (validated.agentId || null), "idempotency_payload_mismatch:agentId");
       return existingSession;
     }
 
@@ -355,6 +358,7 @@ export class LiveService {
         role: validated.role,
         texto: validated.texto,
         estado: validated.estado,
+        agentId: validated.agentId,
         createdAt: validated.createdAt
         ,provenance: validated.provenance
       }

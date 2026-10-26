@@ -1,6 +1,6 @@
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
-import { mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,14 @@ export function resolveDataDir(customPath) {
     process.env.XDG_DATA_HOME || resolve(homedir(), ".local", "share"),
     "pulso-core"
   );
+}
+
+export function resolveDefaultSyncFolder(customPath = null) {
+  if (customPath) return resolve(customPath);
+  if (process.env.PULSO_SYNC_FOLDER) return resolve(process.env.PULSO_SYNC_FOLDER);
+  const redeFe = resolve(homedir(), "Rede Fe");
+  if (existsSync(redeFe)) return join(redeFe, "PULSO Sync");
+  return null;
 }
 
 export function normalizeBridgeError(err) {
@@ -125,10 +133,12 @@ export class PulsoDesktopBridge {
       store: this.store,
       dataDir: this.dataDir,
     });
+    const defaultSyncFolder = resolveDefaultSyncFolder(options.syncFolder);
     this.syncTransport = options.syncTransport || new PeerFolderTransport({
       syncService: this.sync,
-      rootDir: options.syncFolder || join(this.dataDir, "sync", "peer-folder"),
+      rootDir: defaultSyncFolder || join(this.dataDir, "sync", "peer-folder"),
       configPath: join(this.dataDir, "sync", "transport.json"),
+      preferRootDir: Boolean(defaultSyncFolder),
     });
     this.liveMemory = options.liveMemory || new LiveMemoryService({ store: this.store });
     this.skills = options.skillRegistry || new SkillRegistryService({
@@ -183,6 +193,8 @@ export class PulsoDesktopBridge {
     this.initialized = false;
     this.closed = false;
     this.automationTimer = null;
+    this.syncTimer = null;
+    this.syncInFlight = false;
   }
 
   createModelAdapter(params, secretRef) {
@@ -344,6 +356,30 @@ export class PulsoDesktopBridge {
         this.automations.tick().catch(() => {});
       }, 30_000);
       this.automationTimer.unref?.();
+    }
+    if (!this.syncTimer) {
+      const synchronize = async () => {
+        if (this.syncInFlight || !this.syncTransport.status().configured) return null;
+        this.syncInFlight = true;
+        try {
+          const receipt = this.syncTransport.syncAll();
+          if (receipt.pulled.imported > 0) {
+            this.controlPlane.restore();
+            await this.live.restore();
+            this.liveMemory.restore();
+            this.skills.restore();
+            this.automations.restore();
+            this.channels.restore();
+          }
+          return receipt;
+        } finally {
+          this.syncInFlight = false;
+        }
+      };
+      this.synchronizePeers = synchronize;
+      this.syncTimer = setInterval(() => { synchronize().catch(() => {}); }, 15_000);
+      this.syncTimer.unref?.();
+      setTimeout(() => { synchronize().catch(() => {}); }, 1_000).unref?.();
     }
     this.initialized = true;
   }
@@ -698,6 +734,10 @@ export class PulsoDesktopBridge {
         this.automations.restore();
         this.channels.restore();
         return receipt;
+      }
+      case "sync.folder.sync": {
+        await this.initialize();
+        return await this.synchronizePeers();
       }
       case "audit.list": {
         await this.initialize();
@@ -1054,6 +1094,10 @@ export class PulsoDesktopBridge {
     if (this.automationTimer) {
       clearInterval(this.automationTimer);
       this.automationTimer = null;
+    }
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
     }
     for (const run of this.conversations.listRuns()) {
       if (!["completed", "failed", "cancelled", "interrupted"].includes(run.status)) {

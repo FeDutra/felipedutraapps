@@ -1,3 +1,33 @@
+# Rollback — prontidão operacional e sincronização multi-Mac (26/10/2026)
+
+- Baseline instalada: `f8e96d9e2e0b48ff8d834414c84f4a16589b6424` (`pulso-desktop-alpha-v0.9.0-rc.10`).
+- Escopo: sincronização assinada por deltas entre iMac e MacBook, presença real dos peers, autoria de agentes por sessão e operação transitória de jobs/watchdogs pelo Gateway oficial.
+- Fonte canônica: eventos, conversas, agentes e memória continuam no PULSO Core; OpenClaw/VPS permanece executor transitório de rotinas e canais; Firestore recebe somente projeções e recibos sanitizados.
+- Bancos SQLite vivos nunca são copiados entre máquinas. Jobs importados não são ativados em lote.
+
+## Reversão da ponte na VPS
+
+1. Parar somente `pulso-operator-bridge`.
+2. Restaurar o script e as regras preservados no backup datado criado antes da promoção.
+3. Reiniciar somente `pulso-operator-bridge`; não reiniciar Gateway, worker, canais ou a VPS.
+4. Confirmar saúde do Gateway, agenda canônica e ausência de pedidos pendentes duplicados.
+
+## Reversão dos aplicativos
+
+1. Encerrar somente a PULSO Next Preview em cada Mac.
+2. Preservar o bundle candidato e os bancos como artefatos datados; não apagar.
+3. Restaurar o `.app` da baseline guardado em cada Mac antes da promoção.
+4. Reabrir e confirmar SQLite, autenticação e PULSO estável intactos.
+
+## Reversão da sincronização
+
+1. Pausar o transporte de bundles sem remover o journal local.
+2. Revogar o peer em `sync_devices` se houver falha de identidade ou assinatura.
+3. Preservar outbox, inbox, conflitos e recibos para auditoria.
+4. Reverter conteúdo somente por evento compensatório; nunca editar ou substituir o SQLite vivo.
+
+---
+
 # Rollback — entrada raiz compatível com WKWebView do macOS 14 (24/10/2026)
 
 - Baseline: `747d1f373229d28c47f9e829fa20f4213d0a7e27`.

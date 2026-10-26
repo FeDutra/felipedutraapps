@@ -36,9 +36,11 @@ const canaryPath = path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json');
 test('macOS bundle carries the exact icon used by the official PULSO app', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
   const icns = readFileSync(path.join(repoRoot, 'src-tauri', 'icons', 'icon.icns'));
+  const canaryIcns = readFileSync(path.join(repoRoot, 'src-tauri', 'icons', 'pulso-next-official.icns'));
 
   assert.equal(baseConfig.bundle.icon.includes('icons/icon.icns'), true);
   assert.equal(createHash('sha256').update(icns).digest('hex'), '1535d355994f8ee82da91384d2a29e04d5b4440f3e6051b5c8b06e7a62283693');
+  assert.equal(createHash('sha256').update(canaryIcns).digest('hex'), createHash('sha256').update(icns).digest('hex'));
 });
 
 test('desktop HOME applies and persists the black theme without relying on the /pulso layout', () => {
@@ -79,6 +81,7 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   assert.equal(merged.version, '0.9.0');
   assert.notEqual(merged.productName, baseConfig.productName);
   assert.notEqual(merged.identifier, baseConfig.identifier);
+  assert.deepEqual(merged.bundle.icon, ['icons/pulso-next-official.icns']);
 
   // 2. All externalBin entries (Kokoro + pulso-node + official Codex) preserved
   assert.ok(Array.isArray(merged.bundle?.externalBin));

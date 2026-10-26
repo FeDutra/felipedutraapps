@@ -24,8 +24,10 @@ const WORKSPACE_ID = process.env.PULSO_WORKSPACE_ID || 'felipe_dutra';
 const BASE_PATH = `workspaces/${WORKSPACE_ID}`;
 const APPROVALS_PATH = `${BASE_PATH}/pulso_operator_approvals`;
 const RUNTIME_PATH = `${BASE_PATH}/pulso_operator_runtime/current`;
+const AUTOMATIONS_PATH = `${BASE_PATH}/pulso_operator_automations`;
+const COMMANDS_PATH = `${BASE_PATH}/pulso_operator_commands`;
 const HEARTBEAT_MS = Number.parseInt(process.env.PULSO_OPERATOR_HEARTBEAT_MS || '15000', 10);
-const BRIDGE_VERSION = '0.2.0';
+const BRIDGE_VERSION = '0.3.0';
 const DEVICE_IDENTITIES = {
   imac: '2ebf570d0a71ff10bf5c6b5491929be05c8c8786168108993a5efe3c986074db',
   macbook: 'cd9a9e9a737df7280bb62480369e143c61ee9316c80408199754f813c222bba3',
@@ -74,6 +76,27 @@ async function getGatewayRuntime() {
 
 function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+function sanitizeText(value, limit = 500) {
+  if (typeof value !== 'string') return null;
+  return value
+    .replace(/\b(?:sk|pk)-[A-Za-z0-9_-]{12,}\b/gu, '[redacted]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b/giu, 'Bearer [redacted]')
+    .replace(/\b(?:token|password|passwd|secret|api[_-]?key)\s*[:=]\s*\S+/giu, '$1=[redacted]')
+    .slice(0, limit);
+}
+
+function sanitizeSchedule(schedule) {
+  if (!schedule || typeof schedule !== 'object') return null;
+  return compactObject({
+    kind: typeof schedule.kind === 'string' ? schedule.kind : null,
+    expr: typeof schedule.expr === 'string' ? schedule.expr : null,
+    tz: typeof schedule.tz === 'string' ? schedule.tz : null,
+    at: typeof schedule.at === 'string' ? schedule.at : null,
+    everyMs: Number.isFinite(schedule.everyMs) ? Number(schedule.everyMs) : null,
+    anchorMs: Number.isFinite(schedule.anchorMs) ? Number(schedule.anchorMs) : null,
+  });
 }
 
 function normalizeKind(value, fallback = 'exec') {
@@ -144,10 +167,50 @@ async function readDeviceProjection() {
   });
 }
 
+function sanitizeAutomation(job) {
+  const id = String(job?.id || job?.jobId || '').trim();
+  if (!id) return null;
+  const state = job?.state && typeof job.state === 'object' ? job.state : {};
+  return compactObject({
+    id,
+    name: String(job?.displayName || job?.name || id),
+    description: sanitizeText(job?.description),
+    enabled: job?.enabled === true,
+    schedule: sanitizeSchedule(job?.schedule),
+    ownerAgentId: job?.owner?.agentId || job?.agentId || null,
+    payloadKind: job?.payload?.kind || null,
+    model: job?.payload?.model || null,
+    lastRunAtMs: Number(state.lastRunAtMs || 0) || null,
+    nextRunAtMs: Number(state.nextRunAtMs || 0) || null,
+    lastStatus: state.lastStatus || null,
+    lastError: sanitizeText(typeof state.lastError === 'string' ? state.lastError : state.lastError?.message),
+    consecutiveErrors: Number(state.consecutiveErrors || 0),
+    autoDisabled: state.autoDisabled || null,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+async function readAutomationProjection() {
+  const response = await callGatewayFromCli('cron.list', { timeout: String(10_000) }, { includeDisabled: true, limit: 500, offset: 0 });
+  return Array.isArray(response?.jobs) ? response.jobs : Array.isArray(response) ? response : [];
+}
+
+async function executeOperatorCommand(data) {
+  const action = String(data?.action || '');
+  const automationId = String(data?.automationId || '').trim();
+  if (action === 'create') return await callGatewayFromCli('cron.add', { timeout: String(15_000) }, data.job || {});
+  if (action === 'update' && automationId) return await callGatewayFromCli('cron.update', { timeout: String(15_000) }, { id: automationId, patch: data.patch || {} });
+  if (action === 'run' && automationId) return await callGatewayFromCli('cron.run', { timeout: String(15_000) }, { id: automationId, mode: 'force' });
+  if (action === 'remove' && automationId) return await callGatewayFromCli('cron.remove', { timeout: String(15_000) }, { id: automationId });
+  throw new Error(`unsupported_operator_command:${action}`);
+}
+
 async function main() {
   if (!getApps().length) initializeApp({ credential: applicationDefault() });
   const db = getFirestore();
   const approvalsCollection = db.collection(APPROVALS_PATH);
+  const automationsCollection = db.collection(AUTOMATIONS_PATH);
+  const commandsCollection = db.collection(COMMANDS_PATH);
   const runtimeRef = db.doc(RUNTIME_PATH);
   const cfg = loadConfig();
   const { createOperatorApprovalsGatewayClient } = await getGatewayRuntime();
@@ -234,15 +297,65 @@ async function main() {
     }
   }, error => log('firestore.listener.error', { message: error.message }));
 
+  const unsubscribeCommands = commandsCollection.where('status', '==', 'pending').onSnapshot(snapshot => {
+    for (const change of snapshot.docChanges()) {
+      if (change.type !== 'added') continue;
+      void db.runTransaction(async transaction => {
+        const current = await transaction.get(change.doc.ref);
+        if (!current.exists || current.data()?.status !== 'pending') return null;
+        transaction.set(change.doc.ref, {
+          status: 'running',
+          startedAtMs: Date.now(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return current.data();
+      })
+        .then(async data => {
+          if (!data) return;
+          const result = await executeOperatorCommand(data);
+          await change.doc.ref.set({
+            status: 'completed',
+            completedAtMs: Date.now(),
+            resultId: result?.id || result?.job?.id || data.automationId || null,
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        })
+        .catch(error => change.doc.ref.set({
+          status: 'failed',
+          completedAtMs: Date.now(),
+          failureMessage: sanitizeText(error instanceof Error ? error.message : String(error)),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true }));
+    }
+  }, error => log('automation-command.listener.error', { message: error.message }));
+
   const heartbeat = async () => {
     const pending = await approvalsCollection.where('status', 'in', ['pending', 'resolving']).get();
     let devices;
     let deviceProjectionError = null;
+    let automationProjectionError = null;
     try {
       devices = await readDeviceProjection();
     } catch (error) {
       deviceProjectionError = error instanceof Error ? error.message : String(error);
       log('device-projection.error', { message: deviceProjectionError });
+    }
+    try {
+      const jobs = await readAutomationProjection();
+      const batch = db.batch();
+      const activeIds = new Set();
+      for (const job of jobs) {
+        const projection = sanitizeAutomation(job);
+        if (!projection) continue;
+        activeIds.add(projection.id);
+        batch.set(automationsCollection.doc(projection.id), projection, { merge: true });
+      }
+      const existing = await automationsCollection.get();
+      for (const doc of existing.docs) if (!activeIds.has(doc.id)) batch.delete(doc.ref);
+      await batch.commit();
+    } catch (error) {
+      automationProjectionError = error instanceof Error ? error.message : String(error);
+      log('automation-projection.error', { message: automationProjectionError });
     }
     await runtimeRef.set({
       status: 'connected',
@@ -253,6 +366,7 @@ async function main() {
       lastError: null,
       ...(devices ? { devices, devicesObservedAtMs: Date.now() } : {}),
       deviceProjectionError,
+      automationProjectionError,
       stoppedBy: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -265,6 +379,7 @@ async function main() {
     stopping = true;
     clearInterval(heartbeatTimer);
     unsubscribe();
+    unsubscribeCommands();
     gateway.stop();
     await runtimeRef.set({ status: 'offline', lastSeenAtMs: Date.now(), stoppedBy: signal }, { merge: true });
     process.exit(0);

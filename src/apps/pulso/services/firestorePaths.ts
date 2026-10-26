@@ -86,6 +86,10 @@ export const firestorePaths = {
   operatorApproval: (id: string) => `${BASE_PATH}/pulso_operator_approvals/${id}`,
   operatorRuntime: () => `${BASE_PATH}/pulso_operator_runtime`,
   operatorRuntimeState: () => `${BASE_PATH}/pulso_operator_runtime/current`,
+  operatorAutomations: () => `${BASE_PATH}/pulso_operator_automations`,
+  operatorAutomation: (id: string) => `${BASE_PATH}/pulso_operator_automations/${id}`,
+  operatorCommands: () => `${BASE_PATH}/pulso_operator_commands`,
+  operatorCommand: (id: string) => `${BASE_PATH}/pulso_operator_commands/${id}`,
 
   meta: () => `${BASE_PATH}/pulso_meta`,
   seedStatus: (version: string) => `${BASE_PATH}/pulso_meta/seed_${version}`

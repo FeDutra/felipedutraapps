@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
@@ -46,6 +47,27 @@ export interface OperatorRuntimeProjection {
   lastError?: string | null;
   devices: PulsoDeviceProjection[];
 }
+
+export interface OperatorAutomationProjection {
+  id: string;
+  name: string;
+  description?: string | null;
+  enabled: boolean;
+  schedule?: Readonly<Record<string, unknown>> | null;
+  ownerAgentId?: string | null;
+  payloadKind?: string | null;
+  model?: string | null;
+  lastRunAtMs?: number | null;
+  nextRunAtMs?: number | null;
+  lastStatus?: string | null;
+  lastError?: string | null;
+  consecutiveErrors: number;
+}
+
+export type OperatorAutomationCommand =
+  | { action: 'create'; job: Readonly<Record<string, unknown>> }
+  | { action: 'update'; automationId: string; patch: Readonly<Record<string, unknown>> }
+  | { action: 'run' | 'remove'; automationId: string };
 
 function asMillis(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -100,6 +122,45 @@ function normalizeDevices(value: unknown): PulsoDeviceProjection[] {
 }
 
 export const operatorControlService = {
+  subscribeAutomations(
+    onValue: (automations: OperatorAutomationProjection[]) => void,
+    onError?: (error: Error) => void,
+  ) {
+    return onSnapshot(
+      collection(db, firestorePaths.operatorAutomations()),
+      snapshot => onValue(snapshot.docs.map(item => {
+        const raw = item.data();
+        return {
+          id: item.id,
+          name: typeof raw.name === 'string' ? raw.name : item.id,
+          description: typeof raw.description === 'string' ? raw.description : null,
+          enabled: raw.enabled === true,
+          schedule: raw.schedule && typeof raw.schedule === 'object' ? raw.schedule : null,
+          ownerAgentId: typeof raw.ownerAgentId === 'string' ? raw.ownerAgentId : null,
+          payloadKind: typeof raw.payloadKind === 'string' ? raw.payloadKind : null,
+          model: typeof raw.model === 'string' ? raw.model : null,
+          lastRunAtMs: asMillis(raw.lastRunAtMs),
+          nextRunAtMs: asMillis(raw.nextRunAtMs),
+          lastStatus: typeof raw.lastStatus === 'string' ? raw.lastStatus : null,
+          lastError: typeof raw.lastError === 'string' ? raw.lastError : null,
+          consecutiveErrors: typeof raw.consecutiveErrors === 'number' ? raw.consecutiveErrors : 0,
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))),
+      error => onError?.(error),
+    );
+  },
+
+  async requestAutomationCommand(command: OperatorAutomationCommand) {
+    const ref = await addDoc(collection(db, firestorePaths.operatorCommands()), {
+      ...command,
+      status: 'pending',
+      requestedBy: 'pulso',
+      requestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return ref.id;
+  },
+
   subscribeApprovals(
     onValue: (approvals: OperatorApprovalProjection[]) => void,
     onError?: (error: Error) => void,
