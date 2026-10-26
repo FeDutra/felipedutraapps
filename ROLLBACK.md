@@ -1,3 +1,25 @@
+# Rollback — constelação conversacional e controle humano (26/10/2026)
+
+- Baseline: `930d3c1f6be760fff4eee4de164e600e612881aa` (`pulso-desktop-alpha-v0.9.0-rc.16`).
+- Escopo: participantes multiagente por menção/seletor, progresso operacional visível,
+  interrupção/redirecionamento de turnos e pausa/retomada do áudio.
+- Nenhum SQLite vivo será copiado ou editado diretamente. Eventos novos devem ser
+  aditivos e clientes antigos devem continuar entendendo sessões e mensagens existentes.
+- OpenClaw permanece adaptador de execução transitório para capacidades ainda não
+  migradas; a conversa, os turnos, a autoria e o controle pertencem ao PULSO Core.
+
+## Reversão
+
+1. Encerrar somente a PULSO Next Preview e seus sidecars.
+2. Preservar bundle, banco, recibos de execução e eventos da candidata para auditoria.
+3. Restaurar o bundle rc.16 guardado no rollback local de cada Mac.
+4. Reabrir e conferir SQLite, áreas, sessões, mensagens, presença e sincronização.
+5. Eventos aditivos de participantes/progresso/cancelamento permanecem no journal e são
+   ignorados pela rc.16; qualquer compensação deve ocorrer por novo evento, nunca por
+   remoção ou edição direta do banco.
+
+---
+
 # Rollback — prontidão operacional e sincronização multi-Mac (26/10/2026)
 
 - Baseline instalada: `f8e96d9e2e0b48ff8d834414c84f4a16589b6424` (`pulso-desktop-alpha-v0.9.0-rc.10`).

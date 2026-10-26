@@ -7,6 +7,8 @@ import {
   Check, 
   AlertTriangle, 
   Volume2, 
+  Pause,
+  Play,
   Square, 
   Copy, 
   Layers,
@@ -485,8 +487,9 @@ export const MessageRenderer = React.memo(({ text, sender }: { text: string; sen
 interface MessageActionsProps {
   msg: Message;
   playingMsgId: string | null;
-  playingState: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
+  playingState: 'stopped' | 'preparing' | 'playing' | 'paused' | 'error/fallback';
   onHearClick: (msg: Message) => void;
+  onStopAudio?: () => void;
   onCopyText: (msg: Message) => void;
 }
 
@@ -495,11 +498,13 @@ export const MessageActions = ({
   playingMsgId,
   playingState,
   onHearClick,
+  onStopAudio,
   onCopyText
 }: MessageActionsProps) => {
   const isPlayingThis = playingMsgId === msg.id;
   const isPreparing = isPlayingThis && playingState === 'preparing';
   const isCurrentlyPlaying = isPlayingThis && playingState === 'playing';
+  const isPaused = isPlayingThis && playingState === 'paused';
   
   const showHandoffStatus = msg.handoffStatus === 'waiting_user_approval' || 
                             msg.handoffStatus === 'executed' || 
@@ -529,14 +534,26 @@ export const MessageActions = ({
         <button
           onClick={() => onHearClick(msg)}
           className={`text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none flex items-center gap-1.5`}
-          title={isCurrentlyPlaying ? "Parar áudio" : isPreparing ? "Preparando áudio..." : "Ouvir resposta"}
+          title={isCurrentlyPlaying ? "Pausar áudio" : isPaused ? "Retomar áudio" : isPreparing ? "Preparando áudio..." : "Ouvir resposta"}
         >
           {isCurrentlyPlaying ? (
-            <Square size={11} strokeWidth={1.5} />
+            <Pause size={11} strokeWidth={1.5} />
+          ) : isPaused ? (
+            <Play size={11} strokeWidth={1.5} />
           ) : (
             <Volume2 size={11} strokeWidth={1.5} className={isPreparing ? "animate-pulse text-white/80" : ""} />
           )}
         </button>
+
+        {(isCurrentlyPlaying || isPaused || isPreparing) && (
+          <button
+            onClick={() => onStopAudio?.()}
+            className="text-[#fbf9f5]/40 hover:text-white transition-colors bg-transparent border-none cursor-pointer outline-none"
+            title="Parar áudio"
+          >
+            <Square size={10} strokeWidth={1.5} />
+          </button>
+        )}
 
         {/* Copy Text Action */}
         <button

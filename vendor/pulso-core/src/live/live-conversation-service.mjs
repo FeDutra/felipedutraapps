@@ -46,17 +46,39 @@ export class LiveConversationService {
     return await this.memoryRecorder({ title, content, tags: ["conversa", sessionId], source: { kind: "live-session", sessionId } });
   }
 
-  #resolveMention(text, explicitAgentId = null) {
-    if (!this.agentFoundry) return null;
-    if (explicitAgentId) return this.agentFoundry.get("agent", explicitAgentId) ? explicitAgentId : null;
-    const match = String(text || "").match(/^@([\p{L}\p{N}._-]+)/u);
-    if (!match) return null;
-    const needle = match[1].toLowerCase();
-    for (const instance of this.agentFoundry.list("agents")) {
+  #agentDirectory() {
+    if (!this.agentFoundry) return [];
+    return this.agentFoundry.list("agents").map(instance => {
       const blueprint = this.agentFoundry.get("blueprint", instance.blueprintId);
-      if (String(instance.agentId).toLowerCase() === needle || String(blueprint?.name || "").toLowerCase() === needle) return instance.agentId;
+      return { instance, blueprint, aliases: [instance.agentId, String(instance.agentId).replace(/^agent_/, ""), blueprint?.name].filter(Boolean) };
+    });
+  }
+
+  #normalizeMention(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  }
+
+  #resolveAgents(text, explicitAgentIds = [], session = null) {
+    if (!this.agentFoundry) return [];
+    const directory = this.#agentDirectory();
+    const resolve = value => {
+      const needle = this.#normalizeMention(value);
+      return directory.find(item => item.aliases.some(alias => this.#normalizeMention(alias) === needle))?.instance.agentId || null;
+    };
+    const candidates = Array.isArray(explicitAgentIds) ? [...explicitAgentIds] : [];
+    const mentions = String(text || "").matchAll(/@([\p{L}\p{N}._-]+)/gu);
+    for (const mention of mentions) candidates.push(mention[1]);
+    if (candidates.length === 0 && Array.isArray(session?.participantAgentIds)) candidates.push(...session.participantAgentIds);
+    if (candidates.length === 0) {
+      const bound = this.#resolveSessionAgent(session);
+      if (bound) candidates.push(bound);
     }
-    return null;
+    const resolved = [];
+    for (const candidate of candidates) {
+      const agentId = this.agentFoundry.get("agent", candidate) ? candidate : resolve(candidate);
+      if (agentId && !resolved.includes(agentId)) resolved.push(agentId);
+    }
+    return resolved;
   }
 
   #resolveSessionAgent(session) {
@@ -115,6 +137,24 @@ export class LiveConversationService {
       occurredAt,
       payload
     });
+  }
+
+  async #progress(runId, correlationId, details, onEnvelope) {
+    const occurredAt = this.clock();
+    const payload = {
+      phase: String(details.phase || "execution"),
+      label: String(details.label || "execução em andamento").slice(0, 240),
+      status: details.status || "running",
+      agentId: details.agentId || null,
+    };
+    this.#append([this.#runDraft({
+      type: "live.conversation_run.progressed",
+      runId,
+      correlationId,
+      occurredAt,
+      payload,
+    })]);
+    await onEnvelope?.({ type: "conversation.progress", runId, ...payload, occurredAt });
   }
 
   #transition(runId, toStatus, details = {}, correlationId = runId) {
@@ -199,9 +239,10 @@ export class LiveConversationService {
 
     const runId = params.runId || this.idGenerator("live_run");
     const session = this.live.getSession(sessionId);
-    const specialistAgentId = this.#resolveMention(
+    const specialistAgentIds = this.#resolveAgents(
       humanMessage.texto,
-      params.agentId || this.#resolveSessionAgent(session)
+      params.agentIds || (params.agentId ? [params.agentId] : []),
+      session
     );
     const correlationId = params.correlationId || runId;
     const createdAt = this.clock();
@@ -210,6 +251,7 @@ export class LiveConversationService {
       sessionId,
       humanMessageId: humanMessage.id,
       identityId: LIVE_DEFAULT_IDENTITY,
+      agentIds: specialistAgentIds,
       status: "awaiting_provider",
       accumulatedText: "",
       deltasCount: 0,
@@ -246,6 +288,7 @@ export class LiveConversationService {
         sessionId,
         humanMessageId: humanMessage.id,
         identityId: LIVE_DEFAULT_IDENTITY,
+        agentIds: specialistAgentIds,
         status: "awaiting_provider",
         resumedFromRunId,
         createdAt
@@ -283,6 +326,11 @@ export class LiveConversationService {
     }, correlationId);
     this.#transition(runId, "streaming", {}, correlationId);
     await options.onEnvelope?.({ type: "conversation.started", run: this.getRun(runId) });
+    await this.#progress(runId, correlationId, {
+      phase: "planning",
+      label: specialistAgentIds.length > 1 ? `coordenando ${specialistAgentIds.length} agentes` : "preparando contexto",
+      status: "running",
+    }, options.onEnvelope);
 
     let routingReceipt = null;
     let completion = null;
@@ -294,7 +342,7 @@ export class LiveConversationService {
         content: message.texto
       }));
       if (systemPrompt) history.unshift({ role: "system", content: systemPrompt });
-      const stream = specialistAgentId && this.agentExecutor
+      const stream = specialistAgentIds.length > 0 && this.agentExecutor
         ? null
         : this.router.stream({
         sessionId,
@@ -305,22 +353,39 @@ export class LiveConversationService {
         signal: controller.signal
       });
 
-      if (specialistAgentId && this.agentExecutor) {
-        const instance = this.agentFoundry.get("agent", specialistAgentId);
-        const blueprint = instance ? this.agentFoundry.get("blueprint", instance.blueprintId) : null;
-        const objective = humanMessage.texto.replace(/^@[\p{L}\p{N}._-]+\s*/u, "").trim() || humanMessage.texto;
-        const specialist = await this.agentExecutor.execute({ agentId: specialistAgentId, prompt: objective, sessionId, parentRunId: runId, activate: true });
-        const attributedText = `**${blueprint?.name || specialistAgentId}**\n\n${specialist.output}`;
-        const current = this.getRun(runId);
-        this.#append([this.#runDraft({
-          type: "live.conversation_run.delta_appended",
-          runId,
-          correlationId,
-          occurredAt: this.clock(),
-          payload: { index: current.deltasCount, text: attributedText }
-        })]);
-        await options.onEnvelope?.({ type: "conversation.delta", runId, index: current.deltasCount, text: attributedText, accumulatedText: this.getRun(runId).accumulatedText, agentId: specialistAgentId });
-        completion = { type: "model.completed", text: attributedText, outputText: attributedText, providerId: specialist.providerId, model: specialist.model, agentId: specialistAgentId, agentRunId: specialist.run.agentRunId };
+      if (specialistAgentIds.length > 0 && this.agentExecutor) {
+        const objective = humanMessage.texto.replace(/@[\p{L}\p{N}._-]+\s*/gu, "").trim() || humanMessage.texto;
+        const executions = await Promise.allSettled(specialistAgentIds.map(async specialistAgentId => {
+          const instance = this.agentFoundry.get("agent", specialistAgentId);
+          const blueprint = instance ? this.agentFoundry.get("blueprint", instance.blueprintId) : null;
+          const agentName = blueprint?.name || specialistAgentId;
+          await this.#progress(runId, correlationId, { phase: "execution", label: `${agentName} trabalhando`, status: "running", agentId: specialistAgentId }, options.onEnvelope);
+          const specialist = await this.agentExecutor.execute({ agentId: specialistAgentId, prompt: objective, sessionId, parentRunId: runId, activate: true, signal: controller.signal });
+          if (controller.signal.aborted) {
+            const error = new Error("conversation_cancelled");
+            error.code = "conversation_cancelled";
+            throw error;
+          }
+          const attributedText = `**${agentName}**\n\n${specialist.output}`;
+          const current = this.getRun(runId);
+          this.#append([this.#runDraft({ type: "live.conversation_run.delta_appended", runId, correlationId, occurredAt: this.clock(), payload: { index: current.deltasCount, text: `${current.deltasCount ? "\n\n" : ""}${attributedText}` } })]);
+          await options.onEnvelope?.({ type: "conversation.delta", runId, index: current.deltasCount, text: attributedText, accumulatedText: this.getRun(runId).accumulatedText, agentId: specialistAgentId });
+          await this.#progress(runId, correlationId, { phase: "execution", label: `${agentName} concluiu`, status: "completed", agentId: specialistAgentId }, options.onEnvelope);
+          return { text: attributedText, outputText: attributedText, providerId: specialist.providerId, model: specialist.model, agentId: specialistAgentId, agentRunId: specialist.run.agentRunId };
+        }));
+        const responses = [];
+        const failures = [];
+        executions.forEach((result, index) => {
+          if (result.status === "fulfilled") responses.push(result.value);
+          else failures.push({ agentId: specialistAgentIds[index], error: errorDescriptor(result.reason) });
+        });
+        if (controller.signal.aborted) {
+          const error = new Error("conversation_cancelled");
+          error.code = "conversation_cancelled";
+          throw error;
+        }
+        invariant(responses.length > 0, failures[0]?.error?.message || "all_agent_executions_failed");
+        completion = { type: "model.completed", text: this.getRun(runId).accumulatedText, outputText: this.getRun(runId).accumulatedText, providerId: responses[0].providerId, model: responses[0].model, responses, failures };
       }
 
       for await (const envelope of stream || []) {
@@ -359,7 +424,9 @@ export class LiveConversationService {
       const current = this.getRun(runId);
       const finalText = String(completion.text ?? completion.outputText ?? current.accumulatedText).trim();
       invariant(finalText, "assistant_message_empty");
-      const assistantMessageId = this.idGenerator("msg");
+      const responses = completion.responses?.length ? completion.responses : [{ text: finalText, agentId: completion.agentId || null, agentRunId: completion.agentRunId || null }];
+      const assistantMessages = responses.map(response => ({ id: this.idGenerator("msg"), text: String(response.text || "").trim(), agentId: response.agentId || null }));
+      const assistantMessageId = assistantMessages[0].id;
       const completedAt = this.clock();
       const receipt = {
         status: "completed",
@@ -367,22 +434,25 @@ export class LiveConversationService {
         sessionId,
         humanMessageId: humanMessage.id,
         assistantMessageId,
+        assistantMessageIds: assistantMessages.map(message => message.id),
         identityId: LIVE_DEFAULT_IDENTITY,
         providerId: completion.providerId,
         model: completion.model,
         routingReceipt,
-        agentId: completion.agentId || LIVE_DEFAULT_IDENTITY,
-        agentRunId: completion.agentRunId || null,
+        agentIds: specialistAgentIds,
+        agentId: completion.agentId || specialistAgentIds[0] || LIVE_DEFAULT_IDENTITY,
+        agentRunId: completion.agentRunId || responses[0]?.agentRunId || null,
+        failures: completion.failures || [],
         completedAt
       };
       assertNoSecrets(receipt);
       this.router.secretResolver?.assertZeroLeakage(receipt);
 
       const finalDrafts = [
-        eventDraft({
+        ...assistantMessages.map(message => eventDraft({
           type: "live.message.appended",
           aggregateType: "message",
-          aggregateId: assistantMessageId,
+          aggregateId: message.id,
           correlationId,
           causationId: runId,
           actor: LOTUS_ACTOR,
@@ -390,12 +460,12 @@ export class LiveConversationService {
           payload: {
             sessionId,
             role: "assistant",
-            texto: finalText,
+            texto: message.text,
             estado: "persisted",
-            agentId: completion.agentId || null,
+            agentId: message.agentId,
             createdAt: completedAt
           }
-        }),
+        })),
         eventDraft({
           type: "live.message.state_changed",
           aggregateType: "message",
@@ -432,6 +502,7 @@ export class LiveConversationService {
           }
         })
       ];
+      await this.#progress(runId, correlationId, { phase: "delivery", label: "respostas entregues na sessão", status: "completed" }, options.onEnvelope);
       this.#appendAtomic(finalDrafts);
       await this.#recordExplicitMemory({ sessionId, humanText: humanMessage.texto, assistantText: finalText }).catch(() => null);
       const completedRun = validateConversationRun(this.getRun(runId));
@@ -456,10 +527,44 @@ export class LiveConversationService {
     const run = this.getRun(runId);
     invariant(run, "conversation_run_not_found:" + runId);
     if (LIVE_CONVERSATION_RUN_TERMINAL.has(run.status)) return run;
-    this.activeRuns.get(runId)?.abort(options.reason || "operator_cancelled");
-    return this.#transitionIfActive(runId, "cancelled", {
+    const reason = options.reason || "operator_cancelled";
+    this.activeRuns.get(runId)?.abort(reason);
+    const cancelled = this.#transitionIfActive(runId, "cancelled", {
       failure: { code: "conversation_cancelled", message: options.reason || "operator_cancelled" }
     }, options.correlationId || runId);
+    const cancellationMessageId = `msg_cancel_${runId}`;
+    if (!this.live.state.messages.has(cancellationMessageId)) {
+      const occurredAt = this.clock();
+      this.#appendAtomic([
+        eventDraft({
+          type: "live.message.appended",
+          aggregateType: "message",
+          aggregateId: cancellationMessageId,
+          correlationId: options.correlationId || runId,
+          causationId: runId,
+          actor: CORE_ACTOR,
+          occurredAt,
+          payload: {
+            sessionId: run.sessionId,
+            role: "system",
+            texto: "execução interrompida. ajuste a direção e envie novamente quando quiser.",
+            estado: "persisted",
+            createdAt: occurredAt,
+          },
+        }),
+        eventDraft({
+          type: "live.message.state_changed",
+          aggregateType: "message",
+          aggregateId: run.humanMessageId,
+          correlationId: options.correlationId || runId,
+          causationId: runId,
+          actor: CORE_ACTOR,
+          occurredAt,
+          payload: { estado: "persisted" },
+        }),
+      ]);
+    }
+    return cancelled;
   }
 
   async resumeRun(runId, options = {}) {

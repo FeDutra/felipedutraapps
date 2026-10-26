@@ -114,6 +114,67 @@ test('menção a especialista no chat executa agente real e atribui a resposta',
   assert.equal(run.status, 'completed'); assert.equal(prompt, 'construa a direção'); assert.match(run.accumulatedText, /\*\*FORMA\*\*/); assert.match(live.listMessages(boot.activeSessionId).at(-1).texto, /direção entregue/); f.close();
 });
 
+test('múltiplas menções executam agentes na mesma sessão, preservam autoria e progresso', async () => {
+  const f = fixture('conversation-multi-agent'); const live = new LiveService({ store: f.store }); const boot = await live.bootstrap();
+  const agents = [
+    { agentId: 'agent_forma', blueprintId: 'bp_forma', name: 'FORMA' },
+    { agentId: 'agent_ritmo', blueprintId: 'bp_ritmo', name: 'RITMO' },
+  ];
+  const foundry = {
+    list(kind) { return kind === 'agents' ? agents.map(({ agentId, blueprintId }) => ({ agentId, blueprintId })) : []; },
+    get(kind, id) {
+      const item = agents.find(agent => kind === 'agent' ? agent.agentId === id : agent.blueprintId === id);
+      return item ? (kind === 'agent' ? { agentId: item.agentId, blueprintId: item.blueprintId } : { blueprintId: item.blueprintId, name: item.name }) : null;
+    },
+  };
+  const calls = [];
+  const executor = { async execute(input) { calls.push(input); return { output: `${input.agentId} respondeu`, providerId: 'codex-fe', model: 'gpt-test', run: { agentRunId: `run_${input.agentId}` } }; } };
+  const envelopes = [];
+  const conversation = new LiveConversationService({ store: f.store, live, router: { resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; } }, agentExecutor: executor, agentFoundry: foundry });
+  const run = await conversation.startTurn({ sessionId: boot.activeSessionId, text: 'cruzem @FORMA e @RITMO nesta direção' }, { onEnvelope: envelope => envelopes.push(envelope) });
+  const assistantMessages = live.listMessages(boot.activeSessionId).filter(message => message.role === 'assistant');
+  assert.equal(run.status, 'completed');
+  assert.deepEqual(run.agentIds, ['agent_forma', 'agent_ritmo']);
+  assert.deepEqual(new Set(calls.map(call => call.agentId)), new Set(['agent_forma', 'agent_ritmo']));
+  assert.equal(assistantMessages.length, 2);
+  assert.deepEqual(new Set(assistantMessages.map(message => message.agentId)), new Set(['agent_forma', 'agent_ritmo']));
+  assert.ok(envelopes.some(envelope => envelope.type === 'conversation.progress' && envelope.agentId === 'agent_forma'));
+  assert.ok(envelopes.some(envelope => envelope.type === 'conversation.progress' && envelope.agentId === 'agent_ritmo'));
+  f.close();
+});
+
+test('participantes persistentes da sessão recebem o turno sem menção explícita', async () => {
+  const f = fixture('conversation-session-participants'); const live = new LiveService({ store: f.store }); await live.bootstrap();
+  const session = await live.createSession({ id: 'sessao_conselho', areaId: 'area_pulso', titulo: 'Conselho' });
+  await live.setSessionParticipants({ sessionId: session.id, participantAgentIds: ['agent_forma', 'agent_ritmo'] });
+  const agents = [{ agentId: 'agent_forma', blueprintId: 'bp_forma' }, { agentId: 'agent_ritmo', blueprintId: 'bp_ritmo' }];
+  const foundry = { list() { return agents; }, get(kind, id) { if (kind === 'agent') return agents.find(agent => agent.agentId === id) || null; return { name: id === 'bp_forma' ? 'FORMA' : 'RITMO' }; } };
+  const called = [];
+  const conversation = new LiveConversationService({ store: f.store, live, router: { resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; } }, agentFoundry: foundry, agentExecutor: { async execute(input) { called.push(input.agentId); return { output: 'ok', providerId: 'codex-fe', model: 'gpt-test', run: { agentRunId: `run_${input.agentId}` } }; } } });
+  await conversation.startTurn({ sessionId: session.id, text: 'analisem este problema' });
+  assert.deepEqual(new Set(called), new Set(['agent_forma', 'agent_ritmo']));
+  assert.deepEqual(live.getSession(session.id).participantAgentIds, ['agent_forma', 'agent_ritmo']);
+  f.close();
+});
+
+test('cancelamento do turno aborta agentes filhos e cerca resultados tardios', async () => {
+  const f = fixture('conversation-multi-cancel'); const live = new LiveService({ store: f.store }); const boot = await live.bootstrap();
+  const foundry = { list() { return [{ agentId: 'agent_forma', blueprintId: 'bp_forma' }]; }, get(kind) { return kind === 'agent' ? { agentId: 'agent_forma', blueprintId: 'bp_forma' } : { name: 'FORMA' }; } };
+  let childAborted = false;
+  const executor = { async execute(input) { await new Promise(resolve => { input.signal.addEventListener('abort', () => { childAborted = true; resolve(); }, { once: true }); }); return { output: 'resultado tardio', providerId: 'codex-fe', model: 'gpt-test', run: { agentRunId: 'late' } }; } };
+  const conversation = new LiveConversationService({ store: f.store, live, router: { resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; } }, agentFoundry: foundry, agentExecutor: executor });
+  const promise = conversation.startTurn({ sessionId: boot.activeSessionId, text: '@FORMA comece' });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const active = conversation.listRuns(boot.activeSessionId).find(run => run.status === 'streaming');
+  await conversation.cancelRun(active.id, { reason: 'mudança de direção' });
+  const run = await promise;
+  assert.equal(childAborted, true);
+  assert.equal(run.status, 'cancelled');
+  assert.equal(live.listMessages(boot.activeSessionId).some(message => message.texto.includes('resultado tardio')), false);
+  assert.equal(live.listMessages(boot.activeSessionId).some(message => message.role === 'system' && message.texto.includes('execução interrompida')), true);
+  f.close();
+});
+
 test('sessão de especialista mantém vínculo e executa o agente sem menção explícita', async () => {
   const f = fixture('conversation-bound-agent'); const live = new LiveService({ store: f.store }); await live.bootstrap();
   const session = await live.createSession({ id: 'sessao_ritmo', areaId: 'area_pulso', titulo: 'RITMO', agentId: 'agent_audiovisual' });
@@ -170,7 +231,7 @@ test('desktop mantém Core canônico e usa OpenClaw como executor operacional co
   const bridgeSource = readFileSync(new URL('./pulso/operator-bridge.mjs', import.meta.url), 'utf8');
   const operatorSource = readFileSync(new URL('../src/apps/pulso/services/operatorControlService.ts', import.meta.url), 'utf8');
   const systemSource = readFileSync(new URL('../src/apps/pulso/pages/SystemPage.tsx', import.meta.url), 'utf8');
-  assert.match(liveSource, /NEXT_PUBLIC_PULSO_CORE_EXECUTOR !== 'local'/);
+  assert.match(liveSource, /NEXT_PUBLIC_PULSO_CORE_EXECUTOR === 'openclaw'/);
   assert.match(liveSource, /openclaw_\$\{req\.id\}_assistant/);
   assert.match(liveSource, /pulsoCoreClient\.appendMessage/);
   assert.match(bridgeSource, /callGatewayFromCli\('cron\.list'/);

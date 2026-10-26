@@ -79,6 +79,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'live.area.update',
   'live.sessions.list',
   'live.session.create',
+  'live.session.participants.set',
   'live.session.select',
   'live.message.append',
   'live.messages.list',

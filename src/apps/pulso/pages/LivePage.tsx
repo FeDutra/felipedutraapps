@@ -1027,7 +1027,8 @@ import {
   ListTodo,
   Mail,
   MessageCircleMore,
-  ShieldCheck
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { formatDate, truncateText } from '../utils/formatters';
 import { interpretLiveIntent } from '../utils/liveIntentInterpreter';
@@ -1515,16 +1516,101 @@ export type UnifiedVoiceState =
   | 'thinking'
   | 'interrupted';
 
+interface PulsoAgentOption {
+  agentId: string;
+  name: string;
+  role?: string;
+}
+
+function AgentParticipantSelector({
+  agents,
+  selectedAgentIds,
+  disabled,
+  onChange,
+}: {
+  agents: readonly PulsoAgentOption[];
+  selectedAgentIds: readonly string[];
+  disabled?: boolean;
+  onChange: (agentIds: string[]) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selected = new Set(selectedAgentIds);
+  if (agents.length === 0) return null;
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(value => !value)}
+        disabled={disabled}
+        className={`p-1.5 transition-colors bg-transparent border-none outline-none cursor-pointer disabled:opacity-30 ${selected.size > 0 ? 'text-white' : 'text-[#fbf9f5]/45 hover:text-white'}`}
+        title={selected.size > 0 ? `${selected.size} agente${selected.size > 1 ? 's' : ''} nesta conversa` : 'Convidar agentes para esta conversa'}
+        aria-label="Selecionar agentes da conversa"
+        aria-expanded={open}
+      >
+        <span className="relative block">
+          <Users size={14} strokeWidth={1.5} />
+          {selected.size > 0 && (
+            <span className="absolute -top-2 -right-2 min-w-3.5 h-3.5 px-0.5 rounded-full bg-[#fbf9f5] text-[#171717] text-[8px] leading-[14px] text-center font-semibold">
+              {selected.size}
+            </span>
+          )}
+        </span>
+      </button>
+      {open && (
+        <div className="absolute bottom-[calc(100%+0.75rem)] left-0 z-[80] w-56 max-h-72 overflow-y-auto rounded-2xl border border-white/15 bg-[#111]/70 backdrop-blur-2xl shadow-2xl p-2 text-left">
+          <div className="px-2 py-1.5 text-[8px] tracking-[0.2em] uppercase text-white/35">agentes na sessão</div>
+          {agents.map(agent => {
+            const checked = selected.has(agent.agentId);
+            return (
+              <button
+                key={agent.agentId}
+                type="button"
+                onClick={() => {
+                  const next = checked
+                    ? selectedAgentIds.filter(id => id !== agent.agentId)
+                    : [...selectedAgentIds, agent.agentId];
+                  onChange(next);
+                }}
+                className="w-full flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-white/10 transition-colors bg-transparent border-none outline-none cursor-pointer text-left"
+              >
+                <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${checked ? 'border-white bg-white text-black' : 'border-white/25'}`}>
+                  {checked && <Check size={9} strokeWidth={2.5} />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10px] text-white/85 tracking-wide uppercase truncate">{agent.name}</span>
+                  {agent.role && <span className="block text-[8px] text-white/35 truncate">{agent.role}</span>}
+                </span>
+              </button>
+            );
+          })}
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full px-2 pt-2 pb-1 text-[8px] text-white/35 hover:text-white/70 bg-transparent border-none cursor-pointer text-left"
+            >
+              limpar seleção
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function LivePage() {
   const router = useRouter();
   const coreDesktopEnabled = React.useMemo(() => pulsoCoreConversation.isAvailable(), []);
-  // Durante a transição, o Core é a fonte local/sincronizada e a OpenClaw é
-  // o executor operacional com ferramentas, canais, jobs e watchdogs.
+  // Conversa é soberania do Core. O caminho OpenClaw permanece disponível
+  // apenas como adaptador legado explícito enquanto jobs/canais/watchdogs
+  // migram por classe — nunca como default silencioso da sessão humana.
   const coreOperationalExecutorEnabled = coreDesktopEnabled
-    && process.env.NEXT_PUBLIC_PULSO_CORE_EXECUTOR !== 'local';
+    && process.env.NEXT_PUBLIC_PULSO_CORE_EXECUTOR === 'openclaw';
   const [coreReady, setCoreReady] = React.useState(false);
   const [coreMessagesByContext, setCoreMessagesByContext] = React.useState<Record<string, Message[]>>({});
+  const [agentDirectory, setAgentDirectory] = React.useState<PulsoAgentOption[]>([]);
+  const [participantAgentIdsBySession, setParticipantAgentIdsBySession] = React.useState<Record<string, string[]>>({});
   const [state, setState] = React.useState<any>(null);
   // The shell is intentionally visible from the first render. Data hydration
   // may continue in the background, but it cannot hold the UI on a spinner.
@@ -1791,9 +1877,28 @@ export default function LivePage() {
   React.useEffect(() => {
     if (coreDesktopEnabled) {
       let cancelled = false;
-      pulsoCoreConversation.loadNavigation()
-        .then(navigation => {
+      Promise.all([
+        pulsoCoreConversation.loadNavigation(),
+        pulsoCoreClient.listAgents(),
+        pulsoCoreClient.listAgentBlueprints(),
+      ])
+        .then(([navigation, agentsResult, blueprintsResult]) => {
           if (cancelled) return;
+          const agentRows = agentsResult.ok ? agentsResult.result : [];
+          const blueprintRows = blueprintsResult.ok ? blueprintsResult.result : [];
+          const blueprints = new Map(blueprintRows.map(item => [String(item.blueprintId || ''), item]));
+          setAgentDirectory(agentRows.map(item => {
+            const agentId = String(item.agentId || '');
+            const blueprint = blueprints.get(String(item.blueprintId || ''));
+            return {
+              agentId,
+              name: String(blueprint?.name || agentId.replace(/^agent_/, '') || 'agente'),
+              role: blueprint?.role ? String(blueprint.role) : undefined,
+            };
+          }).filter(item => item.agentId));
+          setParticipantAgentIdsBySession(Object.fromEntries(
+            navigation.sessions.map(session => [session.id, [...(session.participantAgentIds || [])]])
+          ));
           const visibleSessions = navigation.sessions
             .filter(session => session.estado === 'active')
             .map(coreSessionToContextNode);
@@ -2791,7 +2896,7 @@ export default function LivePage() {
   const [submittingExecutionId, setSubmittingExecutionId] = React.useState<string | null>(null);
   const [executionErrors, setExecutionErrors] = React.useState<Record<string, string>>({});
   const [playingMsgId, setPlayingMsgId] = React.useState<string | null>(null);
-  const [playingState, setPlayingState] = React.useState<'stopped' | 'preparing' | 'playing' | 'error/fallback'>('stopped');
+  const [playingState, setPlayingState] = React.useState<'stopped' | 'preparing' | 'playing' | 'paused' | 'error/fallback'>('stopped');
 
   const [voiceMode, setVoiceMode] = React.useState<VoiceMode>('off');
 
@@ -3250,9 +3355,11 @@ export default function LivePage() {
 
   const handleSpeakText = React.useCallback((playbackId: string, text: string) => {
     if (playingMsgId === playbackId) {
-      ttsAdapter.cancel();
-      setPlayingMsgId(null);
-      setPlayingState('stopped');
+      if (playingState === 'paused') {
+        if (ttsAdapter.resume()) setPlayingState('playing');
+      } else if (playingState === 'playing') {
+        if (ttsAdapter.pause()) setPlayingState('paused');
+      }
     } else {
       ttsAdapter.cancel();
       setPlayingMsgId(playbackId);
@@ -3286,7 +3393,13 @@ export default function LivePage() {
         }
       );
     }
-  }, [playingMsgId, ttsAdapter]);
+  }, [playingMsgId, playingState, ttsAdapter]);
+
+  const stopSpeechPlayback = React.useCallback(() => {
+    ttsAdapter.cancel();
+    setPlayingMsgId(null);
+    setPlayingState('stopped');
+  }, [ttsAdapter]);
 
   const handleHearClick = React.useCallback((msg: Message) => {
     handleSpeakText(msg.id, msg.text);
@@ -4707,16 +4820,22 @@ export default function LivePage() {
       }
 
       const assistantMessageId = `lotus-core-stream-${preGeneratedReqId}`;
-      const updateStreamingMessage = (text: string) => {
+      let progressSequence = 0;
+      const updateStreamingMessage = (text: string, agentId?: string | null) => {
+        const normalizedAgentId = agentId?.replace(/^agent_/, '') || undefined;
+        const streamingMessageId = normalizedAgentId ? `${assistantMessageId}-${normalizedAgentId}` : assistantMessageId;
+        const assistant = normalizedAgentId ? resolveAssistantIdentity({ agentId: normalizedAgentId }) : sendTargetAssistant;
         const nextMessage: Message = {
-          id: assistantMessageId,
+          id: streamingMessageId,
           sender: 'lotus',
           text,
+          assistantName: assistant.name,
+          agentId: normalizedAgentId,
           timestamp: new Date(),
           contextId: sendingContextId,
         };
         const upsert = (items: Message[]) => {
-          const index = items.findIndex(item => item.id === assistantMessageId);
+          const index = items.findIndex(item => item.id === streamingMessageId);
           if (index === -1) return [...items, nextMessage];
           const next = [...items];
           next[index] = { ...next[index], text };
@@ -4735,14 +4854,43 @@ export default function LivePage() {
         const result = await pulsoCoreConversation.streamTurn({
           sessionId: sendingContextId,
           text: messageText,
+          agentIds: participantAgentIdsBySession[sendingContextId] || [],
           idempotencyKey: preGeneratedReqId,
           signal: controller.signal,
-          onDelta: (_delta, accumulatedText) => updateStreamingMessage(accumulatedText),
+          onDelta: (delta, accumulatedText, _runId, agentId) => updateStreamingMessage(agentId ? delta : accumulatedText, agentId),
+          onProgress: (progress) => {
+            const normalizedAgentId = progress.agentId?.replace(/^agent_/, '') || undefined;
+            const assistant = normalizedAgentId ? resolveAssistantIdentity({ agentId: normalizedAgentId }) : sendTargetAssistant;
+            const progressMessage: Message = {
+              id: `${assistantMessageId}-progress-${progressSequence++}`,
+              sender: 'lotus',
+              text: progress.label,
+              assistantName: assistant.name,
+              agentId: normalizedAgentId,
+              timestamp: progress.occurredAt ? new Date(progress.occurredAt) : new Date(),
+              contextId: sendingContextId,
+              isProgressUpdate: true,
+              phase: progress.phase,
+              originRequestId: preGeneratedReqId,
+            };
+            setMessages(previous => [...previous, progressMessage]);
+            setCoreMessagesByContext(previous => ({
+              ...previous,
+              [sendingContextId]: [...(previous[sendingContextId] || []), progressMessage],
+            }));
+          },
           onState: run => {
             if (run.status === 'streaming') setContextTyping(sendingContextId, true);
           },
         });
-        const mapped = mapCoreMessages(result.messages, sendingContextId);
+        const completedMessageIds = new Set(
+          Array.isArray(result.run.receipt?.assistantMessageIds)
+            ? result.run.receipt.assistantMessageIds.map(String)
+            : result.run.assistantMessageId ? [result.run.assistantMessageId] : []
+        );
+        const mapped = mapCoreMessages(result.messages, sendingContextId).map(message => (
+          completedMessageIds.has(message.id) ? { ...message, requestId: preGeneratedReqId } : message
+        ));
         setCoreMessagesByContext(previous => ({ ...previous, [sendingContextId]: mapped }));
         setMessages(previous => [
           previous.find(message => message.id === 'welcome') || {
@@ -4755,6 +4903,7 @@ export default function LivePage() {
             message.id !== 'welcome'
             && message.contextId !== sendingContextId
           )),
+          ...previous.filter(message => message.contextId === sendingContextId && message.isProgressUpdate),
           ...mapped,
         ]);
         sessionsService.touchSession(sendingContextId);
@@ -6061,6 +6210,42 @@ ${data.transcription}`, {
     }
   }, [voiceState]);
 
+  const selectedParticipantAgentIds = participantAgentIdsBySession[sendTargetContextNode.contextId] || [];
+  const mentionQuery = React.useMemo(() => {
+    const match = inputMessage.match(/(?:^|\s)@([\p{L}\p{N}._-]*)$/u);
+    return match ? match[1] : null;
+  }, [inputMessage]);
+  const mentionSuggestions = React.useMemo(() => {
+    if (mentionQuery === null) return [];
+    const needle = mentionQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    return agentDirectory.filter(agent => {
+      const haystack = `${agent.name} ${agent.agentId.replace(/^agent_/, '')}`
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+      return haystack.includes(needle);
+    }).slice(0, 6);
+  }, [agentDirectory, mentionQuery]);
+
+  const updateSessionParticipants = React.useCallback(async (agentIds: string[]) => {
+    const sessionId = sendTargetContextNode.contextId;
+    const previous = participantAgentIdsBySession[sessionId] || [];
+    setParticipantAgentIdsBySession(current => ({ ...current, [sessionId]: agentIds }));
+    const result = await pulsoCoreClient.setSessionParticipants({
+      sessionId,
+      participantAgentIds: agentIds,
+      idempotencyKey: `participants:${sessionId}:${Date.now()}`,
+    });
+    if (!result.ok) {
+      setParticipantAgentIdsBySession(current => ({ ...current, [sessionId]: previous }));
+      setError(`Não consegui atualizar os agentes da sessão: ${result.error.message}`);
+    }
+  }, [participantAgentIdsBySession, sendTargetContextNode.contextId]);
+
+  const insertAgentMention = React.useCallback((agent: PulsoAgentOption) => {
+    const token = agent.agentId.replace(/^agent_/, '');
+    setInputMessage(current => current.replace(/(?:^|\s)@[\p{L}\p{N}._-]*$/u, match => `${match.startsWith(' ') ? ' ' : ''}@${token} `));
+    window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+  }, []);
+
   React.useEffect(() => {
     if (voiceError) {
       const t = setTimeout(() => setVoiceError(null), 4000);
@@ -7230,6 +7415,7 @@ ${data.transcription}`, {
                           playingMsgId={playingMsgId}
                           playingState={playingState}
                           onHearClick={handleHearClick}
+                          onStopAudio={stopSpeechPlayback}
                           onCopyText={handleCopyText}
                         />
                       )}
@@ -7319,6 +7505,7 @@ ${data.transcription}`, {
                           playingMsgId={playingMsgId}
                           playingState={playingState}
                           onHearClick={handleHearClick}
+                          onStopAudio={stopSpeechPlayback}
                           onCopyText={handleCopyText}
                         />
                       )}
@@ -7539,7 +7726,7 @@ ${data.transcription}`, {
                   onClose={() => {
                     const mesaPlaybackId = `mesa:${activeMesaArtifact.id}`;
                     if (playingMsgId === mesaPlaybackId) {
-                      handleSpeakText(mesaPlaybackId, activeMesaArtifact.content);
+                      stopSpeechPlayback();
                     }
                     setIsMesaOpen(false);
                   }}
@@ -7551,6 +7738,7 @@ ${data.transcription}`, {
                   onToggleCollapse={() => setIsMesaCollapsed(!isMesaCollapsed)}
                   speechState={playingMsgId === `mesa:${activeMesaArtifact.id}` ? playingState : 'stopped'}
                   onToggleSpeech={(id, content) => handleSpeakText(`mesa:${id}`, content)}
+                  onStopSpeech={stopSpeechPlayback}
                 />
               </div>
             </div>
@@ -7645,6 +7833,7 @@ ${data.transcription}`, {
                     playingMsgId={playingMsgId}
                     playingState={playingState}
                     onHearMessage={handleHearClick}
+                    onStopAudio={stopSpeechPlayback}
                     onCopyMessage={handleCopyText}
                     lastReadAt={lastReadTimes[contextNode.contextId] || pageLoadReadFallback}
                   />
@@ -7873,6 +8062,13 @@ ${data.transcription}`, {
             )}
           </div>
 
+          <AgentParticipantSelector
+            agents={agentDirectory}
+            selectedAgentIds={selectedParticipantAgentIds}
+            disabled={!coreReady || isTyping}
+            onChange={(agentIds) => void updateSessionParticipants(agentIds)}
+          />
+
           <SessionModelSelector
             session={sendTargetContextNode}
             models={modelCatalog}
@@ -7888,6 +8084,23 @@ ${data.transcription}`, {
           />
 
         {/* Quote preview bar was moved above the input row — removed from here */}
+
+          {mentionSuggestions.length > 0 && (
+            <div className="absolute bottom-[calc(100%+0.6rem)] left-10 z-[75] w-56 rounded-2xl border border-white/15 bg-[#111]/70 backdrop-blur-2xl shadow-2xl p-1.5 text-left">
+              {mentionSuggestions.map(agent => (
+                <button
+                  key={agent.agentId}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertAgentMention(agent)}
+                  className="w-full flex items-center justify-between gap-3 rounded-xl px-2.5 py-2 bg-transparent hover:bg-white/10 border-none cursor-pointer text-left"
+                >
+                  <span className="text-[10px] tracking-wide uppercase text-white/80 truncate">@{agent.agentId.replace(/^agent_/, '')}</span>
+                  {agent.role && <span className="text-[8px] text-white/30 truncate max-w-20">{agent.role}</span>}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Mapeamento de status físico do canal cognitivo ativo */}
           {(() => {
@@ -8043,11 +8256,11 @@ ${data.transcription}`, {
               submitComposer(sendTargetContextNode);
             }}
             disabled={!isTyping && !inputMessage.trim() && voiceMode !== 'recording_once'}
-            className="p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent border-none cursor-pointer outline-none"
+            className={`p-1.5 text-[#fbf9f5]/60 hover:text-white disabled:opacity-20 disabled:hover:text-[#fbf9f5]/60 transition-colors bg-transparent cursor-pointer outline-none ${coreDesktopEnabled && isTyping ? 'flex items-center gap-1 rounded-full border border-white/15 px-2.5' : 'border-none'}`}
             title={coreDesktopEnabled && isTyping ? 'interromper resposta' : 'enviar'}
           >
             {coreDesktopEnabled && isTyping
-              ? <Square size={12} strokeWidth={1.5} fill="currentColor" />
+              ? <><Square size={10} strokeWidth={1.5} fill="currentColor" /><span className="text-[9px] tracking-wide lowercase">parar</span></>
               : <Send size={14} strokeWidth={1.5} />}
           </button>
         </div>

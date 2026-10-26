@@ -947,6 +947,10 @@ export class PulsoDesktopBridge {
         await this.initialize();
         return await this.live.createSession(params, { idempotencyKey: params && params.idempotencyKey });
       }
+      case "live.session.participants.set": {
+        await this.initialize();
+        return await this.live.setSessionParticipants(params, { idempotencyKey: params && params.idempotencyKey });
+      }
       case "live.sessions.list": {
         await this.initialize();
         return this.live.listSessions(params.areaId || null);

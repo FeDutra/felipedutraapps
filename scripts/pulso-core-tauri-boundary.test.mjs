@@ -344,6 +344,26 @@ test('desktop UI startup does not depend on Kokoro becoming ready before the Web
   assert.match(ttsAdapter, /invoke<string>\('ensure_kokoro_sidecar'\)/);
   assert.match(ttsAdapter, /await ensureDesktopKokoroSidecar\(\);\s*const response = await fetch\('http:\/\/127\.0\.0\.1:14321'/);
   assert.match(ttsAdapter, /if \(isKokoro && \(!wasKokoro \|\| oldVoice !== this\.preferences\.voiceName\)\) \{\s*this\.warmup\(\)/);
+  assert.match(ttsAdapter, /public pause\(\): boolean/);
+  assert.match(ttsAdapter, /this\.currentAudio\?\.pause\(\)/);
+  assert.match(ttsAdapter, /window\.speechSynthesis\.pause\(\)/);
+  assert.match(ttsAdapter, /public resume\(\): boolean/);
+  assert.match(ttsAdapter, /window\.speechSynthesis\.resume\(\)/);
+  assert.match(ttsAdapter, /private async waitWhilePaused\(\)/);
+});
+
+test('desktop conversation surface exposes multi-agent selection, mentions, progress and interruption', () => {
+  const livePage = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'pages', 'LivePage.tsx'),
+    'utf8'
+  );
+  assert.match(livePage, /AgentParticipantSelector/);
+  assert.match(livePage, /setSessionParticipants/);
+  assert.match(livePage, /mentionSuggestions/);
+  assert.match(livePage, /agentIds: participantAgentIdsBySession\[sendingContextId\]/);
+  assert.match(livePage, /onProgress: \(progress\)/);
+  assert.match(livePage, /coreAbortControllersRef\.current\.get\(sendTargetContextNode\.contextId\)\?\.abort\(\)/);
+  assert.match(livePage, /<span className="text-\[9px\][^>]*>parar<\/span>/);
 });
 
 test('desktop WebView uses Tauri default navigation while external URLs stay behind the validated Arc command', () => {

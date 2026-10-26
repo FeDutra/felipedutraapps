@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { X, Copy, Download, Edit3, Save, ChevronRight, Square, Volume2 } from 'lucide-react';
+import { X, Copy, Download, Edit3, Save, ChevronRight, Square, Volume2, Pause, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export interface MesaArtifact {
@@ -18,8 +18,9 @@ interface MesaPanelProps {
   onSave?: (id: string, content: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  speechState?: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
+  speechState?: 'stopped' | 'preparing' | 'playing' | 'paused' | 'error/fallback';
   onToggleSpeech?: (id: string, content: string) => void;
+  onStopSpeech?: () => void;
 }
 
 export function MesaPanel({
@@ -31,6 +32,7 @@ export function MesaPanel({
   onToggleCollapse,
   speechState = 'stopped',
   onToggleSpeech,
+  onStopSpeech,
 }: MesaPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -95,11 +97,13 @@ export function MesaPanel({
               <button
                 onClick={() => onToggleSpeech(artifact.id, artifact.content)}
                 className="p-1.5 text-white/50 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
-                title={speechState === 'playing' ? 'Parar leitura' : speechState === 'preparing' ? 'Preparando áudio...' : 'Ouvir documento'}
-                aria-label={speechState === 'playing' ? 'Parar leitura do documento' : 'Ouvir documento'}
+                title={speechState === 'playing' ? 'Pausar leitura' : speechState === 'paused' ? 'Retomar leitura' : speechState === 'preparing' ? 'Preparando áudio...' : 'Ouvir documento'}
+                aria-label={speechState === 'playing' ? 'Pausar leitura do documento' : speechState === 'paused' ? 'Retomar leitura do documento' : 'Ouvir documento'}
               >
                 {speechState === 'playing' ? (
-                  <Square size={14} strokeWidth={1.5} />
+                  <Pause size={14} strokeWidth={1.5} />
+                ) : speechState === 'paused' ? (
+                  <Play size={14} strokeWidth={1.5} />
                 ) : (
                   <Volume2
                     size={14}
@@ -107,6 +111,16 @@ export function MesaPanel({
                     className={speechState === 'preparing' ? 'animate-pulse text-white/80' : ''}
                   />
                 )}
+              </button>
+            )}
+            {onStopSpeech && ['preparing', 'playing', 'paused'].includes(speechState) && (
+              <button
+                onClick={onStopSpeech}
+                className="p-1.5 text-white/40 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
+                title="Parar leitura"
+                aria-label="Parar leitura do documento"
+              >
+                <Square size={12} strokeWidth={1.5} />
               </button>
             )}
 

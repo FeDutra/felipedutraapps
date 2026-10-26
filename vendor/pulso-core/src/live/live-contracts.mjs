@@ -104,6 +104,7 @@ export function validateSession(session, existingAreaIds = null) {
     titulo: titulo.trim(),
     identityId: LIVE_DEFAULT_IDENTITY,
     agentId: session.agentId ? requiredText(session.agentId, "session_agent_id_invalid") : null,
+    participantAgentIds: validateAgentIds(session.participantAgentIds, "session_participant_agent_ids_invalid"),
     estado,
     createdAt: timestamp,
     updatedAt: session.updatedAt || timestamp,
@@ -199,9 +200,11 @@ export function validateConversationRun(run) {
     humanMessageId: requiredText(run.humanMessageId, "conversation_run_human_message_id_required"),
     assistantMessageId: optionalText(run.assistantMessageId, "conversation_run_assistant_message_id_invalid"),
     identityId: LIVE_DEFAULT_IDENTITY,
+    agentIds: validateAgentIds(run.agentIds, "conversation_run_agent_ids_invalid"),
     status,
     accumulatedText: run.accumulatedText || "",
     deltasCount: run.deltasCount ?? 0,
+    progress: Array.isArray(run.progress) ? structuredClone(run.progress) : [],
     resumedFromRunId: optionalText(run.resumedFromRunId, "conversation_run_resumed_from_invalid"),
     providerId: optionalText(run.providerId, "conversation_run_provider_id_invalid"),
     model: optionalText(run.model, "conversation_run_model_invalid"),
@@ -221,4 +224,15 @@ export function validateConversationRun(run) {
     invariant(validated.completedAt, "terminal_conversation_run_requires_completed_at");
   }
   return freezeDeep(validated);
+}
+
+function validateAgentIds(value, code) {
+  if (value === null || value === undefined) return [];
+  invariant(Array.isArray(value), code);
+  const result = [];
+  for (const agentId of value) {
+    const normalized = requiredText(agentId, code);
+    if (!result.includes(normalized)) result.push(normalized);
+  }
+  return result;
 }

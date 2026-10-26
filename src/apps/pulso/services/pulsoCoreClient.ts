@@ -91,6 +91,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'live.area.update',
   'live.sessions.list',
   'live.session.create',
+  'live.session.participants.set',
   'live.session.select',
   'live.message.append',
   'live.messages.list',
@@ -202,6 +203,7 @@ export interface PulsoLiveSession {
   readonly titulo: string;
   readonly identityId: 'lotus';
   readonly agentId?: string | null;
+  readonly participantAgentIds?: readonly string[];
   readonly estado: PulsoLiveEntityState;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -288,6 +290,7 @@ export interface PulsoCreateSessionParams {
   areaId: string;
   titulo: string;
   agentId?: string | null;
+  participantAgentIds?: readonly string[];
   estado?: PulsoLiveEntityState;
   idempotencyKey?: string;
 }
@@ -339,15 +342,27 @@ export interface PulsoConversationRun {
   readonly humanMessageId: string;
   readonly assistantMessageId: string | null;
   readonly identityId: 'lotus';
+  readonly agentIds: readonly string[];
   readonly status: PulsoConversationRunStatus;
   readonly accumulatedText: string;
   readonly deltasCount: number;
+  readonly progress: readonly PulsoConversationProgress[];
   readonly resumedFromRunId: string | null;
   readonly providerId: string | null;
   readonly model: string | null;
+  readonly receipt?: Readonly<Record<string, unknown>> | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly completedAt: string | null;
+}
+
+export interface PulsoConversationProgress {
+  readonly id?: string;
+  readonly phase: string;
+  readonly label: string;
+  readonly status: 'running' | 'completed' | 'failed' | 'cancelled' | string;
+  readonly agentId?: string | null;
+  readonly occurredAt?: string;
 }
 
 export interface PulsoConversationEnvelope {
@@ -356,6 +371,11 @@ export interface PulsoConversationEnvelope {
   readonly index?: number;
   readonly text?: string;
   readonly accumulatedText?: string;
+  readonly phase?: string;
+  readonly label?: string;
+  readonly status?: string;
+  readonly agentId?: string | null;
+  readonly occurredAt?: string;
   readonly run?: PulsoConversationRun;
   readonly error?: { readonly code?: string; readonly message?: string };
 }
@@ -914,6 +934,24 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
       );
     },
 
+    setSessionParticipants(
+      params: { sessionId: string; participantAgentIds: readonly string[]; idempotencyKey?: string },
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoLiveSession>> {
+      return request<PulsoLiveSession>('live.session.participants.set', {
+        ...params,
+        participantAgentIds: [...params.participantAgentIds],
+      }, requestId);
+    },
+
+    listAgents(requestId?: string): Promise<PulsoCoreResult<readonly Readonly<Record<string, unknown>>[]>> {
+      return request<readonly Readonly<Record<string, unknown>>[]>('agent.list', { resource: 'agents', query: {} }, requestId);
+    },
+
+    listAgentBlueprints(requestId?: string): Promise<PulsoCoreResult<readonly Readonly<Record<string, unknown>>[]>> {
+      return request<readonly Readonly<Record<string, unknown>>[]>('agent.list', { resource: 'blueprints', query: {} }, requestId);
+    },
+
     listSessions(
       params: { areaId?: string } = {},
       requestId?: string
@@ -955,7 +993,7 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
     },
 
     startTurn(
-      params: { sessionId: string; text: string; idempotencyKey?: string },
+      params: { sessionId: string; text: string; agentIds?: readonly string[]; idempotencyKey?: string },
       requestId?: string
     ): Promise<PulsoCoreResult<PulsoTurnStartResult>> {
       return request<PulsoTurnStartResult>('live.turn.start', { ...params }, requestId);

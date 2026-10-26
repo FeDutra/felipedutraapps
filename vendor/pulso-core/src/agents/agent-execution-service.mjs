@@ -26,7 +26,11 @@ export class AgentExecutionService {
     const blueprint = this.foundry.get("blueprint", instance.blueprintId); invariant(blueprint, `blueprint_not_found:${instance.blueprintId}`);
     const runId = input.runId || pulsoId("agtrun"); const budget = input.budget || instance.limits || blueprint.limits;
     const started = await this.foundry.startAgentRun({ agentRunId: runId, agentId, delegationId: input.delegationId || null, parentRunId: input.parentRunId || null, budget, createdAt: this.clock() }, { idempotencyKey: input.idempotencyKey || null });
-    const controller = new AbortController(); this.aborters.set(runId, controller); const startedMs = Date.now();
+    const controller = new AbortController();
+    const abortFromParent = () => controller.abort(input.signal?.reason || "parent_cancelled");
+    if (input.signal?.aborted) abortFromParent();
+    else input.signal?.addEventListener?.("abort", abortFromParent, { once: true });
+    this.aborters.set(runId, controller); const startedMs = Date.now();
     try {
       const memories = this.memory ? [
         ...this.memory.search({ query: prompt, scopeType: "agent", scopeId: agentId, limit: 6 }).results,
@@ -39,9 +43,16 @@ export class AgentExecutionService {
       const completed = await this.foundry.completeAgentRun({ runId, result: { text: completion.text, providerId: completion.providerId, model: completion.model, routingReceipt: completion.routingReceipt || null }, artifactRefs: input.artifactRefs || [], usageDelta: usage });
       return { run: completed.run, output: completion.text, providerId: completion.providerId, model: completion.model, routingReceipt: completion.routingReceipt || null };
     } catch (error) {
+      if (controller.signal.aborted || error?.name === "AbortError" || error?.code === "conversation_cancelled") {
+        const cancelled = await this.foundry.cancelAgentRun(runId, {
+          reason: String(controller.signal.reason || error?.message || "parent_cancelled"),
+        }).catch(() => null);
+        error.run = cancelled?.run || started.run;
+        throw error;
+      }
       const failed = await this.foundry.failAgentRun({ runId, error: { code: error?.code || "AGENT_EXECUTION_FAILED", message: error?.message || String(error) }, usageDelta: { turns: 1, tokens: 0, cost: 0, elapsedMs: Date.now() - startedMs, toolCalls: 0 } }).catch(() => null);
       error.run = failed?.run || started.run; throw error;
-    } finally { this.aborters.delete(runId); }
+    } finally { input.signal?.removeEventListener?.("abort", abortFromParent); this.aborters.delete(runId); }
   }
 
   async cancel(runId, reason = "user_requested") { this.aborters.get(runId)?.abort(); return this.foundry.cancelAgentRun(runId, { reason }); }

@@ -25,8 +25,9 @@ interface SecondaryChatPaneProps {
   onFocus: (focusComposer?: boolean) => void;
   onOpenMesa: (artifact: MesaArtifact) => void;
   playingMsgId: string | null;
-  playingState: 'stopped' | 'preparing' | 'playing' | 'error/fallback';
+  playingState: 'stopped' | 'preparing' | 'playing' | 'paused' | 'error/fallback';
   onHearMessage: (message: RenderMessage) => void;
+  onStopAudio: () => void;
   onCopyMessage: (message: RenderMessage) => void;
   lastReadAt?: string | null;
   messagesOverride?: readonly PaneMessage[];
@@ -74,6 +75,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
   playingMsgId,
   playingState,
   onHearMessage,
+  onStopAudio,
   onCopyMessage,
   lastReadAt,
   messagesOverride,
@@ -241,6 +243,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
                   playingMsgId={playingMsgId}
                   playingState={playingState}
                   onHearClick={onHearMessage}
+                  onStopAudio={onStopAudio}
                   onCopyText={onCopyMessage}
                 />
               </div>

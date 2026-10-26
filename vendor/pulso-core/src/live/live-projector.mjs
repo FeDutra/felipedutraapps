@@ -53,6 +53,7 @@ export function applyLiveEvent(state, event) {
         titulo: p.titulo ?? p.title,
         identityId: p.identityId || "lotus",
         agentId: p.agentId || null,
+        participantAgentIds: Array.isArray(p.participantAgentIds) ? [...p.participantAgentIds] : [],
         estado: p.estado || "active",
         createdAt: p.createdAt || event.occurredAt,
         updatedAt: p.updatedAt || event.occurredAt,
@@ -61,6 +62,17 @@ export function applyLiveEvent(state, event) {
       state.sessions.set(session.id, session);
       if (!state.messagesBySession.has(session.id)) {
         state.messagesBySession.set(session.id, []);
+      }
+      break;
+    }
+    case "live.session.participants_updated": {
+      const existing = state.sessions.get(event.aggregate.id);
+      if (existing) {
+        state.sessions.set(existing.id, {
+          ...existing,
+          participantAgentIds: Array.isArray(p.participantAgentIds) ? [...p.participantAgentIds] : [],
+          updatedAt: p.updatedAt || event.occurredAt,
+        });
       }
       break;
     }
@@ -111,9 +123,11 @@ export function applyLiveEvent(state, event) {
         humanMessageId: p.humanMessageId,
         assistantMessageId: null,
         identityId: p.identityId || "lotus",
+        agentIds: Array.isArray(p.agentIds) ? [...p.agentIds] : [],
         status: p.status || "awaiting_provider",
         accumulatedText: "",
         deltasCount: 0,
+        progress: [],
         resumedFromRunId: p.resumedFromRunId || null,
         providerId: null,
         model: null,
@@ -128,6 +142,24 @@ export function applyLiveEvent(state, event) {
       if (!state.conversationRunsBySession.has(run.sessionId)) state.conversationRunsBySession.set(run.sessionId, []);
       const list = state.conversationRunsBySession.get(run.sessionId);
       if (!list.includes(run.id)) list.push(run.id);
+      break;
+    }
+    case "live.conversation_run.progressed": {
+      const existing = state.conversationRuns.get(event.aggregate.id);
+      if (existing) {
+        state.conversationRuns.set(existing.id, {
+          ...existing,
+          progress: [...(existing.progress || []), {
+            id: event.id,
+            phase: p.phase,
+            label: p.label,
+            status: p.status || "running",
+            agentId: p.agentId || null,
+            occurredAt: event.occurredAt,
+          }],
+          updatedAt: event.occurredAt,
+        });
+      }
       break;
     }
     case "live.conversation_run.transitioned": {

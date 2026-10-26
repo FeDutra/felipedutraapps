@@ -261,6 +261,7 @@ export class LiveService {
         invariant(existingSession.areaId === validated.areaId, "idempotency_payload_mismatch:areaId");
         invariant(existingSession.titulo === validated.titulo, "idempotency_payload_mismatch:titulo");
         invariant((existingSession.agentId || null) === (validated.agentId || null), "idempotency_payload_mismatch:agentId");
+        invariant(JSON.stringify(existingSession.participantAgentIds || []) === JSON.stringify(validated.participantAgentIds || []), "idempotency_payload_mismatch:participantAgentIds");
         return existingSession;
       }
     }
@@ -282,6 +283,7 @@ export class LiveService {
         titulo: validated.titulo,
         identityId: validated.identityId,
         agentId: validated.agentId,
+        participantAgentIds: validated.participantAgentIds,
         estado: validated.estado,
         createdAt: validated.createdAt,
         updatedAt: validated.updatedAt
@@ -305,11 +307,44 @@ export class LiveService {
       invariant(existingSession.areaId === validated.areaId, "idempotency_payload_mismatch:areaId");
       invariant(existingSession.titulo === validated.titulo, "idempotency_payload_mismatch:titulo");
       invariant((existingSession.agentId || null) === (validated.agentId || null), "idempotency_payload_mismatch:agentId");
+      invariant(JSON.stringify(existingSession.participantAgentIds || []) === JSON.stringify(validated.participantAgentIds || []), "idempotency_payload_mismatch:participantAgentIds");
       return existingSession;
     }
 
     applyLiveEvent(this.state, draft);
     return this.state.sessions.get(validated.id);
+  }
+
+  async setSessionParticipants(params = {}, options = {}) {
+    await this.ensureRestored();
+    const sessionId = String(params.sessionId || "").trim();
+    invariant(sessionId, "session_id_required");
+    const existing = this.state.sessions.get(sessionId);
+    invariant(existing, "session_not_found:" + sessionId);
+    const participantAgentIds = [];
+    invariant(Array.isArray(params.participantAgentIds), "participant_agent_ids_required");
+    for (const value of params.participantAgentIds) {
+      const agentId = String(value || "").trim();
+      invariant(agentId, "participant_agent_id_invalid");
+      if (!participantAgentIds.includes(agentId)) participantAgentIds.push(agentId);
+    }
+    const occurredAt = now();
+    const draft = eventDraft({
+      type: "live.session.participants_updated",
+      aggregateType: "session",
+      aggregateId: sessionId,
+      correlationId: options.correlationId || pulsoId("cor"),
+      causationId: options.causationId || null,
+      actor: { kind: "human", id: "fe" },
+      occurredAt,
+      payload: { participantAgentIds, updatedAt: occurredAt },
+    });
+    const appendOptions = options.idempotencyKey ? {
+      idempotency: { scope: "live.session.participants", key: options.idempotencyKey, entityId: sessionId },
+    } : {};
+    const result = this.store.append([draft], appendOptions);
+    if (!result.duplicate) applyLiveEvent(this.state, draft);
+    return this.state.sessions.get(sessionId);
   }
 
   async selectSession(params = {}, options = {}) {

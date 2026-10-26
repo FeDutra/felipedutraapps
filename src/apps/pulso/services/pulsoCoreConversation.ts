@@ -24,9 +24,11 @@ export interface StreamTurnOptions {
   sessionId: string;
   text: string;
   idempotencyKey: string;
+  agentIds?: readonly string[];
   signal?: AbortSignal;
   onStarted?: (run: PulsoConversationRun) => void;
-  onDelta?: (delta: string, accumulatedText: string, runId: string) => void;
+  onDelta?: (delta: string, accumulatedText: string, runId: string, agentId?: string | null) => void;
+  onProgress?: (progress: { phase: string; label: string; status: string; agentId?: string | null; occurredAt?: string }, runId: string) => void;
   onState?: (run: PulsoConversationRun) => void;
   pollIntervalMs?: number;
   timeoutMs?: number;
@@ -111,6 +113,7 @@ export class PulsoCoreConversation {
     const started = await this.client.startTurn({
       sessionId: options.sessionId,
       text: options.text,
+      agentIds: options.agentIds,
       idempotencyKey: options.idempotencyKey,
     });
     if (!started.ok) {
@@ -158,8 +161,17 @@ export class PulsoCoreConversation {
           options.onDelta?.(
             envelope.text,
             envelope.accumulatedText ?? run.accumulatedText,
-            runId
+            runId,
+            envelope.agentId
           );
+        } else if (envelope.type === 'conversation.progress' && envelope.label) {
+          options.onProgress?.({
+            phase: envelope.phase || 'execution',
+            label: envelope.label,
+            status: envelope.status || 'running',
+            agentId: envelope.agentId,
+            occurredAt: envelope.occurredAt,
+          }, runId);
         }
       }
       options.onState?.(run);

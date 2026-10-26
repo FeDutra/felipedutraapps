@@ -274,6 +274,37 @@ export class TTSAdapter {
   private currentAudio: HTMLAudioElement | null = null;
   private currentAbortController: AbortController | null = null;
   private sessionStartTime = 0;
+  private paused = false;
+  private resumeWaiters: Array<() => void> = [];
+
+  public isPaused(): boolean {
+    return this.paused;
+  }
+
+  public pause(): boolean {
+    if (this.currentPlaySessionId === 0 || this.paused) return false;
+    this.paused = true;
+    this.currentAudio?.pause();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.pause();
+    console.log('[PULSO_TTS_PAUSED]');
+    return true;
+  }
+
+  public resume(): boolean {
+    if (this.currentPlaySessionId === 0 || !this.paused) return false;
+    this.paused = false;
+    const waiters = this.resumeWaiters.splice(0);
+    waiters.forEach(resolve => resolve());
+    if (this.currentAudio?.src) void this.currentAudio.play();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.resume();
+    console.log('[PULSO_TTS_RESUMED]');
+    return true;
+  }
+
+  private async waitWhilePaused(): Promise<void> {
+    if (!this.paused) return;
+    await new Promise<void>(resolve => this.resumeWaiters.push(resolve));
+  }
 
   /**
    * Cancel any active speaking.
@@ -285,6 +316,8 @@ export class TTSAdapter {
       console.log('[PULSO_TTS_CANCELLED]', { durationMs: elapsed });
     }
     this.currentPlaySessionId = 0;
+    this.paused = false;
+    this.resumeWaiters.splice(0).forEach(resolve => resolve());
     if (this.currentAbortController) {
       this.currentAbortController.abort();
       this.currentAbortController = null;
@@ -680,6 +713,7 @@ export class TTSAdapter {
 
     const playSessionId = ++this.globalPlaySessionId;
     this.currentPlaySessionId = playSessionId;
+    this.paused = false;
     this.sessionStartTime = startTime;
     this.currentAbortController = new AbortController();
     const isSessionActive = () => this.currentPlaySessionId === playSessionId;
@@ -873,7 +907,8 @@ export class TTSAdapter {
           }
         };
 
-        await audio.play();
+        await this.waitWhilePaused();
+        if (isSessionActive()) await audio.play();
 
       } catch (err) {
         if (!isSessionActive()) {
