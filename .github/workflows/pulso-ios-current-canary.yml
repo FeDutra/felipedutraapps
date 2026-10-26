@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
       - name: Install Rust for iOS
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,x86_64-apple-ios
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
@@ -86,7 +86,7 @@ jobs:
 
       - name: Build and capture iPhone simulator proof
         run: |
-          npx tauri ios build --ci --no-sign --target aarch64-sim --build-number 2026102601
+          npx tauri ios build --ci --no-sign --target x86_64 --build-number 2026102601
           SIM_APP="$(find src-tauri/gen/apple/build -type d -name '*.app' -path '*sim*' -print -quit)"
           test -n "$SIM_APP"
           UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(d["udid"] for devices in data["devices"].values() for d in devices if d["name"].startswith("iPhone") and d["isAvailable"]))')"

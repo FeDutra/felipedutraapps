@@ -48,6 +48,16 @@ test('generated Apple project can invoke the local Tauri CLI through npm', () =>
   assert.equal(packageJson.scripts.tauri, 'tauri');
 });
 
+test('iPhone CI uses the available Intel Apple runner with matching simulator target', () => {
+  const workflow = readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pulso-ios-current-canary.yml'),
+    'utf8'
+  );
+  assert.match(workflow, /runs-on: macos-15-intel/);
+  assert.match(workflow, /targets: aarch64-apple-ios,x86_64-apple-ios/);
+  assert.match(workflow, /--target x86_64/);
+});
+
 test('desktop HOME applies and persists the black theme without relying on the /pulso layout', () => {
   const livePage = readFileSync(
     path.join(repoRoot, 'src', 'apps', 'pulso', 'pages', 'LivePage.tsx'),
