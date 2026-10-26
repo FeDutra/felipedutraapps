@@ -224,14 +224,20 @@ export default function SystemPage() {
 
   const requestAutomation = async (key: string, command: Parameters<typeof operatorControlService.requestAutomationCommand>[0]) => {
     setAutomationBusy(key); setError(null);
-    try { await operatorControlService.requestAutomationCommand(command); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível comandar a rotina.'); }
-    finally { setAutomationBusy(null); }
+    try {
+      await operatorControlService.requestAutomationCommand(command);
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível comandar a rotina.');
+      return false;
+    } finally {
+      setAutomationBusy(null);
+    }
   };
 
   const createAutomation = async () => {
     if (!automationDraft.name.trim() || !automationDraft.message.trim() || !automationDraft.cron.trim()) return;
-    await requestAutomation('create', {
+    const created = await requestAutomation('create', {
       action: 'create',
       job: {
         name: automationDraft.name.trim(),
@@ -242,6 +248,7 @@ export default function SystemPage() {
         delivery: { mode: 'none' },
       },
     });
+    if (!created) return;
     setAutomationDraft({ name: '', cron: '0 9 * * *', message: '' });
     setShowAutomationForm(false);
   };
@@ -370,8 +377,16 @@ export default function SystemPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <button type="button" title={job.enabled ? 'Pausar' : 'Ativar'} disabled={automationBusy === job.id} onClick={() => requestAutomation(job.id, { action: 'update', automationId: job.id, patch: { enabled: !job.enabled } })} className="rounded-full border border-white/10 p-2 text-white/45 hover:text-white"><span className="sr-only">{job.enabled ? 'Pausar' : 'Ativar'}</span>{job.enabled ? <Pause size={13} /> : <Play size={13} />}</button>
-                    <button type="button" title="Executar agora" disabled={automationBusy === job.id} onClick={() => requestAutomation(job.id, { action: 'run', automationId: job.id })} className="rounded-full border border-white/10 p-2 text-white/45 hover:text-white"><Play size={13} /></button>
-                    <button type="button" title="Remover" disabled={automationBusy === job.id} onClick={() => requestAutomation(job.id, { action: 'remove', automationId: job.id })} className="rounded-full border border-rose-200/10 p-2 text-rose-200/35 hover:text-rose-100"><Trash2 size={13} /></button>
+                    <button type="button" title="Executar agora" disabled={automationBusy === job.id} onClick={() => {
+                      if (window.confirm(`Executar “${job.name}” agora? A rotina pode produzir efeitos externos.`)) {
+                        void requestAutomation(job.id, { action: 'run', automationId: job.id });
+                      }
+                    }} className="rounded-full border border-white/10 p-2 text-white/45 hover:text-white"><Play size={13} /></button>
+                    <button type="button" title="Remover" disabled={automationBusy === job.id} onClick={() => {
+                      if (window.confirm(`Remover definitivamente a rotina “${job.name}”?`)) {
+                        void requestAutomation(job.id, { action: 'remove', automationId: job.id });
+                      }
+                    }} className="rounded-full border border-rose-200/10 p-2 text-rose-200/35 hover:text-rose-100"><Trash2 size={13} /></button>
                   </div>
                 </article>
               ))}

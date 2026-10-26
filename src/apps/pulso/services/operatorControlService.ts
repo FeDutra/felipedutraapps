@@ -69,6 +69,14 @@ export type OperatorAutomationCommand =
   | { action: 'update'; automationId: string; patch: Readonly<Record<string, unknown>> }
   | { action: 'run' | 'remove'; automationId: string };
 
+export interface OperatorAutomationCommandReceipt {
+  commandId: string;
+  status: 'completed';
+  resultId: string | null;
+}
+
+const AUTOMATION_COMMAND_TIMEOUT_MS = 60_000;
+
 function asMillis(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
@@ -150,7 +158,7 @@ export const operatorControlService = {
     );
   },
 
-  async requestAutomationCommand(command: OperatorAutomationCommand) {
+  async requestAutomationCommand(command: OperatorAutomationCommand): Promise<OperatorAutomationCommandReceipt> {
     const ref = await addDoc(collection(db, firestorePaths.operatorCommands()), {
       ...command,
       status: 'pending',
@@ -158,7 +166,41 @@ export const operatorControlService = {
       requestedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    return ref.id;
+
+    return new Promise((resolve, reject) => {
+      let stop = () => {};
+      const finish = (callback: () => void) => {
+        clearTimeout(timeout);
+        stop();
+        callback();
+      };
+      const timeout = setTimeout(() => {
+        finish(() => reject(new Error('A OpenClaw não confirmou a operação dentro de 60 segundos. O comando pode continuar em processamento.')));
+      }, AUTOMATION_COMMAND_TIMEOUT_MS);
+
+      stop = onSnapshot(
+        ref,
+        snapshot => {
+          if (!snapshot.exists()) return;
+          const raw = snapshot.data();
+          if (raw.status === 'completed') {
+            finish(() => resolve({
+              commandId: ref.id,
+              status: 'completed',
+              resultId: typeof raw.resultId === 'string' ? raw.resultId : null,
+            }));
+            return;
+          }
+          if (raw.status === 'failed') {
+            const message = typeof raw.failureMessage === 'string' && raw.failureMessage.trim()
+              ? raw.failureMessage
+              : 'A OpenClaw recusou a operação.';
+            finish(() => reject(new Error(message)));
+          }
+        },
+        cause => finish(() => reject(cause)),
+      );
+    });
   },
 
   subscribeApprovals(

@@ -168,6 +168,8 @@ test('transporte por pasta restaura configuração depois de abertura fria', () 
 test('desktop mantém Core canônico e usa OpenClaw como executor operacional com recibo persistido', () => {
   const liveSource = readFileSync(new URL('../src/apps/pulso/pages/LivePage.tsx', import.meta.url), 'utf8');
   const bridgeSource = readFileSync(new URL('./pulso/operator-bridge.mjs', import.meta.url), 'utf8');
+  const operatorSource = readFileSync(new URL('../src/apps/pulso/services/operatorControlService.ts', import.meta.url), 'utf8');
+  const systemSource = readFileSync(new URL('../src/apps/pulso/pages/SystemPage.tsx', import.meta.url), 'utf8');
   assert.match(liveSource, /NEXT_PUBLIC_PULSO_CORE_EXECUTOR !== 'local'/);
   assert.match(liveSource, /openclaw_\$\{req\.id\}_assistant/);
   assert.match(liveSource, /pulsoCoreClient\.appendMessage/);
@@ -178,4 +180,9 @@ test('desktop mantém Core canônico e usa OpenClaw como executor operacional co
   assert.match(bridgeSource, /current\.data\(\)\?\.status !== 'pending'/);
   assert.match(bridgeSource, /function sanitizeSchedule/);
   assert.match(bridgeSource, /function sanitizeText/);
+  assert.match(operatorSource, /raw\.status === 'completed'/);
+  assert.match(operatorSource, /raw\.status === 'failed'/);
+  assert.match(operatorSource, /A OpenClaw não confirmou a operação dentro de 60 segundos/);
+  assert.match(systemSource, /A rotina pode produzir efeitos externos/);
+  assert.match(systemSource, /Remover definitivamente a rotina/);
 });
