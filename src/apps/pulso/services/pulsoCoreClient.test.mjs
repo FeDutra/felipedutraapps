@@ -337,3 +337,64 @@ test('pulsoCoreClient integrates end-to-end with vendored PulsoDesktopBridge for
 
   await bridge.close();
 });
+
+test('live.topology.ensure adopts legacy entities by canonical id without duplicating them', async () => {
+  const dataDir = makeTempDir();
+  const bridge = createDesktopBridge({ dataDir });
+  const client = createPulsoCoreClient({
+    scope: {
+      __TAURI__: {
+        core: {
+          invoke(_command, args) {
+            return bridge.handleRequest(args.request);
+          },
+        },
+      },
+    },
+  });
+
+  await client.bootstrap('req-topology-bootstrap');
+  const legacyArea = await client.createArea(
+    { id: 'area_eu', nome: 'eu legado', glifo: '⊙', ordem: 1 },
+    'req-topology-legacy-area'
+  );
+  assert.equal(legacyArea.ok, true);
+  const legacySession = await client.createSession(
+    { id: 'eu_geral', areaId: 'area_eu', titulo: 'geral legado' },
+    'req-topology-legacy-session'
+  );
+  assert.equal(legacySession.ok, true);
+
+  const ensured = await client.ensureTopology({
+    areas: [
+      { id: 'area_eu', nome: 'eu', glifo: '⊙', ordem: 0 },
+      { id: 'area_casa', nome: 'casa', glifo: '⌂', ordem: 1 },
+    ],
+    sessions: [
+      { id: 'eu_geral', areaId: 'area_eu', titulo: 'geral' },
+      { id: 'casa_geral', areaId: 'area_casa', titulo: 'geral' },
+    ],
+  }, 'req-topology-ensure');
+
+  assert.equal(ensured.ok, true);
+  if (ensured.ok) {
+    assert.equal(ensured.result.areas.filter(area => area.id === 'area_eu').length, 1);
+    assert.equal(ensured.result.sessions.filter(session => session.id === 'eu_geral').length, 1);
+    assert.equal(ensured.result.areas.find(area => area.id === 'area_eu')?.nome, 'eu legado');
+    assert.equal(ensured.result.sessions.find(session => session.id === 'eu_geral')?.titulo, 'geral legado');
+    assert.ok(ensured.result.areas.some(area => area.id === 'area_casa'));
+    assert.ok(ensured.result.sessions.some(session => session.id === 'casa_geral'));
+  }
+
+  const repeated = await client.ensureTopology({
+    areas: [{ id: 'area_eu', nome: 'eu', glifo: '⊙', ordem: 0 }],
+    sessions: [{ id: 'eu_geral', areaId: 'area_eu', titulo: 'geral' }],
+  }, 'req-topology-repeat');
+  assert.equal(repeated.ok, true);
+  if (repeated.ok) {
+    assert.equal(repeated.result.areas.filter(area => area.id === 'area_eu').length, 1);
+    assert.equal(repeated.result.sessions.filter(session => session.id === 'eu_geral').length, 1);
+  }
+
+  await bridge.close();
+});

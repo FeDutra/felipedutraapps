@@ -776,11 +776,29 @@ export class PulsoDesktopBridge {
         await this.initialize();
         const areas = Array.isArray(params.areas) ? params.areas : [];
         const sessions = Array.isArray(params.sessions) ? params.sessions : [];
+        const existingAreaIds = new Set(this.live.listAreas().map(area => area.id));
         for (const area of areas) {
+          if (existingAreaIds.has(area.id)) {
+            continue;
+          }
           await this.live.createArea(area, { idempotencyKey: `topology:area:${area.id}` });
+          existingAreaIds.add(area.id);
         }
+        const existingSessions = new Map(
+          this.live.listSessions().map(session => [session.id, session])
+        );
         for (const session of sessions) {
+          const existingSession = existingSessions.get(session.id);
+          if (existingSession) {
+            if (existingSession.areaId !== session.areaId) {
+              throw new Error(
+                `topology_session_area_conflict:${session.id}:${existingSession.areaId}:${session.areaId}`
+              );
+            }
+            continue;
+          }
           await this.live.createSession(session, { idempotencyKey: `topology:session:${session.id}` });
+          existingSessions.set(session.id, this.live.getSession(session.id));
         }
         return {
           areas: this.live.listAreas(),
