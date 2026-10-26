@@ -33,6 +33,7 @@ function mergeTauriConfig(base, patch) {
 const basePath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
 const canaryPath = path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json');
 const iosCanaryPath = path.join(repoRoot, 'src-tauri', 'tauri.ios.conf.json');
+const packagePath = path.join(repoRoot, 'package.json');
 
 test('macOS bundle carries the exact icon used by the official PULSO app', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
@@ -42,6 +43,11 @@ test('macOS bundle carries the exact icon used by the official PULSO app', () =>
   assert.equal(baseConfig.bundle.icon.includes('icons/icon.icns'), true);
   assert.equal(createHash('sha256').update(icns).digest('hex'), '1535d355994f8ee82da91384d2a29e04d5b4440f3e6051b5c8b06e7a62283693');
   assert.equal(createHash('sha256').update(canaryIcns).digest('hex'), createHash('sha256').update(icns).digest('hex'));
+});
+
+test('generated Apple project can invoke the local Tauri CLI through npm', () => {
+  const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+  assert.equal(packageJson.scripts.tauri, 'tauri');
 });
 
 test('desktop HOME applies and persists the black theme without relying on the /pulso layout', () => {
