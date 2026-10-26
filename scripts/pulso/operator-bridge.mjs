@@ -191,7 +191,7 @@ function sanitizeAutomation(job) {
 }
 
 async function readAutomationProjection() {
-  const response = await callGatewayFromCli('cron.list', { timeout: String(10_000) }, { includeDisabled: true, limit: 500, offset: 0 });
+  const response = await callGatewayFromCli('cron.list', { timeout: String(10_000) }, { includeDisabled: true, limit: 200, offset: 0 });
   return Array.isArray(response?.jobs) ? response.jobs : Array.isArray(response) ? response : [];
 }
 

@@ -172,6 +172,7 @@ test('desktop mantém Core canônico e usa OpenClaw como executor operacional co
   assert.match(liveSource, /openclaw_\$\{req\.id\}_assistant/);
   assert.match(liveSource, /pulsoCoreClient\.appendMessage/);
   assert.match(bridgeSource, /callGatewayFromCli\('cron\.list'/);
+  assert.match(bridgeSource, /includeDisabled: true, limit: 200, offset: 0/);
   assert.match(bridgeSource, /unsupported_operator_command/);
   assert.match(bridgeSource, /db\.runTransaction/);
   assert.match(bridgeSource, /current\.data\(\)\?\.status !== 'pending'/);
