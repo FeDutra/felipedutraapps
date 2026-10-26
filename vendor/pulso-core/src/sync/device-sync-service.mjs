@@ -35,6 +35,7 @@ function sha256(value) {
 
 const SENSITIVE_KEY = /^(?:authorization|cookie|set-cookie|password|passwd|access_?token|refresh_?token|api_?key|client_?secret|private_?key|privateKeyPkcs8Base64)$/i;
 const SENSITIVE_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+\/-]{20,}|\bsk-[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAIza[A-Za-z0-9_-]{25,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/;
+const LOCAL_SECRET_REDACTION = "[conteúdo sensível mantido apenas no dispositivo de origem]";
 
 function sensitivePaths(value, path = "$", hits = []) {
   if (hits.length >= 20) return hits;
@@ -52,6 +53,20 @@ function sensitivePaths(value, path = "$", hits = []) {
   }
   if (typeof value === "string" && SENSITIVE_VALUE.test(value)) hits.push(path);
   return hits;
+}
+
+function redactSensitiveValues(value) {
+  if (Array.isArray(value)) return value.map(redactSensitiveValues);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      SENSITIVE_KEY.test(key) && item !== null && item !== ""
+        ? LOCAL_SECRET_REDACTION
+        : redactSensitiveValues(item),
+    ]));
+  }
+  if (typeof value === "string" && SENSITIVE_VALUE.test(value)) return LOCAL_SECRET_REDACTION;
+  return value;
 }
 
 function eventFromRow(row) {
@@ -137,6 +152,13 @@ export class DeviceSyncService {
       " imported_events INTEGER NOT NULL,",
       " duplicate_events INTEGER NOT NULL,",
       " conflict_events INTEGER NOT NULL",
+      ");",
+      "CREATE TABLE IF NOT EXISTS sync_redactions (",
+      " event_id TEXT PRIMARY KEY,",
+      " source_device_id TEXT NOT NULL,",
+      " origin_sequence INTEGER NOT NULL,",
+      " sensitive_paths_json TEXT NOT NULL,",
+      " recorded_at TEXT NOT NULL",
       ");",
       "CREATE INDEX IF NOT EXISTS idx_sync_origin_device ON sync_event_origin(origin_device_id, origin_sequence);",
     ].join("\n"));
@@ -293,7 +315,8 @@ export class DeviceSyncService {
     ).all();
     const eventCount = Number(this.store.db.prepare("SELECT COUNT(*) AS count FROM sync_event_origin").get().count);
     const conflictCount = Number(this.store.db.prepare("SELECT COUNT(*) AS count FROM sync_conflicts").get().count);
-    return { configured: true, localDevice: manifest, trustedDevices: trusted, replicatedEvents: eventCount, conflicts: conflictCount };
+    const redactionCount = Number(this.store.db.prepare("SELECT COUNT(*) AS count FROM sync_redactions").get().count);
+    return { configured: true, localDevice: manifest, trustedDevices: trusted, replicatedEvents: eventCount, conflicts: conflictCount, redactions: redactionCount };
   }
 
   exportBundle({ targetDeviceId = null, outputPath = null, afterByOrigin = {} } = {}) {
@@ -304,16 +327,40 @@ export class DeviceSyncService {
       "FROM events e JOIN sync_event_origin o ON o.event_id=e.event_id",
       "ORDER BY o.origin_device_id,o.origin_sequence",
     ].join(" ")).all();
+    const quarantine = [];
     const events = rows.filter(row => {
       if (targetDeviceId && row.origin_device_id === targetDeviceId) return false;
       const after = Number(afterByOrigin?.[row.origin_device_id] || 0);
       return Number(row.origin_sequence) > after;
-    }).map(row => ({
-      originDeviceId: row.origin_device_id,
-      originSequence: row.origin_sequence,
-      eventHash: row.event_hash,
-      event: eventFromRow(row),
-    }));
+    }).map(row => {
+      const event = eventFromRow(row);
+      const hits = sensitivePaths(event);
+      if (hits.length === 0) {
+        return {
+          originDeviceId: row.origin_device_id,
+          originSequence: row.origin_sequence,
+          eventHash: row.event_hash,
+          event,
+        };
+      }
+      const redactedEvent = redactSensitiveValues(event);
+      quarantine.push({
+        eventId: event.eventId,
+        eventType: event.type,
+        aggregateType: event.aggregate.type,
+        aggregateId: event.aggregate.id,
+        originDeviceId: row.origin_device_id,
+        originSequence: row.origin_sequence,
+        sensitivePaths: hits,
+      });
+      return {
+        originDeviceId: row.origin_device_id,
+        originSequence: row.origin_sequence,
+        eventHash: sha256(canonicalStringify(redactedEvent)),
+        event: redactedEvent,
+        redaction: { reason: "sensitive_content_local_only", sensitivePaths: hits },
+      };
+    });
     const createdAt = this.#now();
     const bundleId = pulsoId("sync");
     const unsigned = {
@@ -340,6 +387,18 @@ export class DeviceSyncService {
       error.code = "SYNC_SENSITIVE_CONTENT";
       throw error;
     }
+    if (quarantine.length > 0) {
+      const quarantineId = pulsoId("sync_quarantine");
+      atomicWriteJson(join(this.syncDir, "quarantine", `${quarantineId}.json`), {
+        schemaVersion: 2,
+        quarantineId,
+        createdAt,
+        targetDeviceId,
+        eventCount: events.length,
+        redactedEvents: quarantine,
+        reason: "sensitive_content_redacted_from_bundle",
+      });
+    }
     const digest = sha256(canonicalStringify(unsigned));
     const signature = sign(null, Buffer.from(digest, "hex"), identity.privateKey).toString("base64");
     const bundle = { ...unsigned, digest, signature };
@@ -350,7 +409,7 @@ export class DeviceSyncService {
       entries.set(envelope.originDeviceId, Math.max(current, Number(envelope.originSequence)));
       return entries;
     }, new Map()));
-    return { bundleId, path: destination, digest, events: events.length, sourceCursors, sourceDeviceId: identity.deviceId, targetDeviceId };
+    return { bundleId, path: destination, digest, events: events.length, redactions: quarantine.length, sourceCursors, sourceDeviceId: identity.deviceId, targetDeviceId };
   }
 
   #recordConflict(bundle, envelope, reason) {
@@ -434,6 +493,10 @@ export class DeviceSyncService {
       "INSERT INTO sync_event_origin(event_id,origin_device_id,origin_sequence,event_hash,imported_at)",
       "VALUES(?,?,?,?,?)",
     ].join(" "));
+    const insertRedaction = this.store.db.prepare([
+      "INSERT OR REPLACE INTO sync_redactions(event_id,source_device_id,origin_sequence,sensitive_paths_json,recorded_at)",
+      "VALUES(?,?,?,?,?)",
+    ].join(" "));
 
     for (const envelope of parsed.events) {
       const event = envelope.event;
@@ -490,6 +553,15 @@ export class DeviceSyncService {
           envelope.eventHash,
           this.#now(),
         );
+        if (envelope.redaction?.reason === "sensitive_content_local_only") {
+          insertRedaction.run(
+            event.eventId,
+            envelope.originDeviceId,
+            envelope.originSequence,
+            JSON.stringify(Array.isArray(envelope.redaction.sensitivePaths) ? envelope.redaction.sensitivePaths : []),
+            this.#now(),
+          );
+        }
       });
       imported += 1;
     }
@@ -516,6 +588,7 @@ export class DeviceSyncService {
       imported,
       duplicates,
       conflicts,
+      redactions: parsed.events.filter(envelope => envelope.redaction?.reason === "sensitive_content_local_only").length,
       total: parsed.events.length,
       replay: false,
       integrity: this.store.verifyIntegrity(),

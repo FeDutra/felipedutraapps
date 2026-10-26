@@ -131,15 +131,22 @@ test('edição concorrente não sobrescreve: entra em quarentena de conflito', (
   rmSync(b.dataDir, { recursive: true, force: true });
 });
 
-test('exportação falha fechada quando a projeção contém segredo', () => {
+test('exportação mantém segredo local, envia marcador assinado e registra redação no destino', () => {
   const a = fixture('macbook', 'secret-scan');
   const b = fixture('imac', 'secret-scan');
   a.sync.trustDevice(b.sync.deviceManifest());
+  b.sync.trustDevice(a.sync.deviceManifest());
   appendMessage(a.store, 'evt_secret', 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456');
-  assert.throws(
-    () => a.sync.exportBundle({ targetDeviceId: b.sync.deviceManifest().deviceId }),
-    error => error?.code === 'SYNC_SENSITIVE_CONTENT',
-  );
+  const exported = a.sync.exportBundle({ targetDeviceId: b.sync.deviceManifest().deviceId });
+  assert.equal(exported.redactions, 1);
+  const serialized = readFileSync(exported.path, 'utf8');
+  assert.doesNotMatch(serialized, /abcdefghijklmnopqrstuvwxyz123456/);
+  assert.match(serialized, /conteúdo sensível mantido apenas no dispositivo de origem/);
+  const imported = b.sync.importBundle({ bundlePath: exported.path });
+  assert.equal(imported.imported, 1);
+  assert.equal(imported.redactions, 1);
+  assert.equal(b.sync.status().redactions, 1);
+  assert.equal(b.store.all()[0].payload.text, '[conteúdo sensível mantido apenas no dispositivo de origem]');
   const quarantine = path.join(a.dataDir, 'sync', 'quarantine');
   const receipt = readFileSync(path.join(quarantine, readdirSync(quarantine)[0]), 'utf8');
   assert.doesNotMatch(receipt, /abcdefghijklmnopqrstuvwxyz123456/);
