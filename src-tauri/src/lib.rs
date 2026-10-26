@@ -1,17 +1,31 @@
+#[cfg(desktop)]
 use base64::Engine;
+#[cfg(desktop)]
 use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
+#[cfg(desktop)]
 use serde::{Deserialize, Serialize};
+#[cfg(desktop)]
 use std::fs;
+#[cfg(desktop)]
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(desktop)]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+#[cfg(desktop)]
 use std::path::{Path, PathBuf};
+#[cfg(desktop)]
 use std::process::Stdio;
+#[cfg(desktop)]
 use std::sync::Mutex;
+#[cfg(desktop)]
 use std::time::Duration;
+#[cfg(desktop)]
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(desktop)]
 use tauri::{Emitter, Manager};
+#[cfg(desktop)]
 use tauri_plugin_shell::ShellExt;
 
+#[cfg(desktop)]
 const KOKORO_PORT: u16 = 14321;
 
 // Next's client router normalizes the physical document URL with the History
@@ -19,6 +33,7 @@ const KOKORO_PORT: u16 = 14321;
 // mutation on the packaged document into its error page. This script is
 // injected by Wry at document start, before any page script. It gives Next the
 // mutable router state it expects without calling WebKit's native History API.
+#[cfg(desktop)]
 const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
 (() => {
   const protocol = window.location.protocol;
@@ -124,8 +139,10 @@ const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
 })();
 "#;
 
+#[cfg(desktop)]
 const PULSO_DESKTOP_HTTP_PORT: u16 = 14322;
 
+#[cfg(desktop)]
 fn desktop_content_type(path: &Path) -> &'static str {
     match path.extension().and_then(|value| value.to_str()).unwrap_or("") {
         "html" => "text/html; charset=utf-8",
@@ -148,6 +165,7 @@ fn desktop_content_type(path: &Path) -> &'static str {
     }
 }
 
+#[cfg(desktop)]
 fn desktop_static_path(root: &Path, request_path: &str) -> Option<PathBuf> {
     let raw = request_path.split('?').next().unwrap_or("/");
     if raw.contains("..") || raw.contains('%') || raw.contains('\\') {
@@ -168,6 +186,7 @@ fn desktop_static_path(root: &Path, request_path: &str) -> Option<PathBuf> {
     candidate.is_file().then_some(candidate)
 }
 
+#[cfg(desktop)]
 fn serve_desktop_connection(mut stream: TcpStream, root: &Path) -> std::io::Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(3)))?;
     let mut request = [0_u8; 8192];
@@ -197,6 +216,7 @@ fn serve_desktop_connection(mut stream: TcpStream, root: &Path) -> std::io::Resu
     Ok(())
 }
 
+#[cfg(desktop)]
 fn start_desktop_http(app: &tauri::AppHandle) -> Result<String, String> {
     let resource_dir = app
         .path()
@@ -229,24 +249,32 @@ fn start_desktop_http(app: &tauri::AppHandle) -> Result<String, String> {
     Ok(format!("http://127.0.0.1:{PULSO_DESKTOP_HTTP_PORT}/"))
 }
 
+#[cfg(desktop)]
 mod agent;
+#[cfg(desktop)]
 pub mod pulso_core;
+#[cfg(desktop)]
 use agent::local_machine::{execute_applescript, local_music_play, local_open_url};
+#[cfg(desktop)]
 use agent::presence_broker::local_presence_read;
+#[cfg(desktop)]
 use agent::voice_recording::{
     voice_recording_append, voice_recording_begin, voice_recording_finalize, voice_recording_mark,
     voice_recording_recover_incomplete,
 };
+#[cfg(desktop)]
 use pulso_core::{
     bridge_request, core_canary_rendered, delete_provider_secret, hydrate_provider_secret,
     provider_secret_status, shutdown_bridge, store_provider_secret, BridgeManager,
 };
 
+#[cfg(desktop)]
 fn kokoro_is_ready() -> bool {
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), KOKORO_PORT);
     TcpStream::connect_timeout(&address, Duration::from_millis(120)).is_ok()
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     // Voice is an optional capability. It must never participate in the cold
@@ -289,6 +317,7 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     Err("Kokoro sidecar did not become ready".to_string())
 }
 
+#[cfg(desktop)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DeviceOriginConfig {
@@ -298,6 +327,7 @@ struct DeviceOriginConfig {
     private_key_pkcs8_base64: String,
 }
 
+#[cfg(desktop)]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DeviceOriginStatus {
@@ -306,6 +336,7 @@ struct DeviceOriginStatus {
     device_key: Option<String>,
 }
 
+#[cfg(desktop)]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DeviceOriginAssertion {
@@ -315,6 +346,7 @@ struct DeviceOriginAssertion {
     signature: String,
 }
 
+#[cfg(desktop)]
 fn read_device_origin_config(app: &tauri::AppHandle) -> Result<DeviceOriginConfig, String> {
     let path = app
         .path()
@@ -335,6 +367,7 @@ fn read_device_origin_config(app: &tauri::AppHandle) -> Result<DeviceOriginConfi
     Ok(config)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn local_device_origin_status(app: tauri::AppHandle) -> DeviceOriginStatus {
     match read_device_origin_config(&app) {
@@ -351,6 +384,7 @@ fn local_device_origin_status(app: tauri::AppHandle) -> DeviceOriginStatus {
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn local_device_origin_assert(
     app: tauri::AppHandle,
@@ -387,6 +421,7 @@ fn local_device_origin_assert(
     })
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn execute_shell_command(command: &str) -> Result<String, String> {
     println!("Executing shell command: {}", command);
@@ -408,6 +443,7 @@ fn execute_shell_command(command: &str) -> Result<String, String> {
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn execute_long_command_stream(app: tauri::AppHandle, command: &str) -> Result<(), String> {
     println!("Executing streaming shell command: {}", command);
@@ -450,6 +486,7 @@ fn execute_long_command_stream(app: tauri::AppHandle, command: &str) -> Result<(
     Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn desktop_boot_probe(app: tauri::AppHandle, payload: &str) -> Result<(), String> {
     if payload.is_empty() || payload.len() > 16_384 {
@@ -476,7 +513,7 @@ fn desktop_boot_probe(app: tauri::AppHandle, payload: &str) -> Result<(), String
         .map_err(|error| format!("desktop boot probe could not be written: {error}"))
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg(desktop)]
 pub fn run() {
     tauri::Builder::default()
     .append_invoke_initialization_script(PULSO_DESKTOP_HISTORY_GUARD)
@@ -534,4 +571,54 @@ pub fn run() {
     })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+fn local_open_url(_url: &str) -> Result<String, String> {
+    Err("Abertura local não está disponível no iPhone.".into())
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+fn execute_applescript(_script: &str) -> Result<String, String> {
+    Err("Automação do macOS não está disponível no iPhone.".into())
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+fn local_music_play(_query: &str) -> Result<String, String> {
+    Err("Controle local de música não está disponível nesta canária do iPhone.".into())
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+fn execute_shell_command(_command: &str) -> Result<String, String> {
+    Err("Execução local não está disponível no iPhone.".into())
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+fn execute_long_command_stream(
+    _app: tauri::AppHandle,
+    _command: &str,
+) -> Result<(), String> {
+    Err("Execução local não está disponível no iPhone.".into())
+}
+
+#[cfg(mobile)]
+#[tauri::mobile_entry_point]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_http::init())
+        .invoke_handler(tauri::generate_handler![
+            local_open_url,
+            execute_applescript,
+            local_music_play,
+            execute_shell_command,
+            execute_long_command_stream
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running PULSO iPhone canary");
 }

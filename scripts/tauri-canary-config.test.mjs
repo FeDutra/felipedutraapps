@@ -32,6 +32,7 @@ function mergeTauriConfig(base, patch) {
 
 const basePath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
 const canaryPath = path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json');
+const iosCanaryPath = path.join(repoRoot, 'src-tauri', 'tauri.ios.conf.json');
 
 test('macOS bundle carries the exact icon used by the official PULSO app', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
@@ -112,6 +113,21 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   assert.equal(merged.app.windows[0].width, 800);
   assert.equal(merged.app.windows[0].height, 600);
   assert.equal(merged.app.windows[0].fullscreen, false);
+});
+
+test('iPhone canary keeps its own identity, opens the canonical live surface, and excludes Desktop sidecars', () => {
+  const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
+  const iosPatch = JSON.parse(readFileSync(iosCanaryPath, 'utf8'));
+  const merged = mergeTauriConfig(baseConfig, iosPatch);
+
+  assert.equal(merged.productName, 'PULSO iPhone Preview');
+  assert.equal(merged.identifier, 'com.felipedutraapps.pulso.ios.canary');
+  assert.equal(merged.version, '0.9.0');
+  assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
+  assert.equal(merged.build.beforeBuildCommand, 'npm run build');
+  assert.deepEqual(merged.bundle.externalBin, []);
+  assert.deepEqual(merged.bundle.resources, []);
+  assert.equal(merged.bundle.icon.includes('icons/icon.icns'), true);
 });
 
 test('Production Desktop build compiles the HOME natively at the default Tauri root', () => {
