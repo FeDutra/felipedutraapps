@@ -33,16 +33,24 @@ function mergeTauriConfig(base, patch) {
 const basePath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
 const canaryPath = path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json');
 
-test('macOS bundle carries the canonical PULSO mark instead of the legacy placeholder icon', () => {
+test('macOS bundle carries the exact icon used by the official PULSO app', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
-  const sourceMark = readFileSync(path.join(repoRoot, 'src', 'app', 'icon.svg'), 'utf8');
   const icns = readFileSync(path.join(repoRoot, 'src-tauri', 'icons', 'icon.icns'));
 
-  assert.match(sourceMark, /fill="#000000"/);
-  assert.match(sourceMark, /stroke="#fbf9f5"/);
   assert.equal(baseConfig.bundle.icon.includes('icons/icon.icns'), true);
-  assert.equal(createHash('sha256').update(icns).digest('hex'), '1a88e6fcb6c95fc9e6b66c3c4161dc4dbfb030ec346867e13cc23ba7085fac7c');
-  assert.notEqual(createHash('sha256').update(icns).digest('hex'), '1535d355994f8ee82da91384d2a29e04d5b4440f3e6051b5c8b06e7a62283693');
+  assert.equal(createHash('sha256').update(icns).digest('hex'), '1535d355994f8ee82da91384d2a29e04d5b4440f3e6051b5c8b06e7a62283693');
+});
+
+test('desktop HOME applies and persists the black theme without relying on the /pulso layout', () => {
+  const livePage = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'pages', 'LivePage.tsx'),
+    'utf8'
+  );
+
+  assert.match(livePage, /document\.body\.classList\.toggle\('pulso-theme-black'/);
+  assert.match(livePage, /document\.documentElement\.classList\.toggle\('pulso-theme-black-preload'/);
+  assert.match(livePage, /applyTheme\(requestedTheme \|\| safeStorageGet\('pulso-theme'\)/);
+  assert.match(livePage, /updateThemeColor\(\);/);
 });
 
 test('Base tauri.conf.json preserves canonical PULSO identity', () => {

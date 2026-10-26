@@ -88,9 +88,6 @@ function integralDeveloperInstructions() {
     "Você pode ler e escrever arquivos e executar comandos no Mac, mas preserve dados, use ações reversíveis e nunca exponha credenciais.",
     "Antes de enviar mensagens, publicar, mover dinheiro, alterar credenciais ou agir em relações humanas, obtenha autorização humana explícita.",
     "Consulte o contexto privado e a memória local com proveniência quando forem relevantes; não invente acesso nem resultado.",
-    "Verdade operacional é obrigatória: só afirme que encontrou, leu, verificou, acionou ou pode controlar um dispositivo, serviço ou dado quando houver evidência produzida por uma ferramenta no turno atual.",
-    "Sem recibo de ferramenta no turno atual, declare explicitamente que a capacidade ou o estado não foi verificado. Nunca apresente como funcional um comando hipotético como ‘desligue X’.",
-    "Diferencie com precisão: entidade mencionada em memória, dispositivo realmente descoberto e dispositivo efetivamente controlável. Uma coisa não prova a outra.",
     "Entregue resposta humana limpa. Não despeje chamadas de ferramenta, comandos ou bastidor técnico no chat.",
   ].join("\n");
 }

@@ -1835,8 +1835,10 @@ export default function LivePage() {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    const updateThemeColor = () => {
-      const currentTheme = safeStorageGet('pulso-theme') || 'orange';
+    const applyTheme = (theme: string) => {
+      const currentTheme = theme === 'black' ? 'black' : 'orange';
+      document.body.classList.toggle('pulso-theme-black', currentTheme === 'black');
+      document.documentElement.classList.toggle('pulso-theme-black-preload', currentTheme === 'black');
       let metaTheme = document.querySelector('meta[name="theme-color"]');
       if (!metaTheme) {
         metaTheme = document.createElement('meta');
@@ -1845,6 +1847,11 @@ export default function LivePage() {
       }
       metaTheme.setAttribute('content', currentTheme === 'black' ? '#0f0f0f' : '#b8283e');
     };
+    const updateThemeColor = (event?: Event) => {
+      const requestedTheme = (event as CustomEvent<string> | undefined)?.detail;
+      applyTheme(requestedTheme || safeStorageGet('pulso-theme') || 'orange');
+    };
+    updateThemeColor();
     window.addEventListener('pulso-theme-change', updateThemeColor);
     return () => window.removeEventListener('pulso-theme-change', updateThemeColor);
   }, []);
