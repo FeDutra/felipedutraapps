@@ -55,7 +55,10 @@ test('iPhone CI uses the available Intel Apple runner with matching simulator ta
   );
   assert.match(workflow, /runs-on: macos-15-intel/);
   assert.match(workflow, /targets: aarch64-apple-ios,x86_64-apple-ios/);
-  assert.match(workflow, /--target x86_64/);
+  assert.match(workflow, /-sdk iphonesimulator/);
+  assert.match(workflow, /-destination "id=\$UDID"/);
+  assert.match(workflow, /ARCHS=x86_64/);
+  assert.match(workflow, /Upload audited iPhone package/);
 });
 
 test('desktop HOME applies and persists the black theme without relying on the /pulso layout', () => {
