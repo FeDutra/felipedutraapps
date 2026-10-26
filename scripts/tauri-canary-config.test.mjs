@@ -127,7 +127,10 @@ test('iPhone canary keeps its own identity, opens the canonical live surface, an
   assert.equal(merged.identifier, 'com.felipedutraapps.pulso.ios.canary');
   assert.equal(merged.version, '0.9.0');
   assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
-  assert.equal(merged.build.beforeBuildCommand, 'npm run build');
+  assert.equal(
+    merged.build.beforeBuildCommand,
+    'NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1 npm run build'
+  );
   assert.deepEqual(merged.bundle.externalBin, []);
   assert.deepEqual(merged.bundle.resources, []);
   assert.equal(merged.bundle.icon.includes('icons/icon.icns'), true);
