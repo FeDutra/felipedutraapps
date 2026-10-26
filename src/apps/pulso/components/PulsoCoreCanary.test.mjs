@@ -248,7 +248,7 @@ test('Inside Tauri: PulsoCoreCanary transitions idle -> connecting -> connected 
     ['connecting', 'connected']
   );
   assert.equal(finalSnapshot.status, 'connected');
-  assert.equal(finalSnapshot.runtimeStatus, 'stopped');
+  assert.equal(finalSnapshot.runtimeStatus, 'running');
   assert.equal(finalSnapshot.activeAreaId, 'area_pulso');
   assert.equal(finalSnapshot.activeSessionId, 'session_geral');
   assert.match(finalSnapshot.message, /PULSO Core conectado/);

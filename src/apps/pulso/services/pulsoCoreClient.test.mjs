@@ -253,7 +253,7 @@ test('pulsoCoreClient integrates end-to-end with vendored PulsoDesktopBridge for
   if (bs.ok) {
     assert.equal(bs.status, 'ok');
     assert.equal(bs.fallbackRequired, false);
-    assert.equal(bs.result.health.status, 'stopped');
+    assert.equal(bs.result.health.status, 'running');
     assert.equal(bs.result.panel?.sectionCount, 11);
     assert.equal(bs.result.live.activeAreaId, 'area_pulso');
     assert.equal(bs.result.live.activeSessionId, 'session_geral');
@@ -263,7 +263,7 @@ test('pulsoCoreClient integrates end-to-end with vendored PulsoDesktopBridge for
   const statusRes = await client.status('req-status-1');
   assert.equal(statusRes.ok, true);
   if (statusRes.ok) {
-    assert.equal(statusRes.result.status, 'stopped');
+    assert.equal(statusRes.result.status, 'running');
   }
 
   // 3. Create area, session, select, append message, and list messages

@@ -1039,7 +1039,7 @@ import { sessionsService } from '../services/sessionsService';
 import { pulsoCoreConversation } from '../services/pulsoCoreConversation';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
 import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
-import type { PulsoLiveMessage } from '../services/pulsoCoreClient';
+import type { PulsoLiveArea, PulsoLiveMessage, PulsoLiveSession } from '../services/pulsoCoreClient';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
 const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
@@ -1153,6 +1153,28 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   modelTotalTokens: session.modelTotalTokens,
   modelUsageFresh: session.modelUsageFresh,
   modelStateUpdatedAt: session.modelStateUpdatedAt,
+});
+
+const coreSessionToContextNode = (session: PulsoLiveSession): PulsoContextNode => ({
+  areaId: session.areaId,
+  subareaId: session.id.replace(/^[^_]+_/, ''),
+  contextId: session.id,
+  chatId: 'default',
+  openclawSessionKey: `agent:main:pulso:${session.id}`,
+  label: session.titulo,
+  archived: session.estado === 'archived',
+  isDefault: false,
+  createdAt: new Date(session.createdAt),
+  updatedAt: new Date(session.updatedAt),
+});
+
+const coreAreaToLegacyArea = (area: PulsoLiveArea) => ({
+  id: area.id,
+  name: area.nome,
+  icon: area.glifo,
+  order: area.ordem,
+  status: area.estado,
+  archived: area.estado === 'archived',
 });
 
 /**
@@ -1681,7 +1703,39 @@ export default function LivePage() {
   }, []);
 
   React.useEffect(() => {
-    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
+    if (coreDesktopEnabled) {
+      let cancelled = false;
+      pulsoCoreConversation.loadNavigation()
+        .then(navigation => {
+          if (cancelled) return;
+          const visibleSessions = navigation.sessions
+            .filter(session => session.estado === 'active')
+            .map(coreSessionToContextNode);
+          setSessions(visibleSessions.length > 0 ? visibleSessions : [LOADING_PLACEHOLDER_NODE]);
+          setState((previous: any) => ({
+            ...(previous || {}),
+            allRoutines: safeArray(previous?.allRoutines),
+            allAgents: safeArray(previous?.allAgents),
+            allLogs: safeArray(previous?.allLogs),
+            allAreas: navigation.areas.map(coreAreaToLegacyArea),
+            allRequests: safeArray(previous?.allRequests),
+            allSources: safeArray(previous?.allSources),
+            allTasks: safeArray(previous?.allTasks),
+          }));
+          setSessionsLoaded(true);
+          setCoreReady(true);
+        })
+        .catch(error => {
+          if (cancelled) return;
+          setSessions([LOADING_PLACEHOLDER_NODE]);
+          setSessionsLoaded(true);
+          setCoreReady(false);
+          setError(`Core indisponível: ${error?.message || String(error)}`);
+        });
+      return () => { cancelled = true; };
+    }
+
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
 
     if (!isFirestore) {
       // Non-Firestore mode: use DEFAULT_SESSIONS directly
@@ -3296,15 +3350,6 @@ export default function LivePage() {
   React.useEffect(() => {
     if (coreDesktopEnabled) {
       setLoading(false);
-      setState({
-        allRoutines: [],
-        allAgents: [],
-        allLogs: [],
-        allAreas: [],
-        allRequests: [],
-        allSources: [],
-        allTasks: [],
-      });
       return;
     }
     let cancelled = false;

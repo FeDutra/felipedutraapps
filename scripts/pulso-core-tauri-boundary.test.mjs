@@ -234,7 +234,7 @@ test('prepared Core bridge runs as persistent NDJSON sidecar with dedicated data
   assert.ok(firstRun.lines.every((l) => l.ok === true));
   assert.equal(firstRun.lines[0].result.dataDir, dataDir);
   assert.equal(firstRun.lines[0].result.dbPath, path.join(dataDir, 'pulso-core.sqlite'));
-  assert.equal(firstRun.lines[1].result.status, 'stopped');
+  assert.equal(firstRun.lines[1].result.status, 'running');
 
   const secondRun = await runSession([
     { requestId: 'ndjson-5', method: 'live.bootstrap', params: {} },
@@ -378,4 +378,16 @@ test('desktop WebView uses Tauri default navigation while external URLs stay beh
   for (const buttonTag of buttonMatches) {
     assert.match(buttonTag, /type="button"/);
   }
+});
+
+test('desktop HOME hydrates areas and sessions from the Core inventory instead of the frozen defaults', () => {
+  const livePage = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'pages', 'LivePage.tsx'),
+    'utf8'
+  );
+  assert.match(livePage, /pulsoCoreConversation\.loadNavigation\(\)/);
+  assert.match(livePage, /navigation\.sessions[\s\S]*\.map\(coreSessionToContextNode\)/);
+  assert.match(livePage, /allAreas:\s*navigation\.areas\.map\(coreAreaToLegacyArea\)/);
+  const coreBranch = livePage.match(/if \(coreDesktopEnabled\) \{([\s\S]*?)const isFirestore = pulsoService\.getDataMode\(\) === 'firestore';/)?.[1] || '';
+  assert.doesNotMatch(coreBranch, /DEFAULT_SESSIONS/);
 });

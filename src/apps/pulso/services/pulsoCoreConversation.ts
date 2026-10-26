@@ -4,7 +4,10 @@ import {
   type PulsoCoreClient,
   type PulsoCreateAreaParams,
   type PulsoCreateSessionParams,
+  type PulsoLiveArea,
+  type PulsoLiveBootstrapSnapshot,
   type PulsoLiveMessage,
+  type PulsoLiveSession,
 } from './pulsoCoreClient';
 
 export class PulsoCoreConversationError extends Error {
@@ -34,6 +37,14 @@ export interface StreamTurnResult {
   messages: readonly PulsoLiveMessage[];
 }
 
+export interface PulsoCoreNavigationSnapshot {
+  readonly areas: readonly PulsoLiveArea[];
+  readonly sessions: readonly PulsoLiveSession[];
+  readonly activeAreaId: string | null;
+  readonly activeSessionId: string | null;
+  readonly selection: PulsoLiveBootstrapSnapshot['selection'];
+}
+
 const terminal = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -47,6 +58,26 @@ export class PulsoCoreConversation {
 
   isAvailable(): boolean {
     return this.client.isAvailable();
+  }
+
+  async loadNavigation(): Promise<PulsoCoreNavigationSnapshot> {
+    const [bootstrap, areas, sessions] = await Promise.all([
+      this.client.liveBootstrap(),
+      this.client.listAreas(),
+      this.client.listSessions(),
+    ]);
+    for (const result of [bootstrap, areas, sessions]) {
+      if (!result.ok) {
+        throw new PulsoCoreConversationError(result.error.code, result.error.message);
+      }
+    }
+    return Object.freeze({
+      areas: areas.result,
+      sessions: sessions.result,
+      activeAreaId: bootstrap.result.activeAreaId,
+      activeSessionId: bootstrap.result.activeSessionId,
+      selection: bootstrap.result.selection,
+    });
   }
 
   async ensureTopology(

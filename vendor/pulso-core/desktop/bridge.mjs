@@ -249,6 +249,53 @@ export class PulsoDesktopBridge {
     throw error;
   }
 
+  restorePersistedProviderAdapters() {
+    const bindings = this.controlPlane.list("bindings");
+    const restored = [];
+    const skipped = [];
+    for (const provider of this.controlPlane.list("providers")) {
+      if (!provider?.providerId || provider.enabled === false) continue;
+      if (this.controlPlane.router.getAdapter(provider.providerId)) continue;
+      const binding = bindings.find(item => (
+        item?.primary?.providerId === provider.providerId
+        || item?.active?.providerId === provider.providerId
+      ));
+      const runtimeMetadata = provider.metadata?.runtimeAdapter || {};
+      let adapterKind = runtimeMetadata.adapterKind || provider.metadata?.adapterKind || null;
+      if (!adapterKind && provider.providerId === "codex-fe" && process.env.PULSO_CODEX_BIN) {
+        adapterKind = "codex_subscription";
+      }
+      if (!adapterKind && provider.kind === "local") {
+        adapterKind = /11434/.test(String(provider.endpoint || "")) ? "ollama" : "local";
+      }
+      if (!adapterKind) {
+        skipped.push({ providerId: provider.providerId, reason: "adapter_kind_not_persisted" });
+        continue;
+      }
+      const params = {
+        providerId: provider.providerId,
+        displayName: provider.displayName || provider.providerId,
+        adapterKind,
+        model: runtimeMetadata.model || binding?.active?.model || binding?.primary?.model || null,
+        endpoint: runtimeMetadata.endpoint || provider.endpoint || null,
+        profileId: runtimeMetadata.profileId || "personal",
+        allowExternalNetwork: runtimeMetadata.allowExternalNetwork === true,
+        metadata: provider.metadata || {},
+      };
+      try {
+        const adapter = this.createModelAdapter(params, provider.secretRef ?? null);
+        this.controlPlane.router.attachAdapter(provider.providerId, adapter);
+        restored.push(provider.providerId);
+      } catch (error) {
+        skipped.push({
+          providerId: provider.providerId,
+          reason: error?.code || error?.message || "adapter_restore_failed",
+        });
+      }
+    }
+    return { restored, skipped };
+  }
+
   enqueueTurnEnvelope(runId, envelope) {
     if (!this.turnQueues.has(runId)) this.turnQueues.set(runId, []);
     this.turnQueues.get(runId).push(envelope);
@@ -262,6 +309,8 @@ export class PulsoDesktopBridge {
     if (!this.controlPlane.get("panel")) {
       await this.controlPlane.initDefaults();
     }
+    this.restorePersistedProviderAdapters();
+    await this.runtime.start({ recoverLeases: true });
     await this.live.ensureRestored();
     this.liveMemory.restore();
     this.skills.restore();
@@ -726,7 +775,16 @@ export class PulsoDesktopBridge {
           endpoint: params.endpoint ?? null,
           capabilities: params.capabilities || ["chat", "stream"],
           enabled: params.enabled !== false,
-          metadata: params.metadata || {},
+          metadata: {
+            ...(params.metadata || {}),
+            runtimeAdapter: {
+              adapterKind,
+              model: params.model || null,
+              endpoint: params.endpoint ?? null,
+              profileId: params.profileId || null,
+              allowExternalNetwork: params.allowExternalNetwork === true,
+            },
+          },
           secretRef,
         };
         const command = this.controlPlane.get("provider", providerId)

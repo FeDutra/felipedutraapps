@@ -111,6 +111,36 @@ test('streamTurn falha explicitamente sem provider e nunca inventa resposta', as
   );
 });
 
+test('loadNavigation usa o inventário canônico completo do Core', async () => {
+  const areas = [
+    { id: 'area_pulso', nome: 'PULSO', glifo: '○', ordem: 0, estado: 'active', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' },
+    { id: 'area_agentes', nome: 'AGENTES', glifo: '○', ordem: 1, estado: 'active', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' },
+    { id: 'area_despertar', nome: 'Despertar', glifo: '○', ordem: 2, estado: 'active', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' },
+  ];
+  const sessions = [
+    { id: 'pulso_core', areaId: 'area_pulso', titulo: 'Core', identityId: 'lotus', estado: 'active', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' },
+    { id: 'agentes_conselho', areaId: 'area_agentes', titulo: 'Conselho', identityId: 'lotus', estado: 'active', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' },
+  ];
+  const client = {
+    isAvailable: () => true,
+    liveBootstrap: async () => success({
+      areas: [areas[0]],
+      sessions: [sessions[0]],
+      activeAreaId: 'area_pulso',
+      activeSessionId: 'pulso_core',
+      messages: [],
+      selection: { areaId: 'area_pulso', sessionId: 'pulso_core', selectedAt: '2026-10-20T00:00:00.000Z' },
+    }),
+    listAreas: async () => success(areas),
+    listSessions: async () => success(sessions),
+  };
+  const conversation = new PulsoCoreConversation(client);
+  const navigation = await conversation.loadNavigation();
+  assert.deepEqual(navigation.areas.map(area => area.id), ['area_pulso', 'area_agentes', 'area_despertar']);
+  assert.deepEqual(navigation.sessions.map(session => session.id), ['pulso_core', 'agentes_conselho']);
+  assert.equal(navigation.activeSessionId, 'pulso_core');
+});
+
 test('streamTurn propaga cancelamento ao Core antes de encerrar', async () => {
   const controller = new AbortController();
   let cancelled = false;
