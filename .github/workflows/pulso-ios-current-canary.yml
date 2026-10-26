@@ -45,7 +45,7 @@ jobs:
           test -f src/apps/pulso/pages/LivePage.tsx
           grep -F 'com.felipedutraapps.pulso.ios.canary' src-tauri/tauri.ios.conf.json
           grep -F 'pulso/live/index.html' src-tauri/tauri.ios.conf.json
-          grep -F 'src-tauri/icons/icon.icns' .github/workflows/tauri-build.yml
+          grep -F 'icons/icon.icns' src-tauri/tauri.conf.json
           test "$(shasum -a 256 src-tauri/icons/icon.icns | awk '{print $1}')" = '1535d355994f8ee82da91384d2a29e04d5b4440f3e6051b5c8b06e7a62283693'
           if grep -r -I -E 'openclaw qr|Gateway Setup|Reconhecer este iPhone|Conectar à BASE' src src-tauri --exclude-dir=target --exclude='*.md'; then
             echo 'A interface errada do antigo cliente iOS apareceu na fonte.' >&2
