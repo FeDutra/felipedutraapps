@@ -470,7 +470,10 @@ export class PulsoDesktopBridge {
       case "legacy.import.apply": {
         await this.initialize();
         const backupPath = join(this.dataDir, "backups", `before-legacy-import-${Date.now()}.sqlite`);
-        return await this.legacyImport.apply(params.snapshot, { backupPath });
+        return await this.legacyImport.apply(params.snapshot, {
+          backupPath,
+          reconcileExisting: params.reconcileExisting === true,
+        });
       }
       case "agent.constellation.plan": {
         await this.initialize();

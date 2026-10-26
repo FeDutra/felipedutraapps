@@ -121,23 +121,55 @@ export class LegacyImportService {
     };
   }
 
-  async apply(snapshot, { backupPath = null } = {}) {
+  async apply(snapshot, { backupPath = null, reconcileExisting = false } = {}) {
     const plan = this.plan(snapshot);
     if (backupPath) this.store.backup(backupPath);
     await this.live.ensureRestored();
+    const reconciliation = {
+      added: { areas: 0, sessions: 0, messages: 0 },
+      preserved: { areas: 0, sessions: 0, messages: 0 }
+    };
     for (const area of plan.normalized.areas) {
-      await this.live.createArea(area, { idempotencyKey: `legacy:firebase:area:${area.id}` });
+      const key = `legacy:firebase:area:${area.id}`;
+      if (reconcileExisting && (
+        this.store.findIdempotency("live.area", key)
+        || this.live.state.areas.has(area.id)
+      )) {
+        reconciliation.preserved.areas += 1;
+        continue;
+      }
+      await this.live.createArea(area, { idempotencyKey: key });
+      reconciliation.added.areas += 1;
     }
     for (const session of plan.normalized.sessions) {
-      await this.live.createSession(session, { idempotencyKey: `legacy:firebase:session:${session.id}` });
+      const key = `legacy:firebase:session:${session.id}`;
+      if (reconcileExisting && (
+        this.store.findIdempotency("live.session", key)
+        || this.live.state.sessions.has(session.id)
+      )) {
+        reconciliation.preserved.sessions += 1;
+        continue;
+      }
+      await this.live.createSession(session, { idempotencyKey: key });
+      reconciliation.added.sessions += 1;
     }
     for (const message of plan.normalized.messages) {
-      await this.live.appendMessage(message, { idempotencyKey: `legacy:firebase:message:${message.id}` });
+      const key = `legacy:firebase:message:${message.id}`;
+      if (reconcileExisting && (
+        this.store.findIdempotency("live.message", key)
+        || this.live.state.messages.has(message.id)
+      )) {
+        reconciliation.preserved.messages += 1;
+        continue;
+      }
+      await this.live.appendMessage(message, { idempotencyKey: key });
+      reconciliation.added.messages += 1;
     }
     return {
       status: "completed",
       snapshotHash: plan.snapshotHash,
       counts: plan.counts,
+      reconciliation,
       backupPath,
       integrity: this.store.verifyIntegrity()
     };
