@@ -409,3 +409,17 @@ test('Next Preview starts neutral before native loopback bootstrap', () => {
 
   assert.equal(canaryConfig.app.windows[0].url, 'about:blank');
 });
+
+test('Desktop loopback origin has explicit ACL access to the native Core bridge', () => {
+  const buildScript = readFileSync(path.join(repoRoot, 'src-tauri', 'build.rs'), 'utf8');
+  const capability = JSON.parse(
+    readFileSync(path.join(repoRoot, 'src-tauri', 'capabilities', 'default.json'), 'utf8')
+  );
+
+  assert.match(buildScript, /AppManifest::new\(\)\.commands\(COMMANDS\)/);
+  assert.match(buildScript, /"bridge_request"/);
+  assert.deepEqual(capability.remote.urls, ['http://127.0.0.1:14322/*']);
+  assert.ok(capability.permissions.includes('allow-bridge-request'));
+  assert.ok(capability.permissions.includes('allow-core-canary-rendered'));
+  assert.ok(capability.permissions.includes('allow-local-device-origin-status'));
+});
