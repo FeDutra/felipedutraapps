@@ -146,7 +146,7 @@ test('transporte por pasta move bundle assinado e mantém importação idempoten
   assert.equal(transportB.readPresence()[0].deviceKey, 'macbook');
   const pushed = transportA.push(syncB.deviceManifest().deviceId); assert.equal(pushed.events, 1); assert.equal(pushed.skipped, false);
   const pulled = transportB.pull(); assert.equal(pulled.imported, 1); assert.equal(syncB.status().replicatedEvents, 1);
-  const replay = transportB.pull(); assert.equal(replay.imported, 0); assert.equal(replay.receipts[0].receipt.replay, true);
+  const replay = transportB.pull(); assert.equal(replay.imported, 0); assert.equal(replay.scanned, 0); assert.equal(replay.skipped, 1); assert.equal(replay.receipts.length, 0);
   const delta = transportA.push(syncB.deviceManifest().deviceId); assert.equal(delta.skipped, true); assert.equal(delta.events, 0); a.close(); b.close();
 });
 

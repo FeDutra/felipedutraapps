@@ -6,6 +6,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -45,8 +46,8 @@ export class PeerFolderTransport {
   #now() { return typeof this.clock === "function" ? this.clock() : this.clock.now(); }
   #statePath() { return this.configPath ? join(dirname(this.configPath), "transport-state.json") : join(this.rootDir, ".pulso-transport-state.json"); }
   #readConfiguredRoot() { return readJson(this.configPath, {})?.rootDir || null; }
-  #readState() { return readJson(this.#statePath(), { schemaVersion: 2, pushedCursors: {}, lastSyncAt: null }); }
-  #writeState(state) { atomicWriteJson(this.#statePath(), { schemaVersion: 2, ...state }); }
+  #readState() { return readJson(this.#statePath(), { schemaVersion: 3, pushedCursors: {}, processedFiles: {}, lastSyncAt: null }); }
+  #writeState(state) { atomicWriteJson(this.#statePath(), { schemaVersion: 3, ...state }); }
   #localDeviceId() { return this.sync.deviceManifest().deviceId; }
   #bundleRoot() { return join(this.rootDir, "bundles"); }
   #localBundleDir() { return join(this.#bundleRoot(), this.#localDeviceId()); }
@@ -141,23 +142,34 @@ export class PeerFolderTransport {
     const peerDirs = readdirSync(this.#bundleRoot(), { withFileTypes: true })
       .filter(item => item.isDirectory() && item.name !== localDeviceId)
       .map(item => join(this.#bundleRoot(), item.name));
+    const state = this.#readState();
+    state.processedFiles ||= {};
     const receipts = [];
+    let skipped = 0;
     for (const peerDir of peerDirs) {
       for (const name of listJson(peerDir)) {
         const source = join(peerDir, name);
+        const relativeKey = `${basename(peerDir)}/${name}`;
         try {
+          const metadata = statSync(source);
+          const fileVersion = `${metadata.size}:${metadata.mtimeMs}`;
+          if (state.processedFiles[relativeKey] === fileVersion) {
+            skipped += 1;
+            continue;
+          }
           const receipt = this.sync.importBundle({ bundlePath: source });
           receipts.push({ file: source, ok: true, receipt });
+          state.processedFiles[relativeKey] = fileVersion;
         } catch (error) {
           receipts.push({ file: source, ok: false, error: { code: error?.code || "SYNC_IMPORT_FAILED", message: error?.message || String(error) } });
         }
       }
     }
-    const state = this.#readState();
     state.lastSyncAt = this.#now();
     this.#writeState(state);
     const summary = {
       scanned: receipts.length,
+      skipped,
       imported: receipts.reduce((sum, item) => sum + Number(item.receipt?.imported || 0), 0),
       duplicates: receipts.reduce((sum, item) => sum + Number(item.receipt?.duplicates || 0), 0),
       conflicts: receipts.reduce((sum, item) => sum + Number(item.receipt?.conflicts || 0), 0),
