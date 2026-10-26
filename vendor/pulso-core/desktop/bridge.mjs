@@ -936,6 +936,13 @@ export class PulsoDesktopBridge {
         await this.initialize();
         return await this.live.createArea(params, { idempotencyKey: params && params.idempotencyKey });
       }
+      case "live.area.update": {
+        await this.initialize();
+        return await this.live.updateArea(params, {
+          idempotencyKey: params && params.idempotencyKey,
+          force: Boolean(params && params.force),
+        });
+      }
       case "live.session.create": {
         await this.initialize();
         return await this.live.createSession(params, { idempotencyKey: params && params.idempotencyKey });

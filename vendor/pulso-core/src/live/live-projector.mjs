@@ -31,6 +31,21 @@ export function applyLiveEvent(state, event) {
       state.areas.set(area.id, area);
       break;
     }
+    case "live.area.updated": {
+      const existing = state.areas.get(event.aggregate.id);
+      if (existing) {
+        state.areas.set(existing.id, {
+          ...existing,
+          nome: p.nome ?? existing.nome,
+          glifo: p.glifo ?? existing.glifo,
+          ordem: p.ordem ?? existing.ordem,
+          estado: p.estado ?? existing.estado,
+          provenance: p.provenance === undefined ? existing.provenance : p.provenance,
+          updatedAt: p.updatedAt || event.occurredAt,
+        });
+      }
+      break;
+    }
     case "live.session.created": {
       const session = {
         id: event.aggregate.id,

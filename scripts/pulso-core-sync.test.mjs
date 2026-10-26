@@ -7,6 +7,7 @@ import path from 'node:path';
 
 import {
   DeviceSyncService,
+  LiveService,
   SqliteEventStore,
   eventDraft,
 } from '../vendor/pulso-core/src/index.mjs';
@@ -129,6 +130,53 @@ test('edição concorrente não sobrescreve: entra em quarentena de conflito', (
   b.store.close();
   rmSync(a.dataDir, { recursive: true, force: true });
   rmSync(b.dataDir, { recursive: true, force: true });
+});
+
+test('evento posterior explícito reconcilia projeções sem apagar os creates conflitantes', async () => {
+  const macbook = fixture('macbook', 'area-reconcile');
+  const imac = fixture('imac', 'area-reconcile');
+  macbook.sync.trustDevice(imac.sync.deviceManifest());
+  imac.sync.trustDevice(macbook.sync.deviceManifest());
+
+  const macbookLive = new LiveService({ store: macbook.store });
+  const imacLive = new LiveService({ store: imac.store });
+  await macbookLive.createArea({ id: 'area_casa', nome: 'casa', glifo: '⌂', ordem: 3 });
+  await imacLive.createArea({ id: 'area_casa', nome: 'Casa / Construção', glifo: '○', ordem: 5 });
+
+  const initial = imac.sync.exportBundle({ targetDeviceId: macbook.sync.deviceManifest().deviceId });
+  const initialImport = macbook.sync.importBundle({ bundlePath: initial.path });
+  assert.equal(initialImport.conflicts, 1);
+  assert.equal(macbookLive.getArea('area_casa').nome, 'casa');
+
+  await imacLive.updateArea(
+    { id: 'area_casa', nome: 'Casa / Construção', glifo: '○', ordem: 5 },
+    { force: true, idempotencyKey: 'reconcile:area_casa:v1' },
+  );
+  const reconciliation = imac.sync.exportBundle({ targetDeviceId: macbook.sync.deviceManifest().deviceId });
+  const reconciled = macbook.sync.importBundle({ bundlePath: reconciliation.path });
+  assert.equal(reconciled.imported, 1);
+  await macbookLive.restore();
+  assert.deepEqual(
+    {
+      nome: macbookLive.getArea('area_casa').nome,
+      glifo: macbookLive.getArea('area_casa').glifo,
+      ordem: macbookLive.getArea('area_casa').ordem,
+    },
+    { nome: 'Casa / Construção', glifo: '○', ordem: 5 },
+  );
+  // The second bundle can repeat the unresolved create before the sequence-2
+  // reconciliation event; it remains quarantined while the later event wins
+  // the projection. Replay of the same bundle must not add another record.
+  assert.equal(macbook.sync.status().conflicts, 2);
+
+  const replay = macbook.sync.importBundle({ bundlePath: reconciliation.path });
+  assert.equal(replay.imported, 0);
+  assert.equal(replay.replay, true);
+
+  macbook.store.close();
+  imac.store.close();
+  rmSync(macbook.dataDir, { recursive: true, force: true });
+  rmSync(imac.dataDir, { recursive: true, force: true });
 });
 
 test('exportação mantém segredo local, envia marcador assinado e registra redação no destino', () => {

@@ -187,6 +187,63 @@ export class LiveService {
     return this.state.areas.get(validated.id);
   }
 
+  async updateArea(params = {}, options = {}) {
+    await this.ensureRestored();
+    invariant(typeof params.id === "string" && params.id.trim().length > 0, "area_id_required");
+    const id = params.id.trim();
+    const existingArea = this.state.areas.get(id);
+    invariant(existingArea, "area_not_found:" + id);
+
+    const validated = validateArea({
+      ...existingArea,
+      ...params,
+      id,
+      createdAt: existingArea.createdAt,
+      updatedAt: params.updatedAt || now(),
+      provenance: params.provenance === undefined ? existingArea.provenance : params.provenance,
+    });
+
+    const unchanged =
+      existingArea.nome === validated.nome &&
+      existingArea.glifo === validated.glifo &&
+      existingArea.ordem === validated.ordem &&
+      existingArea.estado === validated.estado &&
+      JSON.stringify(existingArea.provenance ?? null) === JSON.stringify(validated.provenance ?? null);
+    if (unchanged && !options.force) return existingArea;
+
+    const draft = eventDraft({
+      type: "live.area.updated",
+      aggregateType: "area",
+      aggregateId: id,
+      correlationId: options.correlationId || pulsoId("cor"),
+      causationId: options.causationId || null,
+      actor: { kind: "core", id: "pulso-live" },
+      occurredAt: validated.updatedAt,
+      payload: {
+        nome: validated.nome,
+        glifo: validated.glifo,
+        ordem: validated.ordem,
+        estado: validated.estado,
+        createdAt: existingArea.createdAt,
+        updatedAt: validated.updatedAt,
+        provenance: validated.provenance,
+      },
+    });
+
+    const appendOpts = {};
+    if (options.idempotencyKey) {
+      appendOpts.idempotency = {
+        scope: "live.area.update",
+        key: options.idempotencyKey,
+        entityId: id,
+      };
+    }
+
+    const result = this.store.append([draft], appendOpts);
+    if (!result.duplicate) applyLiveEvent(this.state, draft);
+    return this.state.areas.get(id);
+  }
+
   async createSession(params = {}, options = {}) {
     await this.ensureRestored();
     const existingAreaIds = new Set(this.state.areas.keys());

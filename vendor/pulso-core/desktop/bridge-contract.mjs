@@ -76,6 +76,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'live.topology.ensure',
   'live.areas.list',
   'live.area.create',
+  'live.area.update',
   'live.sessions.list',
   'live.session.create',
   'live.session.select',

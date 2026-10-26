@@ -277,6 +277,18 @@ test('pulsoCoreClient integrates end-to-end with vendored PulsoDesktopBridge for
     assert.equal(areaRes.result.nome, 'OBRA');
   }
 
+  const areaUpdateRes = await client.updateArea(
+    { id: 'area_obra', nome: 'OBRA VIVA', glifo: '✦', ordem: 7 },
+    'req-area-update-1'
+  );
+  assert.equal(areaUpdateRes.ok, true);
+  if (areaUpdateRes.ok) {
+    assert.equal(areaUpdateRes.result.id, 'area_obra');
+    assert.equal(areaUpdateRes.result.nome, 'OBRA VIVA');
+    assert.equal(areaUpdateRes.result.glifo, '✦');
+    assert.equal(areaUpdateRes.result.ordem, 7);
+  }
+
   const sessionRes = await client.createSession(
     { id: 'session_obra_1', areaId: 'area_obra', titulo: 'arquitetura' },
     'req-session-1'
@@ -326,6 +338,7 @@ test('pulsoCoreClient integrates end-to-end with vendored PulsoDesktopBridge for
   assert.equal(liveAfterRestart.ok, true);
   if (liveAfterRestart.ok) {
     assert.equal(liveAfterRestart.result.areas.length, 2);
+    assert.equal(liveAfterRestart.result.areas.find(area => area.id === 'area_obra')?.nome, 'OBRA VIVA');
     assert.equal(liveAfterRestart.result.activeAreaId, 'area_obra');
     assert.equal(liveAfterRestart.result.activeSessionId, 'session_obra_1');
     assert.equal(liveAfterRestart.result.messages.length, 1);

@@ -88,6 +88,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'live.topology.ensure',
   'live.areas.list',
   'live.area.create',
+  'live.area.update',
   'live.sessions.list',
   'live.session.create',
   'live.session.select',
@@ -269,6 +270,16 @@ export interface PulsoCreateAreaParams {
   glifo: string;
   ordem: number;
   estado?: PulsoLiveEntityState;
+  idempotencyKey?: string;
+}
+
+export interface PulsoUpdateAreaParams {
+  id: string;
+  nome: string;
+  glifo: string;
+  ordem: number;
+  estado?: PulsoLiveEntityState;
+  force?: boolean;
   idempotencyKey?: string;
 }
 
@@ -876,6 +887,17 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
     ): Promise<PulsoCoreResult<PulsoLiveArea>> {
       return request<PulsoLiveArea>(
         'live.area.create',
+        { ...params },
+        requestId
+      );
+    },
+
+    updateArea(
+      params: PulsoUpdateAreaParams,
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoLiveArea>> {
+      return request<PulsoLiveArea>(
+        'live.area.update',
         { ...params },
         requestId
       );
