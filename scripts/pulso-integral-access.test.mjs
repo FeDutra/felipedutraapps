@@ -100,6 +100,10 @@ test('adaptador, bridge e painel carregam o contrato integral sem remover o modo
   assert.match(adapter, /item\/commandExecution\/requestApproval/);
   assert.match(adapter, /item\/permissions\/requestApproval/);
   assert.match(adapter, /mcpServerOpenaiFormElicitation/);
+  assert.match(adapter, /Verdade operacional é obrigatória/);
+  assert.match(adapter, /evidência produzida por uma ferramenta no turno atual/);
+  assert.match(adapter, /Nunca apresente como funcional um comando hipotético/);
+  assert.match(adapter, /entidade mencionada em memória, dispositivo realmente descoberto e dispositivo efetivamente controlável/);
   assert.match(bridge, /access\.mode\.read/);
   assert.match(bridge, /access\.mode\.set/);
   assert.match(bridge, /PrivateMemoryProvider/);
