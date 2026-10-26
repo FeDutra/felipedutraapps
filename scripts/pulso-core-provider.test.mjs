@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -113,6 +113,73 @@ test('provider adapter is restored from the event store after a cold restart', a
   const tested = await second.handleRequest(request('test-restored', 'provider.test', { providerId: 'codex-fe' }));
   assert.equal(tested.ok, true);
   assert.equal(tested.result.status, 'healthy');
+
+  await second.close();
+  rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('legacy Codex provider infers its existing local profile after a cold restart', async () => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'pulso-provider-legacy-profile-'));
+  mkdirSync(path.join(dataDir, 'provider-profiles', 'codex', 'fe-pessoal'), { recursive: true });
+  const first = createDesktopBridge({
+    dataDir,
+    adapterFactory: fakeAdapterFactory([]),
+  });
+  const legacyTime = '2026-10-24T10:49:13.009Z';
+  const actor = { kind: 'system', id: 'legacy-test' };
+  first.store.append([
+    {
+      eventId: 'evt_legacy_codex_provider',
+      type: 'control_plane.provider_registered',
+      aggregate: { type: 'provider_profile', id: 'codex-fe' },
+      correlationId: 'cmd_legacy_codex_provider',
+      causationId: 'cmd_legacy_codex_provider',
+      actor,
+      occurredAt: legacyTime,
+      recordedAt: legacyTime,
+      payload: {
+        providerId: 'codex-fe',
+        kind: 'model',
+        displayName: 'ChatGPT · Fe pessoal',
+        endpoint: null,
+        capabilities: ['chat', 'stream'],
+        enabled: true,
+        health: { status: 'healthy', checkedAt: legacyTime, detail: null },
+        metadata: {},
+        secretRef: null,
+      },
+    },
+    {
+      eventId: 'evt_legacy_codex_binding',
+      type: 'control_plane.model_binding_set',
+      aggregate: { type: 'model_binding', id: 'system' },
+      correlationId: 'cmd_legacy_codex_binding',
+      causationId: 'cmd_legacy_codex_binding',
+      actor,
+      occurredAt: legacyTime,
+      recordedAt: legacyTime,
+      payload: {
+        scope: { type: 'system', scopeId: null },
+        scopeKey: 'system',
+        primary: { providerId: 'codex-fe', model: 'gpt-6.1-sol' },
+        fallbackChain: [],
+        active: { providerId: 'codex-fe', model: 'gpt-6.1-sol', selectedFallbackIndex: null, reason: 'primary' },
+        status: 'active',
+        metadata: {},
+      },
+    },
+  ]);
+  await first.close();
+
+  const restoredCalls = [];
+  const second = createDesktopBridge({
+    dataDir,
+    adapterFactory: fakeAdapterFactory(restoredCalls),
+  });
+  const boot = await second.handleRequest(request('boot-legacy-profile', 'bootstrap'));
+  assert.equal(boot.ok, true);
+  assert.equal(restoredCalls.length, 1);
+  assert.equal(restoredCalls[0].profileId, 'fe-pessoal');
 
   await second.close();
   rmSync(dataDir, { recursive: true, force: true });

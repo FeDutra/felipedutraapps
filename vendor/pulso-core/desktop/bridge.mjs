@@ -1,6 +1,6 @@
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
@@ -262,7 +262,7 @@ export class PulsoDesktopBridge {
       ));
       const runtimeMetadata = provider.metadata?.runtimeAdapter || {};
       let adapterKind = runtimeMetadata.adapterKind || provider.metadata?.adapterKind || null;
-      if (!adapterKind && provider.providerId === "codex-fe" && process.env.PULSO_CODEX_BIN) {
+      if (!adapterKind && provider.providerId === "codex-fe") {
         adapterKind = "codex_subscription";
       }
       if (!adapterKind && provider.kind === "local") {
@@ -272,13 +272,35 @@ export class PulsoDesktopBridge {
         skipped.push({ providerId: provider.providerId, reason: "adapter_kind_not_persisted" });
         continue;
       }
+      const profilesRoot = join(this.dataDir, "provider-profiles", "codex");
+      const storedProfileId = runtimeMetadata.profileId || null;
+      let inferredProfileId = null;
+      if (!storedProfileId && adapterKind === "codex_subscription") {
+        try {
+          const profileIds = readdirSync(profilesRoot, { withFileTypes: true })
+            .filter(entry => entry.isDirectory() && !entry.name.startsWith("."))
+            .map(entry => entry.name);
+          const displayNameSlug = String(provider.displayName || "")
+            .replace(/^ChatGPT\s*[·:-]?\s*/i, "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "");
+          inferredProfileId = profileIds.includes(displayNameSlug)
+            ? displayNameSlug
+            : (profileIds.length === 1 ? profileIds[0] : null);
+        } catch {
+          inferredProfileId = null;
+        }
+      }
       const params = {
         providerId: provider.providerId,
         displayName: provider.displayName || provider.providerId,
         adapterKind,
         model: runtimeMetadata.model || binding?.active?.model || binding?.primary?.model || null,
         endpoint: runtimeMetadata.endpoint || provider.endpoint || null,
-        profileId: runtimeMetadata.profileId || "personal",
+        profileId: storedProfileId || inferredProfileId || "personal",
         allowExternalNetwork: runtimeMetadata.allowExternalNetwork === true,
         metadata: provider.metadata || {},
       };
