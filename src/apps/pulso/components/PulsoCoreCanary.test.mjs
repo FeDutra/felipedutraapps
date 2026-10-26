@@ -371,6 +371,25 @@ test('Desktop packaged entry renders HOME at the immutable Tauri root', () => {
   assert.match(rootPage, /<PulsoCoreCanary \/>/);
 });
 
+test('Desktop HOME keeps a stable hook count while loading settles', () => {
+  const livePage = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'pages', 'LivePage.tsx'),
+    'utf8'
+  );
+
+  assert.match(livePage, /const handleChatDragEnd = async/);
+  assert.doesNotMatch(livePage, /const handleChatDragEnd = React\.useCallback/);
+
+  const debugPanel = readFileSync(
+    path.join(repoRoot, 'src', 'components', 'pulso', 'PulsoDebugPanel.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    debugPanel.indexOf('useStateCacheStore') < debugPanel.indexOf("process.env.NODE_ENV !== 'development'"),
+    'debug panel hooks must run before its production guard'
+  );
+});
+
 test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   const authGateSource = readFileSync(
     path.join(repoRoot, 'src', 'apps', 'pulso', 'components', 'auth', 'AuthGate.tsx'),

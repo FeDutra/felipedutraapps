@@ -5,11 +5,11 @@ import { useStateCacheStore } from '@/lib/pulso/state/StateCacheStore';
 import { invoke } from '@tauri-apps/api/core';
 
 export function PulsoDebugPanel() {
+  const clearSummaryCards = useStateCacheStore(state => state.clearSummaryCards);
+
   if (process.env.NODE_ENV !== 'development') {
     return null;
   }
-
-  const clearSummaryCards = useStateCacheStore(state => state.clearSummaryCards);
 
   const insertMockTask = async () => {
     try {

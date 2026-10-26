@@ -5954,7 +5954,11 @@ ${data.transcription}`, {
   // Move um chat pra área que ele foi solto em cima (append no fim da área
   // destino), ou reordena dentro da própria área se soltou sobre outro chat
   // da mesma área. Grava no Firestore e atualiza local pra resposta imediata.
-  const handleChatDragEnd = React.useCallback(async (active: DragEndEvent['active'], over: NonNullable<DragEndEvent['over']>) => {
+  // Keep this handler as an ordinary function. `loading` and `error` render
+  // guards above intentionally return early; making the handler a hook after
+  // those guards changes the hook count when loading settles and crashes
+  // React during desktop hydration (minified error #300).
+  const handleChatDragEnd = async (active: DragEndEvent['active'], over: NonNullable<DragEndEvent['over']>) => {
     const contextId = String(active.id);
     const sourceAreaId = (active.data.current as any)?.areaId as string | undefined;
     const overId = String(over.id);
@@ -5999,7 +6003,7 @@ ${data.transcription}`, {
     } catch (err) {
       console.error('Erro ao reordenar chats:', err);
     }
-  }, [dynamicAreas, allContextNodes, activeContextNode.contextId, setActiveContextNode]);
+  };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveDragItem(null);
