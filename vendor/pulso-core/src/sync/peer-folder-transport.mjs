@@ -47,7 +47,7 @@ export class PeerFolderTransport {
   #statePath() { return this.configPath ? join(dirname(this.configPath), "transport-state.json") : join(this.rootDir, ".pulso-transport-state.json"); }
   #readConfiguredRoot() { return readJson(this.configPath, {})?.rootDir || null; }
   #readState() { return readJson(this.#statePath(), { schemaVersion: 3, pushedCursors: {}, processedFiles: {}, lastSyncAt: null }); }
-  #writeState(state) { atomicWriteJson(this.#statePath(), { schemaVersion: 3, ...state }); }
+  #writeState(state) { atomicWriteJson(this.#statePath(), { ...state, schemaVersion: 3 }); }
   #localDeviceId() { return this.sync.deviceManifest().deviceId; }
   #bundleRoot() { return join(this.rootDir, "bundles"); }
   #localBundleDir() { return join(this.#bundleRoot(), this.#localDeviceId()); }

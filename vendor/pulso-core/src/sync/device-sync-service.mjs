@@ -322,17 +322,22 @@ export class DeviceSyncService {
   exportBundle({ targetDeviceId = null, outputPath = null, afterByOrigin = {} } = {}) {
     this.#backfillLocalOrigins();
     const identity = this.#identity();
-    const rows = this.store.db.prepare([
+    const origins = this.store.db.prepare(
+      "SELECT DISTINCT origin_device_id FROM sync_event_origin ORDER BY origin_device_id"
+    ).all().map(row => row.origin_device_id).filter(originDeviceId => originDeviceId !== targetDeviceId);
+    const cursorClauses = origins.map(() => "(o.origin_device_id=? AND o.origin_sequence>?)");
+    const cursorParams = origins.flatMap(originDeviceId => [
+      originDeviceId,
+      Number(afterByOrigin?.[originDeviceId] || 0),
+    ]);
+    const rows = cursorClauses.length === 0 ? [] : this.store.db.prepare([
       "SELECT e.*,o.origin_device_id,o.origin_sequence,o.event_hash",
       "FROM events e JOIN sync_event_origin o ON o.event_id=e.event_id",
+      `WHERE ${cursorClauses.join(" OR ")}`,
       "ORDER BY o.origin_device_id,o.origin_sequence",
-    ].join(" ")).all();
+    ].join(" ")).all(...cursorParams);
     const quarantine = [];
-    const events = rows.filter(row => {
-      if (targetDeviceId && row.origin_device_id === targetDeviceId) return false;
-      const after = Number(afterByOrigin?.[row.origin_device_id] || 0);
-      return Number(row.origin_sequence) > after;
-    }).map(row => {
+    const events = rows.map(row => {
       const event = eventFromRow(row);
       const hits = sensitivePaths(event);
       if (hits.length === 0) {

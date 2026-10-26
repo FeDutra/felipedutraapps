@@ -186,3 +186,10 @@ test('desktop mantém Core canônico e usa OpenClaw como executor operacional co
   assert.match(systemSource, /A rotina pode produzir efeitos externos/);
   assert.match(systemSource, /Remover definitivamente a rotina/);
 });
+
+test('sync incremental filtra cursores no SQLite antes de materializar eventos', () => {
+  const source = readFileSync(new URL('../vendor/pulso-core/src/sync/device-sync-service.mjs', import.meta.url), 'utf8');
+  assert.match(source, /o\.origin_sequence>\?/);
+  assert.match(source, /cursorClauses\.join\(" OR "\)/);
+  assert.doesNotMatch(source, /const events = rows\.filter/);
+});
