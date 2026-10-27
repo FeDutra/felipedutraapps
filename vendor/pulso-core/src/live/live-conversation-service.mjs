@@ -20,6 +20,17 @@ function errorDescriptor(error) {
   });
 }
 
+function normalizeSpecialistOutput(output, agentName) {
+  const text = String(output || "").trim();
+  const escapedName = String(agentName || "")
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const redundantIdentity = new RegExp(
+    `^(?:\\*\\*)?(?:${escapedName}|L[oó]tus|Assistente|Assistant)(?:\\s*:\\s*)?(?:\\*\\*)?\\s*:?\\s*`,
+    "iu"
+  );
+  return text.replace(redundantIdentity, "").trim();
+}
+
 export class LiveConversationService {
   constructor({ store, live, router, identityService = null, memoryProvider = null, memoryRecorder = null, agentExecutor = null, agentFoundry = null, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
     invariant(store, "event_store_required");
@@ -366,7 +377,9 @@ export class LiveConversationService {
             error.code = "conversation_cancelled";
             throw error;
           }
-          const attributedText = `**${agentName}**\n\n${specialist.output}`;
+          const specialistOutput = normalizeSpecialistOutput(specialist.output, agentName);
+          invariant(specialistOutput, "specialist_output_empty");
+          const attributedText = `**${agentName}**\n\n${specialistOutput}`;
           const current = this.getRun(runId);
           this.#append([this.#runDraft({ type: "live.conversation_run.delta_appended", runId, correlationId, occurredAt: this.clock(), payload: { index: current.deltasCount, text: `${current.deltasCount ? "\n\n" : ""}${attributedText}` } })]);
           await options.onEnvelope?.({ type: "conversation.delta", runId, index: current.deltasCount, text: attributedText, accumulatedText: this.getRun(runId).accumulatedText, agentId: specialistAgentId });

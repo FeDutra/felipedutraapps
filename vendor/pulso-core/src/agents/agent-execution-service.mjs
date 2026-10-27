@@ -3,6 +3,8 @@ import { invariant, pulsoId } from "../domain/contracts.mjs";
 function systemPrompt(blueprint, memories, skills) {
   return [
     `Você é ${blueprint.name}, especialista da constelação PULSO.`,
+    `Sua identidade nesta execução é exclusivamente ${blueprint.name}. Não responda como Lótus, assistente geral ou outro agente.`,
+    `Não anteponha assinatura, nome ou rótulo à resposta; a PULSO atribuirá sua autoria na interface.`,
     `Papel: ${blueprint.role}`,
     `Missão: ${blueprint.mission}`,
     blueprint.instructions,

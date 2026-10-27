@@ -143,6 +143,26 @@ test('múltiplas menções executam agentes na mesma sessão, preservam autoria 
   f.close();
 });
 
+test('especialista não vaza assinatura da Lótus dentro da própria autoria', async () => {
+  const f = fixture('conversation-specialist-identity'); const live = new LiveService({ store: f.store }); const boot = await live.bootstrap();
+  const foundry = {
+    list() { return [{ agentId: 'agent_ritmo', blueprintId: 'bp_ritmo' }]; },
+    get(kind) { return kind === 'agent' ? { agentId: 'agent_ritmo', blueprintId: 'bp_ritmo' } : { name: 'RITMO' }; },
+  };
+  const conversation = new LiveConversationService({
+    store: f.store,
+    live,
+    router: { resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; } },
+    agentFoundry: foundry,
+    agentExecutor: { async execute() { return { output: '**Lótus:** ritmo sem ruído', providerId: 'codex-fe', model: 'gpt-test', run: { agentRunId: 'run_ritmo' } }; } },
+  });
+  await conversation.startTurn({ sessionId: boot.activeSessionId, text: '@RITMO responda' });
+  const answer = live.listMessages(boot.activeSessionId).find(message => message.role === 'assistant');
+  assert.equal(answer.texto, '**RITMO**\n\nritmo sem ruído');
+  assert.doesNotMatch(answer.texto, /Lótus:/u);
+  f.close();
+});
+
 test('participantes persistentes da sessão recebem o turno sem menção explícita', async () => {
   const f = fixture('conversation-session-participants'); const live = new LiveService({ store: f.store }); await live.bootstrap();
   const session = await live.createSession({ id: 'sessao_conselho', areaId: 'area_pulso', titulo: 'Conselho' });
