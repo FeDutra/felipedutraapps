@@ -57,14 +57,16 @@ interface SortableChatItemDesktopProps {
 // a limitação de forma humana em vez de expor infraestrutura.
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
 
-const humanDecisionLabel = (risk?: string) => ({
+const HUMAN_DECISION_LABELS: Record<string, string> = {
   external_action: 'envio ou publicação',
   external_commitment: 'compromisso externo',
   credentials: 'verificação de acesso',
   money: 'movimentação financeira',
   destructive: 'ação irreversível',
   human_input: 'informação necessária',
-}[String(risk || '')] || 'confirmação necessária');
+};
+
+const humanDecisionLabel = (risk?: string) => HUMAN_DECISION_LABELS[String(risk || '')] || 'confirmação necessária';
 
 const isTauriRuntime = () => typeof window !== 'undefined' && (
   window.location.protocol === 'tauri:'
