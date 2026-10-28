@@ -366,9 +366,10 @@ test('Desktop packaged entry renders HOME at the immutable Tauri root', () => {
   assert.doesNotMatch(rootLayout, /history\.(?:pushState|replaceState)/);
   assert.doesNotMatch(rootPage, /router\.replace/);
   assert.doesNotMatch(rootPage, /useRouter/);
-  assert.match(rootPage, /data-pulso-desktop-root="true"/);
+  assert.match(rootPage, /data-pulso-desktop-root=\{IS_PULSO_DESKTOP_BUILD \? 'true' : undefined\}/);
+  assert.match(rootPage, /data-pulso-app-root=\{PULSO_RUNTIME\}/);
   assert.match(rootPage, /<LivePage \/>/);
-  assert.match(rootPage, /<PulsoCoreCanary \/>/);
+  assert.match(rootPage, /IS_PULSO_DESKTOP_BUILD \? <PulsoCoreCanary \/> : null/);
 });
 
 test('Desktop HOME keeps a stable hook count while loading settles', () => {
