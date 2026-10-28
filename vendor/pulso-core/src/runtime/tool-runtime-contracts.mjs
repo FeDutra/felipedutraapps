@@ -97,7 +97,7 @@ function insideRoot(candidate, root) {
   return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(`${normalizedRoot}${sep}`);
 }
 
-export function normalizeToolItem(item = {}, phase = "started") {
+export function normalizeToolItem(item = {}, phase = "started", options = {}) {
   const type = text(item.type || item.kind || "unknown", 64);
   const itemId = text(item.id || item.itemId || item.callId || `tool_${fingerprint(JSON.stringify(item))}`, 160);
   const common = {
@@ -131,10 +131,13 @@ export function normalizeToolItem(item = {}, phase = "started") {
     };
   }
   if (type === "mcpToolCall") {
+    const tool = text(item.tool || "mcp_tool", 120);
+    const source = text(item.server || item.appContext?.connectorId || "mcp", 120);
     return {
       ...common,
-      tool: text(item.tool || "mcp_tool", 120),
-      source: text(item.server || item.appContext?.connectorId || "mcp", 120),
+      tool,
+      source,
+      capability: `tool.${source}.${tool}`,
       target: text(item.appContext?.displayName || item.server || "conector", 160),
       action: "connector_call",
       success: phase === "completed" ? item.status === "completed" && !item.error : null,
@@ -142,10 +145,13 @@ export function normalizeToolItem(item = {}, phase = "started") {
     };
   }
   if (type === "dynamicToolCall") {
+    const tool = text(item.tool || "dynamic_tool", 120);
+    const source = text(item.namespace || "dynamic", 120);
     return {
       ...common,
-      tool: text(item.tool || "dynamic_tool", 120),
-      source: text(item.namespace || "dynamic", 120),
+      tool,
+      source,
+      capability: options.dynamicCapabilities?.get?.(tool) || `tool.${source}.${tool}`,
       target: text(item.namespace || "ferramenta", 160),
       action: "dynamic_tool_call",
       success: phase === "completed" ? item.success === true : null,

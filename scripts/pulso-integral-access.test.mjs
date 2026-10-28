@@ -120,6 +120,9 @@ test('adaptador, bridge e painel carregam o contrato integral sem remover o modo
   assert.match(adapter, /mcpServer\/elicitation\/request/);
   assert.match(adapter, /apps\._default\.default_tools_approval_mode/);
   assert.match(bridge, /access\.mode\.read/);
+  assert.match(bridge, /agent\.capability\.grant/);
+  assert.match(bridge, /agent\.capability\.revoke/);
+  assert.match(bridge, /agent\.capability\.list/);
   assert.match(bridge, /access\.mode\.set/);
   assert.match(bridge, /PrivateMemoryProvider/);
   assert.match(panel, /modo integral ativo/);
@@ -174,6 +177,10 @@ test('ferramentas dinâmicas expõem contrato mínimo e resposta pública limita
   assert.equal(failed.success, false);
   assert.equal(failed.contentItems[0].text, 'recusado');
   assert.throws(() => normalizeDynamicToolDefinitions([{ name: 'nome inválido', description: 'x' }]), /invalid_dynamic_tool_name/);
+  const receipt = normalizeToolItem({ type: 'dynamicToolCall', id: 'dyn-1', tool: 'pulso_operator_whatsapp_read' }, 'started', {
+    dynamicCapabilities: new Map([['pulso_operator_whatsapp_read', 'tool.whatsapp.read']]),
+  });
+  assert.equal(receipt.capability, 'tool.whatsapp.read');
 });
 
 test('cliente operador mantém WhatsApp em leitura ou minuta e propaga cancelamento', async () => {

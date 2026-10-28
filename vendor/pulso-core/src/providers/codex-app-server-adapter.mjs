@@ -665,6 +665,7 @@ export class CodexAppServerClient {
     let threadId = null;
     let turnId = null;
     const activeDynamicTools = normalizeDynamicToolDefinitions(dynamicTools ?? this.dynamicTools);
+    const dynamicCapabilities = new Map(activeDynamicTools.map(definition => [definition.name, definition.capability]));
     const dynamicToolExecutor = executeDynamicTool ?? this.dynamicToolExecutor;
     const dynamicAbortController = new AbortController();
     const onNotification = message => {
@@ -674,9 +675,9 @@ export class CodexAppServerClient {
       if (message.method === "item/agentMessage/delta") {
         queue.push({ type: "delta", delta: String(params.delta || ""), params });
       } else if (message.method === "item/started") {
-        queue.push({ type: "tool.started", receipt: normalizeToolItem(params.item || {}, "started"), params });
+        queue.push({ type: "tool.started", receipt: normalizeToolItem(params.item || {}, "started", { dynamicCapabilities }), params });
       } else if (message.method === "item/completed") {
-        queue.push({ type: "tool.completed", receipt: normalizeToolItem(params.item || {}, "completed"), params });
+        queue.push({ type: "tool.completed", receipt: normalizeToolItem(params.item || {}, "completed", { dynamicCapabilities }), params });
       } else if (message.method === "turn/completed") {
         queue.push({ type: "completed", params });
         queue.close();

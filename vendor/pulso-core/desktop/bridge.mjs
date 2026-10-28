@@ -615,6 +615,23 @@ export class PulsoDesktopBridge {
         await this.initialize();
         return this.controlPlane.foundry.get(params.resource || "agent", params.id);
       }
+      case "agent.capability.grant": {
+        await this.initialize();
+        return await this.controlPlane.foundry.grantCapability(params, {
+          idempotencyKey: params.idempotencyKey || null,
+        });
+      }
+      case "agent.capability.revoke": {
+        await this.initialize();
+        return await this.controlPlane.foundry.revokeCapability(params, {
+          idempotencyKey: params.idempotencyKey || null,
+        });
+      }
+      case "agent.capability.list": {
+        await this.initialize();
+        const grants = this.controlPlane.foundry.list("grants");
+        return params.agentId ? grants.filter(grant => grant.agentId === params.agentId) : grants;
+      }
       case "agent.run.start": {
         await this.initialize();
         return await this.agentExecutor.execute(params);

@@ -196,3 +196,40 @@ test('provider test fails closed when no adapter is configured', async () => {
   await bridge.close();
   rmSync(dataDir, { recursive: true, force: true });
 });
+
+test('desktop bridge grants, lists and revokes agent capabilities with persisted receipts', async () => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'pulso-agent-grants-'));
+  const bridge = createDesktopBridge({ dataDir });
+  const boot = await bridge.handleRequest(request('boot-agent-grants', 'bootstrap'));
+  assert.equal(boot.ok, true);
+
+  const granted = await bridge.handleRequest(request('grant-whatsapp-read', 'agent.capability.grant', {
+    agentId: 'agent_lotus',
+    capability: 'tool.whatsapp.read',
+    effect: 'allow',
+    scope: { type: 'global', scopeId: '*' },
+    idempotencyKey: 'test:grant:lotus:whatsapp-read',
+  }));
+  assert.equal(granted.ok, true);
+  assert.equal(granted.result.grant.capability, 'tool.whatsapp.read');
+
+  const listed = await bridge.handleRequest(request('list-whatsapp-read', 'agent.capability.list', {
+    agentId: 'agent_lotus',
+  }));
+  assert.equal(listed.ok, true);
+  assert.equal(listed.result.length, 1);
+  assert.equal(listed.result[0].grantId, granted.result.grant.grantId);
+
+  const revoked = await bridge.handleRequest(request('revoke-whatsapp-read', 'agent.capability.revoke', {
+    grantId: granted.result.grant.grantId,
+    idempotencyKey: 'test:revoke:lotus:whatsapp-read',
+  }));
+  assert.equal(revoked.ok, true);
+  const after = await bridge.handleRequest(request('list-after-revoke', 'agent.capability.list', {
+    agentId: 'agent_lotus',
+  }));
+  assert.deepEqual(after.result, []);
+
+  await bridge.close();
+  rmSync(dataDir, { recursive: true, force: true });
+});

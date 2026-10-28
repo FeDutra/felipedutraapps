@@ -69,7 +69,7 @@ export class AgentExecutionService {
         if (typeof input.onEnvelope === "function") await input.onEnvelope(envelope, { agentId, runId });
         if (envelope.type === "tool.started") {
           const receipt = envelope.receipt || {};
-          const capability = `tool.${receipt.source || "provider"}.${receipt.tool || receipt.type || "unknown"}`;
+          const capability = receipt.capability || `tool.${receipt.source || "provider"}.${receipt.tool || receipt.type || "unknown"}`;
           try {
             this.foundry.supervisor.checkAuthorization(agentId, capability, {
               sessionId: input.sessionId || null,
