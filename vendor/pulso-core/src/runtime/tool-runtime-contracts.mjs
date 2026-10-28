@@ -97,6 +97,18 @@ function insideRoot(candidate, root) {
   return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(`${normalizedRoot}${sep}`);
 }
 
+const NON_TOOL_ITEM_TYPES = new Set([
+  "userMessage",
+  "agentMessage",
+  "reasoning",
+  "plan",
+]);
+
+export function isOperationalToolItem(item = {}) {
+  const type = String(item?.type || item?.kind || "").trim();
+  return Boolean(type) && !NON_TOOL_ITEM_TYPES.has(type);
+}
+
 export function normalizeToolItem(item = {}, phase = "started", options = {}) {
   const type = text(item.type || item.kind || "unknown", 64);
   const itemId = text(item.id || item.itemId || item.callId || `tool_${fingerprint(JSON.stringify(item))}`, 160);

@@ -13,6 +13,7 @@ import { SecretRefResolver } from "../runtime/secret-ref-resolver.mjs";
 import {
   approvalDecisionResult,
   classifyApproval,
+  isOperationalToolItem,
   normalizeToolItem,
   sanitizeApproval,
 } from "../runtime/tool-runtime-contracts.mjs";
@@ -675,9 +676,13 @@ export class CodexAppServerClient {
       if (message.method === "item/agentMessage/delta") {
         queue.push({ type: "delta", delta: String(params.delta || ""), params });
       } else if (message.method === "item/started") {
-        queue.push({ type: "tool.started", receipt: normalizeToolItem(params.item || {}, "started", { dynamicCapabilities }), params });
+        if (isOperationalToolItem(params.item)) {
+          queue.push({ type: "tool.started", receipt: normalizeToolItem(params.item || {}, "started", { dynamicCapabilities }), params });
+        }
       } else if (message.method === "item/completed") {
-        queue.push({ type: "tool.completed", receipt: normalizeToolItem(params.item || {}, "completed", { dynamicCapabilities }), params });
+        if (isOperationalToolItem(params.item)) {
+          queue.push({ type: "tool.completed", receipt: normalizeToolItem(params.item || {}, "completed", { dynamicCapabilities }), params });
+        }
       } else if (message.method === "turn/completed") {
         queue.push({ type: "completed", params });
         queue.close();

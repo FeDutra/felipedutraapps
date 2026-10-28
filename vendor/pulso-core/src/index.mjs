@@ -92,6 +92,7 @@ export { PulsoRuntimeService } from "./runtime/pulso-runtime-service.mjs";
 export { SecretRefResolver } from "./runtime/secret-ref-resolver.mjs";
 export { AccessModeStore, ACCESS_MODES } from "./runtime/access-mode-store.mjs";
 export {
+  isOperationalToolItem,
   normalizeToolItem,
   mcpToolIdentity,
   classifyApproval,

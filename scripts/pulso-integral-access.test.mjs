@@ -13,6 +13,7 @@ import {
   PrivateMemoryProvider,
   SqliteEventStore,
   installPrivateSkills,
+  isOperationalToolItem,
   normalizeToolItem,
   mcpToolIdentity,
   classifyApproval,
@@ -181,6 +182,13 @@ test('ferramentas dinâmicas expõem contrato mínimo e resposta pública limita
     dynamicCapabilities: new Map([['pulso_operator_whatsapp_read', 'tool.whatsapp.read']]),
   });
   assert.equal(receipt.capability, 'tool.whatsapp.read');
+  assert.equal(isOperationalToolItem({ type: 'userMessage' }), false);
+  assert.equal(isOperationalToolItem({ type: 'agentMessage' }), false);
+  assert.equal(isOperationalToolItem({ type: 'reasoning' }), false);
+  assert.equal(isOperationalToolItem({ type: 'plan' }), false);
+  assert.equal(isOperationalToolItem({ type: 'dynamicToolCall' }), true);
+  assert.equal(isOperationalToolItem({ type: 'mcpToolCall' }), true);
+  assert.equal(isOperationalToolItem({ type: 'futureSensitiveOperation' }), true);
 });
 
 test('cliente operador mantém WhatsApp em leitura ou minuta e propaga cancelamento', async () => {
