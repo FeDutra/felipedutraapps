@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const destination = path.join(repoRoot, 'out', 'index.html');
 const desktopWebResource = path.join(repoRoot, 'src-tauri', 'resources', 'web');
+const pulsoRuntime =
+  process.env.NEXT_PUBLIC_PULSO_RUNTIME ??
+  (process.env.NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '1' ? 'tauri_desktop' : 'web');
+const isMobileBuild = pulsoRuntime === 'tauri_mobile';
 
 const destinationStat = await stat(destination);
 if (!destinationStat.isFile() || destinationStat.size === 0) {
@@ -12,9 +16,12 @@ if (!destinationStat.isFile() || destinationStat.size === 0) {
 }
 
 let html = await readFile(destination, 'utf8');
-if (!html.includes('data-pulso-desktop-root="true"')) {
+const expectedRootMarker = isMobileBuild
+  ? 'data-pulso-app-root="tauri_mobile"'
+  : 'data-pulso-desktop-root="true"';
+if (!html.includes(expectedRootMarker)) {
   throw new Error(
-    'PULSO desktop root was not compiled natively; refusing a redirect-based bootstrap'
+    `PULSO ${pulsoRuntime} root was not compiled natively; refusing a redirect-based bootstrap`
   );
 }
 const liveEntry = path.join(repoRoot, 'out', 'pulso', 'live', 'index.html');
@@ -35,7 +42,7 @@ if (!liveEntryStat.isFile() || liveEntryStat.size === 0) {
 // script executes and keep the physical document URL immutable.
 const immutableHistoryGuard = `<script data-pulso-immutable-history="true">(()=>{if(location.protocol==="http:"&&location.hostname==="127.0.0.1"&&location.port==="14322")return;const h=history,d=Object.getOwnPropertyDescriptor(History.prototype,"state");let s=null;try{s=d?.get?.call(h)??h.state}catch{}const set=v=>{s=v};try{Object.defineProperty(h,"state",{get:()=>s,configurable:false});Object.defineProperty(h,"pushState",{value:set,configurable:false,writable:false});Object.defineProperty(h,"replaceState",{value:set,configurable:false,writable:false})}catch{h.pushState=set;h.replaceState=set}})();</script>`;
 
-if (!html.includes('data-pulso-immutable-history="true"')) {
+if (!isMobileBuild && !html.includes('data-pulso-immutable-history="true"')) {
   if (!html.includes('<head>')) {
     throw new Error('PULSO desktop root has no <head>; refusing a late History API guard');
   }
@@ -43,18 +50,22 @@ if (!html.includes('data-pulso-immutable-history="true"')) {
   await writeFile(destination, html, 'utf8');
 }
 
-const guardedHtml = await readFile(destination, 'utf8');
-if (!guardedHtml.includes('data-pulso-immutable-history="true"')) {
-  throw new Error('PULSO desktop root History API guard was not installed');
-}
+if (!isMobileBuild) {
+  const guardedHtml = await readFile(destination, 'utf8');
+  if (!guardedHtml.includes('data-pulso-immutable-history="true"')) {
+    throw new Error('PULSO desktop root History API guard was not installed');
+  }
 
 // `frontendDist` is embedded in Tauri's protocol handler and therefore is not
 // emitted as ordinary files in Contents/Resources. The private loopback server
 // needs the exact finalized export as physical files, so mirror it into the
 // regular resource tree after the root entry and guard have been verified.
-await rm(desktopWebResource, { recursive: true, force: true });
-await mkdir(desktopWebResource, { recursive: true });
-await cp(path.join(repoRoot, 'out'), desktopWebResource, { recursive: true });
+  await rm(desktopWebResource, { recursive: true, force: true });
+  await mkdir(desktopWebResource, { recursive: true });
+  await cp(path.join(repoRoot, 'out'), desktopWebResource, { recursive: true });
 
-console.log(`Verified immutable native Tauri desktop HOME at root: ${destination}`);
-console.log(`Mirrored desktop export for private loopback: ${desktopWebResource}`);
+  console.log(`Verified immutable native Tauri desktop HOME at root: ${destination}`);
+  console.log(`Mirrored desktop export for private loopback: ${desktopWebResource}`);
+} else {
+  console.log(`Verified canonical native Tauri mobile HOME at root: ${destination}`);
+}

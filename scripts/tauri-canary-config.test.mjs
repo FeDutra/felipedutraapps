@@ -178,6 +178,10 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.match(prepareScript, /'src-tauri', 'resources', 'web'/);
   assert.match(prepareScript, /await cp\(path\.join\(repoRoot, 'out'\), desktopWebResource/);
   assert.match(prepareScript, /data-pulso-desktop-root/);
+  assert.match(prepareScript, /data-pulso-app-root="tauri_mobile"/);
+  assert.match(prepareScript, /const isMobileBuild = pulsoRuntime === 'tauri_mobile'/);
+  assert.match(prepareScript, /if \(!isMobileBuild && !html\.includes/);
+  assert.match(prepareScript, /if \(!isMobileBuild\) \{/);
   assert.match(prepareScript, /data-pulso-immutable-history/);
   assert.match(tauriLib, /append_invoke_initialization_script\(PULSO_DESKTOP_HISTORY_GUARD\)/);
   assert.match(tauriLib, /History\.prototype, "pushState"/);
