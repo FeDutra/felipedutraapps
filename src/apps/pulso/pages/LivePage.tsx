@@ -4796,7 +4796,7 @@ export default function LivePage() {
     displayText?: string;
     targetContextNode?: PulsoContextNode;
     presenceRouting?: PresenceRoutingDecision;
-  }) => {
+  }): Promise<{ requestId: string; responseText?: string } | null | void> => {
     const originMode = options?.originMode || 'text';
 
     // Presença é uma entrada assíncrona própria. O estado `isTyping` pertence
@@ -5031,6 +5031,16 @@ export default function LivePage() {
         const mappedMessages = mapCoreMessages(result.messages, sendingContextId).map(message => (
           completedMessageIds.has(message.id) ? { ...message, requestId: preGeneratedReqId } : message
         ));
+        const completedMessages = mappedMessages.filter(message => completedMessageIds.has(message.id));
+        const responseText = completedMessages
+          .map(message => {
+            const text = String(message.text || '').trim();
+            if (!text) return '';
+            const speaker = String(message.assistantName || '').trim();
+            return completedMessages.length > 1 && speaker ? `${speaker}: ${text}` : text;
+          })
+          .filter(Boolean)
+          .join('\n\n') || String(result.run.accumulatedText || '').trim();
         const mapped = mergeCoreTimeline(mappedMessages, mapCoreRunArtifacts(persistedRuns, sendingContextId));
         setCoreMessagesByContext(previous => ({ ...previous, [sendingContextId]: mapped }));
         setMessages(previous => [
@@ -5047,6 +5057,10 @@ export default function LivePage() {
           ...mapped,
         ]);
         sessionsService.touchSession(sendingContextId);
+        return {
+          requestId: preGeneratedReqId,
+          responseText: responseText || undefined,
+        };
       } catch (err: any) {
         const providerMissing = err?.code === 'PROVIDER_NOT_CONFIGURED';
         const lotusErrorMsg: Message = {
@@ -5275,13 +5289,12 @@ export default function LivePage() {
   }, [activeContextNode, sessions, state?.allAreas]);
 
   /**
-   * Entrada canônica dedicada do Modo Presença.
+   * Entrada canônica do Modo Presença.
    *
-   * O turno de voz não atravessa a maquinaria do compositor de texto
-   * (anexos, reply, textarea e trava de submit). Isso elimina uma fronteira
-   * acidental que podia rejeitar a fala antes mesmo de criar o documento no
-   * Firestore. A mesma função canônica de persistência continua sendo usada,
-   * portanto o diálogo permanece pesquisável e chega à Lótus normalmente.
+   * Voz e texto atravessam exatamente o mesmo contrato soberano do Core:
+   * sessão, participantes, grants, progresso, aprovações, cancelamento e
+   * persistência. Gemini/Kokoro são transportes de áudio e narração; nunca
+   * criam uma segunda conversa no Firestore/OpenClaw.
    */
   const handlePresenceCanonicalMessage = React.useCallback(async (
     text: string,
@@ -5297,56 +5310,16 @@ export default function LivePage() {
     const target = options.targetContextNode || activeContextNode;
     if (!target?.contextId) throw new Error('presence_context_missing');
 
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    latencyMapRef.current[requestId] = { t1_client_submit: Date.now() };
-    voiceReplyRequestsRef.current.add(requestId);
-
-    setMessages(previous => [...previous, {
-      id: `user-msg-${requestId}`,
-      sender: 'user',
-      text: cleanText,
-      timestamp: new Date(),
-      contextId: target.contextId,
+    const dispatched = await handleSendMessage(cleanText, {
       originMode: 'presence',
-      requestId,
-    }]);
-
-    setContextTyping(target.contextId, true);
-    voiceStateRef.current = 'transcribing';
-    setVoiceState('transcribing');
-
-    try {
-      const created = await createPulsoConversationRequest(cleanText, {
-        mode: 'presence',
-        areaId: target.areaId,
-        contextId: target.contextId,
-        chatId: target.chatId,
-        openclawSessionKey: target.openclawSessionKey,
-        requestId,
-        presenceRouting: options.presenceRouting,
-        context: contextStatesMap[target.contextId]?.strongState
-          ? { reusableContext: contextStatesMap[target.contextId].strongState }
-          : undefined,
-      });
-
-      const persistedRequestId = created.id || requestId;
-      if (latencyMapRef.current[persistedRequestId]) {
-        latencyMapRef.current[persistedRequestId].t2_firestore_queued = Date.now();
-      }
-      sessionsService.touchSession(target.contextId);
-      setLastSentRequestsByContext(previous => ({
-        ...previous,
-        [target.contextId]: persistedRequestId,
-      }));
-      latencyRequestCreatedRef.current = Date.now();
-      voiceStateRef.current = 'waiting_lotus';
-      setVoiceState('waiting_lotus');
-
-      return { requestId: persistedRequestId };
-    } finally {
-      setContextTyping(target.contextId, false);
+      targetContextNode: target,
+      presenceRouting: options.presenceRouting,
+    });
+    if (!dispatched || (!dispatched.requestId && !dispatched.responseText)) {
+      throw new Error('presence_core_dispatch_not_confirmed');
     }
-  }, [activeContextNode, contextStatesMap, createPulsoConversationRequest]);
+    return dispatched;
+  }, [activeContextNode, handleSendMessage]);
 
   const handlePresenceUiIntent = React.useCallback((input: string): LocalPresenceFastPathResult => {
     if (!isMesaOpen || !isMesaDismissUtterance(input)) return { handled: false };

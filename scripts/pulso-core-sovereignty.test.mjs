@@ -34,3 +34,15 @@ test("bundle soberano contém identidade versionada, importador e commit-fonte",
   assert.equal(sourceCommit, "8662274047d90eaf9784c4bdbf55d18ddcf553d9");
   assert.match(readFileSync(join(coreRoot, "desktop", "migration-cli.mjs"), "utf8"), /promoteStagedMigration/);
 });
+
+test("modo Presença despacha pela mesma conversa soberana do Core", () => {
+  const livePage = readFileSync(join(root, "src", "apps", "pulso", "pages", "LivePage.tsx"), "utf8");
+  const start = livePage.indexOf("const handlePresenceCanonicalMessage");
+  const end = livePage.indexOf("const handlePresenceUiIntent", start);
+  assert.ok(start >= 0 && end > start, "presence_handler_missing");
+  const presenceHandler = livePage.slice(start, end);
+  assert.match(presenceHandler, /handleSendMessage\(cleanText/);
+  assert.match(presenceHandler, /originMode: 'presence'/);
+  assert.doesNotMatch(presenceHandler, /createPulsoConversationRequest/);
+  assert.doesNotMatch(presenceHandler, /requestsService\.createRequest/);
+});
