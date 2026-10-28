@@ -166,3 +166,36 @@ test('streamTurn propaga cancelamento ao Core antes de encerrar', async () => {
   assert.equal(cancelled, true);
   assert.equal(result.run.status, 'cancelled');
 });
+
+test('streamTurn projeta ferramenta e decisão humana sem expor payload bruto', async () => {
+  let poll = 0;
+  const client = {
+    isAvailable: () => true,
+    startTurn: async () => success({ runId: 'run-1', run: run('queued') }),
+    pollTurn: async () => {
+      poll += 1;
+      return success({
+        run: run(poll === 1 ? 'streaming' : 'completed', poll === 1 ? '' : 'feito'),
+        envelopes: poll === 1 ? [
+          { type: 'tool.started', receipt: { itemId: 'tool-1', type: 'mcpToolCall', phase: 'started', status: 'inProgress', tool: 'fetch', source: 'notion', target: 'notion', action: 'connector_call' } },
+          { type: 'tool.approval.requested', receipt: { approvalId: 'approval-1', itemId: 'tool-1', risk: 'external_action', rationale: 'efeito externo', status: 'pending' } },
+        ] : [],
+        done: poll > 1,
+      });
+    },
+    listMessages: async () => success([]),
+  };
+  const tools = [];
+  const approvals = [];
+  const conversation = new PulsoCoreConversation(client);
+  await conversation.streamTurn({
+    sessionId: 'session-1',
+    text: 'consulte',
+    idempotencyKey: 'idem-tools',
+    pollIntervalMs: 16,
+    onTool: receipt => tools.push(receipt),
+    onToolApproval: receipt => approvals.push(receipt),
+  });
+  assert.equal(tools[0].source, 'notion');
+  assert.equal(approvals[0].status, 'pending');
+});

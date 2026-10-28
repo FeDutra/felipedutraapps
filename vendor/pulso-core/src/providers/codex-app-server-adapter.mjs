@@ -10,9 +10,16 @@ import {
   validateProviderBinding,
 } from "../domain/contracts.mjs";
 import { SecretRefResolver } from "../runtime/secret-ref-resolver.mjs";
+import {
+  approvalDecisionResult,
+  classifyApproval,
+  normalizeToolItem,
+  sanitizeApproval,
+} from "../runtime/tool-runtime-contracts.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const TURN_TIMEOUT_MS = 300_000;
+const APPROVAL_TIMEOUT_MS = 300_000;
 
 function safeProfileId(value) {
   const profileId = String(value || "personal").trim();
@@ -208,6 +215,8 @@ export class CodexAppServerClient {
     this.nextId = 0;
     this.pending = new Map();
     this.events = new EventEmitter();
+    this.pendingApprovals = new Map();
+    this.approvalSequence = 0;
     this.initialized = false;
     this.closed = false;
   }
@@ -276,7 +285,11 @@ export class CodexAppServerClient {
     }
 
     if (message && typeof message.method === "string" && message.id !== undefined) {
-      this.#handleServerRequest(message);
+      this.#handleServerRequest(message).catch(error => {
+        if (this.child?.stdin?.writable) {
+          this.#write({ id: message.id, error: { code: -32603, message: asError(error).message } });
+        }
+      });
     }
   }
 
@@ -284,7 +297,7 @@ export class CodexAppServerClient {
     return this.accessModeStore?.read?.() ?? { mode: "restricted" };
   }
 
-  #handleServerRequest(message) {
+  async #handleServerRequest(message) {
     const access = this.#access();
     if (access.mode !== "integral") {
       this.#write({ id: message.id, error: { code: -32601, message: "PULSO integral access is disabled" } });
@@ -292,29 +305,106 @@ export class CodexAppServerClient {
     }
     const method = message.method;
     const params = message.params ?? {};
-    if (method === "item/commandExecution/requestApproval") {
-      this.#write({ id: message.id, result: { decision: "acceptForSession" } });
-      return;
-    }
-    if (method === "item/fileChange/requestApproval") {
-      this.#write({ id: message.id, result: { decision: "acceptForSession" } });
-      return;
-    }
-    if (method === "item/permissions/requestApproval") {
-      const permissions = {};
-      if (params.permissions?.network) permissions.network = params.permissions.network;
-      if (params.permissions?.fileSystem) permissions.fileSystem = params.permissions.fileSystem;
-      this.#write({ id: message.id, result: { permissions, scope: "session", strictAutoReview: false } });
-      return;
-    }
-    if (method === "item/tool/requestUserInput") {
-      const result = approvalAnswers(params);
-      if (result) {
+    const approvalMethods = new Set([
+      "item/commandExecution/requestApproval",
+      "item/fileChange/requestApproval",
+      "item/permissions/requestApproval",
+      "item/tool/requestUserInput",
+    ]);
+    if (approvalMethods.has(method)) {
+      const approvalId = String(params.approvalId || params.itemId || params.callId || `approval_${++this.approvalSequence}`);
+      const classification = classifyApproval({ method, params, workspaceDir: this.workspaceDir });
+      const requestedAt = new Date().toISOString();
+      const receipt = sanitizeApproval({ approvalId, method, params, classification, requestedAt });
+      this.events.emit("tool.approval.requested", receipt);
+
+      if (!classification.requiresHuman) {
+        const result = approvalDecisionResult(method, "acceptForSession", params);
         this.#write({ id: message.id, result });
+        this.events.emit("tool.approval.resolved", sanitizeApproval({
+          approvalId,
+          method,
+          params,
+          classification,
+          status: "approved",
+          decision: "acceptForSession",
+          requestedAt,
+          resolvedAt: new Date().toISOString(),
+        }));
         return;
       }
+
+      const timer = setTimeout(() => {
+        const pending = this.pendingApprovals.get(approvalId);
+        if (!pending) return;
+        this.pendingApprovals.delete(approvalId);
+        if (this.child?.stdin?.writable) {
+          this.#write({ id: pending.requestId, error: { code: -32001, message: "PULSO approval expired" } });
+        }
+        this.events.emit("tool.approval.resolved", sanitizeApproval({
+          approvalId,
+          method,
+          params,
+          classification,
+          status: "expired",
+          decision: "decline",
+          requestedAt,
+          resolvedAt: new Date().toISOString(),
+        }));
+      }, APPROVAL_TIMEOUT_MS);
+      this.pendingApprovals.set(approvalId, {
+        approvalId,
+        requestId: message.id,
+        method,
+        params,
+        classification,
+        requestedAt,
+        timer,
+      });
+      return;
     }
     this.#write({ id: message.id, error: { code: -32601, message: `Unsupported PULSO server request: ${method}` } });
+  }
+
+  listPendingApprovals() {
+    return [...this.pendingApprovals.values()].map(pending => sanitizeApproval({
+      approvalId: pending.approvalId,
+      method: pending.method,
+      params: pending.params,
+      classification: pending.classification,
+      requestedAt: pending.requestedAt,
+    }));
+  }
+
+  resolveApproval(approvalId, { decision = "decline", answers = null } = {}) {
+    const pending = this.pendingApprovals.get(String(approvalId));
+    invariant(pending, `tool_approval_not_found:${approvalId}`);
+    this.pendingApprovals.delete(String(approvalId));
+    clearTimeout(pending.timer);
+    let result = null;
+    if (pending.method === "item/tool/requestUserInput") {
+      if (["approve", "accept", "acceptForSession"].includes(decision) && answers && typeof answers === "object") {
+        result = { answers };
+      } else {
+        this.#write({ id: pending.requestId, error: { code: -32002, message: "PULSO operator declined user input" } });
+      }
+    } else {
+      result = approvalDecisionResult(pending.method, decision, pending.params);
+    }
+    if (result) this.#write({ id: pending.requestId, result });
+    const approved = ["approve", "accept", "acceptForSession"].includes(decision);
+    const receipt = sanitizeApproval({
+      approvalId: pending.approvalId,
+      method: pending.method,
+      params: pending.params,
+      classification: pending.classification,
+      status: approved ? "approved" : "declined",
+      decision: approved ? "acceptForSession" : "decline",
+      requestedAt: pending.requestedAt,
+      resolvedAt: new Date().toISOString(),
+    });
+    this.events.emit("tool.approval.resolved", receipt);
+    return receipt;
   }
 
   #terminate(error) {
@@ -327,6 +417,8 @@ export class CodexAppServerClient {
       pending.reject(safeError);
     }
     this.pending.clear();
+    for (const pending of this.pendingApprovals.values()) clearTimeout(pending.timer);
+    this.pendingApprovals.clear();
     this.events.emit("closed", safeError);
   }
 
@@ -398,6 +490,10 @@ export class CodexAppServerClient {
       if (turnId && params.turnId && params.turnId !== turnId) return;
       if (message.method === "item/agentMessage/delta") {
         queue.push({ type: "delta", delta: String(params.delta || ""), params });
+      } else if (message.method === "item/started") {
+        queue.push({ type: "tool.started", receipt: normalizeToolItem(params.item || {}, "started"), params });
+      } else if (message.method === "item/completed") {
+        queue.push({ type: "tool.completed", receipt: normalizeToolItem(params.item || {}, "completed"), params });
       } else if (message.method === "turn/completed") {
         queue.push({ type: "completed", params });
         queue.close();
@@ -405,8 +501,20 @@ export class CodexAppServerClient {
         queue.fail(new Error(params.message || "codex_turn_error"));
       }
     };
+    const onApprovalRequested = receipt => {
+      if (threadId && receipt.threadId && receipt.threadId !== threadId) return;
+      if (turnId && receipt.turnId && receipt.turnId !== turnId) return;
+      queue.push({ type: "tool.approval.requested", receipt });
+    };
+    const onApprovalResolved = receipt => {
+      if (threadId && receipt.threadId && receipt.threadId !== threadId) return;
+      if (turnId && receipt.turnId && receipt.turnId !== turnId) return;
+      queue.push({ type: "tool.approval.resolved", receipt });
+    };
     const onClosed = error => queue.fail(error);
     this.events.on("notification", onNotification);
+    this.events.on("tool.approval.requested", onApprovalRequested);
+    this.events.on("tool.approval.resolved", onApprovalResolved);
     this.events.once("closed", onClosed);
 
     let abortHandler = null;
@@ -417,7 +525,7 @@ export class CodexAppServerClient {
         model: model || null,
         cwd: this.workspaceDir,
         sandbox: integral ? "danger-full-access" : "read-only",
-        approvalPolicy: "never",
+        approvalPolicy: integral ? "on-request" : "never",
         ephemeral: true,
         baseInstructions: systemPrompt || null,
         developerInstructions: integral ? integralDeveloperInstructions() : restrictedDeveloperInstructions(),
@@ -429,7 +537,7 @@ export class CodexAppServerClient {
         threadId,
         input: [{ type: "text", text: input }],
         model: model || null,
-        approvalPolicy: "never",
+        approvalPolicy: integral ? "on-request" : "never",
       }, this.turnTimeoutMs);
       turnId = turnResult?.turn?.id;
       invariant(turnId, "codex_turn_id_missing");
@@ -446,6 +554,8 @@ export class CodexAppServerClient {
       for await (const event of queue) {
         if (event.type === "delta" && event.delta) {
           yield { type: "delta", delta: event.delta, threadId, turnId };
+        } else if (event.type.startsWith("tool.")) {
+          yield { type: event.type, receipt: event.receipt, threadId, turnId };
         } else if (event.type === "completed") {
           const status = event.params?.turn?.status;
           if (status !== "completed") {
@@ -458,6 +568,8 @@ export class CodexAppServerClient {
       }
     } finally {
       this.events.off("notification", onNotification);
+      this.events.off("tool.approval.requested", onApprovalRequested);
+      this.events.off("tool.approval.resolved", onApprovalResolved);
       this.events.off("closed", onClosed);
       if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
     }
@@ -580,6 +692,17 @@ export class CodexSubscriptionAdapter extends ModelProvider {
           text: event.delta,
           delta: event.delta,
           index: index++,
+        };
+      } else if (event.type.startsWith("tool.")) {
+        threadId = event.threadId ?? threadId;
+        turnId = event.turnId ?? turnId;
+        yield {
+          type: event.type,
+          kind: event.type,
+          providerId: this.id,
+          adapterKind: this.adapterKind,
+          model,
+          receipt: event.receipt,
         };
       } else if (event.type === "completed") {
         threadId = event.threadId ?? threadId;

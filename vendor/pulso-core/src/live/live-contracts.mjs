@@ -205,6 +205,8 @@ export function validateConversationRun(run) {
     accumulatedText: run.accumulatedText || "",
     deltasCount: run.deltasCount ?? 0,
     progress: Array.isArray(run.progress) ? structuredClone(run.progress) : [],
+    toolReceipts: Array.isArray(run.toolReceipts) ? structuredClone(run.toolReceipts) : [],
+    toolApprovals: Array.isArray(run.toolApprovals) ? structuredClone(run.toolApprovals) : [],
     resumedFromRunId: optionalText(run.resumedFromRunId, "conversation_run_resumed_from_invalid"),
     providerId: optionalText(run.providerId, "conversation_run_provider_id_invalid"),
     model: optionalText(run.model, "conversation_run_model_invalid"),

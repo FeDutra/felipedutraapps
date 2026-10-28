@@ -785,6 +785,14 @@ export class ProviderRouter {
             }
           } else if (chunk.type === "model.completed" || chunk.kind === "completed" || chunk.type === "completed") {
             completedEvent = chunk;
+          } else {
+            const operationalEvent = {
+              ...chunk,
+              providerId: candidate.providerId,
+              model: chunk.model ?? candidate.model,
+            };
+            this.secretResolver.assertZeroLeakage(operationalEvent);
+            yield operationalEvent;
           }
         }
 

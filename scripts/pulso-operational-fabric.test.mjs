@@ -101,6 +101,39 @@ test('executor real percorre foundry → provider → checkpoint → resultado',
   assert.equal(result.output, 'artefato pronto'); assert.equal(result.run.status, 'succeeded'); assert.equal(result.run.checkpoints.length, 1); f.close();
 });
 
+test('especialista só opera ferramenta concedida e devolve recibos ao integrador', async () => {
+  const f = fixture('agent-tool-grant'); const control = new ControlPlaneService({ store: f.store }); await control.initDefaults();
+  const blueprint = await control.foundry.createBlueprint({ blueprintId: 'bp_pesquisa', name: 'PESQUISA', role: 'pesquisa', mission: 'Localizar fontes.', instructions: 'Use apenas ferramentas concedidas.', skills: [], tools: ['notion'], providerDefaults: { modelProviderId: 'codex-fe', model: 'gpt-test' }, runtimePreferences: {}, limits: { maxTurns: 4, maxTokens: 10000, maxCost: 0, maxToolCalls: 2, maxConcurrency: 1, timeoutMs: 30000 } });
+  await control.foundry.materializeAgent({ blueprintId: blueprint.blueprint.blueprintId, agentId: 'agent_pesquisa', initialStatus: 'active' });
+  await control.foundry.grantCapability({ agentId: 'agent_pesquisa', capability: 'tool.notion.*', effect: 'allow', scope: { type: 'global', scopeId: '*' } });
+  const runtime = { async *routeStream() {
+    yield { type: 'tool.started', receipt: { itemId: 'tool-1', source: 'notion', tool: 'fetch', type: 'mcpToolCall' } };
+    yield { type: 'tool.completed', receipt: { itemId: 'tool-1', source: 'notion', tool: 'fetch', type: 'mcpToolCall', success: true } };
+    yield { type: 'model.delta', text: 'fonte localizada' };
+    yield { type: 'model.completed', text: 'fonte localizada', providerId: 'codex-fe', model: 'gpt-test' };
+  } };
+  const envelopes = [];
+  const executor = new AgentExecutionService({ foundry: control.foundry, runtime });
+  const result = await executor.execute({ agentId: 'agent_pesquisa', prompt: 'Consulte o Notion.', onEnvelope: envelope => envelopes.push(envelope) });
+  assert.equal(result.output, 'fonte localizada');
+  assert.equal(result.run.usage.toolCalls, 1);
+  assert.deepEqual(envelopes.filter(envelope => envelope.type.startsWith('tool.')).map(envelope => envelope.type), ['tool.started', 'tool.completed']);
+  f.close();
+});
+
+test('especialista sem grant aborta a ferramenta em fail-closed', async () => {
+  const f = fixture('agent-tool-denied'); const control = new ControlPlaneService({ store: f.store }); await control.initDefaults();
+  const blueprint = await control.foundry.createBlueprint({ blueprintId: 'bp_sem_grant', name: 'SEM GRANT', role: 'teste', mission: 'Provar bloqueio.', instructions: 'Não extrapole.', skills: [], tools: [], providerDefaults: { modelProviderId: 'codex-fe', model: 'gpt-test' }, runtimePreferences: {}, limits: { maxTurns: 2, maxTokens: 1000, maxCost: 0, maxToolCalls: 1, maxConcurrency: 1, timeoutMs: 30000 } });
+  await control.foundry.materializeAgent({ blueprintId: blueprint.blueprint.blueprintId, agentId: 'agent_sem_grant', initialStatus: 'active' });
+  let observed = false;
+  const runtime = { async *routeStream() { yield { type: 'tool.started', receipt: { itemId: 'tool-x', source: 'notion', tool: 'fetch', type: 'mcpToolCall' } }; yield { type: 'model.completed', text: 'não deveria chegar' }; } };
+  const executor = new AgentExecutionService({ foundry: control.foundry, runtime });
+  await assert.rejects(executor.execute({ agentId: 'agent_sem_grant', prompt: 'Tente.', onEnvelope: envelope => { if (envelope.type === 'tool.started') observed = true; } }), /authorization_denied/);
+  assert.equal(observed, true);
+  assert.equal(control.foundry.list('runs')[0].status, 'cancelled');
+  f.close();
+});
+
 test('menção a especialista no chat executa agente real e atribui a resposta', async () => {
   const f = fixture('conversation-agent'); const live = new LiveService({ store: f.store }); const boot = await live.bootstrap();
   const foundry = {
@@ -140,6 +173,25 @@ test('múltiplas menções executam agentes na mesma sessão, preservam autoria 
   assert.deepEqual(new Set(assistantMessages.map(message => message.agentId)), new Set(['agent_forma', 'agent_ritmo']));
   assert.ok(envelopes.some(envelope => envelope.type === 'conversation.progress' && envelope.agentId === 'agent_forma'));
   assert.ok(envelopes.some(envelope => envelope.type === 'conversation.progress' && envelope.agentId === 'agent_ritmo'));
+  f.close();
+});
+
+test('recibos de ferramenta do especialista persistem no turno e sobrevivem à reabertura', async () => {
+  const f = fixture('conversation-tool-receipts'); const live = new LiveService({ store: f.store }); const boot = await live.bootstrap();
+  const foundry = { list() { return [{ agentId: 'agent_pesquisa', blueprintId: 'bp_pesquisa' }]; }, get(kind) { return kind === 'agent' ? { agentId: 'agent_pesquisa', blueprintId: 'bp_pesquisa' } : { name: 'PESQUISA' }; } };
+  const executor = { async execute(input) {
+    await input.onEnvelope({ type: 'tool.started', receipt: { itemId: 'notion-1', type: 'mcpToolCall', phase: 'started', status: 'inProgress', tool: 'fetch', source: 'notion', target: 'Notion', action: 'connector_call' } });
+    await input.onEnvelope({ type: 'tool.completed', receipt: { itemId: 'notion-1', type: 'mcpToolCall', phase: 'completed', status: 'completed', tool: 'fetch', source: 'notion', target: 'Notion', action: 'connector_call', success: true } });
+    return { output: 'fonte localizada', providerId: 'codex-fe', model: 'gpt-test', run: { agentRunId: 'run_pesquisa' } };
+  } };
+  const router = { resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; }, secretResolver: { assertZeroLeakage() { return true; } } };
+  const conversation = new LiveConversationService({ store: f.store, live, router, agentFoundry: foundry, agentExecutor: executor });
+  const completed = await conversation.startTurn({ sessionId: boot.activeSessionId, text: '@PESQUISA consulte' });
+  assert.equal(completed.toolReceipts.length, 1);
+  assert.equal(completed.toolReceipts[0].phase, 'completed');
+  const reopenedLive = new LiveService({ store: f.store }); await reopenedLive.ensureRestored();
+  const reopenedConversation = new LiveConversationService({ store: f.store, live: reopenedLive, router, agentFoundry: foundry, agentExecutor: executor });
+  assert.equal(reopenedConversation.getRun(completed.id).toolReceipts[0].source, 'notion');
   f.close();
 });
 

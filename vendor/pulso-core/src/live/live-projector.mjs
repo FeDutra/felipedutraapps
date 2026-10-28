@@ -128,6 +128,8 @@ export function applyLiveEvent(state, event) {
         accumulatedText: "",
         deltasCount: 0,
         progress: [],
+        toolReceipts: [],
+        toolApprovals: [],
         resumedFromRunId: p.resumedFromRunId || null,
         providerId: null,
         model: null,
@@ -159,6 +161,32 @@ export function applyLiveEvent(state, event) {
           }],
           updatedAt: event.occurredAt,
         });
+      }
+      break;
+    }
+    case "live.tool_execution.recorded": {
+      const existing = state.conversationRuns.get(event.aggregate.id);
+      if (existing) {
+        const receipt = { id: event.id, ...p, occurredAt: event.occurredAt };
+        const prior = existing.toolReceipts || [];
+        const index = prior.findIndex(item => item.itemId === receipt.itemId);
+        const next = index >= 0
+          ? prior.map((item, itemIndex) => itemIndex === index ? { ...item, ...receipt } : item)
+          : [...prior, receipt];
+        state.conversationRuns.set(existing.id, { ...existing, toolReceipts: next, updatedAt: event.occurredAt });
+      }
+      break;
+    }
+    case "live.tool_approval.recorded": {
+      const existing = state.conversationRuns.get(event.aggregate.id);
+      if (existing) {
+        const approval = { id: event.id, ...p, occurredAt: event.occurredAt };
+        const prior = existing.toolApprovals || [];
+        const index = prior.findIndex(item => item.approvalId === approval.approvalId);
+        const next = index >= 0
+          ? prior.map((item, itemIndex) => itemIndex === index ? { ...item, ...approval } : item)
+          : [...prior, approval];
+        state.conversationRuns.set(existing.id, { ...existing, toolApprovals: next, updatedAt: event.occurredAt });
       }
       break;
     }

@@ -1,6 +1,8 @@
 import {
   pulsoCoreClient,
   type PulsoConversationRun,
+  type PulsoToolApproval,
+  type PulsoToolReceipt,
   type PulsoCoreClient,
   type PulsoCreateAreaParams,
   type PulsoCreateSessionParams,
@@ -29,6 +31,8 @@ export interface StreamTurnOptions {
   onStarted?: (run: PulsoConversationRun) => void;
   onDelta?: (delta: string, accumulatedText: string, runId: string, agentId?: string | null) => void;
   onProgress?: (progress: { phase: string; label: string; status: string; agentId?: string | null; occurredAt?: string }, runId: string) => void;
+  onTool?: (receipt: PulsoToolReceipt, runId: string) => void;
+  onToolApproval?: (approval: PulsoToolApproval, runId: string) => void;
   onState?: (run: PulsoConversationRun) => void;
   pollIntervalMs?: number;
   timeoutMs?: number;
@@ -108,6 +112,12 @@ export class PulsoCoreConversation {
     return result.result;
   }
 
+  async listRuns(sessionId: string): Promise<readonly PulsoConversationRun[]> {
+    const result = await this.client.listTurns({ sessionId });
+    if (!result.ok) throw new PulsoCoreConversationError('CORE_RUNS_UNAVAILABLE', result.error.message);
+    return result.result;
+  }
+
   async streamTurn(options: StreamTurnOptions): Promise<StreamTurnResult> {
     const startedAt = Date.now();
     const started = await this.client.startTurn({
@@ -172,6 +182,10 @@ export class PulsoCoreConversation {
             agentId: envelope.agentId,
             occurredAt: envelope.occurredAt,
           }, runId);
+        } else if ((envelope.type === 'tool.started' || envelope.type === 'tool.completed') && envelope.receipt) {
+          options.onTool?.(envelope.receipt as PulsoToolReceipt, runId);
+        } else if ((envelope.type === 'tool.approval.requested' || envelope.type === 'tool.approval.resolved') && envelope.receipt) {
+          options.onToolApproval?.(envelope.receipt as PulsoToolApproval, runId);
         }
       }
       options.onState?.(run);

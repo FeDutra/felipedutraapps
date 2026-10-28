@@ -1010,6 +1010,13 @@ export class PulsoDesktopBridge {
         await this.initialize();
         return await this.conversations.cancelRun(params.runId, { reason: params.reason });
       }
+      case "live.tool.approval.resolve": {
+        await this.initialize();
+        return await this.conversations.resolveToolApproval(params.runId, params.approvalId, {
+          decision: params.decision,
+          answers: params.answers || null,
+        });
+      }
       case "live.turn.resume": {
         await this.initialize();
         const newRunId = params.newRunId || pulsoId("live_run");

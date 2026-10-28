@@ -13,6 +13,9 @@ import {
   PrivateMemoryProvider,
   SqliteEventStore,
   installPrivateSkills,
+  normalizeToolItem,
+  classifyApproval,
+  approvalDecisionResult,
 } from '../vendor/pulso-core/src/index.mjs';
 import { preparePulsoPrivateContext } from './prepare-pulso-private-context.mjs';
 
@@ -99,12 +102,61 @@ test('adaptador, bridge e painel carregam o contrato integral sem remover o modo
   assert.match(adapter, /integralDeveloperInstructions/);
   assert.match(adapter, /item\/commandExecution\/requestApproval/);
   assert.match(adapter, /item\/permissions\/requestApproval/);
+  assert.match(adapter, /tool\.approval\.requested/);
+  assert.match(adapter, /item\/started/);
+  assert.match(adapter, /item\/completed/);
+  assert.match(adapter, /approvalPolicy: integral \? "on-request" : "never"/);
   assert.match(adapter, /mcpServerOpenaiFormElicitation/);
   assert.match(bridge, /access\.mode\.read/);
   assert.match(bridge, /access\.mode\.set/);
   assert.match(bridge, /PrivateMemoryProvider/);
   assert.match(panel, /modo integral ativo/);
   assert.match(panel, /role="switch"/);
+});
+
+test('runtime de ferramentas produz recibos sanitizados sem conteúdo ou argumentos', () => {
+  const receipt = normalizeToolItem({
+    type: 'mcpToolCall',
+    id: 'call_notion_1',
+    server: 'notion',
+    tool: 'fetch',
+    status: 'completed',
+    arguments: { id: 'private-page', token: 'must-not-leak' },
+    result: { content: 'private content' },
+    durationMs: 42,
+  }, 'completed');
+  assert.equal(receipt.itemId, 'call_notion_1');
+  assert.equal(receipt.source, 'notion');
+  assert.equal(receipt.tool, 'fetch');
+  assert.equal(receipt.success, true);
+  assert.equal(JSON.stringify(receipt).includes('must-not-leak'), false);
+  assert.equal(JSON.stringify(receipt).includes('private content'), false);
+});
+
+test('política integral separa oficina reversível de fronteiras humanas sensíveis', () => {
+  const workspaceDir = '/private/pulso/workspace';
+  const safe = classifyApproval({
+    method: 'item/commandExecution/requestApproval',
+    params: { command: 'npm test', cwd: workspaceDir },
+    workspaceDir,
+  });
+  assert.equal(safe.requiresHuman, false);
+  const destructive = classifyApproval({
+    method: 'item/commandExecution/requestApproval',
+    params: { command: 'rm -rf ./dados', cwd: workspaceDir },
+    workspaceDir,
+  });
+  assert.equal(destructive.requiresHuman, true);
+  assert.equal(destructive.risk, 'destructive');
+  const external = classifyApproval({
+    method: 'item/commandExecution/requestApproval',
+    params: { command: 'curl -X POST https://example.com/messages', cwd: workspaceDir },
+    workspaceDir,
+  });
+  assert.equal(external.requiresHuman, true);
+  assert.equal(external.risk, 'external_action');
+  assert.deepEqual(approvalDecisionResult('item/fileChange/requestApproval', 'approve'), { decision: 'acceptForSession' });
+  assert.deepEqual(approvalDecisionResult('item/fileChange/requestApproval', 'decline'), { decision: 'decline' });
 });
 
 test('empacotador privado mantém identidade e memória fora do bundle público', () => {

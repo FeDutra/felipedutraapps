@@ -1041,7 +1041,7 @@ import { sessionsService } from '../services/sessionsService';
 import { pulsoCoreConversation } from '../services/pulsoCoreConversation';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
 import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
-import { pulsoCoreClient, type PulsoLiveArea, type PulsoLiveMessage, type PulsoLiveSession } from '../services/pulsoCoreClient';
+import { pulsoCoreClient, type PulsoConversationRun, type PulsoLiveArea, type PulsoLiveMessage, type PulsoLiveSession } from '../services/pulsoCoreClient';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
 const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
@@ -1497,6 +1497,22 @@ interface Message {
   isProgressUpdate?: boolean;
   phase?: string | null;
   originRequestId?: string | null;
+  toolRunId?: string;
+  toolApproval?: {
+    approvalId: string;
+    itemId: string;
+    risk: string;
+    rationale: string;
+    status: string;
+    decision?: string | null;
+    questions?: readonly {
+      id: string;
+      header: string;
+      question: string;
+      isSecret: boolean;
+      options: readonly { label: string; description: string }[];
+    }[];
+  };
 }
 
 export type VoiceMode = 'off' | 'recording_once' | 'presence' | 'recording_meeting';
@@ -2554,6 +2570,44 @@ export default function LivePage() {
     }))
   ), []);
 
+  const mapCoreRunArtifacts = React.useCallback((runs: readonly PulsoConversationRun[], contextId: string): Message[] => (
+    runs.flatMap(run => [
+      ...(run.toolReceipts || []).map(receipt => ({
+        id: `core-${run.id}-tool-${receipt.itemId}`,
+        sender: 'lotus' as const,
+        text: `${receipt.source || 'ferramenta'} · ${receipt.tool || receipt.action} ${receipt.phase === 'completed' ? 'concluída' : 'em execução'}`,
+        timestamp: receipt.occurredAt ? new Date(receipt.occurredAt) : new Date(run.updatedAt),
+        contextId,
+        agentId: (receipt as any).agentId?.replace(/^agent_/, '') || undefined,
+        isProgressUpdate: true,
+        phase: 'tool',
+        originRequestId: run.id,
+      })),
+      ...(run.toolApprovals || []).map(approval => ({
+        id: `core-${run.id}-approval-${approval.approvalId}`,
+        sender: 'lotus' as const,
+        text: approval.status === 'pending' ? approval.rationale : `decisão ${approval.status}`,
+        timestamp: approval.occurredAt ? new Date(approval.occurredAt) : new Date(run.updatedAt),
+        contextId,
+        agentId: (approval as any).agentId?.replace(/^agent_/, '') || undefined,
+        toolRunId: run.id,
+        toolApproval: {
+          approvalId: approval.approvalId,
+          itemId: approval.itemId,
+          risk: approval.risk,
+          rationale: approval.rationale,
+          status: approval.status,
+          decision: approval.decision,
+          questions: approval.questions,
+        },
+      })),
+    ])
+  ), []);
+
+  const mergeCoreTimeline = React.useCallback((messages: Message[], artifacts: Message[]) => (
+    [...messages, ...artifacts].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+  ), []);
+
   const coreTopologyFingerprintRef = React.useRef('');
   React.useEffect(() => {
     if (!coreDesktopEnabled || !sessionsLoaded) return;
@@ -2598,10 +2652,12 @@ export default function LivePage() {
     if (!contextId || contextId === LOADING_PLACEHOLDER_NODE.contextId) return;
     let cancelled = false;
     const startedAt = performance.now();
-    pulsoCoreConversation.selectSession(activeContextNode.areaId, contextId)
-      .then(coreMessages => {
+    Promise.all([
+      pulsoCoreConversation.selectSession(activeContextNode.areaId, contextId),
+      pulsoCoreConversation.listRuns(contextId),
+    ]).then(([coreMessages, coreRuns]) => {
         if (cancelled) return;
-        const mapped = mapCoreMessages(coreMessages, contextId);
+        const mapped = mergeCoreTimeline(mapCoreMessages(coreMessages, contextId), mapCoreRunArtifacts(coreRuns, contextId));
         setCoreMessagesByContext(previous => ({ ...previous, [contextId]: mapped }));
         setMessages(previous => [
           previous.find(message => message.id === 'welcome') || {
@@ -2621,18 +2677,24 @@ export default function LivePage() {
         if (!cancelled) setError(`Falha ao abrir sessão no Core: ${error?.message || String(error)}`);
       });
     return () => { cancelled = true; };
-  }, [activeContextNode.areaId, activeContextNode.contextId, coreDesktopEnabled, coreReady, mapCoreMessages]);
+  }, [activeContextNode.areaId, activeContextNode.contextId, coreDesktopEnabled, coreReady, mapCoreMessages, mapCoreRunArtifacts, mergeCoreTimeline]);
 
   React.useEffect(() => {
     if (!coreDesktopEnabled || !coreReady || secondaryContextNodes.length === 0) return;
     let cancelled = false;
-    Promise.all(secondaryContextNodes.map(async contextNode => ({
-      contextId: contextNode.contextId,
-      messages: mapCoreMessages(
-        await pulsoCoreConversation.listMessages(contextNode.contextId),
-        contextNode.contextId
-      ),
-    }))).then(results => {
+    Promise.all(secondaryContextNodes.map(async contextNode => {
+      const [coreMessages, coreRuns] = await Promise.all([
+        pulsoCoreConversation.listMessages(contextNode.contextId),
+        pulsoCoreConversation.listRuns(contextNode.contextId),
+      ]);
+      return {
+        contextId: contextNode.contextId,
+        messages: mergeCoreTimeline(
+          mapCoreMessages(coreMessages, contextNode.contextId),
+          mapCoreRunArtifacts(coreRuns, contextNode.contextId),
+        ),
+      };
+    })).then(results => {
       if (cancelled) return;
       setCoreMessagesByContext(previous => {
         const next = { ...previous };
@@ -2643,7 +2705,7 @@ export default function LivePage() {
       if (!cancelled) setError(`Falha ao abrir split no Core: ${error?.message || String(error)}`);
     });
     return () => { cancelled = true; };
-  }, [coreDesktopEnabled, coreReady, mapCoreMessages, secondaryContextNodes]);
+  }, [coreDesktopEnabled, coreReady, mapCoreMessages, mapCoreRunArtifacts, mergeCoreTimeline, secondaryContextNodes]);
 
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -2892,6 +2954,7 @@ export default function LivePage() {
   const [openclawDraft, setOpenclawDraft] = React.useState('');
   const [submittingResponse, setSubmittingResponse] = React.useState(false);
   const [approvalNotes, setApprovalNotes] = React.useState<Record<string, string>>({});
+  const [toolApprovalAnswers, setToolApprovalAnswers] = React.useState<Record<string, Record<string, string>>>({});
   const [submittingApprovalId, setSubmittingApprovalId] = React.useState<string | null>(null);
   const [submittingExecutionId, setSubmittingExecutionId] = React.useState<string | null>(null);
   const [executionErrors, setExecutionErrors] = React.useState<Record<string, string>>({});
@@ -3512,6 +3575,47 @@ export default function LivePage() {
       setApprovalNotes(prev => { const n = { ...prev }; delete n[msg.id]; return n; });
     } catch (err: any) {
       console.error('[v1.7] Error rejecting proposal:', err);
+    } finally {
+      setSubmittingApprovalId(null);
+    }
+  };
+
+  const handleCoreToolDecision = async (msg: Message, decision: 'approve' | 'decline') => {
+    if (!msg.toolRunId || !msg.toolApproval || submittingApprovalId) return;
+    const questions = msg.toolApproval.questions || [];
+    const selected = toolApprovalAnswers[msg.id] || {};
+    if (decision === 'approve' && questions.some(question => question.isSecret || !selected[question.id])) {
+      setToastMessage(questions.some(question => question.isSecret)
+        ? 'esta decisão exige entrada segura de credencial; ela não pode ser respondida no chat'
+        : 'escolha uma resposta para cada decisão antes de autorizar');
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+    setSubmittingApprovalId(msg.id);
+    try {
+      const answers = questions.length > 0
+        ? Object.fromEntries(questions.map(question => [question.id, { answers: [selected[question.id]] }]))
+        : undefined;
+      const result = await pulsoCoreClient.resolveToolApproval({
+        runId: msg.toolRunId,
+        approvalId: msg.toolApproval.approvalId,
+        decision,
+        answers,
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      setMessages(previous => previous.map(item => item.id === msg.id ? {
+        ...item,
+        text: decision === 'approve' ? 'ação autorizada. acompanhando o efeito…' : 'ação recusada. o turno seguirá sem esse efeito.',
+        toolApproval: { ...item.toolApproval!, status: result.result.status, decision: result.result.decision },
+      } : item));
+      setToolApprovalAnswers(previous => {
+        const next = { ...previous };
+        delete next[msg.id];
+        return next;
+      });
+    } catch (error) {
+      setToastMessage(error instanceof Error ? error.message : 'não foi possível registrar a decisão');
+      setTimeout(() => setToastMessage(null), 3000);
     } finally {
       setSubmittingApprovalId(null);
     }
@@ -4879,6 +4983,40 @@ export default function LivePage() {
               [sendingContextId]: [...(previous[sendingContextId] || []), progressMessage],
             }));
           },
+          onToolApproval: (approval, runId) => {
+            const approvalMessageId = `${assistantMessageId}-approval-${approval.approvalId}`;
+            const approvalMessage: Message = {
+              id: approvalMessageId,
+              sender: 'lotus',
+              text: approval.status === 'pending' ? approval.rationale : `decisão ${approval.status}`,
+              assistantName: 'Lótus',
+              timestamp: approval.occurredAt ? new Date(approval.occurredAt) : new Date(),
+              contextId: sendingContextId,
+              originRequestId: preGeneratedReqId,
+              toolRunId: runId,
+              toolApproval: {
+                approvalId: approval.approvalId,
+                itemId: approval.itemId,
+                risk: approval.risk,
+                rationale: approval.rationale,
+                status: approval.status,
+                decision: approval.decision,
+                questions: approval.questions,
+              },
+            };
+            const upsertApproval = (items: Message[]) => {
+              const index = items.findIndex(item => item.id === approvalMessageId);
+              if (index === -1) return [...items, approvalMessage];
+              const next = [...items];
+              next[index] = approvalMessage;
+              return next;
+            };
+            setMessages(upsertApproval);
+            setCoreMessagesByContext(previous => ({
+              ...previous,
+              [sendingContextId]: upsertApproval(previous[sendingContextId] || []),
+            }));
+          },
           onState: run => {
             if (run.status === 'streaming') setContextTyping(sendingContextId, true);
           },
@@ -4888,9 +5026,11 @@ export default function LivePage() {
             ? result.run.receipt.assistantMessageIds.map(String)
             : result.run.assistantMessageId ? [result.run.assistantMessageId] : []
         );
-        const mapped = mapCoreMessages(result.messages, sendingContextId).map(message => (
+        const persistedRuns = await pulsoCoreConversation.listRuns(sendingContextId);
+        const mappedMessages = mapCoreMessages(result.messages, sendingContextId).map(message => (
           completedMessageIds.has(message.id) ? { ...message, requestId: preGeneratedReqId } : message
         ));
+        const mapped = mergeCoreTimeline(mappedMessages, mapCoreRunArtifacts(persistedRuns, sendingContextId));
         setCoreMessagesByContext(previous => ({ ...previous, [sendingContextId]: mapped }));
         setMessages(previous => [
           previous.find(message => message.id === 'welcome') || {
@@ -4903,7 +5043,6 @@ export default function LivePage() {
             message.id !== 'welcome'
             && message.contextId !== sendingContextId
           )),
-          ...previous.filter(message => message.contextId === sendingContextId && message.isProgressUpdate),
           ...mapped,
         ]);
         sessionsService.touchSession(sendingContextId);
@@ -7494,6 +7633,63 @@ ${data.transcription}`, {
                             <div className="text-[9px] text-[#fbf9f5]/40 font-light mt-1 lowercase select-none">
                               fontes consultadas: {msg.openclawResult.sourcesConsulted.join(', ')}
                             </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isLotus && msg.toolApproval && (
+                        <div className="mt-3 py-2 text-left bg-transparent">
+                          <p className="text-[8px] tracking-[0.22em] uppercase text-[#e3a36a]/70">decisão humana · {msg.toolApproval.risk}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-[#fbf9f5]/70">{msg.toolApproval.rationale}</p>
+                          {msg.toolApproval.status === 'pending' && (msg.toolApproval.questions || []).map(question => (
+                            <div key={question.id} className="mt-3">
+                              <p className="text-[10px] leading-relaxed text-[#fbf9f5]/65">{question.question}</p>
+                              {question.isSecret ? (
+                                <p className="mt-1 text-[9px] text-[#e3a36a]/60">entrada segura necessária — não será coletada no chat</p>
+                              ) : (
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                  {question.options.map(option => {
+                                    const selected = toolApprovalAnswers[msg.id]?.[question.id] === option.label;
+                                    return (
+                                      <button
+                                        key={option.label}
+                                        type="button"
+                                        title={option.description || option.label}
+                                        onClick={() => setToolApprovalAnswers(previous => ({
+                                          ...previous,
+                                          [msg.id]: { ...(previous[msg.id] || {}), [question.id]: option.label },
+                                        }))}
+                                        className={`bg-transparent border-none p-0 text-[9px] tracking-[0.12em] uppercase cursor-pointer ${selected ? 'text-[#f2c08f]' : 'text-white/40 hover:text-white/70'}`}
+                                      >
+                                        {selected ? '● ' : '○ '}{option.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {msg.toolApproval.status === 'pending' ? (
+                            <div className="mt-2 flex items-center gap-4">
+                              <button
+                                type="button"
+                                onClick={() => handleCoreToolDecision(msg, 'approve')}
+                                disabled={submittingApprovalId === msg.id}
+                                className="bg-transparent border-none p-0 text-[9px] tracking-[0.16em] uppercase text-[#e3a36a]/80 hover:text-[#f2c08f] cursor-pointer disabled:opacity-30"
+                              >
+                                {submittingApprovalId === msg.id ? 'registrando…' : 'autorizar'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCoreToolDecision(msg, 'decline')}
+                                disabled={submittingApprovalId === msg.id}
+                                className="bg-transparent border-none p-0 text-[9px] tracking-[0.16em] uppercase text-white/35 hover:text-white/65 cursor-pointer disabled:opacity-30"
+                              >
+                                recusar
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-[8px] tracking-[0.18em] uppercase text-white/30">{msg.toolApproval.status}</p>
                           )}
                         </div>
                       )}

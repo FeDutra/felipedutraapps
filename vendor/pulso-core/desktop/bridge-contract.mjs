@@ -86,6 +86,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'live.turn.start',
   'live.turn.poll',
   'live.turn.cancel',
+  'live.tool.approval.resolve',
   'live.turn.resume',
   'live.turn.get',
   'live.turn.list'

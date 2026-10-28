@@ -1,3 +1,24 @@
+# Rollback — runtime integral de ferramentas e recibos nativos (28/10/2026)
+
+- Baseline: `a4761226bcffbd0b220ab699efda4ed136099dca` (`pulso-desktop-alpha-v0.9.0-rc.18`).
+- Escopo inicial: eventos e recibos sanitizados de ferramentas, aprovação contextual,
+  cancelamento propagado e projeção do efeito na mesma sessão humana.
+- Notion, Google, WhatsApp, canais, jobs e watchdogs permanecem no executor anterior
+  até suas canárias específicas passarem; nenhum runtime legado será desligado em lote.
+- Nenhum SQLite vivo será copiado ou editado diretamente. Mudanças de domínio são
+  aditivas e persistidas por eventos.
+
+## Reversão
+
+1. Encerrar somente a PULSO Next Preview e seus sidecars.
+2. Preservar bundle, banco, journal de ferramentas e recibos da candidata para auditoria.
+3. Restaurar o bundle rc.18 guardado no rollback local de cada Mac.
+4. Reabrir e conferir SQLite, áreas, sessões, mensagens, sincronização e modo de acesso.
+5. Reativar somente o adapter legado específico de uma integração que tenha sido cortada;
+   nunca reativar todo o legado nem repetir efeitos externos por reflexo.
+
+---
+
 # Rollback — constelação conversacional e controle humano (26/10/2026)
 
 - Baseline: `930d3c1f6be760fff4eee4de164e600e612881aa` (`pulso-desktop-alpha-v0.9.0-rc.16`).

@@ -40,10 +40,52 @@ export class AgentExecutionService {
       ].filter((item, index, all) => all.findIndex(other => other.memoryId === item.memoryId) === index).slice(0, 8) : [];
       const skills = this.skills ? this.skills.list({ enabled: true }).filter(item => blueprint.skills.some(name => item.skillId.includes(name) || item.name.toLowerCase().includes(String(name).toLowerCase()))) : [];
       await this.foundry.recordCheckpoint({ runId, step: 1, data: { phase: "context_ready", memories: memories.map(item => item.memoryId), skills: skills.map(item => item.skillId) }, usageDelta: { turns: 0, tokens: 0, cost: 0, elapsedMs: Date.now() - startedMs, toolCalls: 0 } });
-      const completion = await this.runtime.routeCompletion({ agentId, taskId: input.taskId || runId, sessionId: input.sessionId || null, prompt, systemPrompt: systemPrompt(blueprint, memories, skills), signal: controller.signal }, { agentId, allowFallback: input.allowFallback !== false });
-      const usage = { turns: 1, tokens: Number(completion.usage?.totalTokens || 0), cost: 0, elapsedMs: Date.now() - startedMs, toolCalls: Number(completion.usage?.toolCalls || 0) };
+      let completion = null;
+      let output = "";
+      let toolCalls = 0;
+      const request = {
+        agentId,
+        taskId: input.taskId || runId,
+        sessionId: input.sessionId || null,
+        prompt,
+        systemPrompt: systemPrompt(blueprint, memories, skills),
+        signal: controller.signal,
+      };
+      const routeOptions = { agentId, allowFallback: input.allowFallback !== false };
+      const envelopeStream = typeof this.runtime.routeStream === "function"
+        ? this.runtime.routeStream(request, routeOptions)
+        : (async function* completionFallback(runtime) {
+            const result = await runtime.routeCompletion(request, routeOptions);
+            yield { ...result, type: "model.completed", kind: "completed" };
+          })(this.runtime);
+      for await (const envelope of envelopeStream) {
+        if (typeof input.onEnvelope === "function") await input.onEnvelope(envelope, { agentId, runId });
+        if (envelope.type === "tool.started") {
+          const receipt = envelope.receipt || {};
+          const capability = `tool.${receipt.source || "provider"}.${receipt.tool || receipt.type || "unknown"}`;
+          try {
+            this.foundry.supervisor.checkAuthorization(agentId, capability, {
+              sessionId: input.sessionId || null,
+              taskId: input.taskId || runId,
+              scope: input.sessionId
+                ? { type: "session", scopeId: input.sessionId }
+                : { type: "task", scopeId: input.taskId || runId },
+            });
+            this.foundry.supervisor.checkBudget(runId, { toolCalls: 1 });
+          } catch (authorizationError) {
+            controller.abort(`agent_tool_denied:${capability}`);
+            authorizationError.code = "agent_tool_denied";
+            throw authorizationError;
+          }
+          toolCalls += 1;
+        }
+        if (envelope.type === "model.delta") output += String(envelope.text || envelope.delta || "");
+        if (envelope.type === "model.completed") completion = envelope;
+      }
+      invariant(completion, "agent_completion_missing");
+      const usage = { turns: 1, tokens: Number(completion.usage?.totalTokens || 0), cost: 0, elapsedMs: Date.now() - startedMs, toolCalls };
       const completed = await this.foundry.completeAgentRun({ runId, result: { text: completion.text, providerId: completion.providerId, model: completion.model, routingReceipt: completion.routingReceipt || null }, artifactRefs: input.artifactRefs || [], usageDelta: usage });
-      return { run: completed.run, output: completion.text, providerId: completion.providerId, model: completion.model, routingReceipt: completion.routingReceipt || null };
+      return { run: completed.run, output: completion.text || output, providerId: completion.providerId, model: completion.model, routingReceipt: completion.routingReceipt || null };
     } catch (error) {
       if (controller.signal.aborted || error?.name === "AbortError" || error?.code === "conversation_cancelled") {
         const cancelled = await this.foundry.cancelAgentRun(runId, {

@@ -168,6 +168,28 @@ export class LiveConversationService {
     await onEnvelope?.({ type: "conversation.progress", runId, ...payload, occurredAt });
   }
 
+  async #recordToolEnvelope(runId, correlationId, envelope, onEnvelope) {
+    const occurredAt = this.clock();
+    const isApproval = envelope.type.startsWith("tool.approval.");
+    const payload = structuredClone(envelope.receipt || {});
+    this.#append([this.#runDraft({
+      type: isApproval ? "live.tool_approval.recorded" : "live.tool_execution.recorded",
+      runId,
+      correlationId,
+      occurredAt,
+      payload,
+    })]);
+    const label = isApproval
+      ? (payload.status === "pending" ? `decisão necessária · ${payload.risk || "ferramenta"}` : `decisão ${payload.status || "registrada"}`)
+      : `${payload.source || "ferramenta"} · ${payload.tool || payload.action || "execução"} ${envelope.type.endsWith("completed") ? "concluída" : "em execução"}`;
+    await this.#progress(runId, correlationId, {
+      phase: isApproval ? "approval" : "tool",
+      label,
+      status: payload.status === "declined" || payload.success === false ? "failed" : (envelope.type.endsWith("completed") ? "completed" : "running"),
+    }, onEnvelope);
+    await onEnvelope?.({ type: envelope.type, runId, receipt: payload, occurredAt });
+  }
+
   #transition(runId, toStatus, details = {}, correlationId = runId) {
     const run = this.getRun(runId);
     invariant(run, "conversation_run_not_found:" + runId);
@@ -371,7 +393,22 @@ export class LiveConversationService {
           const blueprint = instance ? this.agentFoundry.get("blueprint", instance.blueprintId) : null;
           const agentName = blueprint?.name || specialistAgentId;
           await this.#progress(runId, correlationId, { phase: "execution", label: `${agentName} trabalhando`, status: "running", agentId: specialistAgentId }, options.onEnvelope);
-          const specialist = await this.agentExecutor.execute({ agentId: specialistAgentId, prompt: objective, sessionId, parentRunId: runId, activate: true, signal: controller.signal });
+          const specialist = await this.agentExecutor.execute({
+            agentId: specialistAgentId,
+            prompt: objective,
+            sessionId,
+            parentRunId: runId,
+            activate: true,
+            signal: controller.signal,
+            onEnvelope: async envelope => {
+              if (envelope.type?.startsWith("tool.")) {
+                await this.#recordToolEnvelope(runId, correlationId, {
+                  ...envelope,
+                  receipt: { ...(envelope.receipt || {}), agentId: specialistAgentId },
+                }, options.onEnvelope);
+              }
+            },
+          });
           if (controller.signal.aborted) {
             const error = new Error("conversation_cancelled");
             error.code = "conversation_cancelled";
@@ -407,7 +444,9 @@ export class LiveConversationService {
           cancelled.code = "conversation_cancelled";
           throw cancelled;
         }
-        if (envelope.type === "model.delta") {
+        if (envelope.type.startsWith("tool.")) {
+          await this.#recordToolEnvelope(runId, correlationId, envelope, options.onEnvelope);
+        } else if (envelope.type === "model.delta") {
           const current = this.getRun(runId);
           const occurredAt = this.clock();
           const deltaDraft = this.#runDraft({
@@ -578,6 +617,15 @@ export class LiveConversationService {
       ]);
     }
     return cancelled;
+  }
+
+  async resolveToolApproval(runId, approvalId, { decision = "decline", answers = null } = {}) {
+    await this.ensureReady();
+    const run = this.getRun(runId);
+    invariant(run, "conversation_run_not_found:" + runId);
+    const adapter = this.router.getAdapter(run.providerId);
+    invariant(adapter?.client && typeof adapter.client.resolveApproval === "function", "provider_tool_approval_unavailable");
+    return adapter.client.resolveApproval(approvalId, { decision, answers });
   }
 
   async resumeRun(runId, options = {}) {

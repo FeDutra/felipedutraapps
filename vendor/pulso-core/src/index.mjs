@@ -91,6 +91,12 @@ export {
 export { PulsoRuntimeService } from "./runtime/pulso-runtime-service.mjs";
 export { SecretRefResolver } from "./runtime/secret-ref-resolver.mjs";
 export { AccessModeStore, ACCESS_MODES } from "./runtime/access-mode-store.mjs";
+export {
+  normalizeToolItem,
+  classifyApproval,
+  sanitizeApproval,
+  approvalDecisionResult,
+} from "./runtime/tool-runtime-contracts.mjs";
 export { PrivateMemoryProvider } from "./memory/private-memory-provider.mjs";
 export { LiveMemoryService } from "./memory/live-memory-service.mjs";
 export { PrivateArchiveService } from "./archive/private-archive-service.mjs";

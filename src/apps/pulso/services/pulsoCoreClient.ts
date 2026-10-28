@@ -98,6 +98,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'live.turn.start',
   'live.turn.poll',
   'live.turn.cancel',
+  'live.tool.approval.resolve',
   'live.turn.resume',
   'live.turn.get',
   'live.turn.list',
@@ -347,6 +348,8 @@ export interface PulsoConversationRun {
   readonly accumulatedText: string;
   readonly deltasCount: number;
   readonly progress: readonly PulsoConversationProgress[];
+  readonly toolReceipts: readonly PulsoToolReceipt[];
+  readonly toolApprovals: readonly PulsoToolApproval[];
   readonly resumedFromRunId: string | null;
   readonly providerId: string | null;
   readonly model: string | null;
@@ -354,6 +357,38 @@ export interface PulsoConversationRun {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly completedAt: string | null;
+}
+
+export interface PulsoToolReceipt {
+  readonly id?: string;
+  readonly itemId: string;
+  readonly type: string;
+  readonly phase: string;
+  readonly status: string;
+  readonly tool: string;
+  readonly source: string;
+  readonly target: string;
+  readonly action: string;
+  readonly success?: boolean | null;
+  readonly occurredAt?: string;
+}
+
+export interface PulsoToolApproval {
+  readonly id?: string;
+  readonly approvalId: string;
+  readonly itemId: string;
+  readonly risk: string;
+  readonly rationale: string;
+  readonly status: 'pending' | 'approved' | 'declined' | 'expired' | string;
+  readonly decision?: string | null;
+  readonly questions?: readonly {
+    readonly id: string;
+    readonly header: string;
+    readonly question: string;
+    readonly isSecret: boolean;
+    readonly options: readonly { readonly label: string; readonly description: string }[];
+  }[];
+  readonly occurredAt?: string;
 }
 
 export interface PulsoConversationProgress {
@@ -376,6 +411,7 @@ export interface PulsoConversationEnvelope {
   readonly status?: string;
   readonly agentId?: string | null;
   readonly occurredAt?: string;
+  readonly receipt?: PulsoToolReceipt | PulsoToolApproval;
   readonly run?: PulsoConversationRun;
   readonly error?: { readonly code?: string; readonly message?: string };
 }
@@ -1011,6 +1047,20 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
       requestId?: string
     ): Promise<PulsoCoreResult<PulsoConversationRun>> {
       return request<PulsoConversationRun>('live.turn.cancel', { ...params }, requestId);
+    },
+
+    listTurns(
+      params: { sessionId?: string } = {},
+      requestId?: string
+    ): Promise<PulsoCoreResult<readonly PulsoConversationRun[]>> {
+      return request<readonly PulsoConversationRun[]>('live.turn.list', { ...params }, requestId);
+    },
+
+    resolveToolApproval(
+      params: { runId: string; approvalId: string; decision: 'approve' | 'decline'; answers?: Readonly<Record<string, unknown>> },
+      requestId?: string
+    ): Promise<PulsoCoreResult<PulsoToolApproval>> {
+      return request<PulsoToolApproval>('live.tool.approval.resolve', { ...params }, requestId);
     },
 
     resumeTurn(
