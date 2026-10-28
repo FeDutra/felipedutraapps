@@ -3,6 +3,7 @@
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { execFile } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 
@@ -236,7 +237,8 @@ export function createIntegralOperatorServer() {
   });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+const invokedPath = process.argv[1] ? pathToFileURL(realpathSync(process.argv[1])).href : "";
+if (import.meta.url === invokedPath) {
   const server = createIntegralOperatorServer();
   server.listen(PORT, BIND_HOST, () => {
     process.stdout.write(`${JSON.stringify({ event: "operator.ready", host: BIND_HOST, port: PORT, mode: "governed" })}\n`);
