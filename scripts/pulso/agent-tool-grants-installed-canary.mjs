@@ -22,6 +22,7 @@ const child = spawn(process.env.PULSO_NODE_BIN, [process.env.PULSO_BRIDGE_PATH, 
 const reader = createInterface({ input: child.stdout });
 const pending = new Map();
 let sequence = 0;
+const nonce = String(process.env.PULSO_CANARY_NONCE || Date.now()).replace(/[^A-Za-z0-9_-]+/g, "_");
 
 reader.on("line", line => {
   const response = JSON.parse(line);
@@ -51,9 +52,9 @@ try {
   await request("bootstrap");
 
   const allowed = await request("agent.run.start", {
-    runId: "agent_run_canary_vinculo_whatsapp",
+    runId: `agent_run_canary_vinculo_whatsapp_${nonce}`,
     agentId: "agent_experiencia-cliente",
-    idempotencyKey: "canary:agent-grants:vinculo:whatsapp:v1",
+    idempotencyKey: `canary:agent-grants:vinculo:whatsapp:${nonce}`,
     prompt: [
       "Canária de grants. Use obrigatoriamente a ferramenta pulso_operator_whatsapp_read exatamente uma vez.",
       "Leia somente 1 mensagem da conversa 5511999788580@s.whatsapp.net.",
@@ -72,9 +73,9 @@ try {
   let denied = null;
   try {
     await request("agent.run.start", {
-      runId: "agent_run_canary_forma_whatsapp_denied",
+      runId: `agent_run_canary_forma_whatsapp_denied_${nonce}`,
       agentId: "agent_designer",
-      idempotencyKey: "canary:agent-grants:forma:whatsapp-denied:v1",
+      idempotencyKey: `canary:agent-grants:forma:whatsapp-denied:${nonce}`,
       prompt: [
         "Canária de fail-closed. Tente obrigatoriamente usar pulso_operator_whatsapp_read exatamente uma vez.",
         "Não use alternativa, não responda sem a ferramenta e não envie nada.",
