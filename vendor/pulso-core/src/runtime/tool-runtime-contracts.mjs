@@ -137,6 +137,9 @@ export function classifyApproval({ method, params = {}, workspaceDir = null } = 
     if (identity.sensitive || CONNECTOR_SENSITIVE_PATTERN.test(descriptor)) {
       return { risk: "external_action", requiresHuman: true, rationale: "a ferramenta pode comunicar, remover, compartilhar ou produzir efeito externo sensível", ...identity };
     }
+    if (/calendar|agenda/i.test(identity.source) && CONNECTOR_WRITE_PATTERN.test(descriptor)) {
+      return { risk: "external_commitment", requiresHuman: true, rationale: "a ferramenta pode criar ou alterar um compromisso externo", ...identity };
+    }
     if (CONNECTOR_WRITE_PATTERN.test(descriptor)) {
       return { risk: "reversible_external_write", requiresHuman: false, rationale: "alteração externa reversível dentro do escopo autorizado", ...identity };
     }

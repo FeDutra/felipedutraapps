@@ -190,6 +190,13 @@ test('conectores são identificados e autorizados antes da execução com fronte
   assert.equal(send.requiresHuman, true);
   assert.equal(send.risk, 'external_action');
 
+  const calendarCreate = classifyApproval({
+    method: 'mcpServer/elicitation/request',
+    params: { ...readParams, message: 'Approve Calendar create event', _meta: { ...readParams._meta, connector_id: 'google_calendar', tool_name: 'create_event' } },
+  });
+  assert.equal(calendarCreate.requiresHuman, true);
+  assert.equal(calendarCreate.risk, 'external_commitment');
+
   const ordinaryForm = classifyApproval({
     method: 'mcpServer/elicitation/request',
     params: { mode: 'form', serverName: 'custom', message: 'Provide a value', requestedSchema: { type: 'object', properties: { value: { type: 'string' } } } },
