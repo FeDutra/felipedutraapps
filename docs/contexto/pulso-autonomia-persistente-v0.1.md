@@ -20,9 +20,9 @@ PULSO conserva sessão, contexto, grants, decisão humana, progresso e recibos.
 | destruição | apagar, revogar, remover material ou rotina | sim |
 | segurança e dinheiro | credencial, permissão, pagamento, transferência | sim |
 
-Uma autorização resolvida para acesso ordinário a conector vale durante a sessão do
-provider. Ela não é reapresentada a cada leitura. A permissão de acesso nunca autoriza
-automaticamente uma ação externa sensível.
+O grant persistente do agente autoriza o acesso ordinário ao conector sem criar uma
+decisão humana. Verificação de credencial continua humana. A permissão de acesso nunca
+autoriza automaticamente uma ação externa sensível.
 
 ## Paridade OpenClaw → PULSO
 
@@ -53,3 +53,24 @@ automaticamente uma ação externa sensível.
 4. Reabrir a sessão e ver recibos compactos, sem argumentos ou segredos.
 5. Sessões técnicas permanecem auditáveis, mas não poluem a navegação cotidiana.
 6. iMac e MacBook recebem o mesmo bundle Intel e o mesmo contrato de operador.
+
+## Homologação no iMac · 28/10/2026
+
+- commit instalado: `6eeadff2e3b06660fbc5b53e189678b65cab0a81`;
+- CI Intel: run `40698270619`;
+- manifesto: bundle `com.felipedutraapps.pulso.next-preview`, alvo
+  `x86_64-apple-darwin`;
+- 96/96 contratos;
+- operador persistente respondeu com WhatsApp, Macs e jobs após reabertura;
+- 11 agentes e 89 grants ativos;
+- sessão humana `PULSO CORE · CONSTRUÇÃO`: Notion, Drive, Gmail, Google Calendar
+  direto, WhatsApp via `wacli` e jobs concluíram com 6 recibos, 14 eventos de
+  progresso e 0 decisões humanas;
+- tentativa de envio WhatsApp gerou uma única decisão `external_action`, recusada
+  antes do efeito; busca externa no `wacli` confirmou 0 mensagens com o marcador;
+- SQLite vivo e snapshot pré-corte retornaram `ok`;
+- rollback completo preservado no iMac.
+
+O MacBook permanece na versão anterior enquanto estiver em uso e com baixa margem de
+disco. A sincronização do bundle é uma promoção física pendente; os eventos e grants
+continuam sincronizáveis pelo Core.
