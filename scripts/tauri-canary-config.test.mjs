@@ -57,9 +57,8 @@ test('iPhone CI uses the available Intel Apple runner with matching simulator ta
   );
   assert.match(workflow, /runs-on: macos-15-intel/);
   assert.match(workflow, /targets: aarch64-apple-ios,x86_64-apple-ios/);
-  assert.match(workflow, /-sdk iphonesimulator/);
-  assert.match(workflow, /-destination "id=\$UDID"/);
-  assert.match(workflow, /ARCHS=x86_64/);
+  assert.match(workflow, /tauri ios build --ci --debug --no-sign --target x86_64/);
+  assert.doesNotMatch(workflow, /xcodebuild[\s\S]*ARCHS=x86_64/);
   assert.match(workflow, /Upload audited iPhone package/);
 });
 
@@ -137,7 +136,7 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   assert.equal(merged.app.windows[0].fullscreen, false);
 });
 
-test('iPhone canary keeps its own identity, opens the canonical live surface, and excludes Desktop sidecars', () => {
+test('iPhone canary keeps its own identity, enters through the canonical root, and excludes Desktop sidecars', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
   const iosPatch = JSON.parse(readFileSync(iosCanaryPath, 'utf8'));
   const merged = mergeTauriConfig(baseConfig, iosPatch);
@@ -145,14 +144,20 @@ test('iPhone canary keeps its own identity, opens the canonical live surface, an
   assert.equal(merged.productName, 'PULSO iPhone Preview');
   assert.equal(merged.identifier, 'com.felipedutraapps.pulso.ios.canary');
   assert.equal(merged.version, '0.9.0');
-  assert.equal(merged.app.windows[0].url, 'pulso/live/index.html');
+  assert.equal(merged.app.windows[0].url, 'index.html');
   assert.equal(
     merged.build.beforeBuildCommand,
-    'NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1 npm run build'
+    'NEXT_PUBLIC_PULSO_RUNTIME=tauri_mobile npm run build'
   );
   assert.deepEqual(merged.bundle.externalBin, []);
   assert.deepEqual(merged.bundle.resources, []);
   assert.equal(merged.bundle.icon.includes('icons/icon.icns'), true);
+  const rootPage = readFileSync(path.join(repoRoot, 'src', 'app', 'page.tsx'), 'utf8');
+  assert.match(rootPage, /PULSO_RUNTIME === 'tauri_mobile'/);
+  assert.match(rootPage, /data-pulso-app-root=\{PULSO_RUNTIME\}/);
+  assert.match(rootPage, /IS_PULSO_DESKTOP_BUILD \? <PulsoCoreCanary \/> : null/);
+  assert.doesNotMatch(iosPatch.build.beforeBuildCommand, /PULSO_DESKTOP_BUILD/);
+  assert.doesNotMatch(iosPatch.app.windows[0].url, /pulso\/live/);
 });
 
 test('Production Desktop build compiles the HOME natively at the default Tauri root', () => {

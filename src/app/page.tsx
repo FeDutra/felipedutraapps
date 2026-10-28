@@ -8,21 +8,30 @@ import GlassCard from '@/shared/components/GlassCard';
 import LivePage from '@/apps/pulso/pages/LivePage';
 import { PulsoCoreCanary } from '@/apps/pulso/components/PulsoCoreCanary';
 
-const IS_PULSO_DESKTOP_BUILD = process.env.NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '1';
+const PULSO_RUNTIME =
+  process.env.NEXT_PUBLIC_PULSO_RUNTIME ??
+  (process.env.NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '1' ? 'tauri_desktop' : 'web');
+const IS_PULSO_APP_BUILD =
+  PULSO_RUNTIME === 'tauri_desktop' || PULSO_RUNTIME === 'tauri_mobile';
+const IS_PULSO_DESKTOP_BUILD = PULSO_RUNTIME === 'tauri_desktop';
 
 export default function EdenCentral() {
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark');
   }, []);
 
-  if (IS_PULSO_DESKTOP_BUILD) {
+  if (IS_PULSO_APP_BUILD) {
     return (
-      <div data-pulso-desktop-root="true" className="contents">
+      <div
+        data-pulso-app-root={PULSO_RUNTIME}
+        data-pulso-desktop-root={IS_PULSO_DESKTOP_BUILD ? 'true' : undefined}
+        className="contents"
+      >
         <React.Suspense fallback={
           <div className="theme-her h-[100dvh] overflow-hidden" aria-label="Abrindo Pulso" />
         }>
           <LivePage />
-          <PulsoCoreCanary />
+          {IS_PULSO_DESKTOP_BUILD ? <PulsoCoreCanary /> : null}
         </React.Suspense>
       </div>
     );

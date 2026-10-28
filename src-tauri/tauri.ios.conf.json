@@ -4,14 +4,14 @@
   "version": "0.9.0",
   "identifier": "com.felipedutraapps.pulso.ios.canary",
   "build": {
-    "beforeBuildCommand": "NEXT_PUBLIC_PULSO_DESKTOP_BUILD=1 npm run build"
+    "beforeBuildCommand": "NEXT_PUBLIC_PULSO_RUNTIME=tauri_mobile npm run build"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "PULSO iPhone Preview",
-        "url": "pulso/live/index.html"
+        "url": "index.html"
       }
     ]
   },
