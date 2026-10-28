@@ -20,6 +20,9 @@ import {
 const DEFAULT_TIMEOUT_MS = 30_000;
 const TURN_TIMEOUT_MS = 300_000;
 const APPROVAL_TIMEOUT_MS = 300_000;
+const DYNAMIC_TOOL_TEXT_LIMIT = 24_000;
+const DYNAMIC_TOOL_URL_LIMIT = 8_000;
+const DYNAMIC_TOOL_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 function safeProfileId(value) {
   const profileId = String(value || "personal").trim();
@@ -145,6 +148,63 @@ export function normalizeMcpAnswers(params = {}, answers = null) {
   ]));
 }
 
+function boundedText(value, limit = DYNAMIC_TOOL_TEXT_LIMIT) {
+  const normalized = String(value ?? "");
+  return normalized.length <= limit ? normalized : `${normalized.slice(0, limit)}\n[resultado truncado pela PULSO]`;
+}
+
+export function normalizeDynamicToolDefinitions(definitions = []) {
+  invariant(Array.isArray(definitions), "dynamic_tools_must_be_array");
+  const names = new Set();
+  return definitions.map(definition => {
+    invariant(definition && typeof definition === "object", "dynamic_tool_definition_required");
+    const name = String(definition.name || "").trim();
+    invariant(DYNAMIC_TOOL_NAME_PATTERN.test(name), `invalid_dynamic_tool_name:${name}`);
+    invariant(!names.has(name), `duplicate_dynamic_tool_name:${name}`);
+    names.add(name);
+    const description = boundedText(definition.description, 1_200).trim();
+    invariant(description, `dynamic_tool_description_required:${name}`);
+    const inputSchema = definition.inputSchema && typeof definition.inputSchema === "object"
+      ? structuredClone(definition.inputSchema)
+      : { type: "object", properties: {}, additionalProperties: false };
+    return Object.freeze({
+      name,
+      description,
+      inputSchema,
+      capability: String(definition.capability || `tool.dynamic.${name}`),
+      source: String(definition.source || "pulso_operator"),
+      risk: String(definition.risk || "technical"),
+    });
+  });
+}
+
+export function dynamicToolSpecs(definitions = []) {
+  return normalizeDynamicToolDefinitions(definitions).map(({ name, description, inputSchema }) => ({
+    type: "function",
+    name,
+    description,
+    inputSchema,
+  }));
+}
+
+export function normalizeDynamicToolResult(result) {
+  if (typeof result === "string") {
+    return { success: true, contentItems: [{ type: "inputText", text: boundedText(result) }] };
+  }
+  const success = result?.success !== false;
+  const supplied = Array.isArray(result?.contentItems)
+    ? result.contentItems
+    : result?.text !== undefined
+      ? [{ type: "inputText", text: result.text }]
+      : [{ type: "inputText", text: JSON.stringify(result?.publicResult ?? result ?? null) }];
+  const contentItems = supplied.slice(0, 12).map(item => {
+    if (item?.type === "inputImage") return { type: "inputImage", imageUrl: boundedText(item.imageUrl, DYNAMIC_TOOL_URL_LIMIT) };
+    if (item?.type === "inputAudio") return { type: "inputAudio", audioUrl: boundedText(item.audioUrl, DYNAMIC_TOOL_URL_LIMIT) };
+    return { type: "inputText", text: boundedText(item?.text ?? "") };
+  });
+  return { success, contentItems };
+}
+
 function asError(error, fallback = "codex_app_server_error") {
   if (error instanceof Error) return error;
   const wrapped = new Error(typeof error === "string" ? error : fallback);
@@ -227,6 +287,8 @@ export class CodexAppServerClient {
     turnTimeoutMs = TURN_TIMEOUT_MS,
     clientVersion = "0.9.0",
     accessModeStore = null,
+    dynamicTools = [],
+    dynamicToolExecutor = null,
   } = {}) {
     invariant(typeof binaryPath === "string" && binaryPath.trim(), "codex_binary_path_required");
     invariant(typeof profilesRoot === "string" && profilesRoot.trim(), "codex_profiles_root_required");
@@ -240,6 +302,8 @@ export class CodexAppServerClient {
     this.turnTimeoutMs = turnTimeoutMs;
     this.clientVersion = clientVersion;
     this.accessModeStore = accessModeStore;
+    this.dynamicTools = normalizeDynamicToolDefinitions(dynamicTools);
+    this.dynamicToolExecutor = dynamicToolExecutor;
     this.child = null;
     this.reader = null;
     this.nextId = 0;
@@ -336,6 +400,47 @@ export class CodexAppServerClient {
     }
     const method = message.method;
     const params = message.params ?? {};
+    if (method === "item/tool/call") {
+      const policy = params.threadId ? this.threadPolicies.get(String(params.threadId)) : null;
+      const toolName = String(params.tool || "");
+      const definition = policy?.dynamicTools?.get(toolName) ?? null;
+      if (!definition || typeof policy?.executeDynamicTool !== "function") {
+        this.#write({ id: message.id, result: normalizeDynamicToolResult({ success: false, text: "Ferramenta não disponível nesta sessão." }) });
+        return;
+      }
+      if (policy.abortController?.signal.aborted) {
+        this.#write({ id: message.id, result: normalizeDynamicToolResult({ success: false, text: "Execução cancelada." }) });
+        return;
+      }
+      try {
+        if (typeof policy.authorizeTool === "function") {
+          await policy.authorizeTool({
+            capability: definition.capability,
+            source: definition.source,
+            tool: definition.name,
+            risk: definition.risk,
+            inputFingerprint: null,
+          });
+        }
+        const output = await policy.executeDynamicTool({
+          tool: definition.name,
+          namespace: params.namespace ?? null,
+          arguments: params.arguments ?? {},
+          callId: params.callId ?? null,
+          threadId: params.threadId ?? null,
+          turnId: params.turnId ?? null,
+          signal: policy.abortController?.signal ?? null,
+          capability: definition.capability,
+          source: definition.source,
+          risk: definition.risk,
+        });
+        this.#write({ id: message.id, result: normalizeDynamicToolResult(output) });
+      } catch (error) {
+        const code = boundedText(error?.code || "operator_tool_failed", 120);
+        this.#write({ id: message.id, result: normalizeDynamicToolResult({ success: false, text: `Falha controlada: ${code}` }) });
+      }
+      return;
+    }
     const approvalMethods = new Set([
       "item/commandExecution/requestApproval",
       "item/fileChange/requestApproval",
@@ -543,7 +648,15 @@ export class CodexAppServerClient {
     return this.request("model/list", { includeHidden: false });
   }
 
-  async *streamCompletion({ model, systemPrompt = null, input, signal = null, authorizeTool = null } = {}) {
+  async *streamCompletion({
+    model,
+    systemPrompt = null,
+    input,
+    signal = null,
+    authorizeTool = null,
+    dynamicTools = null,
+    executeDynamicTool = null,
+  } = {}) {
     await this.start();
     const account = await this.accountRead({ refreshToken: true });
     invariant(account?.account?.type === "chatgpt", "codex_chatgpt_login_required");
@@ -551,6 +664,9 @@ export class CodexAppServerClient {
     const queue = new AsyncNotificationQueue();
     let threadId = null;
     let turnId = null;
+    const activeDynamicTools = normalizeDynamicToolDefinitions(dynamicTools ?? this.dynamicTools);
+    const dynamicToolExecutor = executeDynamicTool ?? this.dynamicToolExecutor;
+    const dynamicAbortController = new AbortController();
     const onNotification = message => {
       const params = message.params ?? {};
       if (threadId && params.threadId && params.threadId !== threadId) return;
@@ -600,11 +716,15 @@ export class CodexAppServerClient {
         ephemeral: true,
         baseInstructions: systemPrompt || null,
         developerInstructions: integral ? integralDeveloperInstructions() : restrictedDeveloperInstructions(),
+        dynamicTools: integral && activeDynamicTools.length ? dynamicToolSpecs(activeDynamicTools) : undefined,
       });
       threadId = threadResult?.thread?.id;
       invariant(threadId, "codex_thread_id_missing");
       this.threadPolicies.set(String(threadId), {
         authorizeTool: typeof authorizeTool === "function" ? authorizeTool : null,
+        dynamicTools: new Map(activeDynamicTools.map(definition => [definition.name, definition])),
+        executeDynamicTool: typeof dynamicToolExecutor === "function" ? dynamicToolExecutor : null,
+        abortController: dynamicAbortController,
       });
 
       const turnResult = await this.request("turn/start", {
@@ -618,6 +738,7 @@ export class CodexAppServerClient {
 
       if (signal) {
         abortHandler = () => {
+          dynamicAbortController.abort();
           this.request("turn/interrupt", { threadId, turnId }).catch(() => {});
           queue.fail(Object.assign(new Error("provider_stream_cancelled"), { code: "request_cancelled" }));
         };
@@ -641,6 +762,7 @@ export class CodexAppServerClient {
         }
       }
     } finally {
+      dynamicAbortController.abort();
       if (threadId) this.threadPolicies.delete(String(threadId));
       this.events.off("notification", onNotification);
       this.events.off("tool.approval.requested", onApprovalRequested);
@@ -754,6 +876,8 @@ export class CodexSubscriptionAdapter extends ModelProvider {
       input,
       signal: request.signal ?? null,
       authorizeTool: request.authorizeTool ?? null,
+      dynamicTools: request.dynamicTools ?? null,
+      executeDynamicTool: request.executeDynamicTool ?? null,
     })) {
       if (event.type === "delta") {
         threadId = event.threadId ?? threadId;

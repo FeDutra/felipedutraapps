@@ -18,6 +18,11 @@ import {
   classifyApproval,
   sanitizeApproval,
   approvalDecisionResult,
+  normalizeDynamicToolDefinitions,
+  dynamicToolSpecs,
+  normalizeDynamicToolResult,
+  PulsoOperatorClient,
+  pulsoOperatorDynamicTools,
 } from '../vendor/pulso-core/src/index.mjs';
 import { preparePulsoPrivateContext } from './prepare-pulso-private-context.mjs';
 import { normalizeMcpAnswers } from '../vendor/pulso-core/src/providers/codex-app-server-adapter.mjs';
@@ -110,6 +115,8 @@ test('adaptador, bridge e painel carregam o contrato integral sem remover o modo
   assert.match(adapter, /item\/completed/);
   assert.match(adapter, /approvalPolicy: integral \? "on-request" : "never"/);
   assert.match(adapter, /mcpServerOpenaiFormElicitation/);
+  assert.match(adapter, /item\/tool\/call/);
+  assert.match(adapter, /dynamicTools: integral/);
   assert.match(adapter, /mcpServer\/elicitation\/request/);
   assert.match(adapter, /apps\._default\.default_tools_approval_mode/);
   assert.match(bridge, /access\.mode\.read/);
@@ -136,6 +143,68 @@ test('runtime de ferramentas produz recibos sanitizados sem conteúdo ou argumen
   assert.equal(receipt.success, true);
   assert.equal(JSON.stringify(receipt).includes('must-not-leak'), false);
   assert.equal(JSON.stringify(receipt).includes('private content'), false);
+});
+
+test('ferramentas dinâmicas expõem contrato mínimo e resposta pública limitada', () => {
+  const definitions = normalizeDynamicToolDefinitions([{
+    name: 'pulso_operator_whatsapp_read',
+    description: 'Lê uma conversa do WhatsApp sem enviar mensagem.',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    capability: 'tool.whatsapp.read',
+    source: 'pulso_operator_runtime',
+    risk: 'connector_read',
+  }]);
+  assert.equal(definitions[0].capability, 'tool.whatsapp.read');
+  assert.deepEqual(dynamicToolSpecs(definitions), [{
+    type: 'function',
+    name: 'pulso_operator_whatsapp_read',
+    description: 'Lê uma conversa do WhatsApp sem enviar mensagem.',
+    inputSchema: definitions[0].inputSchema,
+  }]);
+  assert.deepEqual(normalizeDynamicToolResult('resultado público'), {
+    success: true,
+    contentItems: [{ type: 'inputText', text: 'resultado público' }],
+  });
+  const failed = normalizeDynamicToolResult({ success: false, text: 'recusado' });
+  assert.equal(failed.success, false);
+  assert.equal(failed.contentItems[0].text, 'recusado');
+  assert.throws(() => normalizeDynamicToolDefinitions([{ name: 'nome inválido', description: 'x' }]), /invalid_dynamic_tool_name/);
+});
+
+test('cliente operador mantém WhatsApp em leitura ou minuta e propaga cancelamento', async () => {
+  const calls = [];
+  const client = new PulsoOperatorClient({
+    endpoint: 'https://operator.test',
+    token: 'token-temporario-com-tamanho-seguro',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return new Response(JSON.stringify({ success: true, result: { messages: [{ id: 'm1', text: 'olá' }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+  assert.equal(pulsoOperatorDynamicTools().some(tool => /send/i.test(tool.name)), false);
+  const read = await client.execute({
+    tool: 'pulso_operator_whatsapp_read',
+    arguments: { jid: '5511999788580@s.whatsapp.net', limit: 99 },
+  });
+  assert.equal(read.success, true);
+  assert.equal(calls.length, 1);
+  assert.equal(JSON.parse(calls[0].options.body).arguments.limit, 20);
+  assert.match(calls[0].options.headers.authorization, /^Bearer /);
+  const prepared = await client.execute({
+    tool: 'pulso_operator_whatsapp_prepare',
+    arguments: { jid: '5511999788580@s.whatsapp.net', draft: 'Minuta segura.' },
+  });
+  assert.equal(prepared.publicResult.status, 'prepared_not_sent');
+  assert.equal(prepared.publicResult.sent, false);
+  assert.equal(calls.length, 1);
 });
 
 test('política integral separa oficina reversível de fronteiras humanas sensíveis', () => {

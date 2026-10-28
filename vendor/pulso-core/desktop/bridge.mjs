@@ -31,6 +31,7 @@ import {
   ChannelHubService,
   AutomationService,
   AgentExecutionService,
+  PulsoOperatorClient,
   pulsoId,
 } from "../src/index.mjs";
 
@@ -118,6 +119,14 @@ export class PulsoDesktopBridge {
       });
     this.identity = options.identityService || new LotusIdentityService({ dataDir: this.dataDir });
     this.accessMode = options.accessModeStore || new AccessModeStore({ dataDir: this.dataDir });
+    this.operatorClient = options.operatorClient || (
+      process.env.PULSO_OPERATOR_URL && process.env.PULSO_OPERATOR_TOKEN
+        ? new PulsoOperatorClient({
+            endpoint: process.env.PULSO_OPERATOR_URL,
+            token: process.env.PULSO_OPERATOR_TOKEN,
+          })
+        : null
+    );
     this.privateMemory = options.memoryProvider || new PrivateMemoryProvider({
       rootDir: join(this.dataDir, "private-context"),
     });
@@ -219,6 +228,10 @@ export class PulsoDesktopBridge {
             workspaceDir: join(this.dataDir, "private-context"),
             privateContextRoot: join(this.dataDir, "private-context"),
             accessModeStore: this.accessMode,
+            dynamicTools: this.operatorClient?.tools() || [],
+            dynamicToolExecutor: this.operatorClient
+              ? input => this.operatorClient.execute(input)
+              : null,
           });
       this.codexClients.set(params.providerId, client);
       return new CodexSubscriptionAdapter({

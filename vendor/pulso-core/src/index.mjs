@@ -103,6 +103,7 @@ export { LiveMemoryService } from "./memory/live-memory-service.mjs";
 export { PrivateArchiveService } from "./archive/private-archive-service.mjs";
 export { SkillRegistryService } from "./skills/skill-registry-service.mjs";
 export { ChannelHubService, LoopbackChannelAdapter, WebhookChannelAdapter, WhatsAppLocalChannelAdapter } from "./channels/channel-hub-service.mjs";
+export { PulsoOperatorClient, pulsoOperatorDynamicTools } from "./operator/pulso-operator-client.mjs";
 export { AutomationService } from "./automations/automation-service.mjs";
 export { AgentExecutionService } from "./agents/agent-execution-service.mjs";
 export { PeerFolderTransport } from "./sync/peer-folder-transport.mjs";
@@ -124,7 +125,10 @@ export {
 export {
   CodexAppServerClient,
   CodexSubscriptionAdapter,
-  installPrivateSkills
+  installPrivateSkills,
+  normalizeDynamicToolDefinitions,
+  dynamicToolSpecs,
+  normalizeDynamicToolResult
 } from "./providers/codex-app-server-adapter.mjs";
 export {
   SECRET_REF_SCHEMES,
