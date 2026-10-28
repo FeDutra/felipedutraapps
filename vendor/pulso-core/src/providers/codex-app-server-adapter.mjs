@@ -115,6 +115,36 @@ function approvalAnswers(params = {}) {
   return { answers };
 }
 
+function normalizeMcpAnswerValue(schema = {}, rawValue) {
+  const selected = Array.isArray(rawValue?.answers) ? rawValue.answers[0] : rawValue;
+  const options = Array.isArray(schema.anyOf)
+    ? schema.anyOf
+    : Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : [];
+  const matched = options.find(option => {
+    if (!option || typeof option !== "object") return false;
+    return String(option.title ?? option.const ?? "") === String(selected ?? "");
+  });
+  if (matched && Object.prototype.hasOwnProperty.call(matched, "const")) return matched.const;
+  if (schema.type === "boolean") {
+    if (/^(sim|true|yes|1)$/i.test(String(selected ?? ""))) return true;
+    if (/^(não|nao|false|no|0)$/i.test(String(selected ?? ""))) return false;
+  }
+  return selected;
+}
+
+export function normalizeMcpAnswers(params = {}, answers = null) {
+  if (!answers || typeof answers !== "object" || Array.isArray(answers)) return {};
+  const properties = params.requestedSchema?.properties && typeof params.requestedSchema.properties === "object"
+    ? params.requestedSchema.properties
+    : {};
+  return Object.fromEntries(Object.entries(answers).map(([id, value]) => [
+    id,
+    normalizeMcpAnswerValue(properties[id] || {}, value),
+  ]));
+}
+
 function asError(error, fallback = "codex_app_server_error") {
   if (error instanceof Error) return error;
   const wrapped = new Error(typeof error === "string" ? error : fallback);
@@ -421,7 +451,7 @@ export class CodexAppServerClient {
       const approved = ["approve", "accept", "acceptForSession"].includes(decision);
       result = {
         action: approved ? "accept" : "decline",
-        content: approved && answers && typeof answers === "object" ? answers : (approved ? {} : null),
+        content: approved ? normalizeMcpAnswers(pending.params, answers) : null,
         _meta: null,
       };
     } else {

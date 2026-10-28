@@ -16,9 +16,11 @@ import {
   normalizeToolItem,
   mcpToolIdentity,
   classifyApproval,
+  sanitizeApproval,
   approvalDecisionResult,
 } from '../vendor/pulso-core/src/index.mjs';
 import { preparePulsoPrivateContext } from './prepare-pulso-private-context.mjs';
+import { normalizeMcpAnswers } from '../vendor/pulso-core/src/providers/codex-app-server-adapter.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -203,6 +205,49 @@ test('conectores são identificados e autorizados antes da execução com fronte
   });
   assert.equal(ordinaryForm.requiresHuman, true);
   assert.equal(ordinaryForm.risk, 'human_input');
+
+  const formReceipt = sanitizeApproval({
+    approvalId: 'approval-form-1',
+    method: 'mcpServer/elicitation/request',
+    params: {
+      mode: 'form',
+      serverName: 'notion',
+      message: 'Confirme o acesso',
+      requestedSchema: {
+        type: 'object',
+        required: ['decision'],
+        properties: {
+          decision: {
+            type: 'string',
+            title: 'Acesso',
+            description: 'Autorizar esta consulta?',
+            anyOf: [{ const: 'allow', title: 'autorizar' }, { const: 'deny', title: 'recusar' }],
+          },
+          note: { type: 'string', title: 'Observação' },
+          password: { type: 'string', format: 'password', title: 'Senha' },
+        },
+      },
+    },
+    classification: ordinaryForm,
+  });
+  assert.equal(formReceipt.questions.length, 3);
+  assert.equal(formReceipt.questions[0].required, true);
+  assert.deepEqual(formReceipt.questions[0].options.map(option => option.label), ['autorizar', 'recusar']);
+  assert.equal(formReceipt.questions[1].options.length, 0);
+  assert.equal(formReceipt.questions[2].isSecret, true);
+  assert.deepEqual(normalizeMcpAnswers({
+    requestedSchema: {
+      properties: {
+        decision: { anyOf: [{ const: 'allow', title: 'autorizar' }, { const: 'deny', title: 'recusar' }] },
+        confirmed: { type: 'boolean' },
+        note: { type: 'string' },
+      },
+    },
+  }, {
+    decision: { answers: ['autorizar'] },
+    confirmed: { answers: ['sim'] },
+    note: { answers: ['somente leitura'] },
+  }), { decision: 'allow', confirmed: true, note: 'somente leitura' });
 });
 
 test('empacotador privado mantém identidade e memória fora do bundle público', () => {

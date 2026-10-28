@@ -27,6 +27,55 @@ function capabilityPart(value, fallback) {
   return normalized || fallback;
 }
 
+function mcpOptionLabel(option) {
+  if (option && typeof option === "object" && !Array.isArray(option)) {
+    return text(option.title ?? option.const ?? option.value, 120);
+  }
+  return text(option, 120);
+}
+
+function mcpQuestionOptions(schema = {}) {
+  const candidates = Array.isArray(schema.anyOf)
+    ? schema.anyOf
+    : Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : Array.isArray(schema.enum)
+        ? schema.enum
+        : schema.type === "boolean"
+          ? [{ const: true, title: "sim" }, { const: false, title: "não" }]
+          : [];
+  return candidates
+    .map(option => ({
+      label: mcpOptionLabel(option),
+      description: text(option?.description ?? option?.title ?? option?.const ?? option, 240),
+    }))
+    .filter(option => option.label);
+}
+
+function sanitizeMcpQuestions(params = {}) {
+  const requestedSchema = params.requestedSchema && typeof params.requestedSchema === "object"
+    ? params.requestedSchema
+    : {};
+  const properties = requestedSchema.properties && typeof requestedSchema.properties === "object"
+    ? requestedSchema.properties
+    : {};
+  const required = new Set(Array.isArray(requestedSchema.required) ? requestedSchema.required.map(String) : []);
+  const entries = Object.entries(properties);
+  return entries.map(([id, schema]) => {
+    const descriptor = `${id} ${schema?.title || ""} ${schema?.description || ""}`;
+    const isSecret = schema?.format === "password" || schema?.writeOnly === true || SECRET_PATTERN.test(descriptor);
+    const fallback = entries.length === 1 ? params.message : id;
+    return {
+      id: text(id, 120),
+      header: text(schema?.title || id, 120),
+      question: text(schema?.description || schema?.title || fallback, 360),
+      isSecret,
+      required: required.has(id),
+      options: isSecret ? [] : mcpQuestionOptions(schema),
+    };
+  }).filter(question => question.id && question.question);
+}
+
 export function mcpToolIdentity(params = {}) {
   const meta = params?._meta && typeof params._meta === "object" ? params._meta : {};
   const source = capabilityPart(meta.connector_id || params.serverName || "mcp", "mcp");
@@ -200,7 +249,9 @@ export function sanitizeApproval({ approvalId, method, params = {}, classificati
               description: text(option?.description, 240),
             })),
       })).filter(question => question.id && question.question)
-    : [];
+    : method === "mcpServer/elicitation/request"
+      ? sanitizeMcpQuestions(params)
+      : [];
   return {
     approvalId: text(approvalId, 180),
     itemId: text(params.itemId || params.approvalId || params.callId || approvalId, 180),

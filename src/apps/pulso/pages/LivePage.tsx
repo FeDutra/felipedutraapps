@@ -3584,7 +3584,7 @@ export default function LivePage() {
     if (!msg.toolRunId || !msg.toolApproval || submittingApprovalId) return;
     const questions = msg.toolApproval.questions || [];
     const selected = toolApprovalAnswers[msg.id] || {};
-    if (decision === 'approve' && questions.some(question => question.isSecret || !selected[question.id])) {
+    if (decision === 'approve' && questions.some(question => question.isSecret || (question.required && !selected[question.id]))) {
       setToastMessage(questions.some(question => question.isSecret)
         ? 'esta decisão exige entrada segura de credencial; ela não pode ser respondida no chat'
         : 'escolha uma resposta para cada decisão antes de autorizar');
@@ -3593,8 +3593,9 @@ export default function LivePage() {
     }
     setSubmittingApprovalId(msg.id);
     try {
-      const answers = questions.length > 0
-        ? Object.fromEntries(questions.map(question => [question.id, { answers: [selected[question.id]] }]))
+      const answeredQuestions = questions.filter(question => selected[question.id]);
+      const answers = answeredQuestions.length > 0
+        ? Object.fromEntries(answeredQuestions.map(question => [question.id, { answers: [selected[question.id]] }]))
         : undefined;
       const result = await pulsoCoreClient.resolveToolApproval({
         runId: msg.toolRunId,
@@ -7646,6 +7647,17 @@ ${data.transcription}`, {
                               <p className="text-[10px] leading-relaxed text-[#fbf9f5]/65">{question.question}</p>
                               {question.isSecret ? (
                                 <p className="mt-1 text-[9px] text-[#e3a36a]/60">entrada segura necessária — não será coletada no chat</p>
+                              ) : question.options.length === 0 ? (
+                                <input
+                                  type="text"
+                                  value={toolApprovalAnswers[msg.id]?.[question.id] || ''}
+                                  onChange={event => setToolApprovalAnswers(previous => ({
+                                    ...previous,
+                                    [msg.id]: { ...(previous[msg.id] || {}), [question.id]: event.target.value },
+                                  }))}
+                                  placeholder="responda para continuar"
+                                  className="mt-2 w-full max-w-md border-0 border-b border-white/15 bg-transparent px-0 py-1 text-[10px] text-[#fbf9f5]/80 outline-none placeholder:text-white/25 focus:border-[#e3a36a]/50"
+                                />
                               ) : (
                                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
                                   {question.options.map(option => {

@@ -386,6 +386,7 @@ export interface PulsoToolApproval {
     readonly header: string;
     readonly question: string;
     readonly isSecret: boolean;
+    readonly required?: boolean;
     readonly options: readonly { readonly label: string; readonly description: string }[];
   }[];
   readonly occurredAt?: string;
