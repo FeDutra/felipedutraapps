@@ -50,6 +50,13 @@ export class AgentExecutionService {
         prompt,
         systemPrompt: systemPrompt(blueprint, memories, skills),
         signal: controller.signal,
+        authorizeTool: ({ capability }) => this.foundry.supervisor.checkAuthorization(agentId, capability, {
+          sessionId: input.sessionId || null,
+          taskId: input.taskId || runId,
+          scope: input.sessionId
+            ? { type: "session", scopeId: input.sessionId }
+            : { type: "task", scopeId: input.taskId || runId },
+        }),
       };
       const routeOptions = { agentId, allowFallback: input.allowFallback !== false };
       const envelopeStream = typeof this.runtime.routeStream === "function"

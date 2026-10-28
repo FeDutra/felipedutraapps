@@ -623,7 +623,8 @@ export class LiveConversationService {
     await this.ensureReady();
     const run = this.getRun(runId);
     invariant(run, "conversation_run_not_found:" + runId);
-    const adapter = this.router.getAdapter(run.providerId);
+    const approval = (run.toolApprovals || []).find(item => item.approvalId === approvalId);
+    const adapter = this.router.getAdapter(approval?.providerId || run.providerId);
     invariant(adapter?.client && typeof adapter.client.resolveApproval === "function", "provider_tool_approval_unavailable");
     return adapter.client.resolveApproval(approvalId, { decision, answers });
   }

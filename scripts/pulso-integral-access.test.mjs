@@ -14,6 +14,7 @@ import {
   SqliteEventStore,
   installPrivateSkills,
   normalizeToolItem,
+  mcpToolIdentity,
   classifyApproval,
   approvalDecisionResult,
 } from '../vendor/pulso-core/src/index.mjs';
@@ -107,6 +108,8 @@ test('adaptador, bridge e painel carregam o contrato integral sem remover o modo
   assert.match(adapter, /item\/completed/);
   assert.match(adapter, /approvalPolicy: integral \? "on-request" : "never"/);
   assert.match(adapter, /mcpServerOpenaiFormElicitation/);
+  assert.match(adapter, /mcpServer\/elicitation\/request/);
+  assert.match(adapter, /apps\._default\.default_tools_approval_mode/);
   assert.match(bridge, /access\.mode\.read/);
   assert.match(bridge, /access\.mode\.set/);
   assert.match(bridge, /PrivateMemoryProvider/);
@@ -157,6 +160,42 @@ test('política integral separa oficina reversível de fronteiras humanas sensí
   assert.equal(external.risk, 'external_action');
   assert.deepEqual(approvalDecisionResult('item/fileChange/requestApproval', 'approve'), { decision: 'acceptForSession' });
   assert.deepEqual(approvalDecisionResult('item/fileChange/requestApproval', 'decline'), { decision: 'decline' });
+});
+
+test('conectores são identificados e autorizados antes da execução com fronteiras contextuais', () => {
+  const readParams = {
+    threadId: 'thread-1',
+    serverName: 'apps',
+    mode: 'form',
+    message: 'Approve Notion fetch',
+    requestedSchema: { type: 'object', properties: {} },
+    _meta: {
+      codex_request_type: 'approval_request',
+      codex_approval_kind: 'mcp_tool_call',
+      connector_id: 'notion',
+      tool_name: 'fetch',
+      tool_params: { page_id: 'private' },
+    },
+  };
+  assert.deepEqual(mcpToolIdentity(readParams).capability, 'tool.notion.fetch');
+  const read = classifyApproval({ method: 'mcpServer/elicitation/request', params: readParams });
+  assert.equal(read.requiresHuman, false);
+  assert.equal(read.risk, 'connector_read');
+  assert.equal(read.fingerprint.length, 16);
+
+  const send = classifyApproval({
+    method: 'mcpServer/elicitation/request',
+    params: { ...readParams, message: 'Approve Gmail send', _meta: { ...readParams._meta, connector_id: 'gmail', tool_name: 'send_email' } },
+  });
+  assert.equal(send.requiresHuman, true);
+  assert.equal(send.risk, 'external_action');
+
+  const ordinaryForm = classifyApproval({
+    method: 'mcpServer/elicitation/request',
+    params: { mode: 'form', serverName: 'custom', message: 'Provide a value', requestedSchema: { type: 'object', properties: { value: { type: 'string' } } } },
+  });
+  assert.equal(ordinaryForm.requiresHuman, true);
+  assert.equal(ordinaryForm.risk, 'human_input');
 });
 
 test('empacotador privado mantém identidade e memória fora do bundle público', () => {

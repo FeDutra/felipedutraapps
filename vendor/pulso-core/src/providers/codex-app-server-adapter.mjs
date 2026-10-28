@@ -216,6 +216,7 @@ export class CodexAppServerClient {
     this.pending = new Map();
     this.events = new EventEmitter();
     this.pendingApprovals = new Map();
+    this.threadPolicies = new Map();
     this.approvalSequence = 0;
     this.initialized = false;
     this.closed = false;
@@ -310,6 +311,7 @@ export class CodexAppServerClient {
       "item/fileChange/requestApproval",
       "item/permissions/requestApproval",
       "item/tool/requestUserInput",
+      "mcpServer/elicitation/request",
     ]);
     if (approvalMethods.has(method)) {
       const approvalId = String(params.approvalId || params.itemId || params.callId || `approval_${++this.approvalSequence}`);
@@ -317,6 +319,33 @@ export class CodexAppServerClient {
       const requestedAt = new Date().toISOString();
       const receipt = sanitizeApproval({ approvalId, method, params, classification, requestedAt });
       this.events.emit("tool.approval.requested", receipt);
+
+      const policy = params.threadId ? this.threadPolicies.get(String(params.threadId)) : null;
+      if (method === "mcpServer/elicitation/request" && classification.mcpToolApproval && typeof policy?.authorizeTool === "function") {
+        try {
+          await policy.authorizeTool({
+            capability: classification.capability,
+            source: classification.source,
+            tool: classification.tool,
+            risk: classification.risk,
+            inputFingerprint: classification.fingerprint,
+          });
+        } catch (error) {
+          const result = approvalDecisionResult(method, "decline", params);
+          this.#write({ id: message.id, result });
+          this.events.emit("tool.approval.resolved", sanitizeApproval({
+            approvalId,
+            method,
+            params,
+            classification,
+            status: "declined",
+            decision: "decline",
+            requestedAt,
+            resolvedAt: new Date().toISOString(),
+          }));
+          return;
+        }
+      }
 
       if (!classification.requiresHuman) {
         const result = approvalDecisionResult(method, "acceptForSession", params);
@@ -388,6 +417,13 @@ export class CodexAppServerClient {
       } else {
         this.#write({ id: pending.requestId, error: { code: -32002, message: "PULSO operator declined user input" } });
       }
+    } else if (pending.method === "mcpServer/elicitation/request") {
+      const approved = ["approve", "accept", "acceptForSession"].includes(decision);
+      result = {
+        action: approved ? "accept" : "decline",
+        content: approved && answers && typeof answers === "object" ? answers : (approved ? {} : null),
+        _meta: null,
+      };
     } else {
       result = approvalDecisionResult(pending.method, decision, pending.params);
     }
@@ -419,6 +455,7 @@ export class CodexAppServerClient {
     this.pending.clear();
     for (const pending of this.pendingApprovals.values()) clearTimeout(pending.timer);
     this.pendingApprovals.clear();
+    this.threadPolicies.clear();
     this.events.emit("closed", safeError);
   }
 
@@ -476,7 +513,7 @@ export class CodexAppServerClient {
     return this.request("model/list", { includeHidden: false });
   }
 
-  async *streamCompletion({ model, systemPrompt = null, input, signal = null } = {}) {
+  async *streamCompletion({ model, systemPrompt = null, input, signal = null, authorizeTool = null } = {}) {
     await this.start();
     const account = await this.accountRead({ refreshToken: true });
     invariant(account?.account?.type === "chatgpt", "codex_chatgpt_login_required");
@@ -526,12 +563,19 @@ export class CodexAppServerClient {
         cwd: this.workspaceDir,
         sandbox: integral ? "danger-full-access" : "read-only",
         approvalPolicy: integral ? "on-request" : "never",
+        config: integral ? {
+          "apps._default.approvals_reviewer": "user",
+          "apps._default.default_tools_approval_mode": "prompt",
+        } : null,
         ephemeral: true,
         baseInstructions: systemPrompt || null,
         developerInstructions: integral ? integralDeveloperInstructions() : restrictedDeveloperInstructions(),
       });
       threadId = threadResult?.thread?.id;
       invariant(threadId, "codex_thread_id_missing");
+      this.threadPolicies.set(String(threadId), {
+        authorizeTool: typeof authorizeTool === "function" ? authorizeTool : null,
+      });
 
       const turnResult = await this.request("turn/start", {
         threadId,
@@ -567,6 +611,7 @@ export class CodexAppServerClient {
         }
       }
     } finally {
+      if (threadId) this.threadPolicies.delete(String(threadId));
       this.events.off("notification", onNotification);
       this.events.off("tool.approval.requested", onApprovalRequested);
       this.events.off("tool.approval.resolved", onApprovalResolved);
@@ -678,6 +723,7 @@ export class CodexSubscriptionAdapter extends ModelProvider {
       systemPrompt,
       input,
       signal: request.signal ?? null,
+      authorizeTool: request.authorizeTool ?? null,
     })) {
       if (event.type === "delta") {
         threadId = event.threadId ?? threadId;
@@ -702,7 +748,7 @@ export class CodexSubscriptionAdapter extends ModelProvider {
           providerId: this.id,
           adapterKind: this.adapterKind,
           model,
-          receipt: event.receipt,
+          receipt: { ...(event.receipt || {}), providerId: this.id },
         };
       } else if (event.type === "completed") {
         threadId = event.threadId ?? threadId;

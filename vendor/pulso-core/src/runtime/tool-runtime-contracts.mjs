@@ -6,6 +6,8 @@ const DESTRUCTIVE_PATTERN = /(^|\s)(rm\s+-[^\n]*r|trash\s+|git\s+(push|reset\s+-
 const EXTERNAL_MUTATION_PATTERN = /(^|\s)(curl|wget)\b[^\n]*(--request|-X)\s*(POST|PUT|PATCH|DELETE)|\b(gh\s+pr\s+(create|merge)|osascript|open\s+https?:|ssh\s+)/i;
 const MONEY_PATTERN = /\b(payment|pagamento|pix|transfer|transferência|invoice|fatura|checkout|stripe)\b/i;
 const COMMUNICATION_PATTERN = /\b(send|enviar|post|publish|publicar|reply|responder|message|mensagem|whatsapp|telegram|email|gmail)\b/i;
+const CONNECTOR_SENSITIVE_PATTERN = /\b(send|reply|post|publish|share|invite|delete|remove|archive|trash|transfer|payment|checkout|credential|password|secret|token|permission|grant|revoke)\b/i;
+const CONNECTOR_WRITE_PATTERN = /\b(create|update|edit|append|insert|draft|move|rename|set|write|add|upload)\b/i;
 
 function text(value, limit = 240) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
@@ -13,6 +15,30 @@ function text(value, limit = 240) {
 
 function fingerprint(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex").slice(0, 16);
+}
+
+function capabilityPart(value, fallback) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120);
+  return normalized || fallback;
+}
+
+export function mcpToolIdentity(params = {}) {
+  const meta = params?._meta && typeof params._meta === "object" ? params._meta : {};
+  const source = capabilityPart(meta.connector_id || params.serverName || "mcp", "mcp");
+  const tool = capabilityPart(meta.tool_name || "connector_tool", "connector_tool");
+  return {
+    source,
+    tool,
+    capability: `tool.${source}.${tool}`,
+    sensitive: meta.codex_sensitive_action === true,
+    mcpToolApproval: meta.codex_approval_kind === "mcp_tool_call" && meta.codex_request_type === "approval_request",
+    fingerprint: fingerprint(JSON.stringify(meta.tool_params ?? {})),
+  };
 }
 
 function insideRoot(candidate, root) {
@@ -97,6 +123,25 @@ export function classifyApproval({ method, params = {}, workspaceDir = null } = 
   let requiresHuman = false;
   let rationale = "ação técnica reversível dentro da oficina privada";
 
+  if (method === "mcpServer/elicitation/request") {
+    const identity = mcpToolIdentity(params);
+    const mode = String(params.mode || "form");
+    const schemaText = JSON.stringify(params.requestedSchema || {});
+    const descriptor = `${identity.source} ${identity.tool} ${String(params.message || "")}`;
+    if (!identity.mcpToolApproval) {
+      return { risk: "human_input", requiresHuman: true, rationale: "o conector pediu uma decisão ou dado humano", ...identity };
+    }
+    if (mode === "openai/userVerification" || mode === "url" || SECRET_PATTERN.test(schemaText)) {
+      return { risk: "credentials", requiresHuman: true, rationale: "o conector pediu verificação ou entrada sensível", ...identity };
+    }
+    if (identity.sensitive || CONNECTOR_SENSITIVE_PATTERN.test(descriptor)) {
+      return { risk: "external_action", requiresHuman: true, rationale: "a ferramenta pode comunicar, remover, compartilhar ou produzir efeito externo sensível", ...identity };
+    }
+    if (CONNECTOR_WRITE_PATTERN.test(descriptor)) {
+      return { risk: "reversible_external_write", requiresHuman: false, rationale: "alteração externa reversível dentro do escopo autorizado", ...identity };
+    }
+    return { risk: "connector_read", requiresHuman: false, rationale: "consulta de leitura em conector autorizado", ...identity };
+  }
   if (method === "item/tool/requestUserInput") {
     return { risk: "human_input", requiresHuman: true, rationale: "a ferramenta pediu uma decisão humana" };
   }
@@ -159,6 +204,10 @@ export function sanitizeApproval({ approvalId, method, params = {}, classificati
     threadId: text(params.threadId, 180) || null,
     turnId: text(params.turnId, 180) || null,
     method: text(method, 180),
+    source: classification?.source || null,
+    tool: classification?.tool || null,
+    capability: classification?.capability || null,
+    inputFingerprint: classification?.fingerprint || null,
     risk: classification?.risk || "technical",
     rationale: text(classification?.rationale || "decisão necessária", 240),
     status,
@@ -181,6 +230,9 @@ export function approvalDecisionResult(method, decision, params = {}) {
     return approved
       ? { permissions: requestedPermissions, scope: "turn", strictAutoReview: true }
       : { permissions: {}, scope: "turn", strictAutoReview: true };
+  }
+  if (method === "mcpServer/elicitation/request") {
+    return { action: approved ? "accept" : "decline", content: approved ? {} : null, _meta: null };
   }
   return null;
 }
