@@ -58,7 +58,9 @@ test('iPhone CI uses the available Intel Apple runner with matching simulator ta
   assert.match(workflow, /runs-on: macos-15-intel/);
   assert.match(workflow, /targets: aarch64-apple-ios,x86_64-apple-ios/);
   assert.match(workflow, /DEVICE_NAME=.*"\$UDID"/);
-  assert.match(workflow, /tauri ios run --no-watch "\$DEVICE_NAME"/);
+  assert.match(workflow, /beforeBuildCommand/);
+  assert.match(workflow, /tauri ios run --no-watch --config \/tmp\/pulso-ios-simulator\.conf\.json "\$DEVICE_NAME"/);
+  assert.match(workflow, /seq 1 600/);
   assert.match(workflow, /simctl get_app_container "\$UDID" com\.felipedutraapps\.pulso\.ios\.canary app/);
   assert.doesNotMatch(workflow, /tauri ios build --ci --debug --no-sign --target x86_64/);
   assert.doesNotMatch(workflow, /xcodebuild \\/);
