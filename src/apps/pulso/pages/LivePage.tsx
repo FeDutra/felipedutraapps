@@ -57,6 +57,15 @@ interface SortableChatItemDesktopProps {
 // a limitação de forma humana em vez de expor infraestrutura.
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
 
+const humanDecisionLabel = (risk?: string) => ({
+  external_action: 'envio ou publicação',
+  external_commitment: 'compromisso externo',
+  credentials: 'verificação de acesso',
+  money: 'movimentação financeira',
+  destructive: 'ação irreversível',
+  human_input: 'informação necessária',
+}[String(risk || '')] || 'confirmação necessária');
+
 const isTauriRuntime = () => typeof window !== 'undefined' && (
   window.location.protocol === 'tauri:'
   || window.location.protocol === 'file:'
@@ -7619,7 +7628,7 @@ ${data.transcription}`, {
                       {isLotus && msg.toolApproval && (
                         <div className={`mt-3 text-left ${msg.toolApproval.status === 'pending' ? 'rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 backdrop-blur-xl' : 'py-1'}`}>
                           <p className={`text-[8px] tracking-[0.22em] uppercase ${msg.toolApproval.status === 'pending' ? 'text-[#b8283e]/80' : 'text-white/25'}`}>
-                            {msg.toolApproval.status === 'pending' ? `decisão humana · ${msg.toolApproval.risk}` : `decisão ${msg.toolApproval.status === 'approved' ? 'autorizada' : msg.toolApproval.status}`}
+                            {msg.toolApproval.status === 'pending' ? `sua confirmação · ${humanDecisionLabel(msg.toolApproval.risk)}` : `decisão ${msg.toolApproval.status === 'approved' ? 'autorizada' : msg.toolApproval.status}`}
                           </p>
                           {msg.toolApproval.status === 'pending' && (
                           <p className="mt-1 text-[11px] leading-relaxed text-[#fbf9f5]/70">{msg.toolApproval.rationale}</p>
