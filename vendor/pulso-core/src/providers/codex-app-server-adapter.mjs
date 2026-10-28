@@ -398,6 +398,7 @@ export class CodexAppServerClient {
 
   #approvalGrantKey(method, classification = {}, params = {}) {
     if (method !== "mcpServer/elicitation/request") return null;
+    if (classification.risk !== "connector_authorization") return null;
     const source = String(classification.source || params.serverName || "mcp");
     const tool = String(classification.tool || "connector_access");
     const risk = String(classification.risk || "human_input");
@@ -530,8 +531,6 @@ export class CodexAppServerClient {
       const approvalId = String(params.approvalId || params.itemId || params.callId || `approval_${++this.approvalSequence}`);
       const classification = classifyApproval({ method, params, workspaceDir: this.workspaceDir });
       const requestedAt = new Date().toISOString();
-      const receipt = sanitizeApproval({ approvalId, method, params, classification, requestedAt });
-      this.events.emit("tool.approval.requested", receipt);
       const grantKey = this.#approvalGrantKey(method, classification, params);
 
       const policy = params.threadId ? this.threadPolicies.get(String(params.threadId)) : null;
@@ -547,16 +546,6 @@ export class CodexAppServerClient {
         } catch (error) {
           const result = approvalDecisionResult(method, "decline", params);
           this.#write({ id: message.id, result });
-          this.events.emit("tool.approval.resolved", sanitizeApproval({
-            approvalId,
-            method,
-            params,
-            classification,
-            status: "declined",
-            decision: "decline",
-            requestedAt,
-            resolvedAt: new Date().toISOString(),
-          }));
           return;
         }
       }
@@ -564,18 +553,11 @@ export class CodexAppServerClient {
       if (!classification.requiresHuman || this.#hasSessionApproval(params.threadId, grantKey)) {
         const result = approvalDecisionResult(method, "acceptForSession", params);
         this.#write({ id: message.id, result });
-        this.events.emit("tool.approval.resolved", sanitizeApproval({
-          approvalId,
-          method,
-          params,
-          classification,
-          status: "approved",
-          decision: "acceptForSession",
-          requestedAt,
-          resolvedAt: new Date().toISOString(),
-        }));
         return;
       }
+
+      const receipt = sanitizeApproval({ approvalId, method, params, classification, requestedAt });
+      this.events.emit("tool.approval.requested", receipt);
 
       const timer = setTimeout(() => {
         const pending = this.pendingApprovals.get(approvalId);

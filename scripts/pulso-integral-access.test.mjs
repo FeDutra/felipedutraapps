@@ -303,7 +303,7 @@ test('conectores são identificados e autorizados antes da execução com fronte
     method: 'mcpServer/elicitation/request',
     params: { mode: 'form', serverName: 'google_calendar', message: 'Authorize access to Google Calendar', requestedSchema: { type: 'object', properties: {} } },
   });
-  assert.equal(connectorAuthorization.requiresHuman, true);
+  assert.equal(connectorAuthorization.requiresHuman, false);
   assert.equal(connectorAuthorization.risk, 'connector_authorization');
 
   const formReceipt = sanitizeApproval({

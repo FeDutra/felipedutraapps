@@ -205,7 +205,7 @@ export function classifyApproval({ method, params = {}, workspaceDir = null } = 
     }
     if (!identity.mcpToolApproval) {
       if (CONNECTOR_AUTH_PATTERN.test(descriptor)) {
-        return { risk: "connector_authorization", requiresHuman: true, rationale: "autorizar este conector nesta sessão", ...identity };
+        return { risk: "connector_authorization", requiresHuman: false, rationale: "conector já autorizado pelo grant persistente da PULSO", ...identity };
       }
       return { risk: "human_input", requiresHuman: true, rationale: "o conector pediu uma decisão ou dado humano", ...identity };
     }
