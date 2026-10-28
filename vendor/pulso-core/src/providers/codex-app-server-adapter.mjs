@@ -175,6 +175,8 @@ export function normalizeDynamicToolDefinitions(definitions = []) {
       capability: String(definition.capability || `tool.dynamic.${name}`),
       source: String(definition.source || "pulso_operator"),
       risk: String(definition.risk || "technical"),
+      requiresHuman: definition.requiresHuman === true,
+      rationale: boundedText(definition.rationale || "a ação produzirá efeito externo", 240),
     });
   });
 }
@@ -311,6 +313,7 @@ export class CodexAppServerClient {
     this.pending = new Map();
     this.events = new EventEmitter();
     this.pendingApprovals = new Map();
+    this.sessionApprovalGrants = new Map();
     this.threadPolicies = new Map();
     this.approvalSequence = 0;
     this.initialized = false;
@@ -393,6 +396,28 @@ export class CodexAppServerClient {
     return this.accessModeStore?.read?.() ?? { mode: "restricted" };
   }
 
+  #approvalGrantKey(method, classification = {}, params = {}) {
+    if (method !== "mcpServer/elicitation/request") return null;
+    const source = String(classification.source || params.serverName || "mcp");
+    const tool = String(classification.tool || "connector_access");
+    const risk = String(classification.risk || "human_input");
+    const descriptor = boundedText(`${params.message || ""}|${JSON.stringify(params.requestedSchema || {})}`, 2_000);
+    return `${source}:${tool}:${risk}:${descriptor}`;
+  }
+
+  #hasSessionApproval(threadId, grantKey) {
+    if (!threadId || !grantKey) return false;
+    return this.sessionApprovalGrants.get(String(threadId))?.has(grantKey) === true;
+  }
+
+  #rememberSessionApproval(threadId, grantKey) {
+    if (!threadId || !grantKey) return;
+    const key = String(threadId);
+    const grants = this.sessionApprovalGrants.get(key) || new Set();
+    grants.add(grantKey);
+    this.sessionApprovalGrants.set(key, grants);
+  }
+
   async #handleServerRequest(message) {
     const access = this.#access();
     if (access.mode !== "integral") {
@@ -413,7 +438,7 @@ export class CodexAppServerClient {
         this.#write({ id: message.id, result: normalizeDynamicToolResult({ success: false, text: "Execução cancelada." }) });
         return;
       }
-      try {
+      const executeDynamicTool = async () => {
         if (typeof policy.authorizeTool === "function") {
           await policy.authorizeTool({
             capability: definition.capability,
@@ -436,6 +461,58 @@ export class CodexAppServerClient {
           risk: definition.risk,
         });
         this.#write({ id: message.id, result: normalizeDynamicToolResult(output) });
+      };
+      if (definition.requiresHuman === true) {
+        const approvalId = String(params.callId || `dynamic_${++this.approvalSequence}`);
+        const requestedAt = new Date().toISOString();
+        const classification = {
+          risk: definition.risk,
+          requiresHuman: true,
+          rationale: definition.rationale,
+          source: definition.source,
+          tool: definition.name,
+          capability: definition.capability,
+        };
+        const approvalParams = { ...params, approvalId, itemId: params.callId || approvalId };
+        this.events.emit("tool.approval.requested", sanitizeApproval({
+          approvalId,
+          method: "pulso/dynamicTool/requestApproval",
+          params: approvalParams,
+          classification,
+          requestedAt,
+        }));
+        const timer = setTimeout(() => {
+          const pending = this.pendingApprovals.get(approvalId);
+          if (!pending) return;
+          this.pendingApprovals.delete(approvalId);
+          if (this.child?.stdin?.writable) {
+            this.#write({ id: pending.requestId, result: normalizeDynamicToolResult({ success: false, text: "Envio não realizado: decisão expirada." }) });
+          }
+          this.events.emit("tool.approval.resolved", sanitizeApproval({
+            approvalId,
+            method: pending.method,
+            params: pending.params,
+            classification: pending.classification,
+            status: "expired",
+            decision: "decline",
+            requestedAt,
+            resolvedAt: new Date().toISOString(),
+          }));
+        }, APPROVAL_TIMEOUT_MS);
+        this.pendingApprovals.set(approvalId, {
+          approvalId,
+          requestId: message.id,
+          method: "pulso/dynamicTool/requestApproval",
+          params: approvalParams,
+          classification,
+          requestedAt,
+          timer,
+          executeDynamicTool,
+        });
+        return;
+      }
+      try {
+        await executeDynamicTool();
       } catch (error) {
         const code = boundedText(error?.code || "operator_tool_failed", 120);
         this.#write({ id: message.id, result: normalizeDynamicToolResult({ success: false, text: `Falha controlada: ${code}` }) });
@@ -455,6 +532,7 @@ export class CodexAppServerClient {
       const requestedAt = new Date().toISOString();
       const receipt = sanitizeApproval({ approvalId, method, params, classification, requestedAt });
       this.events.emit("tool.approval.requested", receipt);
+      const grantKey = this.#approvalGrantKey(method, classification, params);
 
       const policy = params.threadId ? this.threadPolicies.get(String(params.threadId)) : null;
       if (method === "mcpServer/elicitation/request" && classification.mcpToolApproval && typeof policy?.authorizeTool === "function") {
@@ -483,7 +561,7 @@ export class CodexAppServerClient {
         }
       }
 
-      if (!classification.requiresHuman) {
+      if (!classification.requiresHuman || this.#hasSessionApproval(params.threadId, grantKey)) {
         const result = approvalDecisionResult(method, "acceptForSession", params);
         this.#write({ id: message.id, result });
         this.events.emit("tool.approval.resolved", sanitizeApproval({
@@ -525,6 +603,7 @@ export class CodexAppServerClient {
         classification,
         requestedAt,
         timer,
+        grantKey,
       });
       return;
     }
@@ -541,13 +620,26 @@ export class CodexAppServerClient {
     }));
   }
 
-  resolveApproval(approvalId, { decision = "decline", answers = null } = {}) {
+  async resolveApproval(approvalId, { decision = "decline", answers = null } = {}) {
     const pending = this.pendingApprovals.get(String(approvalId));
     invariant(pending, `tool_approval_not_found:${approvalId}`);
     this.pendingApprovals.delete(String(approvalId));
     clearTimeout(pending.timer);
     let result = null;
-    if (pending.method === "item/tool/requestUserInput") {
+    if (pending.method === "pulso/dynamicTool/requestApproval") {
+      const approved = ["approve", "accept", "acceptForSession"].includes(decision);
+      if (approved) {
+        try {
+          await pending.executeDynamicTool();
+        } catch (error) {
+          const code = boundedText(error?.code || "operator_tool_failed", 120);
+          this.#write({ id: pending.requestId, result: normalizeDynamicToolResult({ success: false, text: `Falha controlada: ${code}` }) });
+          decision = "decline";
+        }
+      } else {
+        this.#write({ id: pending.requestId, result: normalizeDynamicToolResult({ success: false, text: "Envio não realizado: decisão recusada." }) });
+      }
+    } else if (pending.method === "item/tool/requestUserInput") {
       if (["approve", "accept", "acceptForSession"].includes(decision) && answers && typeof answers === "object") {
         result = { answers };
       } else {
@@ -565,6 +657,9 @@ export class CodexAppServerClient {
     }
     if (result) this.#write({ id: pending.requestId, result });
     const approved = ["approve", "accept", "acceptForSession"].includes(decision);
+    if (approved && pending.grantKey) {
+      this.#rememberSessionApproval(pending.params?.threadId, pending.grantKey);
+    }
     const receipt = sanitizeApproval({
       approvalId: pending.approvalId,
       method: pending.method,

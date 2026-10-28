@@ -15,8 +15,9 @@ export const connectorCapabilities = Object.freeze({
     "tool.connector_5f3c8c41a1e54ad7a76272c89e2554fa.connector_tool",
     "tool.codex_apps.google_drive.*",
   ]),
-  whatsapp: Object.freeze(["tool.whatsapp.read", "tool.whatsapp.prepare"]),
+  whatsapp: Object.freeze(["tool.whatsapp.read", "tool.whatsapp.prepare", "tool.whatsapp.send"]),
   devices: Object.freeze(["tool.devices.status"]),
+  jobs: Object.freeze(["tool.jobs.read", "tool.jobs.write", "tool.jobs.run"]),
 });
 
 function capabilities(...groups) {
@@ -24,16 +25,15 @@ function capabilities(...groups) {
 }
 
 export const agentToolGrantMatrix = Object.freeze({
-  agent_lotus: capabilities("notion", "gmail", "calendar", "drive", "whatsapp", "devices"),
+  agent_lotus: capabilities("notion", "gmail", "calendar", "drive", "whatsapp", "devices", "jobs"),
   "agent_lotus-conversa": capabilities("notion", "drive"),
   "agent_lotus-crm-atendimento": capabilities("notion", "gmail", "calendar", "drive", "whatsapp"),
   agent_designer: capabilities("notion", "drive"),
   agent_audiovisual: capabilities("notion", "drive"),
-  "agent_engenharia-produto": capabilities("notion", "drive", "devices"),
+  "agent_engenharia-produto": capabilities("notion", "drive", "devices", "jobs"),
   agent_comunicacao: capabilities("notion", "gmail", "drive", "whatsapp"),
   "agent_experiencia-cliente": capabilities("notion", "gmail", "calendar", "drive", "whatsapp"),
   agent_trafego: capabilities("notion", "gmail", "drive"),
   agent_financeiro: capabilities("notion", "gmail", "calendar", "drive"),
   "agent_social-media": capabilities("notion", "gmail", "drive", "whatsapp"),
 });
-

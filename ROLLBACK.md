@@ -1,3 +1,26 @@
+# Rollback — autonomia persistente e integrações operacionais (28/10/2026)
+
+- Baseline homologada no MacBook: `49dcea83b0d4c77c31b3baacb6b35fab1be661d2`.
+- Escopo: operador persistente, ferramentas de WhatsApp/jobs/dispositivos na sessão
+  normal, política de autorização por consequência e compactação visual de decisões.
+- OpenClaw permanece executor subordinado de WhatsApp, jobs e canais durante o corte.
+- Nenhum job legado é ativado, desativado ou duplicado em lote.
+- Segredos do operador permanecem no host e no Chaves do macOS; nunca entram no Git,
+  SQLite, recibos, argumentos de ferramenta ou texto de conversa.
+
+## Reversão
+
+1. Encerrar somente a PULSO Next Preview e seus sidecars.
+2. Preservar bundle, banco, journal e recibos da candidata para auditoria.
+3. Restaurar o bundle `49dcea83…` guardado no rollback local do Mac.
+4. Desativar somente o serviço HTTP do operador integral, mantendo o Operator Bridge
+   anterior e o Gateway oficial ativos.
+5. Reabrir e conferir SQLite, sessões, agentes, sincronização e integrações anteriores.
+6. Não repetir envios ou execuções de jobs durante a reversão; efeitos confirmados são
+   preservados e qualquer compensação exige uma ação nova e explícita.
+
+---
+
 # Rollback — runtime integral de ferramentas e recibos nativos (28/10/2026)
 
 - Baseline: `a4761226bcffbd0b220ab699efda4ed136099dca` (`pulso-desktop-alpha-v0.9.0-rc.18`).

@@ -1171,6 +1171,11 @@ const coreSessionToContextNode = (session: PulsoLiveSession): PulsoContextNode =
   updatedAt: new Date(session.updatedAt),
 });
 
+const isTechnicalCanarySession = (session: PulsoLiveSession) => {
+  const descriptor = `${session.id} ${session.titulo}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /(^|[_\s-])canari(?:a|o)([_\s-]|$)/.test(descriptor);
+};
+
 const coreAreaToLegacyArea = (area: PulsoLiveArea) => ({
   id: area.id,
   name: area.nome,
@@ -1916,7 +1921,7 @@ export default function LivePage() {
             navigation.sessions.map(session => [session.id, [...(session.participantAgentIds || [])]])
           ));
           const visibleSessions = navigation.sessions
-            .filter(session => session.estado === 'active')
+            .filter(session => session.estado === 'active' && !isTechnicalCanarySession(session))
             .map(coreSessionToContextNode);
           setSessions(visibleSessions.length > 0 ? visibleSessions : [LOADING_PLACEHOLDER_NODE]);
           setState((previous: any) => ({
@@ -2586,7 +2591,7 @@ export default function LivePage() {
       ...(run.toolApprovals || []).map(approval => ({
         id: `core-${run.id}-approval-${approval.approvalId}`,
         sender: 'lotus' as const,
-        text: approval.status === 'pending' ? approval.rationale : `decisão ${approval.status}`,
+        text: approval.status === 'pending' ? 'decisão necessária' : '',
         timestamp: approval.occurredAt ? new Date(approval.occurredAt) : new Date(run.updatedAt),
         contextId,
         agentId: (approval as any).agentId?.replace(/^agent_/, '') || undefined,
@@ -7612,14 +7617,18 @@ ${data.transcription}`, {
                       )}
 
                       {isLotus && msg.toolApproval && (
-                        <div className="mt-3 py-2 text-left bg-transparent">
-                          <p className="text-[8px] tracking-[0.22em] uppercase text-[#e3a36a]/70">decisão humana · {msg.toolApproval.risk}</p>
+                        <div className={`mt-3 text-left ${msg.toolApproval.status === 'pending' ? 'rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 backdrop-blur-xl' : 'py-1'}`}>
+                          <p className={`text-[8px] tracking-[0.22em] uppercase ${msg.toolApproval.status === 'pending' ? 'text-[#b8283e]/80' : 'text-white/25'}`}>
+                            {msg.toolApproval.status === 'pending' ? `decisão humana · ${msg.toolApproval.risk}` : `decisão ${msg.toolApproval.status === 'approved' ? 'autorizada' : msg.toolApproval.status}`}
+                          </p>
+                          {msg.toolApproval.status === 'pending' && (
                           <p className="mt-1 text-[11px] leading-relaxed text-[#fbf9f5]/70">{msg.toolApproval.rationale}</p>
+                          )}
                           {msg.toolApproval.status === 'pending' && (msg.toolApproval.questions || []).map(question => (
                             <div key={question.id} className="mt-3">
                               <p className="text-[10px] leading-relaxed text-[#fbf9f5]/65">{question.question}</p>
                               {question.isSecret ? (
-                                <p className="mt-1 text-[9px] text-[#e3a36a]/60">entrada segura necessária — não será coletada no chat</p>
+                                <p className="mt-1 text-[9px] text-[#b8283e]/65">entrada segura necessária — não será coletada no chat</p>
                               ) : question.options.length === 0 ? (
                                 <input
                                   type="text"
@@ -7629,7 +7638,7 @@ ${data.transcription}`, {
                                     [msg.id]: { ...(previous[msg.id] || {}), [question.id]: event.target.value },
                                   }))}
                                   placeholder="responda para continuar"
-                                  className="mt-2 w-full max-w-md border-0 border-b border-white/15 bg-transparent px-0 py-1 text-[10px] text-[#fbf9f5]/80 outline-none placeholder:text-white/25 focus:border-[#e3a36a]/50"
+                                  className="mt-2 w-full max-w-md border-0 border-b border-white/15 bg-transparent px-0 py-1 text-[10px] text-[#fbf9f5]/80 outline-none placeholder:text-white/25 focus:border-[#b8283e]/60"
                                 />
                               ) : (
                                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
@@ -7644,7 +7653,7 @@ ${data.transcription}`, {
                                           ...previous,
                                           [msg.id]: { ...(previous[msg.id] || {}), [question.id]: option.label },
                                         }))}
-                                        className={`bg-transparent border-none p-0 text-[9px] tracking-[0.12em] uppercase cursor-pointer ${selected ? 'text-[#f2c08f]' : 'text-white/40 hover:text-white/70'}`}
+                                        className={`bg-transparent border-none p-0 text-[9px] tracking-[0.12em] uppercase cursor-pointer ${selected ? 'text-[#b8283e]' : 'text-white/40 hover:text-white/70'}`}
                                       >
                                         {selected ? '● ' : '○ '}{option.label}
                                       </button>
@@ -7660,7 +7669,7 @@ ${data.transcription}`, {
                                 type="button"
                                 onClick={() => handleCoreToolDecision(msg, 'approve')}
                                 disabled={submittingApprovalId === msg.id}
-                                className="bg-transparent border-none p-0 text-[9px] tracking-[0.16em] uppercase text-[#e3a36a]/80 hover:text-[#f2c08f] cursor-pointer disabled:opacity-30"
+                                className="bg-transparent border-none p-0 text-[9px] tracking-[0.16em] uppercase text-[#b8283e]/85 hover:text-[#fbf9f5] cursor-pointer disabled:opacity-30"
                               >
                                 {submittingApprovalId === msg.id ? 'registrando…' : 'autorizar'}
                               </button>
@@ -7673,9 +7682,7 @@ ${data.transcription}`, {
                                 recusar
                               </button>
                             </div>
-                          ) : (
-                            <p className="mt-2 text-[8px] tracking-[0.18em] uppercase text-white/30">{msg.toolApproval.status}</p>
-                          )}
+                          ) : null}
                         </div>
                       )}
 

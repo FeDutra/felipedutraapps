@@ -8,6 +8,7 @@ const MONEY_PATTERN = /\b(payment|pagamento|pix|transfer|transferência|invoice|
 const COMMUNICATION_PATTERN = /\b(send|enviar|post|publish|publicar|reply|responder|message|mensagem|whatsapp|telegram|email|gmail)\b/i;
 const CONNECTOR_SENSITIVE_PATTERN = /\b(send|reply|post|publish|share|invite|delete|remove|archive|trash|transfer|payment|checkout|credential|password|secret|token|permission|grant|revoke)\b/i;
 const CONNECTOR_WRITE_PATTERN = /\b(create|update|edit|append|insert|draft|move|rename|set|write|add|upload)\b/i;
+const CONNECTOR_AUTH_PATTERN = /\b(authoriz(?:e|ation)?|autoriz(?:ar|ação|acao)?|connect|conectar|access|acesso|sign[ -]?in|login|allow|permit)\b/i;
 
 function text(value, limit = 240) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
@@ -145,6 +146,10 @@ export function normalizeToolItem(item = {}, phase = "started", options = {}) {
   if (type === "mcpToolCall") {
     const tool = text(item.tool || "mcp_tool", 120);
     const source = text(item.server || item.appContext?.connectorId || "mcp", 120);
+    const failure = item.error || item.result?.error || item.output?.error || null;
+    const errorCode = failure
+      ? text(failure.code || failure.type || failure.message || failure, 180)
+      : (!["completed", "inProgress"].includes(String(item.status || "")) ? text(item.status, 180) : null);
     return {
       ...common,
       tool,
@@ -152,8 +157,8 @@ export function normalizeToolItem(item = {}, phase = "started", options = {}) {
       capability: `tool.${source}.${tool}`,
       target: text(item.appContext?.displayName || item.server || "conector", 160),
       action: "connector_call",
-      success: phase === "completed" ? item.status === "completed" && !item.error : null,
-      errorCode: item.error ? text(item.error.code || item.error.message || "tool_failed", 120) : null,
+      success: phase === "completed" ? item.status === "completed" && !failure : null,
+      errorCode,
     };
   }
   if (type === "dynamicToolCall") {
@@ -195,11 +200,14 @@ export function classifyApproval({ method, params = {}, workspaceDir = null } = 
     const mode = String(params.mode || "form");
     const schemaText = JSON.stringify(params.requestedSchema || {});
     const descriptor = `${identity.source} ${identity.tool} ${String(params.message || "")}`;
-    if (!identity.mcpToolApproval) {
-      return { risk: "human_input", requiresHuman: true, rationale: "o conector pediu uma decisão ou dado humano", ...identity };
-    }
     if (mode === "openai/userVerification" || mode === "url" || SECRET_PATTERN.test(schemaText)) {
       return { risk: "credentials", requiresHuman: true, rationale: "o conector pediu verificação ou entrada sensível", ...identity };
+    }
+    if (!identity.mcpToolApproval) {
+      if (CONNECTOR_AUTH_PATTERN.test(descriptor)) {
+        return { risk: "connector_authorization", requiresHuman: true, rationale: "autorizar este conector nesta sessão", ...identity };
+      }
+      return { risk: "human_input", requiresHuman: true, rationale: "o conector pediu uma decisão ou dado humano", ...identity };
     }
     if (identity.sensitive || CONNECTOR_SENSITIVE_PATTERN.test(descriptor)) {
       return { risk: "external_action", requiresHuman: true, rationale: "a ferramenta pode comunicar, remover, compartilhar ou produzir efeito externo sensível", ...identity };

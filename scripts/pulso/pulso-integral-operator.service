@@ -1,0 +1,22 @@
+[Unit]
+Description=PULSO Integral Operator Gateway
+After=network-online.target openclaw-gateway.service wacli-sync.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/.local/share/pulso-integral-operator/current
+EnvironmentFile=/root/.config/pulso/integral-operator.env
+Environment=PULSO_WACLI_BIN=/root/go/bin/wacli
+Environment=PULSO_OPENCLAW_BIN=/usr/bin/openclaw
+ExecStart=/usr/bin/node /root/.local/share/pulso-integral-operator/current/integral-operator-gateway.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/.local/share/pulso-integral-operator
+
+[Install]
+WantedBy=default.target

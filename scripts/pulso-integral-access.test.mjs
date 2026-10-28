@@ -118,6 +118,8 @@ test('adaptador, bridge e painel carregam o contrato integral sem remover o modo
   assert.match(adapter, /mcpServerOpenaiFormElicitation/);
   assert.match(adapter, /item\/tool\/call/);
   assert.match(adapter, /dynamicTools: integral/);
+  assert.match(adapter, /pulso\/dynamicTool\/requestApproval/);
+  assert.match(adapter, /sessionApprovalGrants/);
   assert.match(adapter, /mcpServer\/elicitation\/request/);
   assert.match(adapter, /apps\._default\.default_tools_approval_mode/);
   assert.match(bridge, /access\.mode\.read/);
@@ -191,7 +193,7 @@ test('ferramentas dinâmicas expõem contrato mínimo e resposta pública limita
   assert.equal(isOperationalToolItem({ type: 'futureSensitiveOperation' }), true);
 });
 
-test('cliente operador mantém WhatsApp em leitura ou minuta e propaga cancelamento', async () => {
+test('cliente operador mantém leitura/minuta autônomas e marca envio como fronteira humana', async () => {
   const calls = [];
   const client = new PulsoOperatorClient({
     endpoint: 'https://operator.test',
@@ -204,7 +206,11 @@ test('cliente operador mantém WhatsApp em leitura ou minuta e propaga cancelame
       });
     },
   });
-  assert.equal(pulsoOperatorDynamicTools().some(tool => /send/i.test(tool.name)), false);
+  const toolDefinitions = pulsoOperatorDynamicTools();
+  const sendTool = toolDefinitions.find(tool => tool.name === 'pulso_operator_whatsapp_send');
+  assert.equal(sendTool.requiresHuman, true);
+  assert.equal(sendTool.risk, 'external_action');
+  assert.equal(toolDefinitions.find(tool => tool.name === 'pulso_operator_jobs_list').risk, 'connector_read');
   const read = await client.execute({
     tool: 'pulso_operator_whatsapp_read',
     arguments: { jid: '5511999788580@s.whatsapp.net', limit: 99 },
@@ -220,6 +226,9 @@ test('cliente operador mantém WhatsApp em leitura ou minuta e propaga cancelame
   assert.equal(prepared.publicResult.status, 'prepared_not_sent');
   assert.equal(prepared.publicResult.sent, false);
   assert.equal(calls.length, 1);
+  const jobs = await client.execute({ tool: 'pulso_operator_jobs_list', arguments: { limit: 999 } });
+  assert.equal(jobs.success, true);
+  assert.equal(JSON.parse(calls[1].options.body).arguments.limit, 200);
 });
 
 test('política integral separa oficina reversível de fronteiras humanas sensíveis', () => {
@@ -289,6 +298,13 @@ test('conectores são identificados e autorizados antes da execução com fronte
   });
   assert.equal(ordinaryForm.requiresHuman, true);
   assert.equal(ordinaryForm.risk, 'human_input');
+
+  const connectorAuthorization = classifyApproval({
+    method: 'mcpServer/elicitation/request',
+    params: { mode: 'form', serverName: 'google_calendar', message: 'Authorize access to Google Calendar', requestedSchema: { type: 'object', properties: {} } },
+  });
+  assert.equal(connectorAuthorization.requiresHuman, true);
+  assert.equal(connectorAuthorization.risk, 'connector_authorization');
 
   const formReceipt = sanitizeApproval({
     approvalId: 'approval-form-1',

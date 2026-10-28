@@ -10,6 +10,7 @@ import { callGatewayFromCli } from "/usr/lib/node_modules/openclaw/dist/plugin-s
 
 const execFileAsync = promisify(execFile);
 const WACLI_BIN = process.env.PULSO_WACLI_BIN || "/root/go/bin/wacli";
+const OPENCLAW_BIN = process.env.PULSO_OPENCLAW_BIN || "/usr/bin/openclaw";
 const BIND_HOST = process.env.PULSO_OPERATOR_BIND || "127.0.0.1";
 const PORT = Number(process.env.PULSO_OPERATOR_PORT || 8767);
 const TOKEN = String(process.env.PULSO_OPERATOR_TOKEN || "");
@@ -119,9 +120,83 @@ async function readDevices() {
   };
 }
 
+function sanitizeJob(job) {
+  const state = job?.state && typeof job.state === "object" ? job.state : {};
+  return {
+    id: text(job?.id || job?.jobId, 180),
+    name: text(job?.name || job?.displayName, 240),
+    description: text(job?.description, 500),
+    enabled: job?.enabled === true,
+    schedule: job?.schedule || null,
+    ownerAgentId: text(job?.owner?.agentId || job?.agentId, 120) || null,
+    payloadKind: text(job?.payload?.kind, 120) || null,
+    model: text(job?.payload?.model, 180) || null,
+    lastRunAtMs: Number(state.lastRunAtMs || job?.lastRunAtMs || 0) || null,
+    nextRunAtMs: Number(state.nextRunAtMs || job?.nextRunAtMs || 0) || null,
+    lastStatus: text(state.lastStatus || state.lastRunStatus || job?.lastStatus, 120) || null,
+    lastError: text(typeof state.lastError === "string" ? state.lastError : state.lastError?.message, 500) || null,
+  };
+}
+
+async function listJobs(args) {
+  const limit = Math.max(1, Math.min(200, Number(args.limit) || 100));
+  const includeDisabled = args.includeDisabled !== false;
+  const response = await callGatewayFromCli("cron.list", { timeout: "10000" }, { includeDisabled, limit, offset: 0 });
+  const jobs = Array.isArray(response?.jobs) ? response.jobs : Array.isArray(response) ? response : [];
+  return { jobs: jobs.map(sanitizeJob), source: "openclaw_gateway" };
+}
+
+async function createJob(args) {
+  if (!args.job || typeof args.job !== "object" || Array.isArray(args.job)) {
+    throw Object.assign(new Error("operator_job_required"), { code: "operator_job_required" });
+  }
+  const response = await callGatewayFromCli("cron.add", { timeout: "15000" }, args.job);
+  return { job: sanitizeJob(response?.job || response), source: "openclaw_gateway" };
+}
+
+async function updateJob(args) {
+  const jobId = text(args.jobId, 180).trim();
+  if (!jobId || !args.patch || typeof args.patch !== "object" || Array.isArray(args.patch)) {
+    throw Object.assign(new Error("operator_job_update_invalid"), { code: "operator_job_update_invalid" });
+  }
+  const response = await callGatewayFromCli("cron.update", { timeout: "15000" }, { id: jobId, patch: args.patch });
+  return { job: sanitizeJob(response?.job || response), source: "openclaw_gateway" };
+}
+
+async function runJob(args) {
+  const jobId = text(args.jobId, 180).trim();
+  if (!jobId) throw Object.assign(new Error("operator_job_id_required"), { code: "operator_job_id_required" });
+  const response = await callGatewayFromCli("cron.run", { timeout: "30000" }, { id: jobId, mode: "force" });
+  return { jobId, accepted: true, result: response ?? null, source: "openclaw_gateway" };
+}
+
+async function sendWhatsApp(args) {
+  const jid = text(args.jid, 96).trim();
+  const message = text(args.message, 8_000).trim();
+  if (!JID_PATTERN.test(jid)) throw Object.assign(new Error("invalid_whatsapp_jid"), { code: "invalid_whatsapp_jid" });
+  if (!message) throw Object.assign(new Error("whatsapp_message_required"), { code: "whatsapp_message_required" });
+  const target = jid.endsWith("@s.whatsapp.net") ? `+${jid.split("@")[0]}` : jid;
+  const command = ["message", "send", "--channel", "whatsapp", "--target", target, "--message", message, "--json"];
+  if (args.replyToMessageId) command.push("--reply-to", text(args.replyToMessageId, 180));
+  const { stdout } = await execFileAsync(OPENCLAW_BIN, command, { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+  const result = JSON.parse(stdout || "{}");
+  return {
+    sent: result?.sent === true || result?.ok === true || Boolean(result?.messageId || result?.id),
+    messageId: text(result?.messageId || result?.id, 180) || null,
+    channel: "whatsapp",
+    target: jid,
+    source: "openclaw_channel",
+  };
+}
+
 async function executeTool(tool, args) {
   if (tool === "pulso_operator_whatsapp_read") return readWhatsApp(args);
   if (tool === "pulso_operator_devices_status") return readDevices();
+  if (tool === "pulso_operator_jobs_list") return listJobs(args);
+  if (tool === "pulso_operator_job_create") return createJob(args);
+  if (tool === "pulso_operator_job_update") return updateJob(args);
+  if (tool === "pulso_operator_job_run") return runJob(args);
+  if (tool === "pulso_operator_whatsapp_send") return sendWhatsApp(args);
   throw Object.assign(new Error(`operator_tool_unsupported:${tool}`), { code: "operator_tool_unsupported" });
 }
 
@@ -135,7 +210,7 @@ export function createIntegralOperatorServer() {
   return createServer(async (request, response) => {
     try {
       if (request.url === "/health" && request.method === "GET") {
-        respond(response, 200, { success: true, service: "pulso-integral-operator", mode: "read_only" });
+        respond(response, 200, { success: true, service: "pulso-integral-operator", mode: "governed", capabilities: ["whatsapp.read", "whatsapp.send", "devices.read", "jobs.read", "jobs.write", "jobs.run"] });
         return;
       }
       if (request.url !== "/v1/tools/execute" || request.method !== "POST") {
@@ -164,7 +239,7 @@ export function createIntegralOperatorServer() {
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   const server = createIntegralOperatorServer();
   server.listen(PORT, BIND_HOST, () => {
-    process.stdout.write(`${JSON.stringify({ event: "operator.ready", host: BIND_HOST, port: PORT, mode: "read_only" })}\n`);
+    process.stdout.write(`${JSON.stringify({ event: "operator.ready", host: BIND_HOST, port: PORT, mode: "governed" })}\n`);
   });
   const stop = () => server.close(() => process.exit(0));
   process.once("SIGINT", stop);

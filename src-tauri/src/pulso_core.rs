@@ -14,6 +14,7 @@ pub const CODEX_BIN_NAME: &str = "pulso-codex";
 pub const CODEX_TRIPLE_BIN_NAME: &str = "pulso-codex-x86_64-apple-darwin";
 pub const CANARY_RECEIPT_FILENAME: &str = "core-canary-rendered.json";
 const CANARY_FIELD_MAX_BYTES: usize = 128;
+const OPERATOR_PROVIDER_ID: &str = "pulso-operator";
 #[cfg(target_os = "macos")]
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
@@ -178,6 +179,39 @@ pub struct BridgeProcess {
     reader: BufReader<ChildStdout>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OperatorConnectionSecret {
+    endpoint: String,
+    token: String,
+}
+
+fn parse_operator_connection_secret(secret: &[u8]) -> Result<OperatorConnectionSecret, String> {
+    let connection: OperatorConnectionSecret = serde_json::from_slice(secret)
+        .map_err(|_| "PULSO operator Keychain entry is not valid JSON".to_string())?;
+    let endpoint = connection.endpoint.trim();
+    if !(endpoint.starts_with("https://") || endpoint.starts_with("http://100."))
+        || endpoint.contains('@')
+        || endpoint.len() > 300
+    {
+        return Err("PULSO operator endpoint is outside the trusted transport boundary".to_string());
+    }
+    if connection.token.len() < 24 || connection.token.len() > 512 {
+        return Err("PULSO operator token has an invalid length".to_string());
+    }
+    Ok(OperatorConnectionSecret {
+        endpoint: endpoint.trim_end_matches('/').to_string(),
+        token: connection.token,
+    })
+}
+
+fn operator_connection_from_keychain() -> Result<Option<OperatorConnectionSecret>, String> {
+    let Some(secret) = keychain_read_secret(OPERATOR_PROVIDER_ID)? else {
+        return Ok(None);
+    };
+    parse_operator_connection_secret(&secret).map(Some)
+}
+
 impl BridgeProcess {
     pub fn spawn_with_paths(
         node_bin: &Path,
@@ -209,6 +243,10 @@ impl BridgeProcess {
             if let Ok(codex_bin) = resolve_codex_sidecar_path(exe_parent) {
                 cmd.env("PULSO_CODEX_BIN", codex_bin);
             }
+        }
+        if let Some(operator) = operator_connection_from_keychain()? {
+            cmd.env("PULSO_OPERATOR_URL", operator.endpoint)
+                .env("PULSO_OPERATOR_TOKEN", operator.token);
         }
 
         let mut child = cmd.spawn().map_err(|e| {
@@ -684,6 +722,23 @@ mod tests {
         for invalid in ["", "../openai", "open ai", "provider:secret", "provider;rm"] {
             assert!(validate_provider_id(invalid).is_err());
         }
+    }
+
+    #[test]
+    fn operator_connection_secret_accepts_tailnet_and_rejects_untrusted_or_embedded_credentials() {
+        let parsed = parse_operator_connection_secret(
+            br#"{"endpoint":"http://100.64.0.1:8767","token":"token-operador-com-tamanho-seguro"}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.endpoint, "http://100.64.0.1:8767");
+        assert!(parse_operator_connection_secret(
+            br#"{"endpoint":"http://example.com:8767","token":"token-operador-com-tamanho-seguro"}"#,
+        )
+        .is_err());
+        assert!(parse_operator_connection_secret(
+            br#"{"endpoint":"https://user@example.com","token":"token-operador-com-tamanho-seguro"}"#,
+        )
+        .is_err());
     }
 
     #[test]

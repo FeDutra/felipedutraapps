@@ -55,6 +55,82 @@ export function pulsoOperatorDynamicTools() {
       risk: "connector_read",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
     },
+    {
+      name: "pulso_operator_jobs_list",
+      description: "Lista jobs e watchdogs do scheduler oficial, incluindo agenda e último estado. Somente leitura; não executa nem altera rotinas.",
+      capability: "tool.jobs.read",
+      source: "pulso_operator_runtime",
+      risk: "connector_read",
+      inputSchema: {
+        type: "object",
+        properties: {
+          includeDisabled: { type: "boolean", default: true },
+          limit: { type: "integer", minimum: 1, maximum: 200, default: 100 },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "pulso_operator_job_create",
+      description: "Cria uma rotina persistente no scheduler oficial. Use apenas quando a conversa já definiu objetivo, agenda, modelo e destino.",
+      capability: "tool.jobs.write",
+      source: "pulso_operator_runtime",
+      risk: "reversible_internal_write",
+      inputSchema: {
+        type: "object",
+        properties: { job: { type: "object", description: "Contrato integral aceito por cron.add." } },
+        required: ["job"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "pulso_operator_job_update",
+      description: "Atualiza, pausa ou retoma uma rotina existente pelo ID canônico no scheduler oficial.",
+      capability: "tool.jobs.write",
+      source: "pulso_operator_runtime",
+      risk: "reversible_internal_write",
+      inputSchema: {
+        type: "object",
+        properties: {
+          jobId: { type: "string" },
+          patch: { type: "object" },
+        },
+        required: ["jobId", "patch"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "pulso_operator_job_run",
+      description: "Executa agora uma rotina existente pelo ID canônico. A rotina conserva sua própria política de ferramentas e entrega.",
+      capability: "tool.jobs.run",
+      source: "pulso_operator_runtime",
+      risk: "reversible_internal_write",
+      inputSchema: {
+        type: "object",
+        properties: { jobId: { type: "string" } },
+        required: ["jobId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "pulso_operator_whatsapp_send",
+      description: "Envia uma mensagem WhatsApp pelo canal oficial. Exige decisão humana contextual imediatamente antes do envio.",
+      capability: "tool.whatsapp.send",
+      source: "pulso_operator_runtime",
+      risk: "external_action",
+      requiresHuman: true,
+      rationale: "a mensagem será enviada para uma pessoa ou grupo no WhatsApp",
+      inputSchema: {
+        type: "object",
+        properties: {
+          jid: { type: "string", description: "JID canônico do destinatário." },
+          message: { type: "string", description: "Texto integral aprovado para envio." },
+          replyToMessageId: { type: "string" },
+        },
+        required: ["jid", "message"],
+        additionalProperties: false,
+      },
+    },
   ];
 }
 
@@ -128,6 +204,38 @@ export class PulsoOperatorClient {
       }, signal);
     }
     if (tool === "pulso_operator_devices_status") return this.#remote(tool, {}, signal);
+    if (tool === "pulso_operator_jobs_list") {
+      return this.#remote(tool, {
+        includeDisabled: args.includeDisabled !== false,
+        limit: Math.max(1, Math.min(200, Number(args.limit) || 100)),
+      }, signal);
+    }
+    if (tool === "pulso_operator_job_create") {
+      invariant(args.job && typeof args.job === "object" && !Array.isArray(args.job), "operator_job_required");
+      return this.#remote(tool, { job: args.job }, signal);
+    }
+    if (tool === "pulso_operator_job_update") {
+      const jobId = boundedText(args.jobId, 180).trim();
+      invariant(jobId, "operator_job_id_required");
+      invariant(args.patch && typeof args.patch === "object" && !Array.isArray(args.patch), "operator_job_patch_required");
+      return this.#remote(tool, { jobId, patch: args.patch }, signal);
+    }
+    if (tool === "pulso_operator_job_run") {
+      const jobId = boundedText(args.jobId, 180).trim();
+      invariant(jobId, "operator_job_id_required");
+      return this.#remote(tool, { jobId }, signal);
+    }
+    if (tool === "pulso_operator_whatsapp_send") {
+      const jid = boundedText(args.jid, 96).trim();
+      const message = boundedText(args.message, 8_000).trim();
+      invariant(JID_PATTERN.test(jid), "operator_invalid_whatsapp_jid");
+      invariant(message, "operator_message_required");
+      return this.#remote(tool, {
+        jid,
+        message,
+        replyToMessageId: boundedText(args.replyToMessageId, 180).trim() || null,
+      }, signal);
+    }
     const error = new Error(`operator_tool_unsupported:${tool}`);
     error.code = "operator_tool_unsupported";
     throw error;
