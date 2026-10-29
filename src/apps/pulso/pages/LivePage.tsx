@@ -5005,7 +5005,10 @@ export default function LivePage() {
             const approvalMessage: Message = {
               id: approvalMessageId,
               sender: 'lotus',
-              text: approval.status === 'pending' ? approval.rationale : `decisão ${approval.status}`,
+              // A decisão concluída continua auditável no recibo e no rótulo
+              // compacto abaixo, mas não deve voltar como uma nova fala grande
+              // da Lótus ("decisão approved") no fluxo humano.
+              text: approval.status === 'pending' ? approval.rationale : '',
               assistantName: 'Lótus',
               timestamp: approval.occurredAt ? new Date(approval.occurredAt) : new Date(),
               contextId: sendingContextId,

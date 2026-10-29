@@ -1,0 +1,190 @@
+{
+  "inventoryId": "pulso-access-inventory-observed-2026-10-29-v2",
+  "connections": [
+    {
+      "connectionId": "notion-fe",
+      "service": "notion",
+      "label": "Notion · Fe",
+      "principal": "felipemachadodutra@gmail.com",
+      "tenant": "Fe",
+      "adapter": "external_mcp_transition",
+      "credentialSlot": "mcp:notion-fe",
+      "capabilities": ["pages.read", "pages.write", "search"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "workspaceId": "d49d11f6-a884-4710-b2ce-e9660294da2e", "identityVerified": true }
+    },
+    {
+      "connectionId": "notion-despertar",
+      "service": "notion",
+      "label": "Notion · Despertar",
+      "principal": "felipemachadodutra@gmail.com",
+      "tenant": "Despertar",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:notion-despertar",
+      "capabilities": ["pages.read", "pages.write", "search"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "workspaceId": "5fa6dfd4-bdc7-4a5f-9402-4a5dbbbf54d8", "identityVerified": true }
+    },
+    {
+      "connectionId": "notion-mila",
+      "service": "notion",
+      "label": "Notion · MILA MIRANDA",
+      "principal": "felipemachadodutra@gmail.com",
+      "tenant": "MILA MIRANDA",
+      "adapter": "external_mcp_transition",
+      "credentialSlot": "mcp:notion-mila",
+      "capabilities": ["pages.read", "pages.write", "search"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "workspaceId": "5e58ee07-5f17-4b17-8b67-4a8e62f5e4a4", "identityVerified": true }
+    },
+    {
+      "connectionId": "google-pessoal",
+      "service": "google",
+      "label": "Google · pessoal",
+      "principal": "felipemachadodutra@gmail.com",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:google-pessoal",
+      "capabilities": ["calendar.read", "calendar.write", "drive.read", "drive.write", "gmail.read", "gmail.write"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "identityVerified": true, "servicesVerified": ["gmail", "drive", "calendar"] }
+    },
+    {
+      "connectionId": "github-fe",
+      "service": "github",
+      "label": "GitHub · FeDutra",
+      "principal": "FeDutra",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:github-fe",
+      "capabilities": ["repositories.read", "issues.read", "pull_requests.read", "workflows.read"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "identityVerified": true }
+    },
+    {
+      "connectionId": "figma-fe",
+      "service": "figma",
+      "label": "Figma · Fe",
+      "principal": "felipemachadodutra@gmail.com",
+      "tenant": "Felipe Dutra (.fe)'s team",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:figma-fe",
+      "capabilities": ["files.read", "design.read", "design.write", "code_layers.read"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "identityVerified": true, "role": "admin", "seat": "View", "tier": "starter" }
+    },
+    {
+      "connectionId": "lovable-fe",
+      "service": "lovable",
+      "label": "Lovable · Fe",
+      "principal": "felipemachadodutra@gmail.com",
+      "tenant": "My Lovable",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:lovable-fe",
+      "capabilities": ["projects.read", "projects.create", "projects.write"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "identityVerified": true, "role": "owner" }
+    },
+    {
+      "connectionId": "runway-fe",
+      "service": "runway",
+      "label": "Runway · Felipe",
+      "tenant": "Felipe",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:runway-fe",
+      "capabilities": ["images.generate", "background.remove"],
+      "status": "available",
+      "source": "live-identity-audit-2026-10-29",
+      "metadata": { "identityVerified": true, "plan": "free", "videoAvailable": false }
+    },
+    {
+      "connectionId": "tinyfish-google-profile",
+      "service": "browser_automation",
+      "label": "TinyFish · perfil Google",
+      "adapter": "codex_apps",
+      "credentialSlot": "codex:tinyfish-default",
+      "capabilities": ["browser.read", "browser.operate_authenticated"],
+      "status": "transition",
+      "source": "live-profile-audit-2026-10-29",
+      "metadata": { "signedInSite": "google.com", "accountIdentityVerified": false }
+    },
+    {
+      "connectionId": "canva-fe",
+      "service": "canva",
+      "label": "Canva · identidade não confirmada",
+      "adapter": "codex_apps",
+      "capabilities": ["design.read", "design.write"],
+      "status": "unknown",
+      "source": "capability-catalog-2026-10-29",
+      "metadata": { "reason": "ferramentas presentes; identidade não auditada" }
+    },
+    {
+      "connectionId": "adobe-fe",
+      "service": "adobe",
+      "label": "Adobe · identidade não confirmada",
+      "adapter": "codex_apps",
+      "capabilities": ["assets.read", "assets.write"],
+      "status": "unknown",
+      "source": "capability-catalog-2026-10-29",
+      "metadata": { "reason": "ferramentas presentes; identidade não auditada" }
+    },
+    {
+      "connectionId": "zoom-fe",
+      "service": "zoom",
+      "label": "Zoom · identidade não confirmada",
+      "adapter": "codex_apps",
+      "capabilities": ["meetings.read", "recordings.read", "summaries.read"],
+      "status": "unknown",
+      "source": "capability-catalog-2026-10-29",
+      "metadata": { "reason": "ferramentas presentes; identidade não auditada" }
+    },
+    {
+      "connectionId": "firebase-pulso-legacy",
+      "service": "firebase",
+      "label": "Firebase · PULSO legado",
+      "adapter": "legacy_runtime_transition",
+      "capabilities": ["areas.read", "sessions.read", "requests.read"],
+      "status": "transition",
+      "source": "legacy-runtime-inventory-2026-10-29",
+      "metadata": { "reason": "fonte legada ainda necessária para importação e compatibilidade" }
+    },
+    {
+      "connectionId": "notion-calendar-fe",
+      "service": "notion_calendar",
+      "label": "Notion Calendar · Fe",
+      "adapter": "codex_apps",
+      "capabilities": ["calendars.read", "events.read"],
+      "status": "transition",
+      "source": "runtime-audit-2026-10-28",
+      "metadata": { "reason": "fallback comprovado; identidade precisa ser vinculada explicitamente" }
+    },
+    {
+      "connectionId": "apple-mail-imac",
+      "service": "apple_mail",
+      "label": "Apple Mail · iMac",
+      "adapter": "local_app_transition",
+      "capabilities": ["mail.read", "drafts.prepare"],
+      "status": "degraded",
+      "source": "local-account-inventory-2026-10-29",
+      "localOnly": true,
+      "metadata": { "reason": "contas locais presentes; adapter governado do Core ainda não materializado" }
+    }
+  ],
+  "bindings": [
+    { "scopeType": "system", "scopeId": "global", "service": "figma", "connectionId": "figma-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "lovable", "connectionId": "lovable-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "runway", "connectionId": "runway-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "browser_automation", "connectionId": "tinyfish-google-profile", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "canva", "connectionId": "canva-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "adobe", "connectionId": "adobe-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "zoom", "connectionId": "zoom-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "firebase", "connectionId": "firebase-pulso-legacy", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "notion_calendar", "connectionId": "notion-calendar-fe", "priority": 10 },
+    { "scopeType": "system", "scopeId": "global", "service": "apple_mail", "connectionId": "apple-mail-imac", "priority": 10 }
+  ]
+}

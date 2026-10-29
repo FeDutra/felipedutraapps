@@ -364,6 +364,9 @@ test('desktop conversation surface exposes multi-agent selection, mentions, prog
   assert.match(livePage, /onProgress: \(progress\)/);
   assert.match(livePage, /coreAbortControllersRef\.current\.get\(sendTargetContextNode\.contextId\)\?\.abort\(\)/);
   assert.match(livePage, /<span className="text-\[9px\][^>]*>parar<\/span>/);
+  assert.match(livePage, /\.filter\(session => session\.estado === 'active' && !isTechnicalCanarySession\(session\)\)/);
+  assert.match(livePage, /text: approval\.status === 'pending' \? approval\.rationale : ''/);
+  assert.doesNotMatch(livePage, /text: approval\.status === 'pending' \? approval\.rationale : `decisão \$\{approval\.status\}`/);
 });
 
 test('desktop WebView uses Tauri default navigation while external URLs stay behind the validated Arc command', () => {
