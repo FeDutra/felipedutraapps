@@ -1302,4 +1302,12 @@ antes da promoção e reabrir. Preservar `pulso-core.sqlite`, o diretório de da
 o item `pulso-operator` e a identidade `PULSO Local Signing`. Não tocar na
 `/Applications/PULSO.app` estável nem no iMac.
 
+Complemento de prova física: a permissão de microfone do bundle anterior tinha
+um requisito de código incompatível com `PULSO Local Signing`; ela foi renovada
+somente para `com.felipedutraapps.pulso.next-preview`. O VAD passa a calibrar o
+ruído ambiente, exigir fala sustentada e fechar qualquer enunciado em até 18s.
+O STT envia bytes WAV explícitos no Tauri e aplica timeouts diferentes ao
+sidecar local e ao fallback remoto. Reverter este complemento restaura o limiar
+fixo e o envio de `Blob`; não reverta nem apague a autorização TCC já concedida.
+
 ---

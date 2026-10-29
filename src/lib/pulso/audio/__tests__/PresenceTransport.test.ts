@@ -4,6 +4,8 @@ import test from 'node:test';
 import {
   PRESENCE_TRANSPORT_STORAGE_KEY,
   PRESENCE_LIVE_READY_TIMEOUT_MS,
+  PRESENCE_LOCAL_STT_TIMEOUT_MS,
+  PRESENCE_REMOTE_STT_TIMEOUT_MS,
   PRESENCE_REMOTE_STT_URL,
   getPresenceTranscriptionEndpoints,
   readPresenceTransportPreference,
@@ -77,6 +79,8 @@ test('Gemini usa o relay; local continua explicitamente local', () => {
 
 test('Presença desktop tem timeout curto e STT remoto como fallback do sidecar local', () => {
   assert.equal(PRESENCE_LIVE_READY_TIMEOUT_MS, 4_500);
+  assert.equal(PRESENCE_LOCAL_STT_TIMEOUT_MS, 1_500);
+  assert.equal(PRESENCE_REMOTE_STT_TIMEOUT_MS, 30_000);
   assert.deepEqual(getPresenceTranscriptionEndpoints(true), [
     'http://127.0.0.1:14323/transcribe',
     PRESENCE_REMOTE_STT_URL,

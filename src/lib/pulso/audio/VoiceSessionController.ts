@@ -7,7 +7,9 @@ import {
 import {
   getGeminiLiveConfig,
   getPresenceTranscriptionEndpoints,
+  PRESENCE_LOCAL_STT_TIMEOUT_MS,
   PRESENCE_LIVE_READY_TIMEOUT_MS,
+  PRESENCE_REMOTE_STT_TIMEOUT_MS,
 } from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
@@ -102,6 +104,10 @@ export class VoiceSessionController {
   private pcmSampleRate = 48000;
   private silenceStart: number = 0;
   private hasSpoken: boolean = false;
+  private listeningStartedAt: number = 0;
+  private speechStartedAt: number = 0;
+  private noiseFloor = 0.008;
+  private aboveSpeechThresholdFrames = 0;
   private animationFrameId: number | null = null;
   
   // Players e controles
@@ -538,6 +544,10 @@ export class VoiceSessionController {
 
     this.hasSpoken = false;
     this.silenceStart = 0;
+    this.listeningStartedAt = performance.now();
+    this.speechStartedAt = 0;
+    this.noiseFloor = 0.008;
+    this.aboveSpeechThresholdFrames = 0;
     this.mediaRecorder.start(250);
 
     // VAD (checkSilence) usando time domain (RMS)
@@ -562,6 +572,25 @@ export class VoiceSessionController {
           sum += value * value;
         }
         const rms = Math.sqrt(sum / bufferLength);
+        const now = performance.now();
+
+        // Os primeiros frames calibram o ruído real do ambiente. Um limiar
+        // fixo de 0.015 fazia ventilador, reunião ao fundo e até o próprio
+        // cue manterem a Orbe eternamente em `user_speaking`.
+        if (!this.hasSpoken && now - this.listeningStartedAt < 700) {
+          this.noiseFloor = this.noiseFloor * 0.82 + rms * 0.18;
+          this.animationFrameId = requestAnimationFrame(checkSilence);
+          return;
+        }
+
+        const speechStartThreshold = Math.min(0.12, Math.max(0.025, this.noiseFloor * 2.8));
+        const speechContinueThreshold = Math.min(
+          speechStartThreshold,
+          Math.max(0.014, this.noiseFloor * 1.55),
+        );
+        const aboveThreshold = this.hasSpoken
+          ? rms > speechContinueThreshold
+          : rms > speechStartThreshold;
 
         // Print debug VAD de sinal em tempo real
         if (Math.random() < 0.05) { // throttled print
@@ -575,7 +604,8 @@ export class VoiceSessionController {
         }
 
         // Se o usuário falou (threshold RMS de 0.015)
-        if (rms > 0.015) {
+        if (aboveThreshold) {
+          this.aboveSpeechThresholdFrames += 1;
           // Interrompe assistente se estiver falando (Barge-in)
           // Mas impede interrupção nos primeiros 1200ms de reprodução (evita eco inicial e falsas interrupções de início de frase)
           if (this.isAssistantSpeaking && (Date.now() - this.assistantSpeechStartMs) > 1200) {
@@ -584,24 +614,39 @@ export class VoiceSessionController {
           }
 
           if (this.state === 'presence_listening') {
-            if (!this.hasSpoken) {
+            // Três frames consecutivos evitam abrir turno por um estalo.
+            if (!this.hasSpoken && this.aboveSpeechThresholdFrames >= 3) {
               this.hasSpoken = true;
+              this.speechStartedAt = now;
               this.activeTurnBasedTurnId = this.createVoiceTurnId();
               this.advanceTurn({ type: 'turn_opened', turnId: this.activeTurnBasedTurnId });
               this.log('VAD_SPEECH_START');
               this.transition('user_speaking');
             }
-            this.silenceStart = Date.now();
+            if (this.hasSpoken) this.silenceStart = Date.now();
           } else if (this.state === 'user_speaking') {
             this.silenceStart = Date.now();
           }
         } else {
+          this.aboveSpeechThresholdFrames = 0;
+          if (!this.hasSpoken) {
+            // Aprende lentamente mudanças do ambiente sem perseguir a voz.
+            this.noiseFloor = this.noiseFloor * 0.97 + rms * 0.03;
+          }
           // Uma pausa natural encerra o turno sem impor a demora de um chat gravado.
-          if (this.hasSpoken && this.silenceStart > 0 && Date.now() - this.silenceStart > 1100) {
+          if (this.hasSpoken && this.silenceStart > 0 && Date.now() - this.silenceStart > 900) {
             this.log('VAD_SPEECH_END');
             this.finalizeUserTurn();
             return;
           }
+        }
+
+        // Mesmo num ambiente permanentemente ruidoso, um turno nunca pode
+        // manter a Presença muda por um minuto inteiro.
+        if (this.hasSpoken && this.speechStartedAt > 0 && now - this.speechStartedAt > 18_000) {
+          this.log('VAD_MAX_UTTERANCE_REACHED');
+          this.finalizeUserTurn();
+          return;
         }
 
         this.animationFrameId = requestAnimationFrame(checkSilence);
@@ -684,18 +729,27 @@ export class VoiceSessionController {
         : fetch;
 
       const endpoints = getPresenceTranscriptionEndpoints(isTauriEnv);
+      const requestBody: BodyInit = isTauriEnv
+        ? new Uint8Array(await blob.arrayBuffer())
+        : blob;
       let response: Response | null = null;
       let selectedEndpoint = endpoints[0];
       let lastFailure = 'transcritor indisponível';
       for (const endpointUrl of endpoints) {
         selectedEndpoint = endpointUrl;
+        const controller = new AbortController();
+        const timeoutMs = endpointUrl.includes('127.0.0.1')
+          ? PRESENCE_LOCAL_STT_TIMEOUT_MS
+          : PRESENCE_REMOTE_STT_TIMEOUT_MS;
+        const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
         try {
           const candidate = await requestFetch(endpointUrl, {
             method: 'POST',
             headers: {
               'Content-Type': blob.type || 'audio/webm',
             },
-            body: blob,
+            body: requestBody,
+            signal: controller.signal,
           });
           if (candidate.ok) {
             response = candidate;
@@ -703,7 +757,11 @@ export class VoiceSessionController {
           }
           lastFailure = `status ${candidate.status}`;
         } catch (error) {
-          lastFailure = error instanceof Error ? error.message : String(error);
+          lastFailure = controller.signal.aborted
+            ? `timeout apos ${timeoutMs}ms`
+            : error instanceof Error ? error.message : String(error);
+        } finally {
+          window.clearTimeout(timeout);
         }
         this.log('STT_ENDPOINT_FAILED', { endpointUrl, failure: lastFailure });
       }

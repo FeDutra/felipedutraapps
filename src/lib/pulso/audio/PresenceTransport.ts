@@ -12,6 +12,8 @@ const GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY = 'pulso_presence_transport_migratio
 const DEFAULT_LIVE_VOICE_RELAY_URL = 'wss://72-62-105-195.nip.io/live-voice/live';
 export const PRESENCE_LIVE_READY_TIMEOUT_MS = 4_500;
 export const PRESENCE_REMOTE_STT_URL = 'https://felipedutraapps.web.app/api/pulso/transcribe';
+export const PRESENCE_LOCAL_STT_TIMEOUT_MS = 1_500;
+export const PRESENCE_REMOTE_STT_TIMEOUT_MS = 30_000;
 
 export function getGeminiLiveConfig() {
   const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL || DEFAULT_LIVE_VOICE_RELAY_URL;
