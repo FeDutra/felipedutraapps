@@ -33,6 +33,61 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const VOLATILE_SEMANTIC_KEYS = new Set([
+  "createdAt",
+  "updatedAt",
+  "startedAt",
+  "stoppedAt",
+  "checkedAt",
+  "provenance",
+]);
+const LOCAL_DIVERGENCE_AGGREGATES = new Set(["runtime_service", "selection"]);
+const LOCAL_ONLY_AGGREGATES = Object.freeze([
+  "runtime_service",
+  "selection",
+  "connection_profile",
+  "connection_binding",
+]);
+
+function semanticValue(value) {
+  if (Array.isArray(value)) return value.map(semanticValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !VOLATILE_SEMANTIC_KEYS.has(key))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => [key, semanticValue(item)]));
+  }
+  return value;
+}
+
+export function classifySyncConflict({ reason, incomingEvent, existingEvent = null } = {}) {
+  if (reason !== "aggregate_sequence_collision" || !incomingEvent || !existingEvent) {
+    return { classification: "domain_conflict", status: "pending", rationale: reason || "unknown_conflict" };
+  }
+  const sameType = incomingEvent.type === existingEvent.type;
+  const samePayload = canonicalStringify(semanticValue(incomingEvent.payload))
+    === canonicalStringify(semanticValue(existingEvent.payload));
+  if (sameType && samePayload) {
+    return {
+      classification: "equivalent_semantic",
+      status: "classified",
+      rationale: "mesmo fato de domínio; diferem apenas proveniência ou campos voláteis",
+    };
+  }
+  if (LOCAL_DIVERGENCE_AGGREGATES.has(incomingEvent.aggregate?.type)) {
+    return {
+      classification: "local_divergence_allowed",
+      status: "classified",
+      rationale: "estado efêmero deliberadamente local à instalação",
+    };
+  }
+  return {
+    classification: "domain_conflict",
+    status: "pending",
+    rationale: "eventos concorrentes exigem regra ou resolução explícita de domínio",
+  };
+}
+
 const SENSITIVE_KEY = /^(?:authorization|cookie|set-cookie|password|passwd|access_?token|refresh_?token|api_?key|client_?secret|private_?key|privateKeyPkcs8Base64)$/i;
 const SENSITIVE_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+\/-]{20,}|\bsk-[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAIza[A-Za-z0-9_-]{25,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/;
 const LOCAL_SECRET_REDACTION = "[conteúdo sensível mantido apenas no dispositivo de origem]";
@@ -162,6 +217,13 @@ export class DeviceSyncService {
       ");",
       "CREATE INDEX IF NOT EXISTS idx_sync_origin_device ON sync_event_origin(origin_device_id, origin_sequence);",
     ].join("\n"));
+    const conflictColumns = new Set(this.store.db.prepare("PRAGMA table_info(sync_conflicts)").all().map(row => row.name));
+    if (!conflictColumns.has("classification")) this.store.db.exec("ALTER TABLE sync_conflicts ADD COLUMN classification TEXT");
+    if (!conflictColumns.has("status")) this.store.db.exec("ALTER TABLE sync_conflicts ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'");
+    if (!conflictColumns.has("rationale")) this.store.db.exec("ALTER TABLE sync_conflicts ADD COLUMN rationale TEXT");
+    if (!conflictColumns.has("classified_at")) this.store.db.exec("ALTER TABLE sync_conflicts ADD COLUMN classified_at TEXT");
+    if (!conflictColumns.has("resolution_json")) this.store.db.exec("ALTER TABLE sync_conflicts ADD COLUMN resolution_json TEXT");
+    if (!conflictColumns.has("resolved_at")) this.store.db.exec("ALTER TABLE sync_conflicts ADD COLUMN resolved_at TEXT");
   }
 
   #identity() {
@@ -315,8 +377,9 @@ export class DeviceSyncService {
     ).all();
     const eventCount = Number(this.store.db.prepare("SELECT COUNT(*) AS count FROM sync_event_origin").get().count);
     const conflictCount = Number(this.store.db.prepare("SELECT COUNT(*) AS count FROM sync_conflicts").get().count);
+    const conflictInventory = this.conflictInventory({ refresh: false, includeItems: false });
     const redactionCount = Number(this.store.db.prepare("SELECT COUNT(*) AS count FROM sync_redactions").get().count);
-    return { configured: true, localDevice: manifest, trustedDevices: trusted, replicatedEvents: eventCount, conflicts: conflictCount, redactions: redactionCount };
+    return { configured: true, localDevice: manifest, trustedDevices: trusted, replicatedEvents: eventCount, conflicts: conflictCount, conflictInventory, redactions: redactionCount };
   }
 
   exportBundle({ targetDeviceId = null, outputPath = null, afterByOrigin = {} } = {}) {
@@ -333,9 +396,10 @@ export class DeviceSyncService {
     const rows = cursorClauses.length === 0 ? [] : this.store.db.prepare([
       "SELECT e.*,o.origin_device_id,o.origin_sequence,o.event_hash",
       "FROM events e JOIN sync_event_origin o ON o.event_id=e.event_id",
-      `WHERE ${cursorClauses.join(" OR ")}`,
+      `WHERE (${cursorClauses.join(" OR ")})`,
+      `AND e.aggregate_type NOT IN (${LOCAL_ONLY_AGGREGATES.map(() => "?").join(",")})`,
       "ORDER BY o.origin_device_id,o.origin_sequence",
-    ].join(" ")).all(...cursorParams);
+    ].join(" ")).all(...cursorParams, ...LOCAL_ONLY_AGGREGATES);
     const quarantine = [];
     const events = rows.map(row => {
       const event = eventFromRow(row);
@@ -417,12 +481,26 @@ export class DeviceSyncService {
     return { bundleId, path: destination, digest, events: events.length, redactions: quarantine.length, sourceCursors, sourceDeviceId: identity.deviceId, targetDeviceId };
   }
 
+  #existingEventForEnvelope(envelope) {
+    const aggregate = envelope?.event?.aggregate;
+    if (!aggregate) return null;
+    const row = this.store.db.prepare(
+      "SELECT * FROM events WHERE aggregate_type=? AND aggregate_id=? AND aggregate_sequence=?"
+    ).get(aggregate.type, aggregate.id, aggregate.sequence);
+    return row ? eventFromRow(row) : null;
+  }
+
   #recordConflict(bundle, envelope, reason) {
     const conflictId = pulsoId("conflict");
     const createdAt = this.#now();
+    const classified = classifySyncConflict({
+      reason,
+      incomingEvent: envelope?.event || null,
+      existingEvent: this.#existingEventForEnvelope(envelope),
+    });
     this.store.db.prepare([
-      "INSERT INTO sync_conflicts(conflict_id,bundle_id,source_device_id,event_id,reason,envelope_json,created_at)",
-      "VALUES(?,?,?,?,?,?,?)",
+      "INSERT INTO sync_conflicts(conflict_id,bundle_id,source_device_id,event_id,reason,envelope_json,created_at,classification,status,rationale,classified_at)",
+      "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
     ].join(" ")).run(
       conflictId,
       bundle.bundleId,
@@ -431,16 +509,115 @@ export class DeviceSyncService {
       reason,
       JSON.stringify(envelope || null),
       createdAt,
+      classified.classification,
+      classified.status,
+      classified.rationale,
+      createdAt,
     );
     atomicWriteJson(join(this.syncDir, "conflicts", `${conflictId}.json`), {
       conflictId,
       bundleId: bundle.bundleId,
       sourceDeviceId: bundle.source.deviceId,
       reason,
+      classification: classified.classification,
+      status: classified.status,
       envelope,
       createdAt,
     });
     return conflictId;
+  }
+
+  classifyConflicts() {
+    const rows = this.store.db.prepare(
+      "SELECT conflict_id,reason,envelope_json FROM sync_conflicts WHERE resolved_at IS NULL"
+    ).all();
+    const update = this.store.db.prepare(
+      "UPDATE sync_conflicts SET classification=?,status=?,rationale=?,classified_at=? WHERE conflict_id=?"
+    );
+    const classifiedAt = this.#now();
+    this.store.runInTransaction(() => {
+      for (const row of rows) {
+        const envelope = JSON.parse(row.envelope_json);
+        const classified = classifySyncConflict({
+          reason: row.reason,
+          incomingEvent: envelope?.event || null,
+          existingEvent: this.#existingEventForEnvelope(envelope),
+        });
+        update.run(classified.classification, classified.status, classified.rationale, classifiedAt, row.conflict_id);
+      }
+    });
+    return this.conflictInventory({ refresh: false, includeItems: false });
+  }
+
+  resolveSafeClassifiedConflicts() {
+    this.classifyConflicts();
+    const rows = this.store.db.prepare([
+      "SELECT conflict_id,classification,rationale FROM sync_conflicts",
+      "WHERE resolved_at IS NULL AND status='classified'",
+      "AND classification IN ('equivalent_semantic','local_divergence_allowed')",
+    ].join(" ")).all();
+    const resolvedAt = this.#now();
+    const update = this.store.db.prepare([
+      "UPDATE sync_conflicts SET status='resolved',resolution_json=?,resolved_at=?",
+      "WHERE conflict_id=? AND resolved_at IS NULL",
+    ].join(" "));
+    this.store.runInTransaction(() => {
+      for (const row of rows) {
+        const resolution = row.classification === "equivalent_semantic"
+          ? { policy: "retain_local_equivalent", destructive: false, rationale: row.rationale }
+          : { policy: "retain_device_local_state", destructive: false, rationale: row.rationale };
+        update.run(JSON.stringify(resolution), resolvedAt, row.conflict_id);
+      }
+    });
+    return {
+      resolved: rows.length,
+      retainedEnvelopes: rows.length,
+      destructive: false,
+      inventory: this.conflictInventory({ refresh: false, includeItems: false }),
+    };
+  }
+
+  conflictInventory({ refresh = false, includeItems = false, limit = 100 } = {}) {
+    if (refresh) return this.classifyConflicts();
+    const groups = this.store.db.prepare([
+      "SELECT COALESCE(classification,'unclassified') AS classification,status,reason,COUNT(*) AS count,COUNT(DISTINCT event_id) AS events",
+      "FROM sync_conflicts GROUP BY COALESCE(classification,'unclassified'),status,reason",
+      "ORDER BY count DESC,classification,status,reason",
+    ].join(" ")).all().map(row => ({
+      classification: row.classification,
+      status: row.status,
+      reason: row.reason,
+      count: Number(row.count),
+      events: Number(row.events),
+    }));
+    const total = groups.reduce((sum, item) => sum + item.count, 0);
+    const summary = {
+      total,
+      equivalent: groups.filter(item => item.classification === "equivalent_semantic").reduce((sum, item) => sum + item.count, 0),
+      localDivergence: groups.filter(item => item.classification === "local_divergence_allowed").reduce((sum, item) => sum + item.count, 0),
+      domainPending: groups.filter(item => item.classification === "domain_conflict" && item.status === "pending").reduce((sum, item) => sum + item.count, 0),
+      unresolved: groups.filter(item => item.status === "pending").reduce((sum, item) => sum + item.count, 0),
+    };
+    const result = { summary, groups };
+    if (includeItems) {
+      result.items = this.store.db.prepare([
+        "SELECT conflict_id,bundle_id,source_device_id,event_id,reason,classification,status,rationale,created_at,classified_at,resolved_at",
+        "FROM sync_conflicts ORDER BY created_at DESC LIMIT ?",
+      ].join(" ")).all(Math.max(1, Math.min(500, Number(limit) || 100))).map(row => ({
+        conflictId: row.conflict_id,
+        bundleId: row.bundle_id,
+        sourceDeviceId: row.source_device_id,
+        eventId: row.event_id,
+        reason: row.reason,
+        classification: row.classification || "unclassified",
+        status: row.status,
+        rationale: row.rationale,
+        createdAt: row.created_at,
+        classifiedAt: row.classified_at,
+        resolvedAt: row.resolved_at,
+      }));
+    }
+    return result;
   }
 
   importBundle({ bundle = null, bundlePath = null } = {}) {

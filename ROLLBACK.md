@@ -1249,3 +1249,29 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Motivo:** qualquer combinação anterior ainda deixava uma transição de History API: `/index.html → /`, `/ → /pulso/live/` ou `/pulso/live/index.html → /pulso/live/`. No WKWebView 14 essa transição é promovida a uma carga inválida. A nova entrada nasce e permanece na raiz, sem redirect, `router.replace`, `pushState` ou `replaceState`.
 - **Reversão de código:** reverter o commit desta mudança restaura o redirecionamento Tauri da rota raiz e/ou a URL explícita da janela.
 - **Reversão da instalação:** restaurar apenas o `.app` anterior; preservar banco e contexto privado.
+# ROLLBACK · conexões nomeadas e classificação de conflitos (29/10/2026)
+
+Base imutável: `6eeadff2` (release instalada nos Macs em 28/10/2026).
+
+Escopo desta oficina:
+
+- introduzir no PULSO Core um registro sem segredos para conexões nomeadas;
+- vincular conexões a contexto/Área/agente sem usar nomes genéricos ambíguos;
+- classificar colisões de sincronização como equivalência de bootstrap,
+  divergência local permitida ou conflito de domínio pendente;
+- preservar integralmente os envelopes e eventos já existentes.
+
+Fora de escopo sem confirmação própria:
+
+- copiar ou rotacionar credenciais;
+- apagar conflitos, eventos, bancos ou artefatos;
+- alterar serviços publicados ou reiniciar processos;
+- promover aplicativo nos Macs antes de snapshot, CI e canária instalada.
+
+Reversão de código: retornar ao commit `6eeadff2` ou remover o worktree
+`feature/pulso-integrations-20261029`. A implementação usa migrações aditivas;
+rollback do bundle não remove tabelas nem registros novos. Antes de qualquer
+promoção, criar snapshot SQLite consistente e preservar o bundle instalado como
+rollback datado.
+
+---

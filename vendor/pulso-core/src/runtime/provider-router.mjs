@@ -496,8 +496,8 @@ export class ProviderRouter {
         this.#commitRoutingEvents([
           eventDraft({
             type: "runtime.provider_attempt_failed",
-            aggregateType: "model_binding",
-            aggregateId: route.scopeKey,
+            aggregateType: "routing_execution",
+            aggregateId: correlationId,
             correlationId,
             causationId: correlationId,
             actor,
@@ -584,8 +584,8 @@ export class ProviderRouter {
             }),
             eventDraft({
               type: "runtime.fallback_triggered",
-              aggregateType: "model_binding",
-              aggregateId: route.scopeKey,
+              aggregateType: "routing_execution",
+              aggregateId: correlationId,
               correlationId,
               causationId: correlationId,
               actor,
@@ -607,8 +607,8 @@ export class ProviderRouter {
         drafts.push(
           eventDraft({
             type: "runtime.routing_completed",
-            aggregateType: "model_binding",
-            aggregateId: route.scopeKey,
+            aggregateType: "routing_execution",
+            aggregateId: correlationId,
             correlationId,
             causationId: correlationId,
             actor,
@@ -657,8 +657,8 @@ export class ProviderRouter {
     this.#commitRoutingEvents([
       eventDraft({
         type: "runtime.routing_failed",
-        aggregateType: "model_binding",
-        aggregateId: route.scopeKey,
+        aggregateType: "routing_execution",
+        aggregateId: correlationId,
         correlationId,
         causationId: correlationId,
         actor,
@@ -846,8 +846,8 @@ export class ProviderRouter {
           this.#commitRoutingEvents([
             eventDraft({
               type: "runtime.provider_attempt_failed",
-              aggregateType: "model_binding",
-              aggregateId: route.scopeKey,
+              aggregateType: "routing_execution",
+              aggregateId: correlationId,
               correlationId,
               causationId: correlationId,
               actor,
@@ -861,8 +861,8 @@ export class ProviderRouter {
             }),
             eventDraft({
               type: "runtime.routing_failed",
-              aggregateType: "model_binding",
-              aggregateId: route.scopeKey,
+              aggregateType: "routing_execution",
+              aggregateId: correlationId,
               correlationId,
               causationId: correlationId,
               actor,
@@ -904,8 +904,8 @@ export class ProviderRouter {
         this.#commitRoutingEvents([
           eventDraft({
             type: "runtime.provider_attempt_failed",
-            aggregateType: "model_binding",
-            aggregateId: route.scopeKey,
+            aggregateType: "routing_execution",
+            aggregateId: correlationId,
             correlationId,
             causationId: correlationId,
             actor,
@@ -988,8 +988,8 @@ export class ProviderRouter {
             }),
             eventDraft({
               type: "runtime.fallback_triggered",
-              aggregateType: "model_binding",
-              aggregateId: route.scopeKey,
+              aggregateType: "routing_execution",
+              aggregateId: correlationId,
               correlationId,
               causationId: correlationId,
               actor,
@@ -1011,8 +1011,8 @@ export class ProviderRouter {
         drafts.push(
           eventDraft({
             type: "runtime.routing_completed",
-            aggregateType: "model_binding",
-            aggregateId: route.scopeKey,
+            aggregateType: "routing_execution",
+            aggregateId: correlationId,
             correlationId,
             causationId: correlationId,
             actor,
@@ -1073,8 +1073,8 @@ export class ProviderRouter {
     this.#commitRoutingEvents([
       eventDraft({
         type: "runtime.routing_failed",
-        aggregateType: "model_binding",
-        aggregateId: route.scopeKey,
+        aggregateType: "routing_execution",
+        aggregateId: correlationId,
         correlationId,
         causationId: correlationId,
         actor,

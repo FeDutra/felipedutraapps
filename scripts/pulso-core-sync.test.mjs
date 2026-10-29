@@ -7,6 +7,7 @@ import path from 'node:path';
 
 import {
   DeviceSyncService,
+  classifySyncConflict,
   LiveService,
   SqliteEventStore,
   eventDraft,
@@ -125,9 +126,92 @@ test('edição concorrente não sobrescreve: entra em quarentena de conflito', (
   assert.equal(result.conflicts, 1);
   assert.equal(b.store.all()[0].payload.text, 'texto B');
   assert.equal(b.sync.status().conflicts, 1);
+  assert.equal(b.sync.status().conflictInventory.summary.domainPending, 1);
 
   a.store.close();
   b.store.close();
+  rmSync(a.dataDir, { recursive: true, force: true });
+  rmSync(b.dataDir, { recursive: true, force: true });
+});
+
+test('classificador distingue bootstrap equivalente, estado local e conflito de domínio', () => {
+  const base = {
+    type: 'automation.created',
+    aggregate: { type: 'automation', id: 'auto_1', sequence: 1 },
+    payload: { automationId: 'auto_1', name: 'vigia', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+  };
+  const equivalent = classifySyncConflict({
+    reason: 'aggregate_sequence_collision',
+    incomingEvent: base,
+    existingEvent: { ...base, payload: { ...base.payload, createdAt: '2026-10-02T00:00:00Z', updatedAt: '2026-10-02T00:00:00Z' } },
+  });
+  assert.equal(equivalent.classification, 'equivalent_semantic');
+  assert.equal(equivalent.status, 'classified');
+
+  const local = classifySyncConflict({
+    reason: 'aggregate_sequence_collision',
+    incomingEvent: { type: 'live.session.selected', aggregate: { type: 'selection', id: 'active', sequence: 1 }, payload: { sessionId: 'a' } },
+    existingEvent: { type: 'live.session.selected', aggregate: { type: 'selection', id: 'active', sequence: 1 }, payload: { sessionId: 'b' } },
+  });
+  assert.equal(local.classification, 'local_divergence_allowed');
+
+  const domain = classifySyncConflict({
+    reason: 'aggregate_sequence_collision',
+    incomingEvent: { type: 'live.area.created', aggregate: { type: 'area', id: 'pulso', sequence: 1 }, payload: { nome: 'PULSO' } },
+    existingEvent: { type: 'live.area.created', aggregate: { type: 'area', id: 'pulso', sequence: 1 }, payload: { nome: 'Outra área' } },
+  });
+  assert.equal(domain.classification, 'domain_conflict');
+  assert.equal(domain.status, 'pending');
+});
+
+test('inventário classifica conflitos antigos sem apagar envelopes', () => {
+  const a = fixture('macbook', 'inventory');
+  const b = fixture('imac', 'inventory');
+  b.sync.trustDevice(a.sync.deviceManifest());
+  const occurredAt = '2026-10-23T15:00:00.000Z';
+  for (const [store, createdAt] of [[a.store, '2026-10-01T00:00:00.000Z'], [b.store, '2026-10-02T00:00:00.000Z']]) {
+    const draft = eventDraft({
+      type: 'automation.created',
+      aggregateType: 'automation',
+      aggregateId: 'auto_same',
+      correlationId: 'corr_auto_same',
+      actor: { kind: 'system', id: 'test' },
+      payload: { automationId: 'auto_same', name: 'vigia', createdAt, updatedAt: createdAt },
+      occurredAt,
+    });
+    store.append([draft]);
+  }
+  const bundle = a.sync.exportBundle({ targetDeviceId: b.sync.deviceManifest().deviceId });
+  assert.equal(b.sync.importBundle({ bundlePath: bundle.path }).conflicts, 1);
+  const inventory = b.sync.classifyConflicts();
+  assert.equal(inventory.summary.total, 1);
+  assert.equal(inventory.summary.equivalent, 1);
+  assert.equal(inventory.summary.domainPending, 0);
+  assert.equal(b.store.db.prepare('SELECT COUNT(*) AS count FROM sync_conflicts').get().count, 1);
+  const resolution = b.sync.resolveSafeClassifiedConflicts();
+  assert.equal(resolution.resolved, 1);
+  assert.equal(resolution.destructive, false);
+  assert.equal(resolution.inventory.summary.unresolved, 0);
+  assert.equal(b.store.db.prepare('SELECT COUNT(*) AS count FROM sync_conflicts').get().count, 1);
+  a.store.close(); b.store.close();
+  rmSync(a.dataDir, { recursive: true, force: true });
+  rmSync(b.dataDir, { recursive: true, force: true });
+});
+
+test('estado efêmero e registro local de conexões não saem no bundle entre pares', () => {
+  const a = fixture('macbook', 'local-only');
+  const b = fixture('imac', 'local-only');
+  a.sync.trustDevice(b.sync.deviceManifest());
+  const drafts = [
+    eventDraft({ type: 'live.session.selected', aggregateType: 'selection', aggregateId: 'active', correlationId: 'local-selection', actor: { kind: 'system', id: 'test' }, payload: { areaId: 'area_pulso', sessionId: 'session_a' }, occurredAt: '2026-10-23T15:00:00.000Z' }),
+    eventDraft({ type: 'connection.profile_registered', aggregateType: 'connection_profile', aggregateId: 'notion-fe', correlationId: 'local-connection', actor: { kind: 'system', id: 'test' }, payload: { connectionId: 'notion-fe', service: 'notion', status: 'available' }, occurredAt: '2026-10-23T15:00:00.000Z' }),
+    eventDraft({ type: 'live.message_appended', aggregateType: 'live_session', aggregateId: 'session_a', correlationId: 'shared-message', actor: { kind: 'human', id: 'fe' }, payload: { messageId: 'message_a', text: 'compartilhável' }, occurredAt: '2026-10-23T15:00:00.000Z' }),
+  ];
+  a.store.append(drafts);
+  const exported = a.sync.exportBundle({ targetDeviceId: b.sync.deviceManifest().deviceId });
+  const bundle = JSON.parse(readFileSync(exported.path, 'utf8'));
+  assert.deepEqual(bundle.events.map(item => item.event.aggregate.type), ['live_session']);
+  a.store.close(); b.store.close();
   rmSync(a.dataDir, { recursive: true, force: true });
   rmSync(b.dataDir, { recursive: true, force: true });
 });

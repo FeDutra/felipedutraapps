@@ -53,7 +53,7 @@ export {
 // v0.4 Sovereign Agent Foundry exports
 export { AgentFoundryService } from "./agents/agent-foundry-service.mjs";
 export { ConstellationImporter } from "./agents/constellation-importer.mjs";
-export { DeviceSyncService, canonicalStringify } from "./sync/device-sync-service.mjs";
+export { DeviceSyncService, canonicalStringify, classifySyncConflict } from "./sync/device-sync-service.mjs";
 export { AgentSupervisor } from "./agents/agent-supervisor.mjs";
 export {
   emptyAgentFoundryState,
@@ -106,6 +106,13 @@ export { SkillRegistryService } from "./skills/skill-registry-service.mjs";
 export { ChannelHubService, LoopbackChannelAdapter, WebhookChannelAdapter, WhatsAppLocalChannelAdapter } from "./channels/channel-hub-service.mjs";
 export { PulsoOperatorClient, pulsoOperatorDynamicTools } from "./operator/pulso-operator-client.mjs";
 export { AutomationService } from "./automations/automation-service.mjs";
+export { ConnectionRegistryService } from "./connections/connection-registry-service.mjs";
+export {
+  DEFAULT_CONNECTION_INVENTORY_ID,
+  DEFAULT_CONNECTIONS,
+  DEFAULT_CONNECTION_BINDINGS,
+  DEFAULT_CONNECTION_INVENTORY,
+} from "./connections/default-inventory.mjs";
 export { AgentExecutionService } from "./agents/agent-execution-service.mjs";
 export { PeerFolderTransport } from "./sync/peer-folder-transport.mjs";
 export { ProviderRouter, ProviderRegistry } from "./runtime/provider-router.mjs";

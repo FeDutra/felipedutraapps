@@ -9,6 +9,7 @@ import {
   AgentExecutionService,
   AutomationService,
   ChannelHubService,
+  ConnectionRegistryService,
   ControlPlaneService,
   DeviceSyncService,
   LiveConversationService,
@@ -145,6 +146,31 @@ test('menção a especialista no chat executa agente real e atribui a resposta',
   const conversation = new LiveConversationService({ store: f.store, live, router, agentExecutor: executor, agentFoundry: foundry });
   const run = await conversation.startTurn({ sessionId: boot.activeSessionId, text: '@FORMA construa a direção' });
   assert.equal(run.status, 'completed'); assert.equal(prompt, 'construa a direção'); assert.match(run.accumulatedText, /\*\*FORMA\*\*/); assert.match(live.listMessages(boot.activeSessionId).at(-1).texto, /direção entregue/); f.close();
+});
+
+test('turno humano recebe conexão nomeada da Área e bloqueia conta ambígua', async () => {
+  const f = fixture('conversation-connections');
+  const live = new LiveService({ store: f.store });
+  const boot = await live.bootstrap();
+  const connections = new ConnectionRegistryService({ store: f.store });
+  connections.register({ connectionId: 'google-pessoal', service: 'google', label: 'Google · pessoal', principal: 'fe@example.com', status: 'needs_auth' });
+  connections.register({ connectionId: 'google-despertar', service: 'google', label: 'Google · Despertar', principal: 'acessos@example.com', status: 'available' });
+  connections.bind({ scopeType: 'system', scopeId: 'global', service: 'google', connectionId: 'google-pessoal' });
+  connections.bind({ scopeType: 'area', scopeId: 'area_despertar', service: 'google', connectionId: 'google-despertar' });
+  let request = null;
+  const router = {
+    resolveRoute() { return { primary: { providerId: 'codex-fe', model: 'gpt-test' } }; },
+    async *stream(input) {
+      request = input;
+      yield { type: 'model.completed', text: 'feito', providerId: 'codex-fe', model: 'gpt-test' };
+    },
+  };
+  const conversation = new LiveConversationService({ store: f.store, live, router, connectionRegistry: connections });
+  await conversation.startTurn({ sessionId: boot.activeSessionId, text: 'consulte minha agenda' });
+  assert.match(request.messages[0].content, /Google · pessoal/);
+  assert.match(request.messages[0].content, /needs_auth/);
+  assert.throws(() => request.authorizeTool({ source: 'gmail', tool: 'search_email_ids' }), /connection_unavailable:google:google-pessoal/);
+  f.close();
 });
 
 test('múltiplas menções executam agentes na mesma sessão, preservam autoria e progresso', async () => {

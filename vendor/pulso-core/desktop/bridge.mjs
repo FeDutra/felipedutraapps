@@ -30,6 +30,8 @@ import {
   SkillRegistryService,
   ChannelHubService,
   AutomationService,
+  ConnectionRegistryService,
+  DEFAULT_CONNECTION_INVENTORY,
   AgentExecutionService,
   PulsoOperatorClient,
   pulsoId,
@@ -155,11 +157,13 @@ export class PulsoDesktopBridge {
       rootDir: join(this.dataDir, "private-context", "archive", "skills"),
     });
     this.channels = options.channelHub || new ChannelHubService({ store: this.store });
+    this.connections = options.connectionRegistry || new ConnectionRegistryService({ store: this.store });
     this.agentExecutor = options.agentExecutor || new AgentExecutionService({
       foundry: this.controlPlane.foundry,
       runtime: this.runtime,
       memory: this.liveMemory,
       skills: this.skills,
+      connectionRegistry: this.connections,
     });
     this.automations = options.automationService || new AutomationService({
       store: this.store,
@@ -178,6 +182,7 @@ export class PulsoDesktopBridge {
         live: this.live,
         router: this.controlPlane.router,
         identityService: this.identity,
+        connectionRegistry: this.connections,
         memoryProvider: async query => {
           const [privateResult, liveResult] = await Promise.all([
             this.privateMemory.retrieve(query),
@@ -363,6 +368,8 @@ export class PulsoDesktopBridge {
     this.skills.restore();
     this.channels.restore();
     this.automations.restore();
+    this.connections.restore();
+    this.connections.importInventory(DEFAULT_CONNECTION_INVENTORY);
     this.automations.importSnapshot();
     if (!this.automationTimer) {
       this.automationTimer = setInterval(() => {
@@ -383,6 +390,7 @@ export class PulsoDesktopBridge {
             this.skills.restore();
             this.automations.restore();
             this.channels.restore();
+            this.connections.restore();
           }
           return receipt;
         } finally {
@@ -468,6 +476,7 @@ export class PulsoDesktopBridge {
             skills: this.skills.status(),
             automations: this.automations.status(),
             channels: { total: this.channels.list().length, ready: this.channels.list().filter(item => item.status === "ready").length },
+            connections: this.connections.status(),
             sync: { ...syncStatus, transport: this.syncTransport.status() },
           },
         };
@@ -536,6 +545,50 @@ export class PulsoDesktopBridge {
         await this.initialize();
         return this.sync.status();
       }
+      case "sync.conflicts.classify": {
+        await this.initialize();
+        return this.sync.classifyConflicts();
+      }
+      case "sync.conflicts.resolve_safe": {
+        await this.initialize();
+        return this.sync.resolveSafeClassifiedConflicts();
+      }
+      case "sync.conflicts.inventory": {
+        await this.initialize();
+        return this.sync.conflictInventory({
+          refresh: params.refresh === true,
+          includeItems: params.includeItems === true,
+          limit: params.limit || 100,
+        });
+      }
+      case "connection.status": {
+        await this.initialize();
+        return this.connections.status();
+      }
+      case "connection.register": {
+        await this.initialize();
+        return this.connections.register(params.connection || params, { idempotencyKey: params.idempotencyKey || null });
+      }
+      case "connection.import": {
+        await this.initialize();
+        return this.connections.importInventory(params || {});
+      }
+      case "connection.health.record": {
+        await this.initialize();
+        return this.connections.recordHealth(params.connectionId, params.health || {});
+      }
+      case "connection.bind": {
+        await this.initialize();
+        return this.connections.bind(params.binding || params, { idempotencyKey: params.idempotencyKey || null });
+      }
+      case "connection.list": {
+        await this.initialize();
+        return { connections: this.connections.list(params || {}), bindings: this.connections.listBindings(params || {}) };
+      }
+      case "connection.resolve": {
+        await this.initialize();
+        return this.connections.resolve(params || {});
+      }
       case "sync.device.manifest": {
         await this.initialize();
         return this.sync.deviceManifest();
@@ -563,6 +616,7 @@ export class PulsoDesktopBridge {
         });
         this.controlPlane.restore();
         await this.live.restore();
+        this.connections.restore();
         return receipt;
       }
       case "archive.status": {

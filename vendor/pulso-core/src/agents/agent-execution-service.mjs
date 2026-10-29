@@ -1,6 +1,6 @@
 import { invariant, pulsoId } from "../domain/contracts.mjs";
 
-function systemPrompt(blueprint, memories, skills) {
+function systemPrompt(blueprint, memories, skills, connectionPrompt = null) {
   return [
     `Você é ${blueprint.name}, especialista da constelação PULSO.`,
     `Sua identidade nesta execução é exclusivamente ${blueprint.name}. Não responda como Lótus, assistente geral ou outro agente.`,
@@ -10,14 +10,15 @@ function systemPrompt(blueprint, memories, skills) {
     blueprint.instructions,
     skills.length ? `Habilidades ativas: ${skills.map(item => item.name).join(", ")}` : "",
     memories.length ? `Memória pertinente com proveniência:\n${memories.map(item => `- [${item.memoryId}] ${item.content}`).join("\n")}` : "",
+    connectionPrompt,
     "Produza um resultado finito, declare limites e devolva artefatos/decisões ao integrador.",
   ].filter(Boolean).join("\n\n");
 }
 
 export class AgentExecutionService {
-  constructor({ foundry, runtime, memory = null, skills = null, clock = () => new Date().toISOString() } = {}) {
+  constructor({ foundry, runtime, memory = null, skills = null, connectionRegistry = null, clock = () => new Date().toISOString() } = {}) {
     invariant(foundry, "agent_foundry_required"); invariant(runtime, "runtime_required");
-    this.foundry = foundry; this.runtime = runtime; this.memory = memory; this.skills = skills; this.clock = clock; this.aborters = new Map();
+    this.foundry = foundry; this.runtime = runtime; this.memory = memory; this.skills = skills; this.connectionRegistry = connectionRegistry; this.clock = clock; this.aborters = new Map();
   }
 
   async execute(input = {}) {
@@ -39,6 +40,8 @@ export class AgentExecutionService {
         ...this.memory.search({ query: prompt, scopeType: "global", limit: 4 }).results,
       ].filter((item, index, all) => all.findIndex(other => other.memoryId === item.memoryId) === index).slice(0, 8) : [];
       const skills = this.skills ? this.skills.list({ enabled: true }).filter(item => blueprint.skills.some(name => item.skillId.includes(name) || item.name.toLowerCase().includes(String(name).toLowerCase()))) : [];
+      const connectionScope = { taskId: input.taskId || runId, agentId, areaId: input.areaId || null };
+      const connectionPrompt = this.connectionRegistry?.promptContext(connectionScope) || null;
       await this.foundry.recordCheckpoint({ runId, step: 1, data: { phase: "context_ready", memories: memories.map(item => item.memoryId), skills: skills.map(item => item.skillId) }, usageDelta: { turns: 0, tokens: 0, cost: 0, elapsedMs: Date.now() - startedMs, toolCalls: 0 } });
       let completion = null;
       let output = "";
@@ -48,15 +51,18 @@ export class AgentExecutionService {
         taskId: input.taskId || runId,
         sessionId: input.sessionId || null,
         prompt,
-        systemPrompt: systemPrompt(blueprint, memories, skills),
+        systemPrompt: systemPrompt(blueprint, memories, skills, connectionPrompt),
         signal: controller.signal,
-        authorizeTool: ({ capability }) => this.foundry.supervisor.checkAuthorization(agentId, capability, {
-          sessionId: input.sessionId || null,
-          taskId: input.taskId || runId,
-          scope: input.sessionId
-            ? { type: "session", scopeId: input.sessionId }
-            : { type: "task", scopeId: input.taskId || runId },
-        }),
+        authorizeTool: tool => {
+          this.connectionRegistry?.authorizeTool(tool, connectionScope);
+          return this.foundry.supervisor.checkAuthorization(agentId, tool.capability, {
+            sessionId: input.sessionId || null,
+            taskId: input.taskId || runId,
+            scope: input.sessionId
+              ? { type: "session", scopeId: input.sessionId }
+              : { type: "task", scopeId: input.taskId || runId },
+          });
+        },
       };
       const routeOptions = { agentId, allowFallback: input.allowFallback !== false };
       const envelopeStream = typeof this.runtime.routeStream === "function"

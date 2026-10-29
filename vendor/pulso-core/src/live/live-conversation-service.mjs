@@ -32,7 +32,7 @@ function normalizeSpecialistOutput(output, agentName) {
 }
 
 export class LiveConversationService {
-  constructor({ store, live, router, identityService = null, memoryProvider = null, memoryRecorder = null, agentExecutor = null, agentFoundry = null, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
+  constructor({ store, live, router, identityService = null, connectionRegistry = null, memoryProvider = null, memoryRecorder = null, agentExecutor = null, agentFoundry = null, clock = () => new Date().toISOString(), idGenerator = pulsoId } = {}) {
     invariant(store, "event_store_required");
     invariant(live, "live_service_required");
     invariant(router, "provider_router_required");
@@ -40,6 +40,7 @@ export class LiveConversationService {
     this.live = live;
     this.router = router;
     this.identityService = identityService;
+    this.connectionRegistry = connectionRegistry;
     this.memoryProvider = memoryProvider;
     this.memoryRecorder = memoryRecorder;
     this.agentExecutor = agentExecutor;
@@ -369,7 +370,14 @@ export class LiveConversationService {
     let completion = null;
     try {
       const memory = this.memoryProvider ? await this.memoryProvider({ sessionId, input: humanMessage.texto }) : null;
-      const systemPrompt = this.identityService?.composeSystemPrompt({ session, memory }) ?? null;
+      const identityPrompt = this.identityService?.composeSystemPrompt({ session, memory }) ?? null;
+      const connectionScope = {
+        taskId: runId,
+        agentId: LIVE_DEFAULT_IDENTITY,
+        areaId: session.areaId,
+      };
+      const connectionPrompt = this.connectionRegistry?.promptContext(connectionScope) || null;
+      const systemPrompt = [identityPrompt, connectionPrompt].filter(Boolean).join("\n\n") || null;
       const history = this.live.listMessages(sessionId).map(message => ({
         role: message.role === "human" ? "user" : message.role,
         content: message.texto
@@ -383,7 +391,8 @@ export class LiveConversationService {
         turnId: runId,
         input: { modality: "text", text: humanMessage.texto },
         messages: history,
-        signal: controller.signal
+        signal: controller.signal,
+        authorizeTool: input => this.connectionRegistry?.authorizeTool(input, connectionScope),
       });
 
       if (specialistAgentIds.length > 0 && this.agentExecutor) {
@@ -397,6 +406,7 @@ export class LiveConversationService {
             agentId: specialistAgentId,
             prompt: objective,
             sessionId,
+            areaId: session.areaId,
             parentRunId: runId,
             activate: true,
             signal: controller.signal,
