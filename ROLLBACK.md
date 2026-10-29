@@ -1309,5 +1309,8 @@ ruído ambiente, exigir fala sustentada e fechar qualquer enunciado em até 18s.
 O STT envia bytes WAV explícitos no Tauri e aplica timeouts diferentes ao
 sidecar local e ao fallback remoto. Reverter este complemento restaura o limiar
 fixo e o envio de `Blob`; não reverta nem apague a autorização TCC já concedida.
+No Tauri, a orbe também compensa metade da barra de título para coincidir com o
+centro geométrico da janela inteira; navegador e mobile mantêm o centro da
+viewport sem compensação.
 
 ---

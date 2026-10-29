@@ -52,7 +52,8 @@ test("modo Presença nunca fica visualmente vivo com transporte morto", () => {
   const controller = readFileSync(join(root, "src", "lib", "pulso", "audio", "VoiceSessionController.ts"), "utf8");
   const transport = readFileSync(join(root, "src", "lib", "pulso", "audio", "PresenceTransport.ts"), "utf8");
 
-  assert.match(livePage, /: presenceMode\s*\? \{ x: windowWidth \/ 2, y: windowHeight \/ 2 \}/);
+  assert.match(livePage, /: presenceMode\s*\? presenceWindowCenter/);
+  assert.match(livePage, /window\.outerHeight - window\.innerHeight/);
   assert.match(controller, /GEMINI_LIVE_FALLBACK_TO_TURN_BASED/);
   assert.match(controller, /fallbackFromGemini\('setup_timeout'\)/);
   assert.match(controller, /getPresenceTranscriptionEndpoints\(isTauriEnv\)/);

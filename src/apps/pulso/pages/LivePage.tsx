@@ -6702,10 +6702,20 @@ ${data.transcription}`, {
   const isWorkspaceMode = isAtelieActive || isEstudioActive;
   const orbHasEntered = orbEntryPhase === 'travel' || orbEntryPhase === 'settled';
   const orbHasAligned = orbEntryPhase === 'align' || orbEntryPhase === 'handoff' || orbHasEntered;
+  // No desktop Tauri, `innerHeight` exclui a barra de título, enquanto Fe
+  // percebe o centro pela janela inteira. Compensar metade desse chrome leva
+  // a orbe ao centro geométrico do frame sem deslocar navegador ou mobile.
+  const presenceWindowChromeOffsetY = coreDesktopEnabled && typeof window !== 'undefined'
+    ? Math.max(0, (window.outerHeight - window.innerHeight) / 2)
+    : 0;
+  const presenceWindowCenter = {
+    x: windowWidth / 2,
+    y: windowHeight / 2 - presenceWindowChromeOffsetY,
+  };
   const orbTarget = !orbHasEntered
     ? { x: windowWidth / 2, y: windowHeight / 2 }
     : presenceMode
-      ? { x: windowWidth / 2, y: windowHeight / 2 }
+      ? presenceWindowCenter
       : hasSplitChats
       ? (splitOrbPosition || { x: windowWidth / 2, y: windowHeight / 2 })
       : isWorkspaceMode
