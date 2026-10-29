@@ -3,6 +3,9 @@ import test from 'node:test';
 // @ts-expect-error Node's strip-types runner executes the TypeScript source directly.
 import {
   PRESENCE_TRANSPORT_STORAGE_KEY,
+  PRESENCE_LIVE_READY_TIMEOUT_MS,
+  PRESENCE_REMOTE_STT_URL,
+  getPresenceTranscriptionEndpoints,
   readPresenceTransportPreference,
   shouldUseGeminiLive,
   writePresenceTransportPreference,
@@ -70,4 +73,13 @@ test('Gemini usa o relay; local continua explicitamente local', () => {
   assert.equal(shouldUseGeminiLive('gemini_live'), true);
   assert.equal(shouldUseGeminiLive('turn_based'), false);
   assert.equal(shouldUseGeminiLive('gemini_live', '?gemini_live=0'), false);
+});
+
+test('Presença desktop tem timeout curto e STT remoto como fallback do sidecar local', () => {
+  assert.equal(PRESENCE_LIVE_READY_TIMEOUT_MS, 4_500);
+  assert.deepEqual(getPresenceTranscriptionEndpoints(true), [
+    'http://127.0.0.1:14323/transcribe',
+    PRESENCE_REMOTE_STT_URL,
+  ]);
+  assert.deepEqual(getPresenceTranscriptionEndpoints(false), ['/api/pulso/transcribe']);
 });

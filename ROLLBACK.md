@@ -1282,3 +1282,24 @@ uma leitura recusada do Chaves abortava o bootstrap inteiro. A reversão não de
 apagar nem recriar o item `pulso-operator`.
 
 ---
+# Presença viva e centro real da viewport · 29/10/2026
+
+Base preservada: `46e5456d` (`feature/pulso-core-v0.9-integrations-20261029`).
+
+Escopo desta correção:
+
+- limitar o tempo de partida da rota Gemini Live e cair automaticamente para o
+  pipeline por turnos quando autenticação/setup não concluírem;
+- preferir STT local quando disponível e usar a função remota já publicada como
+  fallback explícito quando o sidecar local não existir;
+- manter despacho e resposta no PULSO Core canônico;
+- centralizar a orbe da Presença no centro matemático da viewport, sem herdar o
+  anchor histórico do chat.
+
+Reversão de código: reverter o commit desta correção. Reversão no MacBook:
+encerrar somente `PULSO Next Preview.app`, restaurar o bundle datado preservado
+antes da promoção e reabrir. Preservar `pulso-core.sqlite`, o diretório de dados,
+o item `pulso-operator` e a identidade `PULSO Local Signing`. Não tocar na
+`/Applications/PULSO.app` estável nem no iMac.
+
+---

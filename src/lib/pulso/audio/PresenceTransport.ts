@@ -10,6 +10,8 @@ const GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY = 'pulso_presence_transport_migratio
 // build works in the browser. The relay URL is public; authorization comes
 // from the signed Firebase session sent after the WebSocket opens.
 const DEFAULT_LIVE_VOICE_RELAY_URL = 'wss://72-62-105-195.nip.io/live-voice/live';
+export const PRESENCE_LIVE_READY_TIMEOUT_MS = 4_500;
+export const PRESENCE_REMOTE_STT_URL = 'https://felipedutraapps.web.app/api/pulso/transcribe';
 
 export function getGeminiLiveConfig() {
   const relayUrl = process.env.NEXT_PUBLIC_LIVE_VOICE_RELAY_URL || DEFAULT_LIVE_VOICE_RELAY_URL;
@@ -91,6 +93,12 @@ export function shouldUseGeminiLive(preference: PresenceTransportPreference, sea
   if (override === '1') return hasGeminiLiveConfig();
   if (preference === 'turn_based') return false;
   return hasGeminiLiveConfig();
+}
+
+export function getPresenceTranscriptionEndpoints(isDesktopRuntime: boolean) {
+  return isDesktopRuntime
+    ? ['http://127.0.0.1:14323/transcribe', PRESENCE_REMOTE_STT_URL]
+    : ['/api/pulso/transcribe'];
 }
 
 export function getPresenceDeviceId() {

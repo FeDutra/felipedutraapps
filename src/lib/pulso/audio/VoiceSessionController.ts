@@ -4,7 +4,11 @@ import {
   GeminiLiveState,
   PresenceAudioReceipt,
 } from './GeminiLiveClient';
-import { getGeminiLiveConfig } from './PresenceTransport';
+import {
+  getGeminiLiveConfig,
+  getPresenceTranscriptionEndpoints,
+  PRESENCE_LIVE_READY_TIMEOUT_MS,
+} from './PresenceTransport';
 import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
 import { classifyPresenceWork, PresenceWorkDecision } from '../presence/PresenceWorkRouter';
@@ -111,6 +115,10 @@ export class VoiceSessionController {
 
   // Modo experimental Gemini Live
   private geminiLiveClient: GeminiLiveClient | null = null;
+  private geminiReady = false;
+  private geminiFallbackStarted = false;
+  private geminiReadyTimer: ReturnType<typeof setTimeout> | null = null;
+  private initialAudioContext: AudioContext | null = null;
   private activeGeminiTurnId: string | null = null;
   private activePresenceRequestId: string | null = null;
   private deepFallbackCheckpointTimer: ReturnType<typeof setTimeout> | null = null;
@@ -379,13 +387,29 @@ export class VoiceSessionController {
     this.advanceTurn({ type: 'session_started' });
     this.transition('starting');
 
+    this.initialAudioContext = passedAudioContext ?? null;
+
     if (this.config.useGeminiLive) {
       const started = await this.startGeminiLive();
       if (started) return;
-      return;
     }
 
     await this.startTurnBased(passedAudioContext);
+  }
+
+  private clearGeminiReadyTimer() {
+    if (this.geminiReadyTimer) clearTimeout(this.geminiReadyTimer);
+    this.geminiReadyTimer = null;
+  }
+
+  private async fallbackFromGemini(reason: string) {
+    if (this.geminiFallbackStarted) return;
+    this.geminiFallbackStarted = true;
+    this.clearGeminiReadyTimer();
+    this.log('GEMINI_LIVE_FALLBACK_TO_TURN_BASED', { reason });
+    this.geminiLiveClient?.stop();
+    this.geminiLiveClient = null;
+    await this.startTurnBased(this.initialAudioContext ?? undefined);
   }
 
   private async startTurnBased(passedAudioContext?: AudioContext) {
@@ -653,30 +677,44 @@ export class VoiceSessionController {
     try {
       const isTauriEnv = this.isTauriRuntime();
 
-      const endpointUrl = isTauriEnv
-        ? 'http://127.0.0.1:14323/transcribe'
-        : '/api/pulso/transcribe';
       // plugin-http atravessa a fronteira nativa do Tauri sem depender do
       // CORS do WKWebView. No navegador comum, preservamos o fetch padrão.
       const requestFetch: typeof fetch = isTauriEnv
         ? (await import('@tauri-apps/plugin-http')).fetch
         : fetch;
 
-      const response = await requestFetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': blob.type || 'audio/webm',
-        },
-        body: blob,
-      });
+      const endpoints = getPresenceTranscriptionEndpoints(isTauriEnv);
+      let response: Response | null = null;
+      let selectedEndpoint = endpoints[0];
+      let lastFailure = 'transcritor indisponível';
+      for (const endpointUrl of endpoints) {
+        selectedEndpoint = endpointUrl;
+        try {
+          const candidate = await requestFetch(endpointUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': blob.type || 'audio/webm',
+            },
+            body: blob,
+          });
+          if (candidate.ok) {
+            response = candidate;
+            break;
+          }
+          lastFailure = `status ${candidate.status}`;
+        } catch (error) {
+          lastFailure = error instanceof Error ? error.message : String(error);
+        }
+        this.log('STT_ENDPOINT_FAILED', { endpointUrl, failure: lastFailure });
+      }
 
-      if (!response.ok) throw new Error(`Falha no STT (${response.status})`);
+      if (!response) throw new Error(`Falha no STT (${lastFailure})`);
 
       const data = await response.json();
       const userText = data.text || '';
       this.log('STT_REQUEST_FINISHED', {
         text: userText,
-        engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
+        engine: data.engine || (selectedEndpoint.includes('127.0.0.1') ? 'local' : 'cloud_fallback'),
         durationMs: data.durationMs,
       });
 
@@ -851,6 +889,10 @@ export class VoiceSessionController {
       getAccessToken: this.config.getGeminiAccessToken,
       systemInstruction: GEMINI_LIVE_SYSTEM_INSTRUCTION,
       onStateChange: (state) => {
+        if (state === 'listening') {
+          this.geminiReady = true;
+          this.clearGeminiReadyTimer();
+        }
         this.transition(mapGeminiLiveState(state));
       },
       onTranscript: (role, text) => {
@@ -867,8 +909,7 @@ export class VoiceSessionController {
       onError: (message) => {
         this.log('GEMINI_LIVE_ERROR', message);
         this.config.onPresenceWorkChange?.(false);
-        this.config.onError(`Conversa em tempo real indisponível: ${message}`);
-        this.transition('error');
+        void this.fallbackFromGemini(message);
       },
       onAudioReceipt: (receipt) => {
         this.persistAudioReceipt(receipt);
@@ -1002,6 +1043,11 @@ export class VoiceSessionController {
     });
 
     this.geminiLiveClient.start();
+    this.geminiReadyTimer = setTimeout(() => {
+      if (!this.geminiReady) {
+        void this.fallbackFromGemini('setup_timeout');
+      }
+    }, PRESENCE_LIVE_READY_TIMEOUT_MS);
     return true;
   }
 
@@ -1051,6 +1097,7 @@ export class VoiceSessionController {
     this.advanceTurn({ type: 'session_stopped' });
     this.transition('idle');
     this.clearDeepFallbackCheckpoint();
+    this.clearGeminiReadyTimer();
 
     if (this.geminiLiveClient) {
       this.geminiLiveClient.stop();

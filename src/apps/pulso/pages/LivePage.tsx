@@ -6704,7 +6704,9 @@ ${data.transcription}`, {
   const orbHasAligned = orbEntryPhase === 'align' || orbEntryPhase === 'handoff' || orbHasEntered;
   const orbTarget = !orbHasEntered
     ? { x: windowWidth / 2, y: windowHeight / 2 }
-    : hasSplitChats
+    : presenceMode
+      ? { x: windowWidth / 2, y: windowHeight / 2 }
+      : hasSplitChats
       ? (splitOrbPosition || { x: windowWidth / 2, y: windowHeight / 2 })
       : isWorkspaceMode
         ? {
