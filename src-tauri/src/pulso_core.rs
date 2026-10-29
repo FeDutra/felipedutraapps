@@ -244,9 +244,24 @@ impl BridgeProcess {
                 cmd.env("PULSO_CODEX_BIN", codex_bin);
             }
         }
-        if let Some(operator) = operator_connection_from_keychain()? {
-            cmd.env("PULSO_OPERATOR_URL", operator.endpoint)
-                .env("PULSO_OPERATOR_TOKEN", operator.token);
+        match operator_connection_from_keychain() {
+            Ok(Some(operator)) => {
+                cmd.env("PULSO_OPERATOR_URL", operator.endpoint)
+                    .env("PULSO_OPERATOR_TOKEN", operator.token)
+                    .env("PULSO_OPERATOR_BOOT_STATUS", "available");
+            }
+            Ok(None) => {
+                cmd.env("PULSO_OPERATOR_BOOT_STATUS", "missing");
+            }
+            Err(error) => {
+                // The operator extends the Core; it must never become a fuse for
+                // sessions, memory or sync. macOS can legitimately deny a
+                // Keychain item after an ad-hoc candidate is replaced. Start the
+                // sovereign Core without the credential and expose an honest
+                // degraded state to the connection registry.
+                eprintln!("PULSO operator unavailable during boot: {error}");
+                cmd.env("PULSO_OPERATOR_BOOT_STATUS", "keychain_unavailable");
+            }
         }
 
         let mut child = cmd.spawn().map_err(|e| {

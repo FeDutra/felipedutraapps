@@ -1274,4 +1274,11 @@ rollback do bundle não remove tabelas nem registros novos. Antes de qualquer
 promoção, criar snapshot SQLite consistente e preservar o bundle instalado como
 rollback datado.
 
+Complemento após a primeira promoção: o operador no Chaves é uma extensão e
+não pode impedir o nascimento do Core. Se o macOS negar a ACL de uma candidata,
+o Core inicia sem o segredo e marca WhatsApp, jobs e dispositivos como
+`degraded`. Reverter este complemento restaura o comportamento anterior, no qual
+uma leitura recusada do Chaves abortava o bootstrap inteiro. A reversão não deve
+apagar nem recriar o item `pulso-operator`.
+
 ---

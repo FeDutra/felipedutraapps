@@ -129,6 +129,9 @@ export class PulsoDesktopBridge {
           })
         : null
     );
+    this.operatorBootStatus = this.operatorClient
+      ? "available"
+      : (process.env.PULSO_OPERATOR_BOOT_STATUS || "missing");
     this.privateMemory = options.memoryProvider || new PrivateMemoryProvider({
       rootDir: join(this.dataDir, "private-context"),
     });
@@ -370,6 +373,7 @@ export class PulsoDesktopBridge {
     this.automations.restore();
     this.connections.restore();
     this.connections.importInventory(DEFAULT_CONNECTION_INVENTORY);
+    this.reconcileOperatorConnections();
     this.automations.importSnapshot();
     if (!this.automationTimer) {
       this.automationTimer = setInterval(() => {
@@ -391,6 +395,7 @@ export class PulsoDesktopBridge {
             this.automations.restore();
             this.channels.restore();
             this.connections.restore();
+            this.reconcileOperatorConnections();
           }
           return receipt;
         } finally {
@@ -403,6 +408,21 @@ export class PulsoDesktopBridge {
       setTimeout(() => { synchronize().catch(() => {}); }, 1_000).unref?.();
     }
     this.initialized = true;
+  }
+
+  reconcileOperatorConnections() {
+    const status = this.operatorClient ? "available" : "degraded";
+    const code = this.operatorClient ? "operator_ready" : this.operatorBootStatus;
+    const current = new Map(this.connections.list().map(item => [item.connectionId, item]));
+    for (const connectionId of ["whatsapp-fe", "scheduler-oficial", "fe-macs"]) {
+      const profile = current.get(connectionId);
+      if (!profile || profile.status === status) continue;
+      this.connections.recordHealth(connectionId, {
+        ok: Boolean(this.operatorClient),
+        status,
+        code,
+      });
+    }
   }
 
   formatSuccessResponse(requestId, result) {

@@ -5,6 +5,7 @@ import {
   ConnectionRegistryService,
   SqliteEventStore,
 } from '../vendor/pulso-core/src/index.mjs';
+import { PulsoDesktopBridge } from '../vendor/pulso-core/desktop/bridge.mjs';
 
 test('registro nomeia identidades sem expor slot de credencial', () => {
   const registry = new ConnectionRegistryService({
@@ -94,4 +95,30 @@ test('autorização usa binding de Área e libera identidade institucional corre
   registry.bind({ scopeType: 'area', scopeId: 'area_despertar', service: 'google', connectionId: 'google-despertar' });
   const receipt = registry.authorizeTool({ capability: 'tool.google_calendar.list_calendars' }, { areaId: 'area_despertar' });
   assert.equal(receipt.connection.connectionId, 'google-despertar');
+});
+
+test('Core nasce sem operador e marca WhatsApp, jobs e Macs como degradados', async () => {
+  const previousUrl = process.env.PULSO_OPERATOR_URL;
+  const previousToken = process.env.PULSO_OPERATOR_TOKEN;
+  const previousStatus = process.env.PULSO_OPERATOR_BOOT_STATUS;
+  delete process.env.PULSO_OPERATOR_URL;
+  delete process.env.PULSO_OPERATOR_TOKEN;
+  process.env.PULSO_OPERATOR_BOOT_STATUS = 'keychain_unavailable';
+  const bridge = new PulsoDesktopBridge({ dbPath: ':memory:' });
+  try {
+    await bridge.initialize();
+    for (const connectionId of ['whatsapp-fe', 'scheduler-oficial', 'fe-macs']) {
+      const connection = bridge.connections.list().find(item => item.connectionId === connectionId);
+      assert.equal(connection?.status, 'degraded');
+      assert.equal(connection?.metadata?.health?.code, 'keychain_unavailable');
+    }
+  } finally {
+    await bridge.close();
+    if (previousUrl === undefined) delete process.env.PULSO_OPERATOR_URL;
+    else process.env.PULSO_OPERATOR_URL = previousUrl;
+    if (previousToken === undefined) delete process.env.PULSO_OPERATOR_TOKEN;
+    else process.env.PULSO_OPERATOR_TOKEN = previousToken;
+    if (previousStatus === undefined) delete process.env.PULSO_OPERATOR_BOOT_STATUS;
+    else process.env.PULSO_OPERATOR_BOOT_STATUS = previousStatus;
+  }
 });
