@@ -212,7 +212,15 @@ pub fn run() {
         Ok(sidecar_command) => {
           let command = sidecar_command.args([model_path.to_str().unwrap(), voices_path.to_str().unwrap()]);
           match command.spawn() {
-            Ok((_rx, _child)) => println!("Kokoro sidecar started successfully."),
+            Ok((mut receiver, _child)) => {
+              // Kokoro mantém um servidor HTTP local. Se os eventos do
+              // sidecar não forem drenados, stdout/stderr podem encher e
+              // bloquear justamente as próximas respostas de voz.
+              tauri::async_runtime::spawn(async move {
+                while receiver.recv().await.is_some() {}
+              });
+              println!("Kokoro sidecar started successfully.");
+            },
             Err(e) => eprintln!("Failed to spawn Kokoro sidecar: {}", e),
           }
         },

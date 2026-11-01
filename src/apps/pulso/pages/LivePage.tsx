@@ -3464,13 +3464,12 @@ export default function LivePage() {
             const canNarrateProgress = voiceModeRef.current === 'presence'
               && voiceReplyRequestsRef.current.has(originRequestId)
               && (progressTimeMs === 0 || progressTimeMs > presenceSessionStartTimeRef.current)
-              && presenceController?.isGeminiLiveActive()
               && !narratedPresenceProgressRef.current.has(req.id);
             if (canNarrateProgress) {
               const progressText = (req.text || req.message || '').trim();
               if (progressText && presenceController?.notifyPresenceCheckpoint(progressText, originRequestId)) {
                 narratedPresenceProgressRef.current.add(req.id);
-                console.log('[PULSO_GEMINI_LIVE_CHECKPOINT_NARRATED]', { requestId: req.id });
+                console.log('[PULSO_PRESENCE_CHECKPOINT_NARRATED]', { requestId: req.id });
               }
             }
           }
@@ -3552,8 +3551,6 @@ export default function LivePage() {
                     : '[PULSO_GEMINI_LIVE_RESULT_SUPPRESSED]',
                   { requestId: originRequestId },
                 );
-              } else if (voiceStateRef.current === 'speaking') {
-                console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
               } else {
                 spokenRequestsRef.current.add(req.id);
                 const msgId = `lotus-${req.id}`;
