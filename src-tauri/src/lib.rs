@@ -9,8 +9,9 @@ use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandChild;
 
 const KOKORO_PORT: u16 = 14321;
 
@@ -247,6 +248,9 @@ fn kokoro_is_ready() -> bool {
     TcpStream::connect_timeout(&address, Duration::from_millis(120)).is_ok()
 }
 
+#[derive(Default)]
+struct KokoroSidecarState(Mutex<Option<CommandChild>>);
+
 #[tauri::command]
 fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     // Voice is an optional capability. It must never participate in the cold
@@ -275,7 +279,7 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
             model_path.to_string_lossy().to_string(),
             voices_path.to_string_lossy().to_string(),
         ]);
-    let (mut receiver, _child) = command
+    let (mut receiver, child) = command
         .spawn()
         .map_err(|error| format!("Failed to spawn Kokoro sidecar: {error}"))?;
 
@@ -286,6 +290,7 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn(async move {
         while receiver.recv().await.is_some() {}
     });
+    *app.state::<KokoroSidecarState>().0.lock().unwrap() = Some(child);
 
     for _ in 0..40 {
         if kokoro_is_ready() {
@@ -486,9 +491,10 @@ fn desktop_boot_probe(app: tauri::AppHandle, payload: &str) -> Result<(), String
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
     .append_invoke_initialization_script(PULSO_DESKTOP_HISTORY_GUARD)
     .manage(Mutex::new(BridgeManager::default()))
+    .manage(KokoroSidecarState::default())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_http::init())
     .invoke_handler(tauri::generate_handler![
@@ -540,6 +546,22 @@ pub fn run() {
 
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+      if !matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
+        return;
+      }
+
+      let sidecar = app_handle.state::<KokoroSidecarState>();
+      let Some(child) = sidecar.0.lock().unwrap().take() else {
+        return;
+      };
+
+      let _ = std::process::Command::new("/usr/bin/pkill")
+        .args(["-TERM", "-P", &child.pid().to_string()])
+        .status();
+      let _ = child.kill();
+    });
 }
