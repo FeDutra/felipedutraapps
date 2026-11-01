@@ -11,6 +11,7 @@ import { MessageActions, type Message as RenderMessage } from './chat/MessageRen
 import { MessageAttachments, type RenderableAttachment } from './chat/MessageAttachments';
 import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
 import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assistantIdentity';
+import { sanitizeAssistantConversationText } from '../lib/conversationText';
 
 interface PaneMessage extends RenderMessage {
   sender: 'user' | 'lotus';
@@ -35,7 +36,7 @@ interface SecondaryChatPaneProps {
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
 
 function toRenderableConversationText(value: unknown): string {
-  const text = typeof value === 'string' ? value : '';
+  const text = sanitizeAssistantConversationText(value);
   return TECHNICAL_HISTORY_OMISSION.test(text)
     ? 'Esta resposta ficou grande demais para ser carregada integralmente neste histórico.'
     : text;
