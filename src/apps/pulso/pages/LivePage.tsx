@@ -13,6 +13,7 @@ import type { LocalPresenceFastPathResult } from '@/lib/pulso/actions/localPrese
 import { float32ToInt16Bytes } from '@/lib/pulso/audio/pcmWav';
 import { isPresenceOwnedRequest } from '@/lib/pulso/presence/PresenceWorkRouter';
 import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assistantIdentity';
+import { sanitizeAssistantConversationText, userFacingConversationError } from '../lib/conversationText';
 
 import {
   DndContext,
@@ -564,7 +565,7 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
 }
 
 function toRenderableConversationText(value: unknown): string {
-  const text = typeof value === 'string' ? value : '';
+  const text = sanitizeAssistantConversationText(value);
   if (TECHNICAL_HISTORY_OMISSION.test(text)) {
     return 'Esta resposta ficou grande demais para ser carregada integralmente neste histórico.';
   }
@@ -3423,7 +3424,8 @@ export default function LivePage() {
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-              const errorText = toRenderableConversationText(req.openclawResult?.responseText) || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
+              const errorText = toRenderableConversationText(req.openclawResult?.responseText)
+                || userFacingConversationError(req.openclawResult?.error);
               chatHistory.push({
                 id: `lotus-${req.id || Math.random()}`,
                 sender: 'lotus',
@@ -3790,7 +3792,8 @@ export default function LivePage() {
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-              const errorText = toRenderableConversationText(req.openclawResult?.responseText) || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
+              const errorText = toRenderableConversationText(req.openclawResult?.responseText)
+                || userFacingConversationError(req.openclawResult?.error);
               chatHistory.push({
                 id: `lotus-${req.id}`,
                 sender: 'lotus',
