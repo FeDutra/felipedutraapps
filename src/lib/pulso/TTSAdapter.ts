@@ -45,6 +45,17 @@ const resolveKokoroVoice = (voice: string) => (
   isKokoroVoiceExpression(voice) ? voice : DEFAULT_KOKORO_VOICE
 );
 
+// O runner local empacotado usa kokoro-onnx diretamente e aceita apenas um
+// voice id. Expressões ponderadas são válidas no serviço remoto, mas fazem o
+// sidecar responder 400 e deixam o desktop completamente mudo. Mantemos a
+// expressão nas preferências e escolhemos sua voz principal somente na borda
+// local.
+export const resolveKokoroVoiceForProvider = (provider: TTSProvider, voice: string) => {
+  const resolved = resolveKokoroVoice(voice);
+  if (provider !== 'local_kokoro_sidecar') return resolved;
+  return resolved.match(/^([a-z]{2}_[a-z0-9]+)/i)?.[1] || 'pf_dora';
+};
+
 const DEFAULT_PREFERENCES: TTSPreferences = {
   ttsProvider: 'kokoro_http',
   voiceName: '',
@@ -173,7 +184,10 @@ export class TTSAdapter {
     console.log('[PULSO_TTS_KOKORO_WARMUP_START]');
     try {
       const payloadText = this.normalizeTextForSpeech('ok');
-      const voice = resolveKokoroVoice(this.preferences.voiceName);
+      const voice = resolveKokoroVoiceForProvider(
+        this.preferences.ttsProvider,
+        this.preferences.voiceName,
+      );
       const rate = this.preferences.rate;
 
       let endpoint = getKokoroEndpoint();
@@ -542,7 +556,7 @@ export class TTSAdapter {
   }
 
   private async getChunkAudio(chunkText: string, provider: TTSProvider, voice: string, rate: number, signal?: AbortSignal): Promise<Blob> {
-    const actualVoice = resolveKokoroVoice(voice);
+    const actualVoice = resolveKokoroVoiceForProvider(provider, voice);
     const actualRate = rate;
     
     const cacheKey = `${provider}:${actualVoice}:${actualRate}:${chunkText}`;
@@ -726,7 +740,10 @@ export class TTSAdapter {
       return;
     }
 
-    const voice = resolveKokoroVoice(this.preferences.voiceName);
+    const voice = resolveKokoroVoiceForProvider(
+      this.preferences.ttsProvider,
+      this.preferences.voiceName,
+    );
     const rate = this.preferences.rate;
     const provider = this.preferences.ttsProvider;
 

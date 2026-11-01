@@ -1,5 +1,6 @@
-use tauri::{Manager, Emitter};
+use tauri::{Manager, Emitter, RunEvent};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandChild;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 use std::fs;
@@ -7,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use base64::Engine;
 use ed25519_dalek::{pkcs8::DecodePrivateKey, Signer, SigningKey};
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 
 mod agent;
 use agent::local_machine::{local_open_url, execute_applescript, local_music_play};
@@ -18,6 +20,9 @@ use agent::voice_recording::{
   voice_recording_mark,
   voice_recording_recover_incomplete,
 };
+
+#[derive(Default)]
+struct KokoroSidecarState(Mutex<Option<CommandChild>>);
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,9 +173,10 @@ fn execute_long_command_stream(app: tauri::AppHandle, command: &str) -> Result<(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let app = tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_http::init())
+    .manage(KokoroSidecarState::default())
     .invoke_handler(tauri::generate_handler![
       local_open_url,
       execute_applescript,
@@ -212,13 +218,14 @@ pub fn run() {
         Ok(sidecar_command) => {
           let command = sidecar_command.args([model_path.to_str().unwrap(), voices_path.to_str().unwrap()]);
           match command.spawn() {
-            Ok((mut receiver, _child)) => {
+            Ok((mut receiver, child)) => {
               // Kokoro mantém um servidor HTTP local. Se os eventos do
               // sidecar não forem drenados, stdout/stderr podem encher e
               // bloquear justamente as próximas respostas de voz.
               tauri::async_runtime::spawn(async move {
                 while receiver.recv().await.is_some() {}
               });
+              *app.state::<KokoroSidecarState>().0.lock().unwrap() = Some(child);
               println!("Kokoro sidecar started successfully.");
             },
             Err(e) => eprintln!("Failed to spawn Kokoro sidecar: {}", e),
@@ -232,6 +239,26 @@ pub fn run() {
 
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application");
+
+  app.run(|app_handle, event| {
+    if !matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
+      return;
+    }
+
+    let sidecar = app_handle.state::<KokoroSidecarState>();
+    let Some(child) = sidecar.0.lock().unwrap().take() else {
+      return;
+    };
+
+    // PyInstaller mantém um processo-filho que serve a porta 14321. Encerrar
+    // somente o bootloader deixa esse servidor órfão e a próxima abertura da
+    // PULSO fica sem voz. Derrubamos primeiro os descendentes e depois o
+    // processo controlado pelo plugin.
+    let _ = std::process::Command::new("/usr/bin/pkill")
+      .args(["-TERM", "-P", &child.pid().to_string()])
+      .status();
+    let _ = child.kill();
+  });
 }
