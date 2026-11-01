@@ -11,6 +11,64 @@ function decode(value) {
   return JSON.parse(value);
 }
 
+function decodeEventRow(row) {
+  const failures = [];
+  let actor;
+  let payload;
+
+  try {
+    actor = decode(row.actor_json);
+  } catch (error) {
+    failures.push({ field: "actor_json", error });
+  }
+
+  try {
+    payload = decode(row.payload_json);
+  } catch (error) {
+    failures.push({ field: "payload_json", error });
+  }
+
+  if (failures.length > 0) {
+    return {
+      event: null,
+      corruption: Object.freeze({
+        rowId: row.rowid,
+        eventId: row.event_id,
+        eventType: row.event_type,
+        aggregateType: row.aggregate_type,
+        aggregateId: row.aggregate_id,
+        aggregateSequence: row.aggregate_sequence,
+        fields: Object.freeze(failures.map(item => item.field)),
+        errors: Object.freeze(failures.map(item => Object.freeze({
+          field: item.field,
+          name: item.error?.name || "SyntaxError",
+          message: item.error?.message || "invalid_json",
+        }))),
+        recordedAt: row.recorded_at,
+      }),
+    };
+  }
+
+  return {
+    event: {
+      eventId: row.event_id,
+      type: row.event_type,
+      aggregate: {
+        type: row.aggregate_type,
+        id: row.aggregate_id,
+        sequence: row.aggregate_sequence
+      },
+      correlationId: row.correlation_id,
+      causationId: row.causation_id,
+      actor,
+      payload,
+      occurredAt: row.occurred_at,
+      recordedAt: row.recorded_at
+    },
+    corruption: null,
+  };
+}
+
 export class SqliteEventStore {
   constructor(filename = ":memory:") {
     this.filename = filename;
@@ -50,6 +108,8 @@ export class SqliteEventStore {
     this.nextSequence = this.db.prepare("SELECT COALESCE(MAX(aggregate_sequence),0)+1 AS seq FROM events WHERE aggregate_type=? AND aggregate_id=?");
     this.findIdempotencyStmt = this.db.prepare("SELECT entity_id FROM idempotency WHERE scope=? AND key=?");
     this.insertIdempotency = this.db.prepare("INSERT INTO idempotency (scope,key,entity_id,created_at) VALUES (?,?,?,?)");
+    this.selectEvents = this.db.prepare("SELECT rowid, * FROM events ORDER BY rowid");
+    this.lastCorruptEvents = Object.freeze([]);
     this._txDepth = 0;
     this.beforeAppendHook = null;
   }
@@ -145,22 +205,34 @@ export class SqliteEventStore {
     return this.runInTransaction(() => this.appendInTransaction(drafts, options));
   }
 
+  loadEvents() {
+    const rows = this.selectEvents.all();
+    const events = [];
+    const corruptions = [];
+
+    for (const row of rows) {
+      const decoded = decodeEventRow(row);
+      if (decoded.event) events.push(decoded.event);
+      if (decoded.corruption) corruptions.push(decoded.corruption);
+    }
+
+    this.lastCorruptEvents = Object.freeze(corruptions);
+    return { rows, events, corruptions: this.lastCorruptEvents };
+  }
+
   all() {
-    return this.db.prepare("SELECT * FROM events ORDER BY rowid").all().map(row => ({
-      eventId: row.event_id,
-      type: row.event_type,
-      aggregate: {
-        type: row.aggregate_type,
-        id: row.aggregate_id,
-        sequence: row.aggregate_sequence
-      },
-      correlationId: row.correlation_id,
-      causationId: row.causation_id,
-      actor: decode(row.actor_json),
-      payload: decode(row.payload_json),
-      occurredAt: row.occurred_at,
-      recordedAt: row.recorded_at
-    }));
+    return this.loadEvents().events;
+  }
+
+  corruptionReport() {
+    const { rows, events, corruptions } = this.loadEvents();
+    return Object.freeze({
+      status: corruptions.length > 0 ? "degraded" : "healthy",
+      totalEvents: rows.length,
+      readableEvents: events.length,
+      corruptEvents: corruptions.length,
+      events: corruptions,
+    });
   }
 
   byCorrelation(correlationId) {
@@ -168,14 +240,23 @@ export class SqliteEventStore {
   }
 
   verifyIntegrity() {
+    const { rows, events, corruptions } = this.loadEvents();
     const expected = new Map();
-    for (const event of this.all()) {
-      const key = event.aggregate.type + ":" + event.aggregate.id;
+    for (const row of rows) {
+      const key = row.aggregate_type + ":" + row.aggregate_id;
       const next = (expected.get(key) ?? 0) + 1;
-      invariant(event.aggregate.sequence === next, "aggregate_sequence_gap:" + key);
+      invariant(row.aggregate_sequence === next, "aggregate_sequence_gap:" + key);
       expected.set(key, next);
     }
-    return { ok: true, events: this.all().length, aggregates: expected.size };
+    return {
+      ok: true,
+      status: corruptions.length > 0 ? "degraded" : "healthy",
+      degraded: corruptions.length > 0,
+      events: rows.length,
+      readableEvents: events.length,
+      corruptEvents: corruptions.length,
+      aggregates: expected.size,
+    };
   }
 
   backup(destination) {

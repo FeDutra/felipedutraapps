@@ -1,3 +1,20 @@
+# Rollback — canário do narrador de Presença (01/11/2026)
+
+- Commit do canário: `d7a24227c1a7db184cd2cf63d09008bb9a51c906`.
+- Bundle isolado: `com.felipedutraapps.pulso.next-preview`, versão `0.9.0`, alvo `x86_64-apple-darwin`.
+- Escopo: restaurar voz local, narrar checkpoints reais do fluxo legado e frases completas já produzidas pelo streaming do Core, sem alterar a gravação comum nem substituir `/Applications/PULSO.app`.
+- Backup obrigatório antes da instalação: mover o Preview vigente para `/Applications/PULSO Next Preview.rollback-before-presence-d7a24227-20261101T2204Z.app`.
+
+## Reversão no iMac
+
+1. Encerrar somente `PULSO Next Preview` e seus sidecars.
+2. Preservar o canário com sufixo `.failed-d7a24227`; não apagar.
+3. Restaurar o bundle acima para `/Applications/PULSO Next Preview.app`.
+4. Encerrar qualquer `kokoro_runner` pertencente ao canário e reabrir a PULSO anterior.
+5. Não alterar bancos, preferências, gravações recuperáveis, Firestore, PULSO estável ou credenciais.
+
+---
+
 # Rollback — entrada raiz compatível com WKWebView do macOS 14 (24/10/2026)
 
 - Baseline: `747d1f373229d28c47f9e829fa20f4213d0a7e27`.
@@ -1153,3 +1170,13 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Motivo:** qualquer combinação anterior ainda deixava uma transição de History API: `/index.html → /`, `/ → /pulso/live/` ou `/pulso/live/index.html → /pulso/live/`. No WKWebView 14 essa transição é promovida a uma carga inválida. A nova entrada nasce e permanece na raiz, sem redirect, `router.replace`, `pushState` ou `replaceState`.
 - **Reversão de código:** reverter o commit desta mudança restaura o redirecionamento Tauri da rota raiz e/ou a URL explícita da janela.
 - **Reversão da instalação:** restaurar apenas o `.app` anterior; preservar banco e contexto privado.
+
+---
+# Presença com progresso canônico + Core resiliente · 01/11/2026
+
+- **Mudança:** o modo Presença narra apenas checkpoints reais e frases completas já produzidas pelo fluxo canônico; o `SqliteEventStore` isola eventos cujo JSON histórico não pode ser lido, preservando-os no SQLite e expondo integridade degradada sem derrubar o Core.
+- **Dados:** nenhum evento é apagado, reescrito ou reparado automaticamente. O evento isolado permanece no banco para auditoria futura.
+- **Gravação comum:** não faz parte desta alteração. O ciclo `MediaRecorder`/WAV/STT existente não deve ser modificado nem substituído nesta promoção.
+- **Reversão de código:** reverter o commit desta alteração restaura o narrador anterior e a leitura estrita do Event Store.
+- **Reversão da instalação:** encerrar somente o aplicativo promovido e restaurar os bundles datados de `PULSO.app` e `PULSO Next Preview.app` preservados imediatamente antes da instalação.
+- **Banco:** nunca substituir o SQLite vivo por uma cópia antiga durante rollback do bundle. Antes da promoção, criar backup transacional separado; em caso de reversão, manter o banco atual e restaurar apenas o aplicativo, salvo decisão explícita após auditoria.
