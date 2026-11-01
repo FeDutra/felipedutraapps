@@ -35,14 +35,14 @@ function withWindow(protocol: string, run: (storage: MemoryStorage) => void) {
   }
 }
 
-test('restaura Gemini Live uma única vez no desktop Tauri', () => {
+test('migra o desktop uma única vez para o narrador local', () => {
   withWindow('tauri:', (storage) => {
-    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'turn_based');
-    assert.equal(readPresenceTransportPreference(), 'gemini_live');
-    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'gemini_live');
-
-    writePresenceTransportPreference('turn_based');
+    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
     assert.equal(readPresenceTransportPreference(), 'turn_based');
+    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'turn_based');
+
+    writePresenceTransportPreference('gemini_live');
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
   });
 });
 
@@ -54,9 +54,8 @@ test('mantém Gemini explícito como padrão fora do desktop', () => {
 
 test('remove auto do desktop sem sobrescrever escolha local explícita', () => {
   withWindow('tauri:', (storage) => {
-    // Executa a migração histórica e depois reproduz o estado ambíguo que
-    // permaneceu no iMac antes desta correção.
-    assert.equal(readPresenceTransportPreference(), 'gemini_live');
+    // Executa a migração nova e depois reproduz um estado legado ambíguo.
+    assert.equal(readPresenceTransportPreference(), 'turn_based');
     storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'auto');
     assert.equal(readPresenceTransportPreference(), 'gemini_live');
     assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'gemini_live');

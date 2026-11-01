@@ -138,9 +138,17 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
             model_path.to_string_lossy().to_string(),
             voices_path.to_string_lossy().to_string(),
         ]);
-    command
+    let (mut receiver, _child) = command
         .spawn()
         .map_err(|error| format!("Failed to spawn Kokoro sidecar: {error}"))?;
+
+    // O sidecar escreve logs em stdout/stderr. Se o receiver for abandonado,
+    // o pipe enche depois de muitas sínteses e o servidor bloqueia antes de
+    // devolver os headers HTTP. Drenar os eventos é parte da disponibilidade
+    // da voz, mesmo quando não persistimos esses logs.
+    tauri::async_runtime::spawn(async move {
+        while receiver.recv().await.is_some() {}
+    });
 
     for _ in 0..40 {
         if kokoro_is_ready() {

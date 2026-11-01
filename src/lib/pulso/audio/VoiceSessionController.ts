@@ -56,6 +56,13 @@ export interface PresenceNarrationContext {
   kind?: PresenceNarrationKind;
 }
 
+interface QueuedPresenceNarration {
+  text: string;
+  context: PresenceNarrationContext & { turnId?: string };
+  onStart?: () => void;
+  onEnd?: () => void;
+}
+
 const PRESENCE_AUDIO_RECEIPTS_STORAGE_KEY = 'pulso_presence_audio_receipts_v1';
 const MAX_PRESENCE_AUDIO_RECEIPTS = 120;
 
@@ -116,6 +123,8 @@ export class VoiceSessionController {
   private deepFallbackCheckpointTimer: ReturnType<typeof setTimeout> | null = null;
   private activeTurnBasedTurnId: string | null = null;
   private readonly turnMachine = new PresenceTurnMachine();
+  private localNarrationQueue: QueuedPresenceNarration[] = [];
+  private localNarrationActive = false;
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
@@ -229,19 +238,6 @@ export class VoiceSessionController {
   private clearDeepFallbackCheckpoint() {
     if (this.deepFallbackCheckpointTimer) clearTimeout(this.deepFallbackCheckpointTimer);
     this.deepFallbackCheckpointTimer = null;
-  }
-
-  private scheduleDeepFallbackCheckpoint(turnId: string) {
-    this.clearDeepFallbackCheckpoint();
-    this.deepFallbackCheckpointTimer = setTimeout(() => {
-      this.deepFallbackCheckpointTimer = null;
-      if (turnId !== this.activeGeminiTurnId) return;
-      const accepted = this.geminiLiveClient?.sendCheckpointText(
-        'Ainda estou cruzando as informações.',
-        turnId,
-      ) ?? false;
-      if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
-    }, 12_000);
   }
 
   private log(tag: string, details?: any) {
@@ -639,6 +635,8 @@ export class VoiceSessionController {
     
     // Aborta requests pendentes de TTS
     this.ttsAdapter.cancel();
+    this.localNarrationQueue = [];
+    this.localNarrationActive = false;
 
     // Volta imediatamente para escuta do novo turno do usuário
     this.startListeningLoop();
@@ -762,9 +760,10 @@ export class VoiceSessionController {
       ?? this.activeGeminiTurnId
       ?? undefined;
 
+    const narrationKind = context.kind ?? 'result';
     if (turnId) {
       const result = this.advanceTurn({
-        type: 'result_received',
+        type: narrationKind === 'checkpoint' ? 'checkpoint_received' : 'result_received',
         turnId,
         requestId: context.requestId,
       });
@@ -779,59 +778,88 @@ export class VoiceSessionController {
       }
     }
 
-    if (!text.trim()) {
+    const normalizedText = text.trim();
+    if (!normalizedText) return false;
+
+    const queued: QueuedPresenceNarration = {
+      text: normalizedText,
+      context: { ...context, turnId },
+      onStart,
+      onEnd,
+    };
+    if (narrationKind === 'result') {
+      this.localNarrationQueue = this.localNarrationQueue.filter(item => (
+        item.context.kind !== 'checkpoint' || item.context.turnId !== turnId
+      ));
+      this.localNarrationQueue.push(queued);
+    } else if (narrationKind === 'checkpoint') {
+      const pendingIndex = this.localNarrationQueue.findIndex(item => (
+        item.context.kind === 'checkpoint' && item.context.turnId === turnId
+      ));
+      if (pendingIndex >= 0) this.localNarrationQueue[pendingIndex] = queued;
+      else this.localNarrationQueue.push(queued);
+    } else {
+      this.localNarrationQueue.push(queued);
+    }
+    this.drainLocalNarrationQueue();
+    return true;
+  }
+
+  private drainLocalNarrationQueue() {
+    if (this.localNarrationActive) return;
+    const next = this.localNarrationQueue.shift();
+    if (!next) {
+      this.log('SESSION_RETURNED_TO_LISTENING');
       this.startListeningLoop();
-      return false;
+      return;
     }
 
-    // Uma resposta Firestore pode chegar depois de o modo ter sido encerrado.
+    const turnId = next.context.turnId;
     if (!this.stream) {
       if (turnId) this.advanceTurn({ type: 'turn_interrupted', turnId });
-      return false;
+      this.localNarrationQueue = [];
+      return;
     }
 
     if (turnId) {
       this.advanceTurn({
         type: 'narration_started',
         turnId,
-        kind: context.kind ?? 'result',
+        kind: next.context.kind ?? 'result',
       });
     }
-
+    this.localNarrationActive = true;
     this.transition('speaking');
-    this.log('TTS_REQUEST_STARTED');
+    this.log('TTS_REQUEST_STARTED', { kind: next.context.kind ?? 'result', turnId });
     this.isAssistantSpeaking = true;
+    this.assistantSpeechStartMs = Date.now();
 
-    try {
-      // Usaremos o próprio TTSAdapter para buscar o áudio via API
-      this.assistantSpeechStartMs = Date.now();
-      this.ttsAdapter.speak(
-        text,
+    let settled = false;
+    const finishNarration = () => {
+      if (settled) return;
+      settled = true;
+      this.log('ASSISTANT_AUDIO_ENDED');
+      this.isAssistantSpeaking = false;
+      this.localNarrationActive = false;
+      if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
+      next.onEnd?.();
+      this.drainLocalNarrationQueue();
+    };
+
+    void this.ttsAdapter.speak(
+        next.text,
         () => {
           this.assistantSpeechStartMs = Date.now();
           this.log('ASSISTANT_AUDIO_STARTED');
-          onStart?.();
+          next.onStart?.();
         },
-        () => {
-          if (this.isAssistantSpeaking) {
-            this.log('ASSISTANT_AUDIO_ENDED');
-            this.isAssistantSpeaking = false;
-            if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
-            onEnd?.();
-            this.log('SESSION_RETURNED_TO_LISTENING');
-            this.startListeningLoop();
-          }
-        },
+        finishNarration,
         undefined,
-        { fallbackToNative: false }
-      );
-    } catch (e) {
-      console.warn('Erro ao reproduzir TTS:', e);
-      this.isAssistantSpeaking = false;
-      if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
-      this.startListeningLoop();
-    }
-    return true;
+        { fallbackToNative: false },
+      ).catch(error => {
+      console.warn('Erro ao reproduzir TTS:', error);
+      finishNarration();
+    });
   }
 
   // ---- Modo experimental Gemini Live ----
@@ -980,7 +1008,8 @@ export class VoiceSessionController {
               turnId,
               requestId: dispatch.requestId,
             });
-            this.scheduleDeepFallbackCheckpoint(turnId);
+            // Checkpoints vêm apenas do processo canônico. Silêncio não é
+            // preenchido com uma frase inventada pelo transporte vocal.
           } else if (!dispatch?.responseText) {
             this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', { turnId });
             this.advanceTurn({ type: 'turn_failed', turnId });
@@ -1005,23 +1034,32 @@ export class VoiceSessionController {
     return true;
   }
 
-  /**
-   * Chamado por fora (LivePage) quando um processo longo disparado durante o
-   * modo Presença solta uma atualização de progresso — repassa pra Gemini
-   * narrar como checkpoint, sem quebrar a lei de "nunca parecer perdida".
-   */
+  /** Narra progresso canônico com o transporte vocal que estiver ativo. */
   public notifyPresenceCheckpoint(checkpointText: string, requestId?: string) {
     const turnId = requestId
       ? this.turnMachine.findTurnIdByRequestId(requestId)
-      : this.activeGeminiTurnId ?? undefined;
+      : this.activeTurnBasedTurnId
+        ?? this.activeGeminiTurnId
+        ?? this.turnMachine.getSnapshot().activeTurnId
+        ?? undefined;
     const disposition = this.advanceTurn({ type: 'checkpoint_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
-    const accepted = this.geminiLiveClient?.sendCheckpointText(checkpointText, turnId) ?? false;
-    if (accepted) {
-      this.clearDeepFallbackCheckpoint();
-      this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
+    this.clearDeepFallbackCheckpoint();
+
+    if (this.geminiLiveClient?.isConnected()) {
+      const accepted = this.geminiLiveClient.sendCheckpointText(checkpointText, turnId);
+      if (accepted) {
+        this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
+      }
+      return accepted;
     }
-    return accepted;
+
+    void this.speakAssistant(checkpointText, undefined, undefined, {
+      turnId,
+      requestId,
+      kind: 'checkpoint',
+    });
+    return true;
   }
 
   /** Entrega à voz um resultado já produzido pela Lótus/OpenClaw. */
@@ -1051,6 +1089,8 @@ export class VoiceSessionController {
     this.advanceTurn({ type: 'session_stopped' });
     this.transition('idle');
     this.clearDeepFallbackCheckpoint();
+    this.localNarrationQueue = [];
+    this.localNarrationActive = false;
 
     if (this.geminiLiveClient) {
       this.geminiLiveClient.stop();

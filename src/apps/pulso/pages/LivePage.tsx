@@ -967,6 +967,7 @@ import { SummaryCards } from '../../../components/pulso/SummaryCards';
 import { intentRouter } from '../../../lib/pulso/llm/IntentRouter';
 import { localActions } from '../../../lib/pulso/actions/localActions';
 import { VoiceSessionController, VoiceSessionState } from '../../../lib/pulso/audio/VoiceSessionController';
+import { PresenceProgressNarrator } from '../../../lib/pulso/audio/PresenceProgressNarrator';
 import {
   getPresenceDeviceId,
   PresenceTransportPreference,
@@ -3610,13 +3611,12 @@ export default function LivePage() {
             const canNarrateProgress = voiceModeRef.current === 'presence'
               && voiceReplyRequestsRef.current.has(originRequestId)
               && (progressTimeMs === 0 || progressTimeMs > presenceSessionStartTimeRef.current)
-              && presenceController?.isGeminiLiveActive()
               && !narratedPresenceProgressRef.current.has(req.id);
             if (canNarrateProgress) {
               const progressText = (req.text || req.message || '').trim();
               if (progressText && presenceController?.notifyPresenceCheckpoint(progressText, originRequestId)) {
                 narratedPresenceProgressRef.current.add(req.id);
-                console.log('[PULSO_GEMINI_LIVE_CHECKPOINT_NARRATED]', { requestId: req.id });
+                console.log('[PULSO_PRESENCE_CHECKPOINT_NARRATED]', { requestId: req.id });
               }
             }
           }
@@ -3698,8 +3698,6 @@ export default function LivePage() {
                     : '[PULSO_GEMINI_LIVE_RESULT_SUPPRESSED]',
                   { requestId: originRequestId },
                 );
-              } else if (voiceStateRef.current === 'speaking') {
-                console.log('[PULSO_PRESENCE_AUTO_TTS_SKIPPED_ALREADY_SPEAKING]', { requestId: req.id });
               } else {
                 spokenRequestsRef.current.add(req.id);
                 const msgId = `lotus-${req.id}`;
@@ -4546,6 +4544,9 @@ export default function LivePage() {
       }
 
       const assistantMessageId = `lotus-core-stream-${preGeneratedReqId}`;
+      const presenceNarrator = originMode === 'presence'
+        ? new PresenceProgressNarrator()
+        : null;
       const updateStreamingMessage = (text: string) => {
         const nextMessage: Message = {
           id: assistantMessageId,
@@ -4576,7 +4577,13 @@ export default function LivePage() {
           text: messageText,
           idempotencyKey: preGeneratedReqId,
           signal: controller.signal,
-          onDelta: (_delta, accumulatedText) => updateStreamingMessage(accumulatedText),
+          onDelta: (_delta, accumulatedText) => {
+            updateStreamingMessage(accumulatedText);
+            const spokenChunk = presenceNarrator?.acceptAccumulatedResponse(accumulatedText);
+            if (spokenChunk) {
+              voiceSessionControllerRef.current?.notifyPresenceCheckpoint(spokenChunk);
+            }
+          },
           onState: run => {
             if (run.status === 'streaming') setContextTyping(sendingContextId, true);
           },
@@ -4597,6 +4604,13 @@ export default function LivePage() {
           ...mapped,
         ]);
         sessionsService.touchSession(sendingContextId);
+        if (originMode === 'presence') {
+          return {
+            requestId: preGeneratedReqId,
+            responseText: presenceNarrator?.finalRemainder(result.run.accumulatedText)
+              || result.run.accumulatedText,
+          };
+        }
       } catch (err: any) {
         const providerMissing = err?.code === 'PROVIDER_NOT_CONFIGURED';
         const lotusErrorMsg: Message = {
@@ -4609,6 +4623,7 @@ export default function LivePage() {
           contextId: sendingContextId,
         };
         setMessages(previous => [...previous.filter(message => message.id !== assistantMessageId), lotusErrorMsg]);
+        if (originMode === 'presence') throw err;
       } finally {
         coreAbortControllersRef.current.delete(sendingContextId);
         setContextTyping(sendingContextId, false);
