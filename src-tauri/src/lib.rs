@@ -530,16 +530,12 @@ pub fn run() {
         )?;
       }
 
-      if app.config().identifier.ends_with(".next-preview") {
-        let url = start_desktop_http(app.handle())?;
-        let window = app
-          .get_webview_window("main")
-          .ok_or_else(|| "PULSO main window is unavailable".to_string())?;
-        window.navigate(
-          url.parse()
-            .map_err(|error| format!("desktop HTTP URL is invalid: {error}"))?,
-        )?;
-      }
+      // The isolated Preview must boot through Tauri's packaged root exactly
+      // like the stable app. Navigating an `about:blank` WKWebView to a local
+      // HTTP origin proved unreliable on macOS 14 and produced WebKit's native
+      // "This page couldn't load" surface before the Core bridge could start.
+      // The document-start History guard above already keeps Next routing from
+      // invalidating the packaged `tauri://localhost` document.
 
       // O microsserviço Node.js do WhatsApp agora roda externamente (via PM2)
       // para garantir persistência independentemente do ciclo de vida da interface.
