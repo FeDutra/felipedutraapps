@@ -974,3 +974,21 @@ Baseline: `c46012ea` (`origin/main`).
 3. não reiniciar `pulso-live-voice.service`, pois o relay não muda;
 4. preservar todos os registros de voz já gravados no Firestore;
 5. manter MacBook e iPhone fora da reversão desta etapa.
+# Rollback — identidades canônicas do relay de Presença (02/11/2026)
+
+## Escopo
+
+- aceitar no relay as duas identidades Firebase já usadas por Fe: a conta
+  Google histórica e a conta canônica da PULSO clássica;
+- manter projeto, assinatura, validade e lista explícita de identidades como
+  controles obrigatórios;
+- não alterar gravação comum, captura de microfone, Gemini Live ou OpenClaw.
+
+## Reversão
+
+1. restaurar `/opt/pulso-live-voice` pelo backup criado antes da ativação;
+2. reiniciar apenas `pulso-live-voice.service`;
+3. manter o aplicativo instalado no MacBook, pois o bundle não muda;
+4. validar `/live-voice/healthz` e uma conexão autenticada após a reversão.
+
+---

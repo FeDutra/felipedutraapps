@@ -26,6 +26,9 @@ async function fetchFirebaseCertificates() {
 async function verifyFirebaseIdToken(token, options = {}) {
   const projectId = options.projectId;
   const allowedEmail = options.allowedEmail;
+  const allowedEmails = Array.isArray(options.allowedEmails)
+    ? options.allowedEmails.filter(Boolean)
+    : [];
   if (!projectId) throw new Error('firebase project id missing');
   if (typeof token !== 'string' || token.length > 16384) throw new Error('invalid firebase token');
 
@@ -51,7 +54,10 @@ async function verifyFirebaseIdToken(token, options = {}) {
   if (payload.aud !== projectId) throw new Error('invalid firebase audience');
   if (payload.iss !== `https://securetoken.google.com/${projectId}`) throw new Error('invalid firebase issuer');
   if (!payload.sub || typeof payload.sub !== 'string') throw new Error('invalid firebase subject');
-  if (allowedEmail && payload.email !== allowedEmail) throw new Error('firebase user not allowed');
+  const acceptedEmails = allowedEmail ? [allowedEmail, ...allowedEmails] : allowedEmails;
+  if (acceptedEmails.length > 0 && !acceptedEmails.includes(payload.email)) {
+    throw new Error('firebase user not allowed');
+  }
   if (!payload.exp || payload.exp <= nowSeconds) throw new Error('expired firebase token');
   if (!payload.iat || payload.iat > nowSeconds + 300) throw new Error('invalid firebase issued-at');
   if (payload.auth_time && payload.auth_time > nowSeconds + 300) throw new Error('invalid firebase auth time');

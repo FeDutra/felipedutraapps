@@ -7,7 +7,12 @@ const PORT = process.env.PORT || 8080;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ACCESS_TOKEN = process.env.PULSO_LIVE_VOICE_TOKEN;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'felipedutraapps';
-const PULSO_OWNER_EMAIL = process.env.PULSO_OWNER_EMAIL || 'felipemachadodutra@gmail.com';
+const PULSO_OWNER_EMAILS = (process.env.PULSO_OWNER_EMAILS
+  || process.env.PULSO_OWNER_EMAIL
+  || 'felipemachadodutra@gmail.com,felipe@pulso.local')
+  .split(',')
+  .map(email => email.trim())
+  .filter(Boolean);
 const GEMINI_WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
 const server = http.createServer((req, res) => {
@@ -82,7 +87,7 @@ wss.on('connection', (clientWs, req) => {
         const firebaseIdToken = message?.auth?.firebaseIdToken;
         await verifyFirebaseIdToken(firebaseIdToken, {
           projectId: FIREBASE_PROJECT_ID,
-          allowedEmail: PULSO_OWNER_EMAIL,
+          allowedEmails: PULSO_OWNER_EMAILS,
         });
         authenticated = true;
         if (clientWs.readyState !== WebSocket.OPEN) return;

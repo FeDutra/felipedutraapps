@@ -41,6 +41,16 @@ test('aceita um Firebase ID token assinado para o projeto correto', async () => 
   assert.equal(payload.sub, 'felipe-canary');
 });
 
+test('aceita qualquer identidade explicitamente autorizada', async () => {
+  const fixture = createToken({ email: 'felipe@pulso.local' });
+  const payload = await verifyFirebaseIdToken(fixture.token, {
+    projectId,
+    allowedEmails: ['felipe@example.com', 'felipe@pulso.local'],
+    certificates: fixture.certificates,
+  });
+  assert.equal(payload.email, 'felipe@pulso.local');
+});
+
 test('rejeita assinatura, projeto e expiração inválidos', async () => {
   const valid = createToken();
   const other = createToken();
@@ -65,6 +75,12 @@ test('rejeita assinatura, projeto e expiração inválidos', async () => {
   await assert.rejects(() => verifyFirebaseIdToken(wrongUser.token, {
     projectId,
     allowedEmail: 'felipe@example.com',
+    certificates: wrongUser.certificates,
+  }), /not allowed/);
+
+  await assert.rejects(() => verifyFirebaseIdToken(wrongUser.token, {
+    projectId,
+    allowedEmails: ['felipe@example.com', 'felipe@pulso.local'],
     certificates: wrongUser.certificates,
   }), /not allowed/);
 });
