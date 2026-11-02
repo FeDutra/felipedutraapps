@@ -1,3 +1,22 @@
+# Rollback — Gemini Live com progresso canônico na Presença (02/11/2026)
+
+- Baseline: `2fd2d40b` na branch `fix/pulso-presence-runtime-20261102`.
+- Escopo: desfazer a migração que forçou o desktop para `turn_based` e
+  restaurar Gemini Live como transporte padrão, preservando os checkpoints
+  públicos já correlacionados por `requestId`.
+- A gravação comum, seu Gemini de transcrição, STT local, Kokoro, relay e
+  serviços não são alterados por esta correção.
+
+## Reversão
+
+1. Reinstalar o bundle preservado da baseline `2fd2d40b`.
+2. Reverter apenas o commit desta correção; não reiniciar Gateway, relay,
+   Firestore, STT ou Kokoro.
+3. A migração `v6` é executada uma vez. Depois dela, uma escolha manual por
+   `turn_based` continua sendo respeitada.
+
+---
+
 # Rollback — Presença ampliada no iMac (17/10/2026)
 
 - Baseline instalada: `74d028c6`.

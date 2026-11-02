@@ -5,6 +5,7 @@ const PRESENCE_DEVICE_ID_STORAGE_KEY = 'pulso_presence_device_id';
 const GEMINI_DESKTOP_RESTORE_MIGRATION_KEY = 'pulso_presence_transport_migration_v3_gemini_restore';
 const GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY = 'pulso_presence_transport_migration_v4_explicit_gemini';
 const LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY = 'pulso_presence_transport_migration_v5_local_progress';
+const GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY = 'pulso_presence_transport_migration_v6_gemini_canonical_progress';
 
 // NEXT_PUBLIC values are normally inlined by Next during the web build. The
 // Tauri static bundle can lose that replacement at runtime even when the same
@@ -37,18 +38,24 @@ function isDesktopRuntime() {
 export function readPresenceTransportPreference(): PresenceTransportPreference {
   if (typeof window === 'undefined') return 'gemini_live';
   try {
-    // O narrador canônico não depende mais da sessão Gemini. No desktop,
-    // migra uma vez a instalação atual para o ciclo local comprovável; Gemini
-    // permanece disponível como escolha explícita e via ?gemini_live=1.
+    const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
+
+    // A migração v5 desviou instalações Tauri para o pipeline local. Esse
+    // pipeline depende de um STT sidecar e retirou a experiência Gemini que já
+    // havia sido aprovada. Restaura uma única vez as instalações afetadas e
+    // mantém qualquer escolha feita depois desta correção.
     if (
       isDesktopRuntime()
-      && window.localStorage.getItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY) !== '1'
+      && window.localStorage.getItem(GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY) !== '1'
     ) {
-      window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'turn_based');
-      window.localStorage.setItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY, '1');
-      window.localStorage.setItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY, '1');
-      window.localStorage.setItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY, '1');
-      return 'turn_based';
+      window.localStorage.setItem(GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY, '1');
+      const wasForcedToLocal = window.localStorage.getItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY) === '1';
+      if (wasForcedToLocal || saved === null || saved === 'auto') {
+        window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
+        window.localStorage.setItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY, '1');
+        window.localStorage.setItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY, '1');
+        return 'gemini_live';
+      }
     }
 
     // Em 14/10, o desktop foi migrado silenciosamente para turn_based para
@@ -64,7 +71,6 @@ export function readPresenceTransportPreference(): PresenceTransportPreference {
       return 'gemini_live';
     }
 
-    const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
     // `auto` permitia que uma oscilação do Gemini abrisse silenciosamente o
     // caminho local pós-Gemini que nunca foi aprovado. No desktop, migra uma
     // única vez esse estado ambíguo para o contrato explícito Gemini. Uma
@@ -88,7 +94,7 @@ export function readPresenceTransportPreference(): PresenceTransportPreference {
     // Some desktop WebViews can deny storage while the custom asset origin is
     // being initialized. Presence must still open with its intended default.
   }
-  return isDesktopRuntime() ? 'turn_based' : 'gemini_live';
+  return 'gemini_live';
 }
 
 export function writePresenceTransportPreference(preference: PresenceTransportPreference) {

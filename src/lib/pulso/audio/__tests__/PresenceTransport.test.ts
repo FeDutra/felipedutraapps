@@ -35,14 +35,24 @@ function withWindow(protocol: string, run: (storage: MemoryStorage) => void) {
   }
 }
 
-test('migra o desktop uma única vez para o narrador local', () => {
-  withWindow('tauri:', (storage) => {
-    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
-    assert.equal(readPresenceTransportPreference(), 'turn_based');
-    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'turn_based');
+const LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY = 'pulso_presence_transport_migration_v5_local_progress';
 
-    writePresenceTransportPreference('gemini_live');
+test('restaura Gemini uma única vez nas instalações desviadas para o narrador local', () => {
+  withWindow('tauri:', (storage) => {
+    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'turn_based');
+    storage.setItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY, '1');
     assert.equal(readPresenceTransportPreference(), 'gemini_live');
+    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'gemini_live');
+
+    writePresenceTransportPreference('turn_based');
+    assert.equal(readPresenceTransportPreference(), 'turn_based');
+  });
+});
+
+test('usa Gemini como padrão em uma instalação desktop nova', () => {
+  withWindow('tauri:', (storage) => {
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
+    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'gemini_live');
   });
 });
 
@@ -54,8 +64,8 @@ test('mantém Gemini explícito como padrão fora do desktop', () => {
 
 test('remove auto do desktop sem sobrescrever escolha local explícita', () => {
   withWindow('tauri:', (storage) => {
-    // Executa a migração nova e depois reproduz um estado legado ambíguo.
-    assert.equal(readPresenceTransportPreference(), 'turn_based');
+    // Executa a restauração nova e depois reproduz um estado legado ambíguo.
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
     storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'auto');
     assert.equal(readPresenceTransportPreference(), 'gemini_live');
     assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'gemini_live');
