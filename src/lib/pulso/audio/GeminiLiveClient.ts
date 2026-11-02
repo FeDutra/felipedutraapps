@@ -345,7 +345,10 @@ export class GeminiLiveClient {
             languageCode: 'pt-BR'
           }
         },
-        inputAudioTranscription: {},
+        // Sem uma pista explícita, o ASR da Live API autodetecta o idioma e
+        // frases curtas em português brasileiro podem voltar como espanhol.
+        // `languageCodes` restringe a hipótese sem alterar o áudio enviado.
+        inputAudioTranscription: { languageCodes: ['pt-BR'] },
         outputAudioTranscription: {}
       }
     }));

@@ -53,6 +53,33 @@ function isTauriDesktop() {
     || Boolean(tauriWindow.__TAURI_INTERNALS__);
 }
 
+function localTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+}
+
+function formatLocalClockRead(target: string, now = new Date()) {
+  const timeZone = localTimezone();
+  if (target === 'clock_date') {
+    const value = new Intl.DateTimeFormat('pt-BR', {
+      timeZone,
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(now);
+    return `Hoje é ${value}.`;
+  }
+
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const hour = Number(parts.find(part => part.type === 'hour')?.value || '0');
+  const minute = parts.find(part => part.type === 'minute')?.value || '00';
+  return `${hour === 1 ? 'É' : 'São'} ${hour}h${minute}.`;
+}
+
 export async function executeLocalPresenceFastPath(input: string): Promise<LocalPresenceFastPathResult> {
   if (!isTauriDesktop()) return { handled: false };
 
@@ -101,6 +128,17 @@ export async function executeLocalPresenceFastPath(input: string): Promise<Local
   }
 
   const startedAt = performance.now();
+  if (decision.localAction === 'read_clock') {
+    return {
+      handled: true,
+      action: 'local_read',
+      target: decision.target,
+      responseText: formatLocalClockRead(decision.target),
+      durationMs: Math.round(performance.now() - startedAt),
+      routeKind: 'local_reflex',
+      capability: decision.target,
+    };
+  }
   if (decision.localAction === 'play_music') {
     const result = await localActions.playMusic(decision.target);
     return {

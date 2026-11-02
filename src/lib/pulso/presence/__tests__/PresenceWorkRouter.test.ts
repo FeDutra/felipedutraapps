@@ -65,6 +65,26 @@ test('mídia volta ao reflexo local depois de trabalho profundo', () => {
   assert.equal(next.target, 'bon iver');
 });
 
+test('hora e data ficam na Presença e não criam pedido canônico', () => {
+  for (const phrase of [
+    'Que horas são?',
+    'Qual é a hora agora?',
+    'Qué hora es ahora?',
+  ]) {
+    const decision = classifyPresenceWork(phrase);
+    assert.equal(decision.kind, 'local_reflex', phrase);
+    assert.equal(decision.localAction, 'read_clock', phrase);
+    assert.equal(decision.target, 'clock_time', phrase);
+  }
+
+  for (const phrase of ['Que dia é hoje?', 'Qual é a data de hoje?', 'Qué día es hoy?']) {
+    const decision = classifyPresenceWork(phrase);
+    assert.equal(decision.kind, 'local_reflex', phrase);
+    assert.equal(decision.localAction, 'read_clock', phrase);
+    assert.equal(decision.target, 'clock_date', phrase);
+  }
+});
+
 test('escrita em agenda sempre exige Lótus', () => {
   const decision = classifyPresenceWork('Marque um compromisso amanhã às dez');
   assert.equal(decision.kind, 'deep_work');

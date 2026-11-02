@@ -108,6 +108,7 @@ test('setup reduz a espera de silêncio sem usar VAD agressivo', () => {
   assert.equal(setup.realtimeInputConfig.automaticActivityDetection.disabled, false);
   assert.equal(setup.realtimeInputConfig.automaticActivityDetection.prefixPaddingMs, 40);
   assert.equal(setup.realtimeInputConfig.automaticActivityDetection.silenceDurationMs, 600);
+  assert.deepEqual(setup.inputAudioTranscription.languageCodes, ['pt-BR']);
 });
 
 test('pedido operacional toca a confirmação autônoma e entra uma vez no fluxo canônico', async () => {
