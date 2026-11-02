@@ -63,6 +63,37 @@ test('resultado espera a confirmação terminar e só então entra na fila de vo
   assert.match(sent[0], /\[RESULTADO\] Resultado pronto\./);
 });
 
+test('fim tardio da confirmação libera checkpoint e resultado canônicos', async () => {
+  const { client, sent, states } = createHarness();
+  Object.assign(client, {
+    narrationInFlight: null,
+    pendingSources: 0,
+    turnCompletePending: false,
+    outputEchoGuardUntil: 0,
+    lastNarrationCompletedAt: Date.now() - 7_000,
+  });
+
+  // Reproduz o iMac físico: o último buffer da confirmação já acabou e só
+  // depois chega `turnComplete`. Antes da correção, a trava permanecia ativa
+  // para sempre e o chat/MESA avançavam sem qualquer voz posterior.
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+
+  const afterAck = client as unknown as { turnCompletePending: boolean };
+  assert.equal(afterAck.turnCompletePending, false);
+  assert.equal(states.at(-1), 'listening');
+  Object.assign(client, { lastNarrationCompletedAt: Date.now() - 7_000 });
+
+  assert.equal(client.sendCheckpointText('Localizei a conversa correta.', 'turn-current'), true);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /\[CHECKPOINT\] Localizei a conversa correta\./);
+
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+  assert.equal(client.sendResultText('As últimas mensagens são estas.', 'turn-current'), true);
+  assert.equal(sent.length, 2);
+  assert.match(sent[1], /\[RESULTADO\] As últimas mensagens são estas\./);
+});
+
 test('resultado de turno antigo é descartado sem falar', () => {
   const { client, sent } = createHarness();
   assert.equal(client.sendResultText('Não deve falar.', 'turn-old'), false);

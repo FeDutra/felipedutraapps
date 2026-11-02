@@ -568,6 +568,12 @@ export class GeminiLiveClient {
           // cauda sem adicionar latência perceptível à conversa.
           this.receipt('turn_closed', { turnId: this.activeTurnId ?? undefined });
           this.turnCompletePending = true;
+          // O marcador de fim pode chegar depois que o último buffer da
+          // confirmação curta já terminou. Nesse ordenamento não haverá um
+          // novo `source.onended` para destravar a fila. Tentar a transição
+          // agora preserva a cauda de eco e libera checkpoints/resultados
+          // assim que ela assentar.
+          this.maybeReturnToListening();
           if (this.pendingUserTranscript) {
             this.scheduleInputTurnFinalization(
               this.inputTranscriptionFinished
