@@ -16,7 +16,10 @@ on:
 jobs:
   build-macos:
     if: ${{ github.event.inputs.target == 'macos' || github.event.inputs.target == 'both' }}
-    runs-on: macos-latest
+    # Os Macs canônicos de Fe e o sidecar Kokoro são Intel. O rótulo
+    # macos-latest hoje provisiona ARM; use o runner Intel documentado para a
+    # arquitetura nativa do produto e evite Rosetta/fila do pool ARM.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
 
@@ -27,9 +30,8 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Runners macos-latest sao Apple Silicon (arm64), mas o sidecar
-          # kokoro_runner versionado no repo so existe em x86_64. Compilar
-          # mirando x86_64 roda em qualquer Mac via Rosetta 2.
+          # O runner e os Macs de destino sao Intel; mantenha o target
+          # explícito para que manifesto e arquitetura permaneçam auditáveis.
           targets: x86_64-apple-darwin
 
       - name: Install frontend deps

@@ -1023,3 +1023,9 @@ Reversão seletiva: reverter o commit desta candidata ou restaurar
 `GeminiLiveClient.ts` e `GeminiLiveClient.test.ts` a partir de `c146c150`. Em
 máquina instalada, promover novamente o bundle preservado imediatamente antes
 da candidata. Não alterar dados do WebKit, gravações comuns, Firebase ou relay.
+
+O workflow desta candidata usa o runner documentado `macos-15-intel`, coerente
+com o target `x86_64-apple-darwin` e os dois Macs canônicos. Se o rótulo deixar
+de existir, reverta apenas `.github/workflows/tauri-build.yml` para o último
+rótulo Intel suportado; não troque o target nem publique artefato ARM como
+substituto do bundle Intel.
