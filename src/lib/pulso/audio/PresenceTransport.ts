@@ -1,4 +1,14 @@
 export type PresenceTransportPreference = 'gemini_live' | 'turn_based';
+export type PresenceToggleAction = 'start' | 'stop' | 'retry';
+
+export function resolvePresenceToggleAction(
+  presenceMode: boolean,
+  voiceState: string,
+): PresenceToggleAction {
+  if (!presenceMode) return 'start';
+  if (voiceState === 'error') return 'retry';
+  return 'stop';
+}
 
 export const PRESENCE_TRANSPORT_STORAGE_KEY = 'pulso_presence_transport';
 const PRESENCE_DEVICE_ID_STORAGE_KEY = 'pulso_presence_device_id';

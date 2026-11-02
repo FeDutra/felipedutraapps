@@ -992,3 +992,22 @@ Baseline: `c46012ea` (`origin/main`).
 4. validar `/live-voice/healthz` e uma conexão autenticada após a reversão.
 
 ---
+# Rollback — retomada do Gemini após erro terminal (02/11/2026)
+
+- Baseline instalada no MacBook: `f6fdf0ef`, transporte persistido
+  `gemini_live` e bundle anterior preservado em
+  `~/Documents/PULSO/Rollbacks/PULSO-pre-f6fdf0ef-20261102T133943.app`.
+- Causa observada: depois de três rejeições de autenticação, o cliente ficava
+  em `error`; corrigir o relay não criava nova conexão e o próximo clique era
+  consumido apenas para sair da Presença.
+- Escopo desta correção: permitir que um clique na orbe em estado `error`
+  descarte apenas a sessão Gemini falha e abra uma sessão nova. Não alterar
+  gravação comum, journal, STT, Kokoro, roteamento canônico ou relay de
+  progresso.
+
+## Reversão
+
+1. Reverter o commit desta correção e reconstruir a partir de `8c015cd4`.
+2. Se o artefato instalado não abrir, restaurar o bundle preservado acima.
+3. Confirmar que a gravação comum continua no contrato anterior e que a
+   preferência `pulso_presence_transport` não foi modificada.

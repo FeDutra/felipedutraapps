@@ -972,6 +972,7 @@ import {
   getPresenceDeviceId,
   PresenceTransportPreference,
   readPresenceTransportPreference,
+  resolvePresenceToggleAction,
   shouldUseGeminiLive,
   writePresenceTransportPreference,
 } from '../../../lib/pulso/audio/PresenceTransport';
@@ -5511,10 +5512,20 @@ ${data.transcription}`, {
     if (e) {
       e.stopPropagation();
     }
-    
-    if (presenceMode) {
+
+    const presenceToggleAction = resolvePresenceToggleAction(presenceMode, voiceState);
+    const retryErroredPresence = presenceToggleAction === 'retry';
+
+    if (presenceToggleAction === 'stop') {
       exitPresenceMode();
     } else {
+      if (retryErroredPresence && voiceSessionControllerRef.current) {
+        console.log('[PULSO_PRESENCE_RETRY_AFTER_ERROR]');
+        voiceSessionControllerRef.current.stop();
+        voiceSessionControllerRef.current = null;
+        setPresenceWorkActive(false);
+      }
+
       const useGeminiLive = shouldUseGeminiLive(
         presenceTransport,
         typeof window !== 'undefined' ? window.location.search : ''
@@ -5530,6 +5541,7 @@ ${data.transcription}`, {
       setPresenceMode(true);
       setVoiceMode('presence');
       voiceModeRef.current = 'presence';
+      setVoiceError(null);
       presenceSessionStartTimeRef.current = Date.now();
       spokenRequestsRef.current.clear();
       voiceReplyRequestsRef.current.clear();
@@ -5576,7 +5588,7 @@ ${data.transcription}`, {
 
       await controller.start(syncAudioCtx);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
+  }, [presenceMode, voiceState, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;

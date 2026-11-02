@@ -4,9 +4,16 @@ import test from 'node:test';
 import {
   PRESENCE_TRANSPORT_STORAGE_KEY,
   readPresenceTransportPreference,
+  resolvePresenceToggleAction,
   shouldUseGeminiLive,
   writePresenceTransportPreference,
 } from '../PresenceTransport.ts';
+
+test('um clique reabre a Presença depois de erro terminal', () => {
+  assert.equal(resolvePresenceToggleAction(false, 'idle'), 'start');
+  assert.equal(resolvePresenceToggleAction(true, 'presence_listening'), 'stop');
+  assert.equal(resolvePresenceToggleAction(true, 'error'), 'retry');
+});
 
 class MemoryStorage {
   private values = new Map<string, string>();
