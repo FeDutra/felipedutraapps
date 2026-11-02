@@ -1180,3 +1180,12 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Reversão de código:** reverter o commit desta alteração restaura o narrador anterior e a leitura estrita do Event Store.
 - **Reversão da instalação:** encerrar somente o aplicativo promovido e restaurar os bundles datados de `PULSO.app` e `PULSO Next Preview.app` preservados imediatamente antes da instalação.
 - **Banco:** nunca substituir o SQLite vivo por uma cópia antiga durante rollback do bundle. Antes da promoção, criar backup transacional separado; em caso de reversão, manter o banco atual e restaurar apenas o aplicativo, salvo decisão explícita após auditoria.
+
+---
+# Projeção oral canônica da Presença · 02/11/2026
+
+- **Mudança:** checkpoints e resultados públicos passam por uma projeção oral determinística antes do TTS. A fala remove markdown, caminhos, URLs e diagnóstico técnico; checkpoint usa a primeira mudança concreta e o resultado usa uma síntese limitada do início factual.
+- **Autoridade:** o texto integral continua no chat. A projeção não chama outro modelo, não lê raciocínio privado e não inventa progresso.
+- **Transportes:** o mesmo contrato vale para Gemini Live e narrador local; quando o Gemini não está conectado, o resultado canônico também é narrado pela fila local.
+- **Reversão de código:** reverter o commit desta alteração e remover `presenceOralText.ts` restaura a narração literal anterior.
+- **Instalação:** nenhuma Preview é instalada por este commit isolado. Quando houver promoção futura, preservar o bundle e o SQLite vivos antes da troca.

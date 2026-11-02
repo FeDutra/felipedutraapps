@@ -14,6 +14,7 @@ import {
   PresenceTurnEvent,
   PresenceTurnMachine,
 } from './PresenceTurnMachine';
+import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from './presenceOralText';
 
 export type VoiceSessionState =
   | 'idle'
@@ -1046,15 +1047,18 @@ export class VoiceSessionController {
     if (disposition.decision !== 'narrate' || !turnId) return false;
     this.clearDeepFallbackCheckpoint();
 
+    const oralText = toPresenceCheckpointSpeech(checkpointText);
+    if (!oralText) return false;
+
     if (this.geminiLiveClient?.isConnected()) {
-      const accepted = this.geminiLiveClient.sendCheckpointText(checkpointText, turnId);
+      const accepted = this.geminiLiveClient.sendCheckpointText(oralText, turnId);
       if (accepted) {
         this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
       }
       return accepted;
     }
 
-    void this.speakAssistant(checkpointText, undefined, undefined, {
+    void this.speakAssistant(oralText, undefined, undefined, {
       turnId,
       requestId,
       kind: 'checkpoint',
@@ -1067,11 +1071,22 @@ export class VoiceSessionController {
     this.clearDeepFallbackCheckpoint();
     const turnId = requestId
       ? this.turnMachine.findTurnIdByRequestId(requestId)
-      : this.activeGeminiTurnId ?? undefined;
+      : this.activeTurnBasedTurnId ?? this.activeGeminiTurnId ?? undefined;
     const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
     this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
-    const accepted = this.geminiLiveClient?.sendResultText(resultText, turnId) ?? false;
+    const oralText = toPresenceResultSpeech(resultText);
+    if (!oralText) return false;
+    if (!this.geminiLiveClient?.isConnected()) {
+      void this.speakAssistant(oralText, undefined, undefined, {
+        turnId,
+        requestId,
+        kind: 'result',
+      });
+      this.config.onPresenceWorkChange?.(false);
+      return true;
+    }
+    const accepted = this.geminiLiveClient.sendResultText(oralText, turnId);
     if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
     if (accepted) this.config.onPresenceWorkChange?.(false);
     return accepted;
