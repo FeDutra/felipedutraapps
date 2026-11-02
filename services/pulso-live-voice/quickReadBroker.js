@@ -49,9 +49,21 @@ function normalizeEvents(eventLists) {
   return [...byIdentity.values()].sort((left, right) => eventStart(left).localeCompare(eventStart(right)));
 }
 
-function formatCalendarToday(events, timezone = 'America/Sao_Paulo') {
+function calendarDayLabels(requestedDate, localDate) {
+  if (!localDate || requestedDate === localDate) {
+    return { inline: 'hoje', target: 'hoje' };
+  }
+  if (requestedDate === nextDate(localDate)) {
+    return { inline: 'amanhã', target: 'amanhã' };
+  }
+  const dateLabel = formatDateLabel(requestedDate);
+  return { inline: `em ${dateLabel}`, target: dateLabel };
+}
+
+function formatCalendarDay(events, requestedDate, localDate, timezone = 'America/Sao_Paulo') {
+  const labels = calendarDayLabels(requestedDate, localDate);
   if (events.length === 0) {
-    return 'Fê, você não tem compromissos registrados para hoje.';
+    return `Fê, você não tem compromissos registrados para ${labels.target}.`;
   }
 
   const items = events.map(event => {
@@ -60,9 +72,13 @@ function formatCalendarToday(events, timezone = 'America/Sao_Paulo') {
     return time ? `${time}, ${title}` : `o dia todo, ${title}`;
   });
 
-  if (items.length === 1) return `Fê, você tem um compromisso hoje: ${items[0]}.`;
-  if (items.length === 2) return `Fê, você tem dois compromissos hoje: ${items[0]} e ${items[1]}.`;
-  return `Fê, você tem ${items.length} compromissos hoje: ${items.join('; ')}.`;
+  if (items.length === 1) return `Fê, você tem um compromisso ${labels.inline}: ${items[0]}.`;
+  if (items.length === 2) return `Fê, você tem dois compromissos ${labels.inline}: ${items[0]} e ${items[1]}.`;
+  return `Fê, você tem ${items.length} compromissos ${labels.inline}: ${items.join('; ')}.`;
+}
+
+function formatCalendarToday(events, timezone = 'America/Sao_Paulo') {
+  return formatCalendarDay(events, '', '', timezone);
 }
 
 function localDateKey(value, timezone) {
@@ -76,8 +92,8 @@ function localDateKey(value, timezone) {
   }).format(parsed);
 }
 
-function formatCalendarRange(events, startDate, endDate, timezone = 'America/Sao_Paulo') {
-  if (startDate === endDate) return formatCalendarToday(events, timezone);
+function formatCalendarRange(events, startDate, endDate, timezone = 'America/Sao_Paulo', localDate = '') {
+  if (startDate === endDate) return formatCalendarDay(events, startDate, localDate, timezone);
   if (events.length === 0) {
     return `Fê, você não tem compromissos registrados entre ${formatDateLabel(startDate)} e ${formatDateLabel(endDate)}.`;
   }
@@ -243,8 +259,14 @@ async function executeQuickRead(request, options = {}) {
 
   const startDate = String(request?.args?.startDate || request?.args?.localDate || '');
   const endDate = String(request?.args?.endDate || startDate);
+  const localDate = String(request?.args?.localDate || '');
   const timezone = String(request?.args?.timezone || 'America/Sao_Paulo');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+    || (localDate && !/^\d{4}-\d{2}-\d{2}$/.test(localDate))
+    || endDate < startDate
+  ) {
     return { ok: false, errorCode: 'invalid_arguments', durationMs: Date.now() - startedAt };
   }
   const spanDays = Math.round((new Date(`${endDate}T12:00:00Z`) - new Date(`${startDate}T12:00:00Z`)) / 86_400_000) + 1;
@@ -260,7 +282,7 @@ async function executeQuickRead(request, options = {}) {
     return {
       ok: true,
       capability: request.capability,
-      responseText: formatCalendarRange(events, startDate, endDate, timezone),
+      responseText: formatCalendarRange(events, startDate, endDate, timezone, localDate),
       itemCount: events.length,
       durationMs: Date.now() - startedAt,
     };

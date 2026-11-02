@@ -93,6 +93,7 @@ function mapGeminiLiveState(state: GeminiLiveState): VoiceSessionState {
 
 export class VoiceSessionController {
   private state: VoiceSessionState = 'idle';
+  private stopped = true;
   private config: VoiceSessionConfig;
   private stream: MediaStream | null = null;
   private mediaRecorder: MediaRecorder | null = null;
@@ -120,12 +121,20 @@ export class VoiceSessionController {
   // Modo experimental Gemini Live
   private geminiLiveClient: GeminiLiveClient | null = null;
   private activeGeminiTurnId: string | null = null;
+  private readonly handledGeminiTurnIds = new Set<string>();
   private activePresenceRequestId: string | null = null;
   private deepFallbackCheckpointTimer: ReturnType<typeof setTimeout> | null = null;
   private activeTurnBasedTurnId: string | null = null;
   private readonly turnMachine = new PresenceTurnMachine();
   private localNarrationQueue: QueuedPresenceNarration[] = [];
   private localNarrationActive = false;
+
+  private claimGeminiTurn(turnId: string) {
+    if (this.stopped || turnId !== this.activeGeminiTurnId) return false;
+    if (this.handledGeminiTurnIds.has(turnId)) return false;
+    this.handledGeminiTurnIds.add(turnId);
+    return true;
+  }
 
   constructor(config: VoiceSessionConfig) {
     this.config = config;
@@ -372,6 +381,7 @@ export class VoiceSessionController {
    * Inicia a sessão de voz e solicita permissões e AudioContext.
    */
   public async start(passedAudioContext?: AudioContext) {
+    this.stopped = false;
     this.log('VOICE_SESSION_START_REQUESTED');
     this.advanceTurn({ type: 'session_started' });
     this.transition('starting');
@@ -391,6 +401,10 @@ export class VoiceSessionController {
     try {
       this.log('MIC_PERMISSION_REQUESTED');
       const micStream = await this.openHealthyMicrophone();
+      if (this.stopped) {
+        micStream.getTracks().forEach(track => track.stop());
+        return;
+      }
       this.stream = micStream;
       this.log('MIC_OPENED');
 
@@ -711,6 +725,7 @@ export class VoiceSessionController {
       if (!response.ok) throw new Error(`Falha no STT (${response.status})`);
 
       const data = await response.json();
+      if (this.stopped) return;
       const userText = data.text || '';
       this.log('STT_REQUEST_FINISHED', {
         text: userText,
@@ -736,6 +751,7 @@ export class VoiceSessionController {
       this.playSoundCue('sent');
 
       const localResult = await this.executeImmediatePresenceAction(userText);
+      if (this.stopped) return;
       if (localResult?.handled && localResult.responseText) {
         this.recordLocalInteractionInBackground(userText, localResult);
         await this.speakAssistant(localResult.responseText, undefined, undefined, {
@@ -746,6 +762,7 @@ export class VoiceSessionController {
       }
 
       const presenceRouting = await this.config.routePresenceIntent?.(userText);
+      if (this.stopped) return;
       const rawDispatch = await this.config.handleSendMessage(userText, {
         originMode: 'presence',
         targetContextNode: presenceRouting?.target,
@@ -924,9 +941,11 @@ export class VoiceSessionController {
       getAccessToken: this.config.getGeminiAccessToken,
       systemInstruction: GEMINI_LIVE_SYSTEM_INSTRUCTION,
       onStateChange: (state) => {
+        if (this.stopped) return;
         this.transition(mapGeminiLiveState(state));
       },
       onTranscript: (role, text) => {
+        if (this.stopped) return;
         this.log('GEMINI_LIVE_TRANSCRIPT', { role, chars: text.length });
         // onTextReceived espera (userText, assistantText) juntos por turno;
         // nesse modo os dois chegam em eventos separados, então repassamos
@@ -938,15 +957,18 @@ export class VoiceSessionController {
         }
       },
       onError: (message) => {
+        if (this.stopped) return;
         this.log('GEMINI_LIVE_ERROR', message);
         this.config.onPresenceWorkChange?.(false);
         this.config.onError(`Conversa em tempo real indisponível: ${message}`);
         this.transition('error');
       },
       onAudioReceipt: (receipt) => {
+        if (this.stopped) return;
         this.persistAudioReceipt(receipt);
       },
       onUserTurnStarted: (turnId) => {
+        if (this.stopped) return;
         this.clearDeepFallbackCheckpoint();
         this.activeGeminiTurnId = turnId;
         this.activePresenceRequestId = null;
@@ -955,7 +977,11 @@ export class VoiceSessionController {
         this.log('GEMINI_LIVE_USER_TURN_STARTED', { turnId });
       },
       onUserTurnReady: async ({ turnId, userText, assistantText, socialOnly }) => {
-        if (turnId !== this.activeGeminiTurnId) return;
+        const isCurrentTurn = () => !this.stopped && turnId === this.activeGeminiTurnId;
+        if (!this.claimGeminiTurn(turnId)) {
+          this.log('GEMINI_LIVE_DUPLICATE_TURN_SUPPRESSED', { turnId });
+          return;
+        }
         this.advanceTurn({ type: 'turn_closed', turnId });
         this.advanceTurn({ type: 'transcription_started', turnId });
         this.advanceTurn({ type: 'transcription_ready', turnId });
@@ -980,7 +1006,7 @@ export class VoiceSessionController {
             return;
           }
           const localResult = await this.executeImmediatePresenceAction(userText);
-          if (turnId !== this.activeGeminiTurnId) return;
+          if (!isCurrentTurn()) return;
           if (localResult?.handled && localResult.responseText) {
             this.recordLocalInteractionInBackground(userText, localResult);
             this.config.onPresenceWorkChange?.(false);
@@ -996,7 +1022,7 @@ export class VoiceSessionController {
 
           if (workDecision.kind === 'quick_read') {
             const quickResult = await this.executeQuickRead(workDecision);
-            if (turnId !== this.activeGeminiTurnId) return;
+            if (!isCurrentTurn()) return;
             if (quickResult?.responseText) {
               this.recordLocalInteractionInBackground(userText, quickResult);
               this.config.onPresenceWorkChange?.(false);
@@ -1039,13 +1065,14 @@ export class VoiceSessionController {
               failureCode: 'route_fallback',
             });
           }
+          if (!isCurrentTurn()) return;
           const rawDispatch = await this.config.handleSendMessage(userText, {
             originMode: 'presence',
             targetContextNode: presenceRouting?.target,
             presenceRouting,
           });
           const dispatch = rawDispatch && typeof rawDispatch === 'object' ? rawDispatch : null;
-          if (turnId !== this.activeGeminiTurnId) return;
+          if (!isCurrentTurn()) return;
           this.activePresenceRequestId = dispatch?.requestId || null;
           if (dispatch?.requestId) {
             this.advanceTurn({ type: 'request_bound', turnId, requestId: dispatch.requestId });
@@ -1062,6 +1089,7 @@ export class VoiceSessionController {
             this.geminiLiveClient?.sendResultText('O pedido não entrou no chat. Vou continuar ouvindo.', turnId);
           }
         } catch (err: any) {
+          if (!isCurrentTurn()) return;
           this.log('GEMINI_LIVE_ORCHESTRATOR_ERROR', err.message || err);
           this.geminiLiveClient?.recordCanonicalReceipt('canonical_dispatch_failed', {
             turnId,
@@ -1143,6 +1171,8 @@ export class VoiceSessionController {
    * Finaliza e limpa completamente todos os recursos abertos na sessão.
    */
   public stop() {
+    this.stopped = true;
+    this.handledGeminiTurnIds.clear();
     this.log('VOICE_SESSION_STOPPED');
     this.advanceTurn({ type: 'session_stopped' });
     this.transition('idle');
@@ -1157,7 +1187,6 @@ export class VoiceSessionController {
       this.activePresenceRequestId = null;
       this.activeTurnBasedTurnId = null;
       this.config.onPresenceWorkChange?.(false);
-      return;
     }
 
     if (this.maxRecordTimeout) clearTimeout(this.maxRecordTimeout);

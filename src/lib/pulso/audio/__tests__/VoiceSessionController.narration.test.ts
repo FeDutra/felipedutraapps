@@ -98,3 +98,28 @@ test('confirmação vinculada não conclui o turno antes do resultado', async ()
   assert.equal((controller as any).turnMachine.getSnapshot().turns['turn-1'].status, 'working');
   assert.deepEqual(spoken, ['Certo, já comecei.']);
 });
+
+test('o mesmo turno Gemini só pode ser reivindicado uma vez', async () => {
+  const { controller } = await createController();
+  (controller as any).stopped = false;
+  (controller as any).activeGeminiTurnId = 'gemini-turn-1';
+
+  assert.equal((controller as any).claimGeminiTurn('gemini-turn-1'), true);
+  assert.equal((controller as any).claimGeminiTurn('gemini-turn-1'), false);
+});
+
+test('encerrar Gemini também cancela a voz e os recursos comuns', async () => {
+  const { controller } = await createController();
+  let geminiStopped = 0;
+  let ttsCancelled = 0;
+  (controller as any).stopped = false;
+  (controller as any).geminiLiveClient = { stop: () => { geminiStopped += 1; } };
+  (controller as any).ttsAdapter = { cancel: () => { ttsCancelled += 1; } };
+
+  controller.stop();
+
+  assert.equal(geminiStopped, 1);
+  assert.equal(ttsCancelled, 1);
+  assert.equal((controller as any).stopped, true);
+  assert.equal((controller as any).geminiLiveClient, null);
+});

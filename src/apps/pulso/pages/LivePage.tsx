@@ -2488,15 +2488,6 @@ export default function LivePage() {
     };
   }, [ttsAdapter]);
 
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setPresenceMode(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
   const [copiedResultId, setCopiedResultId] = React.useState<string | null>(null);
   const [registeringForId, setRegisteringForId] = React.useState<string | null>(null);
   const [openclawDraft, setOpenclawDraft] = React.useState('');
@@ -2846,6 +2837,9 @@ export default function LivePage() {
   const baseTextBeforeRecordingRef = React.useRef<string>('');
   const sendAfterTranscribeRef = React.useRef<boolean>(false);
   const voiceSessionControllerRef = React.useRef<VoiceSessionController | null>(null);
+  // Cada entrada na Presença recebe uma concessão exclusiva. Callbacks de uma
+  // sessão encerrada não podem persistir fala, mudar UI nem voltar a narrar.
+  const presenceControllerEpochRef = React.useRef(0);
   // Atualizações podem reaparecer em cada snapshot do Firestore. Esta memória
   // local impede a mesma frase de ser narrada repetidamente na voz.
   const narratedPresenceProgressRef = React.useRef<Set<string>>(new Set());
@@ -4793,6 +4787,7 @@ export default function LivePage() {
 
   const exitPresenceMode = React.useCallback(() => {
     console.log('[PULSO_PRESENCE_EXIT_CLEAN]');
+    presenceControllerEpochRef.current += 1;
     if (voiceSessionControllerRef.current) {
       voiceSessionControllerRef.current.stop();
       voiceSessionControllerRef.current = null;
@@ -4810,6 +4805,22 @@ export default function LivePage() {
     currentTextRef.current = '';
     setInputMessage('');
   }, [stopVoiceRecognition, ttsAdapter]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (presenceMode || voiceSessionControllerRef.current)) {
+        exitPresenceMode();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [exitPresenceMode, presenceMode]);
+
+  React.useEffect(() => () => {
+    presenceControllerEpochRef.current += 1;
+    voiceSessionControllerRef.current?.stop();
+    voiceSessionControllerRef.current = null;
+  }, []);
 
   const inputMessageRef = React.useRef(inputMessage);
   React.useEffect(() => {
@@ -5519,8 +5530,13 @@ ${data.transcription}`, {
     if (presenceToggleAction === 'stop') {
       exitPresenceMode();
     } else {
-      if (retryErroredPresence && voiceSessionControllerRef.current) {
-        console.log('[PULSO_PRESENCE_RETRY_AFTER_ERROR]');
+      if (voiceSessionControllerRef.current) {
+        console.log(
+          retryErroredPresence
+            ? '[PULSO_PRESENCE_RETRY_AFTER_ERROR]'
+            : '[PULSO_PRESENCE_STALE_CONTROLLER_REPLACED]'
+        );
+        presenceControllerEpochRef.current += 1;
         voiceSessionControllerRef.current.stop();
         voiceSessionControllerRef.current = null;
         setPresenceWorkActive(false);
@@ -5548,7 +5564,15 @@ ${data.transcription}`, {
       narratedPresenceProgressRef.current.clear();
       presentedPresenceResultsRef.current.clear();
 
-      const controller = new VoiceSessionController({
+      const controllerEpoch = presenceControllerEpochRef.current + 1;
+      presenceControllerEpochRef.current = controllerEpoch;
+      let controller: VoiceSessionController;
+      const isCurrentController = () => (
+        presenceControllerEpochRef.current === controllerEpoch
+        && voiceSessionControllerRef.current === controller
+      );
+
+      controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
         getGeminiAccessToken: async () => {
@@ -5556,24 +5580,37 @@ ${data.transcription}`, {
           return currentUser.getIdToken();
         },
         onStateChange: (newState) => {
+          if (!isCurrentController()) return;
           setVoiceState(newState);
           voiceStateRef.current = newState;
         },
         onError: (err) => {
+          if (!isCurrentController()) return;
           setVoiceError(err);
         },
         onPresenceWorkChange: (working) => {
+          if (!isCurrentController()) return;
           setPresenceWorkActive(working);
         },
         onTextReceived: (userText, assistantText) => {
           // Apenas adiciona ao log do chat se necessário (geralmente handleSendMessage já cria as mensagens)
         },
         handleSendMessage: async (text, options) => {
+          if (!isCurrentController()) return null;
           return handlePresenceCanonicalMessage(text, options);
         },
-        recordLocalFastPath: recordLocalPresenceFastPath,
-        handlePresenceUiIntent,
-        routePresenceIntent: routePresenceInput,
+        recordLocalFastPath: async (text, result) => {
+          if (!isCurrentController()) return;
+          await recordLocalPresenceFastPath(text, result);
+        },
+        handlePresenceUiIntent: async (text) => {
+          if (!isCurrentController()) return { handled: false };
+          return handlePresenceUiIntent(text);
+        },
+        routePresenceIntent: async (text) => {
+          if (!isCurrentController()) throw new Error('presence_session_stale');
+          return routePresenceInput(text);
+        },
       });
 
       voiceSessionControllerRef.current = controller;
@@ -5587,6 +5624,7 @@ ${data.transcription}`, {
       }
 
       await controller.start(syncAudioCtx);
+      if (!isCurrentController()) controller.stop();
     }
   }, [presenceMode, voiceState, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 

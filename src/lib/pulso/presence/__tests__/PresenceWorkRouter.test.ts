@@ -34,6 +34,16 @@ test('classifica agenda como consulta rápida tipada', () => {
   }
 });
 
+test('amanhã permanece amanhã no intervalo tipado', () => {
+  const decision = classifyPresenceWork(
+    'Quais são os meus compromissos de amanhã?',
+    new Date(2026, 10, 2, 18, 58),
+  );
+  assert.equal(decision.kind, 'quick_read');
+  assert.equal(decision.quickReadCapability, 'calendar_range');
+  assert.deepEqual(decision.quickReadArgs, { startDate: '2026-11-03', endDate: '2026-11-03' });
+});
+
 test('entende intervalo de hoje até quarta-feira', () => {
   const decision = classifyPresenceWork(
     'Quais são meus compromissos de hoje até quarta-feira?',

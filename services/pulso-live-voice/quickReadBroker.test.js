@@ -54,6 +54,33 @@ test('consulta calendário por intervalo inclusivo', async () => {
   assert.match(formatCalendarRange([], '2026-10-17', '2026-10-21'), /entre 17\/10 e 21\/10/);
 });
 
+test('consulta de amanhã não é narrada como hoje', async () => {
+  const result = await executeQuickRead({
+    capability: 'calendar_range',
+    args: {
+      localDate: '2026-11-02',
+      startDate: '2026-11-03',
+      endDate: '2026-11-03',
+      timezone: 'America/Sao_Paulo',
+    },
+  }, {
+    accounts: ['trabalho'],
+    gogRunner: async (_account, startDate, endDate) => {
+      assert.equal(startDate, '2026-11-03');
+      assert.equal(endDate, '2026-11-03');
+      return [{
+        id: 'amanha',
+        summary: 'Imersões — Estratégico',
+        start: { dateTime: '2026-11-03T09:30:00-03:00' },
+      }];
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.responseText, /um compromisso amanhã/i);
+  assert.doesNotMatch(result.responseText, /compromisso hoje/i);
+});
+
 test('lê até cinco mensagens recentes sem abrir interface', async () => {
   const result = await executeQuickRead({
     capability: 'whatsapp_latest',
