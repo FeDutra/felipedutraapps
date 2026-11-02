@@ -190,20 +190,25 @@ export class TTSAdapter {
       );
       const rate = this.preferences.rate;
 
+      const isLocalSidecar = this.preferences.ttsProvider === 'local_kokoro_sidecar';
       let endpoint = getKokoroEndpoint();
-      if (this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'local_kokoro_sidecar') {
+      if (this.preferences.ttsProvider === 'local_kokoro') {
         endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+      } else if (isLocalSidecar) {
+        endpoint = 'http://127.0.0.1:14321';
       }
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'kokoro',
-          input: payloadText,
-          voice: voice,
-          response_format: 'mp3',
-          speed: rate
-        })
+        body: JSON.stringify(isLocalSidecar
+          ? { text: payloadText, voice, speed: rate, lang: 'pt-br' }
+          : {
+              model: 'kokoro',
+              input: payloadText,
+              voice,
+              response_format: 'mp3',
+              speed: rate,
+            })
       });
 
       if (response.ok) {

@@ -14,6 +14,7 @@ import {
   PresenceTurnEvent,
   PresenceTurnMachine,
 } from './PresenceTurnMachine';
+import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from './presenceOralText';
 
 export type VoiceSessionState =
   | 'idle'
@@ -389,13 +390,7 @@ export class VoiceSessionController {
 
     try {
       this.log('MIC_PERMISSION_REQUESTED');
-      const micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
+      const micStream = await this.openHealthyMicrophone();
       this.stream = micStream;
       this.log('MIC_OPENED');
 
@@ -452,6 +447,48 @@ export class VoiceSessionController {
       this.config.onError('Permissão de microfone negada ou erro ao iniciar AudioContext.');
       this.transition('error');
     }
+  }
+
+  private microphoneConstraints(deviceId?: string): MediaTrackConstraints {
+    return {
+      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
+  }
+
+  private isHealthyAudioStream(stream: MediaStream) {
+    const track = stream.getAudioTracks()[0];
+    if (!stream.active || !track || track.readyState !== 'live') return false;
+    const settings = track.getSettings();
+    return (settings.channelCount ?? 1) > 0 && (settings.sampleRate ?? 1) > 0;
+  }
+
+  private async openHealthyMicrophone() {
+    const first = await navigator.mediaDevices.getUserMedia({
+      audio: this.microphoneConstraints(),
+    });
+    await new Promise(resolve => setTimeout(resolve, 120));
+    if (this.isHealthyAudioStream(first) && !first.getAudioTracks()[0]?.muted) return first;
+
+    first.getTracks().forEach(track => track.stop());
+    const devices = await navigator.mediaDevices.enumerateDevices?.() ?? [];
+    const inputs = devices.filter(device => device.kind === 'audioinput' && device.deviceId);
+    const preferred = inputs.find(device => /built[- ]?in|interno|microfone do mac|mac microphone/i.test(device.label))
+      ?? inputs.find(device => !/virtual|zoom|soundflower|blackhole|sf-voice/i.test(device.label));
+    if (!preferred) throw new Error('Nenhum microfone físico saudável foi encontrado.');
+
+    this.log('MIC_DEFAULT_REJECTED_RETRYING_PHYSICAL', { label: preferred.label });
+    const retry = await navigator.mediaDevices.getUserMedia({
+      audio: this.microphoneConstraints(preferred.deviceId),
+    });
+    await new Promise(resolve => setTimeout(resolve, 120));
+    if (!this.isHealthyAudioStream(retry) || retry.getAudioTracks()[0]?.muted) {
+      retry.getTracks().forEach(track => track.stop());
+      throw new Error('O microfone físico não produziu uma faixa de áudio válida.');
+    }
+    return retry;
   }
 
   /**
@@ -717,6 +754,11 @@ export class VoiceSessionController {
       if (turnId && res?.requestId) {
         this.activePresenceRequestId = res.requestId;
         this.advanceTurn({ type: 'request_bound', turnId, requestId: res.requestId });
+        await this.speakAssistant('Certo, já comecei.', undefined, undefined, {
+          turnId,
+          requestId: res.requestId,
+          kind: 'acknowledgement',
+        });
       }
 
       if (!res?.requestId && !res?.responseText) {
@@ -761,7 +803,7 @@ export class VoiceSessionController {
       ?? undefined;
 
     const narrationKind = context.kind ?? 'result';
-    if (turnId) {
+    if (turnId && narrationKind !== 'acknowledgement') {
       const result = this.advanceTurn({
         type: narrationKind === 'checkpoint' ? 'checkpoint_received' : 'result_received',
         turnId,
@@ -1046,15 +1088,17 @@ export class VoiceSessionController {
     if (disposition.decision !== 'narrate' || !turnId) return false;
     this.clearDeepFallbackCheckpoint();
 
+    const oralText = toPresenceCheckpointSpeech(checkpointText);
+    if (!oralText) return false;
     if (this.geminiLiveClient?.isConnected()) {
-      const accepted = this.geminiLiveClient.sendCheckpointText(checkpointText, turnId);
+      const accepted = this.geminiLiveClient.sendCheckpointText(oralText, turnId);
       if (accepted) {
         this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
       }
       return accepted;
     }
 
-    void this.speakAssistant(checkpointText, undefined, undefined, {
+    void this.speakAssistant(oralText, undefined, undefined, {
       turnId,
       requestId,
       kind: 'checkpoint',
@@ -1067,11 +1111,22 @@ export class VoiceSessionController {
     this.clearDeepFallbackCheckpoint();
     const turnId = requestId
       ? this.turnMachine.findTurnIdByRequestId(requestId)
-      : this.activeGeminiTurnId ?? undefined;
+      : this.activeTurnBasedTurnId ?? this.activeGeminiTurnId ?? undefined;
     const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
     this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
-    const accepted = this.geminiLiveClient?.sendResultText(resultText, turnId) ?? false;
+    const oralText = toPresenceResultSpeech(resultText);
+    if (!oralText) return false;
+    if (!this.geminiLiveClient?.isConnected()) {
+      void this.speakAssistant(oralText, undefined, undefined, {
+        turnId,
+        requestId,
+        kind: 'result',
+      });
+      this.config.onPresenceWorkChange?.(false);
+      return true;
+    }
+    const accepted = this.geminiLiveClient.sendResultText(oralText, turnId);
     if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
     if (accepted) this.config.onPresenceWorkChange?.(false);
     return accepted;
