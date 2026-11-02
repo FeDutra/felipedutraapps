@@ -75,3 +75,26 @@ test('checkpoint local usa o turno vinculado ao request canônico', async () => 
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(spoken, ['encontrei os compromissos']);
 });
+
+test('resultado canônico também é narrado no transporte local em forma oral', async () => {
+  const { controller, spoken } = await createController();
+
+  assert.equal(controller.narratePresenceResult(
+    '## Fechado\nA correção foi instalada. O relatório integral permanece no chat. `/tmp/build.log`',
+    'request-1',
+  ), true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(spoken, ['Fechado A correção foi instalada. O relatório integral permanece no chat.']);
+});
+
+test('confirmação vinculada não conclui o turno antes do resultado', async () => {
+  const { controller, spoken } = await createController();
+
+  assert.equal(await controller.speakAssistant('Certo, já comecei.', undefined, undefined, {
+    turnId: 'turn-1',
+    requestId: 'request-1',
+    kind: 'acknowledgement',
+  }), true);
+  assert.equal((controller as any).turnMachine.getSnapshot().turns['turn-1'].status, 'working');
+  assert.deepEqual(spoken, ['Certo, já comecei.']);
+});

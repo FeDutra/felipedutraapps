@@ -462,7 +462,10 @@ export class VoiceSessionController {
     const track = stream.getAudioTracks()[0];
     if (!stream.active || !track || track.readyState !== 'live') return false;
     const settings = track.getSettings();
-    return (settings.channelCount ?? 1) > 0 && (settings.sampleRate ?? 1) > 0;
+    const isVirtualInput = /virtual|zoom|soundflower|blackhole|sf-voice/i.test(track.label);
+    return !isVirtualInput
+      && (settings.channelCount ?? 1) > 0
+      && (settings.sampleRate ?? 1) > 0;
   }
 
   private async openHealthyMicrophone() {
