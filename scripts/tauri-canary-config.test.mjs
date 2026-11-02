@@ -80,18 +80,10 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. The Preview boots from the same packaged Tauri root as the stable app.
-  // A neutral about:blank window followed by runtime HTTP navigation makes
-  // WKWebView surface its native reload error before Core can initialize.
-  assert.equal(canaryPatch.app?.windows?.[0]?.url, undefined);
+  // 5. Rust starts the private loopback origin first and only then creates the
+  // Preview WebView. There is no declarative blank or packaged window.
   assert.ok(Array.isArray(merged.app?.windows));
-  assert.equal(merged.app.windows.length, 1);
-  assert.equal(merged.app.windows[0].title, 'PULSO Next Preview');
-  assert.equal(merged.app.windows[0].url, undefined);
-  assert.equal(merged.app.windows[0].resizable, true);
-  assert.equal(merged.app.windows[0].width, 800);
-  assert.equal(merged.app.windows[0].height, 600);
-  assert.equal(merged.app.windows[0].fullscreen, false);
+  assert.equal(merged.app.windows.length, 0);
 });
 
 test('Production Desktop build compiles the HOME natively at the default Tauri root', () => {
@@ -117,6 +109,8 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.doesNotMatch(tauriLib, /__PULSO_DESKTOP_HISTORY_GUARD__/);
   assert.match(tauriLib, /desktop_boot_probe/);
   assert.doesNotMatch(tauriLib, /window\.navigate/);
+  assert.match(tauriLib, /start_desktop_http\(app\.handle\(\)\)/);
+  assert.match(tauriLib, /WebviewWindowBuilder::new\(app, "main", WebviewUrl::External\(external_url\)\)/);
   assert.doesNotMatch(rootPage, /useRouter/);
   assert.doesNotMatch(rootPage, /router\.replace/);
   assert.match(rootPage, /<LivePage \/>/);

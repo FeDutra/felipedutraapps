@@ -9,7 +9,7 @@ use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{Emitter, Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild;
 
@@ -419,12 +419,23 @@ pub fn run() {
         )?;
       }
 
-      // The isolated Preview must boot through Tauri's packaged root exactly
-      // like the stable app. Navigating an `about:blank` WKWebView to a local
-      // HTTP origin proved unreliable on macOS 14 and produced WebKit's native
-      // "This page couldn't load" surface before the Core bridge could start.
-      // The packaged root is loaded without initialization scripts that mutate
-      // WebKit navigation primitives. The stable PULSO follows the same path.
+      // The isolated Preview has no declarative window. Start its loopback
+      // server first, then create the only WebView directly on that origin.
+      // This removes both failure modes observed on macOS 14: mutating the
+      // packaged `tauri://` history and navigating an already-created blank
+      // window while WebKit is still establishing its initial document.
+      if app.config().identifier.ends_with(".next-preview") {
+        let url = start_desktop_http(app.handle())?;
+        let external_url = url
+          .parse()
+          .map_err(|error| format!("desktop HTTP URL is invalid: {error}"))?;
+        WebviewWindowBuilder::new(app, "main", WebviewUrl::External(external_url))
+          .title("PULSO Next Preview")
+          .inner_size(800.0, 600.0)
+          .resizable(true)
+          .fullscreen(false)
+          .build()?;
+      }
 
       // O microsserviço Node.js do WhatsApp agora roda externamente (via PM2)
       // para garantir persistência independentemente do ciclo de vida da interface.

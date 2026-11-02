@@ -383,10 +383,10 @@ test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   assert.match(authGateSource, /return;/);
 });
 
-test('Next Preview starts from the packaged Tauri root', () => {
+test('Next Preview lets Rust create its WebView after loopback startup', () => {
   const canaryConfig = JSON.parse(
     readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json'), 'utf8')
   );
 
-  assert.equal(canaryConfig.app.windows[0].url, undefined);
+  assert.deepEqual(canaryConfig.app.windows, []);
 });
