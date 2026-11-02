@@ -15,116 +15,6 @@ use tauri_plugin_shell::process::CommandChild;
 
 const KOKORO_PORT: u16 = 14321;
 
-// Next's client router normalizes the physical document URL with the History
-// API during hydration. WKWebView on macOS 14 turns any native History API
-// mutation on the packaged document into its error page. This script is
-// injected by Wry at document start, before any page script. It gives Next the
-// mutable router state it expects without calling WebKit's native History API.
-const PULSO_DESKTOP_HISTORY_GUARD: &str = r#"
-(() => {
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  if (protocol === "http:" && hostname === "127.0.0.1" && window.location.port === "14322") return;
-
-  const nativeStateDescriptor = Object.getOwnPropertyDescriptor(History.prototype, "state");
-  let virtualState = null;
-  try {
-    virtualState = nativeStateDescriptor?.get?.call(window.history) ?? window.history.state;
-  } catch (_) {}
-
-  const updateVirtualState = function (state) {
-    virtualState = state;
-    return undefined;
-  };
-  const lock = (target, key, value) => {
-    try {
-      Object.defineProperty(target, key, {
-        value,
-        configurable: false,
-        writable: false,
-      });
-    } catch (_) {}
-  };
-
-  lock(History.prototype, "pushState", updateVirtualState);
-  lock(History.prototype, "replaceState", updateVirtualState);
-  lock(window.history, "pushState", updateVirtualState);
-  lock(window.history, "replaceState", updateVirtualState);
-  try {
-    Object.defineProperty(window.history, "state", {
-      get: () => virtualState,
-      configurable: false,
-    });
-  } catch (_) {
-    try {
-      Object.defineProperty(History.prototype, "state", {
-        get() {
-          if (this === window.history) return virtualState;
-          return nativeStateDescriptor?.get?.call(this) ?? null;
-        },
-        configurable: false,
-      });
-    } catch (_) {}
-  }
-
-  Object.defineProperty(window, "__PULSO_DESKTOP_HISTORY_GUARD__", {
-    value: true,
-    configurable: false,
-    writable: false,
-  });
-
-  const report = (stage, detail = {}) => {
-    const payload = JSON.stringify({ stage, href: window.location.href, detail });
-    let attempts = 0;
-    const send = () => {
-      try {
-        const invoke = window.__TAURI_INTERNALS__?.invoke;
-        if (typeof invoke === "function") {
-          void invoke("desktop_boot_probe", { payload }).catch(() => {});
-          return;
-        }
-      } catch (_) {}
-      attempts += 1;
-      if (attempts < 50) setTimeout(send, 50);
-    };
-    send();
-  };
-
-  window.addEventListener("error", (event) => {
-    report("window-error", {
-      message: String(event.message || ""),
-      filename: String(event.filename || ""),
-      line: event.lineno || 0,
-      column: event.colno || 0,
-      stack: String(event.error?.stack || "").slice(0, 8000),
-    });
-  }, true);
-  window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason;
-    report("unhandled-rejection", {
-      message: String(reason?.message || reason || ""),
-      stack: String(reason?.stack || "").slice(0, 8000),
-    });
-  }, true);
-  document.addEventListener("DOMContentLoaded", () => {
-    report("dom-content-loaded", {
-      htmlId: document.documentElement.id || "",
-      body: String(document.body?.innerText || "").slice(0, 1000),
-    });
-    setTimeout(() => report("post-hydration", {
-      htmlId: document.documentElement.id || "",
-      body: String(document.body?.innerText || "").slice(0, 1000),
-    }), 1500);
-  }, { once: true });
-  setTimeout(() => report("guard-installed", {
-    hasTauriInvoke: typeof window.__TAURI_INTERNALS__?.invoke === "function",
-    protocol,
-    hostname,
-    virtualState: true,
-  }), 0);
-})();
-"#;
-
 const PULSO_DESKTOP_HTTP_PORT: u16 = 14322;
 
 fn desktop_content_type(path: &Path) -> &'static str {
@@ -492,7 +382,6 @@ fn desktop_boot_probe(app: tauri::AppHandle, payload: &str) -> Result<(), String
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
-    .append_invoke_initialization_script(PULSO_DESKTOP_HISTORY_GUARD)
     .manage(Mutex::new(BridgeManager::default()))
     .manage(KokoroSidecarState::default())
     .plugin(tauri_plugin_shell::init())
@@ -534,8 +423,8 @@ pub fn run() {
       // like the stable app. Navigating an `about:blank` WKWebView to a local
       // HTTP origin proved unreliable on macOS 14 and produced WebKit's native
       // "This page couldn't load" surface before the Core bridge could start.
-      // The document-start History guard above already keeps Next routing from
-      // invalidating the packaged `tauri://localhost` document.
+      // The packaged root is loaded without initialization scripts that mutate
+      // WebKit navigation primitives. The stable PULSO follows the same path.
 
       // O microsserviço Node.js do WhatsApp agora roda externamente (via PM2)
       // para garantir persistência independentemente do ciclo de vida da interface.
