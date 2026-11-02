@@ -164,6 +164,7 @@ export class GeminiLiveClient {
   // Orquestração reconhecimento -> backend real -> narração do resultado
   private pendingUserTranscript = '';
   private pendingAssistantTranscript = '';
+  private inputTranscriptionFinished = false;
   private inputTurnFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
   private awaitingResult = false;
   private turnSequence = 0;
@@ -190,6 +191,12 @@ export class GeminiLiveClient {
   private static readonly MAX_SPOKEN_CHECKPOINTS = 3;
   private static readonly DEEP_PULSE_GAP_MS = 2_900;
   private static readonly DEEP_PULSE_MAX_MS = 90_000;
+  // A transcrição da Live API é incremental e não tem ordem garantida em
+  // relação a turnComplete. Nunca publique o primeiro fragmento como se fosse
+  // a frase inteira. `finished` fecha cedo; o timeout maior preserva
+  // compatibilidade com modelos antigos que ainda não enviam o marcador.
+  private static readonly FINAL_TRANSCRIPT_SETTLE_MS = 80;
+  private static readonly PARTIAL_TRANSCRIPT_FALLBACK_MS = 1_600;
 
   private closedByUser = false;
   private reconnectAttempts = 0;
@@ -428,11 +435,20 @@ export class GeminiLiveClient {
           this.receipt('input_transcript', { turnId: this.activeTurnId ?? undefined });
         }
         this.pendingUserTranscript += sc.inputTranscription.text;
+        if (sc.inputTranscription.finished === true) {
+          this.inputTranscriptionFinished = true;
+        }
         this.config.onTranscript?.('user', sc.inputTranscription.text);
-        // `inputTranscription` e `turnComplete` não têm ordem garantida. Este
-        // watchdog fecha o turno mesmo quando a transcrição final chega depois
-        // do marcador; `turnComplete` ainda encurta a espera para 100 ms.
-        this.scheduleInputTurnFinalization(850);
+        this.scheduleInputTurnFinalization(
+          this.inputTranscriptionFinished
+            ? GeminiLiveClient.FINAL_TRANSCRIPT_SETTLE_MS
+            : GeminiLiveClient.PARTIAL_TRANSCRIPT_FALLBACK_MS,
+        );
+      } else if (sc.inputTranscription?.finished === true && this.pendingUserTranscript) {
+        // Alguns eventos fecham a transcrição sem repetir o texto do último
+        // fragmento. O marcador ainda é autoridade para concluir o turno.
+        this.inputTranscriptionFinished = true;
+        this.scheduleInputTurnFinalization(GeminiLiveClient.FINAL_TRANSCRIPT_SETTLE_MS);
       }
 
       if (sc.interrupted) {
@@ -450,7 +466,13 @@ export class GeminiLiveClient {
           // brevemente caso o fragmento de transcrição venha no pacote logo
           // seguinte ao marcador de interrupção.
           this.pendingAssistantTranscript = '';
-          this.scheduleInputTurnFinalization(220);
+          if (this.pendingUserTranscript) {
+            this.scheduleInputTurnFinalization(
+              this.inputTranscriptionFinished
+                ? GeminiLiveClient.FINAL_TRANSCRIPT_SETTLE_MS
+                : GeminiLiveClient.PARTIAL_TRANSCRIPT_FALLBACK_MS,
+            );
+          }
           return;
         }
         if (interruptedKind === 'result') {
@@ -523,7 +545,13 @@ export class GeminiLiveClient {
           // cauda sem adicionar latência perceptível à conversa.
           this.receipt('turn_closed', { turnId: this.activeTurnId ?? undefined });
           this.turnCompletePending = true;
-          this.scheduleInputTurnFinalization(100);
+          if (this.pendingUserTranscript) {
+            this.scheduleInputTurnFinalization(
+              this.inputTranscriptionFinished
+                ? GeminiLiveClient.FINAL_TRANSCRIPT_SETTLE_MS
+                : GeminiLiveClient.PARTIAL_TRANSCRIPT_FALLBACK_MS,
+            );
+          }
         }
       }
       return;
@@ -554,6 +582,7 @@ export class GeminiLiveClient {
     const assistantText = this.pendingAssistantTranscript.trim();
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';
+    this.inputTranscriptionFinished = false;
 
     if (userText) {
       const turnId = this.activeTurnId || this.createTurnId();

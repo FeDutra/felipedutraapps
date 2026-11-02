@@ -1011,3 +1011,15 @@ Baseline: `c46012ea` (`origin/main`).
 2. Se o artefato instalado não abrir, restaurar o bundle preservado acima.
 3. Confirmar que a gravação comum continua no contrato anterior e que a
    preferência `pulso_presence_transport` não foi modificada.
+
+# Rollback · finalização canônica da transcrição Gemini Live · 02/11/2026
+
+Escopo: `src/lib/pulso/audio/GeminiLiveClient.ts` e seu teste focado. A mudança
+faz o Modo Presença respeitar `inputTranscription.finished` e impede que um
+fragmento provisório seja publicado quando `turnComplete` chegar antes da
+transcrição final. A gravação comum não é alterada.
+
+Reversão seletiva: reverter o commit desta candidata ou restaurar
+`GeminiLiveClient.ts` e `GeminiLiveClient.test.ts` a partir de `c146c150`. Em
+máquina instalada, promover novamente o bundle preservado imediatamente antes
+da candidata. Não alterar dados do WebKit, gravações comuns, Firebase ou relay.

@@ -125,7 +125,7 @@ test('pedido operacional toca a confirmação autônoma e entra uma vez no fluxo
 
   await handleMessage(client, {
     serverContent: {
-      inputTranscription: { text: 'Quais são meus compromissos de hoje?' },
+      inputTranscription: { text: 'Quais são meus compromissos de hoje?', finished: true },
       modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
       turnComplete: true,
     },
@@ -153,7 +153,7 @@ test('saudação também entra no fluxo canônico e não duplica a resposta fala
 
   await handleMessage(client, {
     serverContent: {
-      inputTranscription: { text: 'Oi, bom dia. Tudo bem? E você?' },
+      inputTranscription: { text: 'Oi, bom dia. Tudo bem? E você?', finished: true },
       modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
       turnComplete: true,
     },
@@ -167,7 +167,7 @@ test('saudação também entra no fluxo canônico e não duplica a resposta fala
   assert.equal(client.completeResultSilently(turns[0].turnId), false);
 });
 
-test('transcrição tardia ainda fecha o turno e entra no fluxo canônico', async () => {
+test('transcrição tardia final ainda fecha o turno e entra no fluxo canônico', async () => {
   const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
   const { client } = createHarness({
     onUserTurnReady: (turn) => turns.push(turn),
@@ -180,11 +180,65 @@ test('transcrição tardia ainda fecha o turno e entra no fluxo canônico', asyn
   await handleMessage(client, { serverContent: { turnComplete: true } });
   await new Promise(resolve => setTimeout(resolve, 140));
   await handleMessage(client, {
-    serverContent: { inputTranscription: { text: 'Verifique minha agenda.' } },
+    serverContent: { inputTranscription: { text: 'Verifique minha agenda.', finished: true } },
   });
-  await new Promise(resolve => setTimeout(resolve, 900));
+  await new Promise(resolve => setTimeout(resolve, 140));
 
   assert.equal(turns.length, 1);
   assert.equal(turns[0].userText, 'Verifique minha agenda.');
   assert.equal(turns[0].socialOnly, false);
+});
+
+test('turnComplete não publica fragmento provisório antes de finished', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'De.', finished: false },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.equal(turns.length, 0, 'fragmento provisório não pode virar mensagem');
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: ' Que horas são agora?', finished: true },
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'De. Que horas são agora?');
+});
+
+test('modelo antigo sem finished usa fallback lento sem perder o turno', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Abra o calendário.' },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.equal(turns.length, 0);
+  await new Promise(resolve => setTimeout(resolve, 1_500));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Abra o calendário.');
 });
