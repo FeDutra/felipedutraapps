@@ -4,6 +4,7 @@
   "version": "0.9.0",
   "identifier": "com.felipedutraapps.pulso.next-preview",
   "app": {
+    "withGlobalTauri": true,
     "windows": []
   }
 }

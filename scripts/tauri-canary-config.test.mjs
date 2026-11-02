@@ -31,6 +31,7 @@ function mergeTauriConfig(base, patch) {
 
 const basePath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
 const canaryPath = path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json');
+const capabilityPath = path.join(repoRoot, 'src-tauri', 'capabilities', 'default.json');
 
 test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
@@ -84,6 +85,12 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   // Preview WebView. There is no declarative blank or packaged window.
   assert.ok(Array.isArray(merged.app?.windows));
   assert.equal(merged.app.windows.length, 0);
+  assert.equal(merged.app.withGlobalTauri, true);
+
+  const capability = JSON.parse(readFileSync(capabilityPath, 'utf8'));
+  assert.deepEqual(capability.remote?.urls, ['http://127.0.0.1:14322']);
+  assert.deepEqual(capability.windows, ['main']);
+  assert.equal(capability.permissions.includes('core:default'), true);
 });
 
 test('Production Desktop build compiles the HOME natively at the default Tauri root', () => {
