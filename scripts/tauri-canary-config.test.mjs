@@ -81,14 +81,16 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   const parsedDevUrl = new URL(merged.build.devUrl);
   assert.equal(parsedDevUrl.pathname, '/pulso/live');
 
-  // 5. Rust starts the private loopback origin first and only then creates the
-  // Preview WebView. There is no declarative blank or packaged window.
+  // 5. The Preview opens the packaged root declaratively. Keeping the page on
+  // Tauri's trusted origin is what makes the native invoke bridge available.
   assert.ok(Array.isArray(merged.app?.windows));
-  assert.equal(merged.app.windows.length, 0);
+  assert.equal(merged.app.windows.length, 1);
+  assert.equal(merged.app.windows[0].label, 'main');
+  assert.equal(merged.app.windows[0].url, undefined);
   assert.equal(merged.app.withGlobalTauri, true);
 
   const capability = JSON.parse(readFileSync(capabilityPath, 'utf8'));
-  assert.deepEqual(capability.remote?.urls, ['http://127.0.0.1:14322']);
+  assert.equal(capability.remote, undefined);
   assert.deepEqual(capability.windows, ['main']);
   assert.equal(capability.permissions.includes('core:default'), true);
 });
@@ -116,8 +118,8 @@ test('Production Desktop build compiles the HOME natively at the default Tauri r
   assert.doesNotMatch(tauriLib, /__PULSO_DESKTOP_HISTORY_GUARD__/);
   assert.match(tauriLib, /desktop_boot_probe/);
   assert.doesNotMatch(tauriLib, /window\.navigate/);
-  assert.match(tauriLib, /start_desktop_http\(app\.handle\(\)\)/);
-  assert.match(tauriLib, /WebviewWindowBuilder::new\(app, "main", WebviewUrl::External\(external_url\)\)/);
+  assert.doesNotMatch(tauriLib, /start_desktop_http/);
+  assert.doesNotMatch(tauriLib, /WebviewUrl::External/);
   assert.doesNotMatch(rootPage, /useRouter/);
   assert.doesNotMatch(rootPage, /router\.replace/);
   assert.match(rootPage, /<LivePage \/>/);

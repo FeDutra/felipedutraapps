@@ -383,10 +383,12 @@ test('Desktop sovereign runtime bypasses the legacy Firebase gate', () => {
   assert.match(authGateSource, /return;/);
 });
 
-test('Next Preview lets Rust create its WebView after loopback startup', () => {
+test('Next Preview declares one packaged-root WebView with the canonical main label', () => {
   const canaryConfig = JSON.parse(
     readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json'), 'utf8')
   );
 
-  assert.deepEqual(canaryConfig.app.windows, []);
+  assert.equal(canaryConfig.app.windows.length, 1);
+  assert.equal(canaryConfig.app.windows[0].label, 'main');
+  assert.equal(canaryConfig.app.windows[0].url, undefined);
 });

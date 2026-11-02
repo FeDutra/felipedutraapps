@@ -5,6 +5,15 @@
   "identifier": "com.felipedutraapps.pulso.next-preview",
   "app": {
     "withGlobalTauri": true,
-    "windows": []
+    "windows": [
+      {
+        "label": "main",
+        "title": "PULSO Next Preview",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
   }
 }

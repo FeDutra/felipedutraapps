@@ -5,9 +5,6 @@
   "windows": [
     "main"
   ],
-  "remote": {
-    "urls": ["http://127.0.0.1:14322"]
-  },
   "permissions": [
     "core:default",
     "http:default",
