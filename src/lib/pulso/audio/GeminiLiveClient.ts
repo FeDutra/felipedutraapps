@@ -4,8 +4,9 @@
  *
  * Substitui, quando ativo, o pipeline turn-based (grava -> STT -> LLM -> TTS)
  * por uma sessão contínua: o microfone é transmitido em streaming e o áudio
- * de resposta chega e toca em pedaços, com barge-in detectado pelo próprio
- * Gemini (VAD do lado do servidor), sem precisar de RMS manual no cliente.
+ * de resposta chega e toca em pedaços. No desktop usamos meio-duplex durante
+ * a reprodução: a entrada fica fechada enquanto a PULSO fala, porque o
+ * cancelamento de eco do WKWebView não é confiável nos Macs físicos.
  */
 
 import {
@@ -59,6 +60,8 @@ export type PresenceAudioReceiptPhase =
   | 'turn_closed'
   | 'first_output_audio'
   | 'playback_started'
+  | 'output_echo_guard_started'
+  | 'echo_transcript_suppressed'
   | 'capture_watchdog_failed'
   | 'canonical_dispatch_started'
   | 'canonical_routing_fallback'
@@ -139,6 +142,10 @@ export class GeminiLiveClient {
   private firstPcmFrameSeen = false;
   private firstWsFrameSent = false;
   private captureFramesSuppressedUntil = 0;
+  private outputEchoGuardUntil = 0;
+  private outputEchoGuardReceiptOpen = false;
+  private echoTranscriptSuppressedForCurrentGuard = false;
+  private listeningResumeTimer: ReturnType<typeof setTimeout> | null = null;
   private deepCueSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
   private deepWorkPulseTimer: ReturnType<typeof setTimeout> | null = null;
   private deepWorkPulseTurnId: string | null = null;
@@ -165,6 +172,7 @@ export class GeminiLiveClient {
   private pendingUserTranscript = '';
   private pendingAssistantTranscript = '';
   private inputTranscriptionFinished = false;
+  private inputTurnClosed = true;
   private inputTurnFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
   private awaitingResult = false;
   private turnSequence = 0;
@@ -197,6 +205,10 @@ export class GeminiLiveClient {
   // compatibilidade com modelos antigos que ainda não enviam o marcador.
   private static readonly FINAL_TRANSCRIPT_SETTLE_MS = 80;
   private static readonly PARTIAL_TRANSCRIPT_FALLBACK_MS = 1_600;
+  // O alto-falante físico ainda reverbera por alguns centenas de milissegundos
+  // depois do último buffer. Reabrir antes disso transforma a voz da própria
+  // PULSO em uma nova fala e cria um loop acústico.
+  private static readonly OUTPUT_ECHO_TAIL_MS = 850;
 
   private closedByUser = false;
   private reconnectAttempts = 0;
@@ -426,6 +438,14 @@ export class GeminiLiveClient {
       // uma interrupção. A transcrição precisa ser preservada antes de tratar
       // o cancelamento da resposta autônoma; caso contrário o pedido inteiro
       // desaparece sem chegar à Lótus.
+      const suppressEchoTranscription = Boolean(sc.inputTranscription)
+        && this.shouldSuppressEchoTranscription();
+      if (suppressEchoTranscription) {
+        // Texto, áudio de resposta e turnComplete deste pacote pertencem ao
+        // mesmo eco. Processar qualquer parte permitiria que a Gemini
+        // continuasse a conversar consigo mesma mesmo sem publicar mensagem.
+        return;
+      }
       if (sc.inputTranscription?.text) {
         if (!this.pendingUserTranscript) {
           this.beginUserTurn();
@@ -444,7 +464,10 @@ export class GeminiLiveClient {
             ? GeminiLiveClient.FINAL_TRANSCRIPT_SETTLE_MS
             : GeminiLiveClient.PARTIAL_TRANSCRIPT_FALLBACK_MS,
         );
-      } else if (sc.inputTranscription?.finished === true && this.pendingUserTranscript) {
+      } else if (
+        sc.inputTranscription?.finished === true
+        && this.pendingUserTranscript
+      ) {
         // Alguns eventos fecham a transcrição sem repetir o texto do último
         // fragmento. O marcador ainda é autoridade para concluir o turno.
         this.inputTranscriptionFinished = true;
@@ -569,6 +592,55 @@ export class GeminiLiveClient {
     return `voice_${Date.now()}_${this.turnSequence}`;
   }
 
+  private armOutputEchoGuard(playbackEndsAtMs: number) {
+    const now = Date.now();
+    const wasActive = now < this.outputEchoGuardUntil;
+    const guardedUntil = playbackEndsAtMs + GeminiLiveClient.OUTPUT_ECHO_TAIL_MS;
+    this.outputEchoGuardUntil = Math.max(this.outputEchoGuardUntil, guardedUntil);
+    this.captureFramesSuppressedUntil = Math.max(
+      this.captureFramesSuppressedUntil,
+      this.outputEchoGuardUntil,
+    );
+    if (!wasActive) {
+      this.outputEchoGuardReceiptOpen = true;
+      this.echoTranscriptSuppressedForCurrentGuard = false;
+      this.receipt('output_echo_guard_started', { turnId: this.activeTurnId ?? undefined });
+    }
+    if (this.listeningResumeTimer) {
+      clearTimeout(this.listeningResumeTimer);
+      this.listeningResumeTimer = null;
+    }
+  }
+
+  private outputEchoGuardActive() {
+    const active = Date.now() < this.outputEchoGuardUntil;
+    if (!active && this.outputEchoGuardReceiptOpen) {
+      this.outputEchoGuardReceiptOpen = false;
+      this.echoTranscriptSuppressedForCurrentGuard = false;
+    }
+    return active;
+  }
+
+  private shouldSuppressEchoTranscription() {
+    if (!this.outputEchoGuardActive()) return false;
+
+    // O Gemini pode começar a devolver áudio antes do marcador `finished` da
+    // transcrição humana. Nesse caso, deixamos apenas a frase humana já aberta
+    // terminar. Qualquer nova transcrição durante a reprodução é eco.
+    const isFinishingOpenHumanTurn = (
+      !this.inputTurnClosed
+      && Boolean(this.pendingUserTranscript)
+      && !this.inputTranscriptionFinished
+    );
+    if (isFinishingOpenHumanTurn) return false;
+
+    if (!this.echoTranscriptSuppressedForCurrentGuard) {
+      this.echoTranscriptSuppressedForCurrentGuard = true;
+      this.receipt('echo_transcript_suppressed', { turnId: this.activeTurnId ?? undefined });
+    }
+    return true;
+  }
+
   private scheduleInputTurnFinalization(delayMs: number) {
     if (this.inputTurnFinalizeTimer) clearTimeout(this.inputTurnFinalizeTimer);
     this.inputTurnFinalizeTimer = setTimeout(() => {
@@ -583,6 +655,7 @@ export class GeminiLiveClient {
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';
     this.inputTranscriptionFinished = false;
+    this.inputTurnClosed = true;
 
     if (userText) {
       const turnId = this.activeTurnId || this.createTurnId();
@@ -606,6 +679,7 @@ export class GeminiLiveClient {
   private beginUserTurn() {
     const turnId = this.createTurnId();
     this.activeTurnId = turnId;
+    this.inputTurnClosed = false;
     this.stopDeepWorkPulse();
     this.awaitingResult = false;
     this.narrationQueue = [];
@@ -625,7 +699,7 @@ export class GeminiLiveClient {
     this.config.onUserTurnStarted?.(turnId);
   }
 
-  // ---- Captura de microfone (envio contínuo, full-duplex) ----
+  // ---- Captura de microfone (streaming com gate durante a saída de voz) ----
 
   private async startMic() {
     if (this.micStream) return;
@@ -908,6 +982,12 @@ export class GeminiLiveClient {
     this.playbackSources.add(source);
 
     const startTime = Math.max(this.nextPlaybackTime, ctx.currentTime);
+    const playbackEndsAtMs = Date.now() + Math.ceil(
+      Math.max(0, startTime + buffer.duration - ctx.currentTime) * 1_000,
+    );
+    // Arma a barreira antes de iniciar o alto-falante. Assim, nem o primeiro
+    // frame da voz sintetizada pode escapar pelo microfone para o relay.
+    this.armOutputEchoGuard(playbackEndsAtMs);
     source.start(startTime);
     const markPlaybackStarted = () => {
       if (this.firstPlaybackStarted) return;
@@ -944,7 +1024,18 @@ export class GeminiLiveClient {
 
   private maybeReturnToListening() {
     if (this.turnCompletePending && this.pendingSources === 0) {
+      const echoTailRemainingMs = this.outputEchoGuardUntil - Date.now();
+      if (echoTailRemainingMs > 0) {
+        if (!this.listeningResumeTimer) {
+          this.listeningResumeTimer = setTimeout(() => {
+            this.listeningResumeTimer = null;
+            this.maybeReturnToListening();
+          }, echoTailRemainingMs + 5);
+        }
+        return;
+      }
       this.turnCompletePending = false;
+      this.outputEchoGuardActive();
       this.lastNarrationCompletedAt = Date.now();
       this.setState('listening');
       this.flushNarrationQueue();
@@ -1112,6 +1203,8 @@ export class GeminiLiveClient {
     this.checkpointTimer = null;
     if (this.inputTurnFinalizeTimer) clearTimeout(this.inputTurnFinalizeTimer);
     this.inputTurnFinalizeTimer = null;
+    if (this.listeningResumeTimer) clearTimeout(this.listeningResumeTimer);
+    this.listeningResumeTimer = null;
     if (this.deepCueSuppressionTimer) clearTimeout(this.deepCueSuppressionTimer);
     this.deepCueSuppressionTimer = null;
     this.stopDeepWorkPulse();
@@ -1124,6 +1217,12 @@ export class GeminiLiveClient {
     this.activeTurnId = null;
     this.pendingUserTranscript = '';
     this.pendingAssistantTranscript = '';
+    this.inputTurnClosed = true;
+    this.inputTranscriptionFinished = false;
+    this.outputEchoGuardUntil = 0;
+    this.captureFramesSuppressedUntil = 0;
+    this.outputEchoGuardReceiptOpen = false;
+    this.echoTranscriptSuppressedForCurrentGuard = false;
     this.narrationQueue = [];
     this.narrationInFlight = null;
     this.teardownMic();

@@ -242,3 +242,115 @@ test('modelo antigo sem finished usa fallback lento sem perder o turno', async (
   assert.equal(turns.length, 1);
   assert.equal(turns[0].userText, 'Abra o calendário.');
 });
+
+test('voz reproduzida fecha a captura e não pode criar um turno de eco', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const played: string[] = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: 'turn-finished',
+    awaitingResult: true,
+    inputTurnClosed: true,
+    pendingUserTranscript: '',
+    enqueuePlayback: (chunk: string) => played.push(chunk),
+  });
+
+  const internals = client as unknown as {
+    armOutputEchoGuard: (playbackEndsAtMs: number) => void;
+    outputEchoGuardUntil: number;
+    captureFramesSuppressedUntil: number;
+  };
+  internals.armOutputEchoGuard(Date.now() + 300);
+  assert.ok(internals.captureFramesSuppressedUntil >= internals.outputEchoGuardUntil);
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Iniciando.', finished: true },
+      modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 0, 'a voz da própria PULSO não pode voltar como fala humana');
+  assert.equal(played.length, 0, 'a resposta ao eco também precisa ser descartada');
+
+  internals.outputEchoGuardUntil = Date.now() - 1;
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Agora sou eu.', finished: true },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Agora sou eu.');
+});
+
+test('barreira de captura é armada antes do primeiro frame tocar no alto-falante', () => {
+  const { client } = createHarness();
+  let guardedWhenPlaybackStarted = false;
+  const source = {
+    buffer: null as unknown,
+    connect: () => undefined,
+    start: () => {
+      const snapshot = client as unknown as { captureFramesSuppressedUntil: number };
+      guardedWhenPlaybackStarted = snapshot.captureFramesSuppressedUntil > Date.now();
+    },
+    stop: () => undefined,
+    disconnect: () => undefined,
+    onended: null as null | (() => void),
+  };
+  const fakeContext = {
+    currentTime: 10,
+    state: 'running',
+    destination: {},
+    createBuffer: (_channels: number, length: number, sampleRate: number) => ({
+      duration: length / sampleRate,
+      copyToChannel: () => undefined,
+    }),
+    createBufferSource: () => source,
+  };
+  Object.assign(client, {
+    ensurePlaybackContext: () => fakeContext,
+    playbackContext: fakeContext,
+    nextPlaybackTime: 10,
+  });
+
+  (client as unknown as { enqueuePlayback: (base64: string) => void }).enqueuePlayback('AAE=');
+
+  assert.equal(guardedWhenPlaybackStarted, true);
+  (client as unknown as { flushPlayback: () => void }).flushPlayback();
+});
+
+test('barreira de eco deixa a transcrição humana já aberta terminar', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Que dia', finished: false },
+    },
+  });
+  (client as unknown as { armOutputEchoGuard: (playbackEndsAtMs: number) => void })
+    .armOutputEchoGuard(Date.now() + 300);
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: ' é hoje?', finished: true },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Que dia é hoje?');
+});

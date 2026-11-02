@@ -1,3 +1,23 @@
+# Rollback — barreira acústica do Modo Presença (02/11/2026)
+
+- Baseline instalada no iMac: `1102166b`.
+- Escopo: impedir que a saída Gemini volte pelo microfone, seja transcrita e
+  crie novos turnos. Durante a reprodução, a captura fica fechada e só reabre
+  após uma cauda acústica de 850 ms.
+- Consequência deliberada: barge-in fica suspenso nesta candidata; interrupção
+  durante a fala volta numa etapa própria, com cancelamento de eco comprovado.
+- A gravação de áudio comum, STT local, Kokoro, relay, Gateway e credenciais
+  não são alterados.
+
+## Reversão
+
+1. Encerrar somente a PULSO e seus processos `kokoro_runner`.
+2. Restaurar o bundle datado preservado antes da instalação como
+   `/Applications/PULSO.app`.
+3. Reabrir somente a PULSO. Não reiniciar relay, Gateway, STT nem o Mac.
+
+---
+
 # Rollback — Gemini Live com progresso canônico na Presença (02/11/2026)
 
 - Baseline: `2fd2d40b` na branch `fix/pulso-presence-runtime-20261102`.
