@@ -116,6 +116,7 @@ export {
 } from "./providers/model-adapters.mjs";
 export {
   CodexAppServerClient,
+  prepareCodexProfileAuthentication,
   CodexSubscriptionAdapter,
   installPrivateSkills
 } from "./providers/codex-app-server-adapter.mjs";

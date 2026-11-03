@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import {
   PrivateMemoryProvider,
   SqliteEventStore,
   installPrivateSkills,
+  prepareCodexProfileAuthentication,
 } from '../vendor/pulso-core/src/index.mjs';
 import { preparePulsoPrivateContext } from './prepare-pulso-private-context.mjs';
 
@@ -89,6 +90,30 @@ test('skills privadas são instaladas localmente no perfil Codex sem depender da
   }
   rmSync(privateContextRoot, { recursive: true, force: true });
   rmSync(codexHome, { recursive: true, force: true });
+});
+
+test('perfil Codex reutiliza o login oficial sem bloquear no Chaves', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pulso-codex-auth-'));
+  const codexHome = path.join(root, 'profile');
+  const sharedHome = path.join(root, 'shared');
+  const sharedAuthPath = path.join(sharedHome, 'auth.json');
+  mkdirSync(sharedHome, { recursive: true });
+  mkdirSync(codexHome, { recursive: true });
+  writeFileSync(sharedAuthPath, '{"test":true}\n', { mode: 0o600 });
+  writeFileSync(path.join(codexHome, 'config.toml'), [
+    'forced_login_method = "chatgpt"',
+    'cli_auth_credentials_store = "keyring"',
+    '',
+  ].join('\n'), { mode: 0o600 });
+
+  const result = prepareCodexProfileAuthentication({ codexHome, sharedAuthPath });
+  assert.equal(result.shared, true);
+  assert.equal(lstatSync(result.authPath).isSymbolicLink(), true);
+  assert.equal(readlinkSync(result.authPath), sharedAuthPath);
+  assert.match(readFileSync(result.configPath, 'utf8'), /cli_auth_credentials_store = "file"/);
+  assert.doesNotMatch(readFileSync(result.configPath, 'utf8'), /keyring/);
+
+  rmSync(root, { recursive: true, force: true });
 });
 
 test('adaptador, bridge e painel carregam o contrato integral sem remover o modo restrito', () => {

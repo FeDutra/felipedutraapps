@@ -1,6 +1,19 @@
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  readdirSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 
@@ -23,7 +36,7 @@ function safeProfileId(value) {
 function codexConfigText() {
   return [
     'forced_login_method = "chatgpt"',
-    'cli_auth_credentials_store = "keyring"',
+    'cli_auth_credentials_store = "file"',
     "",
   ].join("\n");
 }
@@ -33,9 +46,35 @@ function ensureProfileDirectory(codexHome) {
   const configPath = join(codexHome, "config.toml");
   if (!existsSync(configPath)) {
     writeFileSync(configPath, codexConfigText(), { encoding: "utf8", mode: 0o600 });
+  } else {
+    const current = readFileSync(configPath, "utf8");
+    const next = /(^|\n)cli_auth_credentials_store\s*=/.test(current)
+      ? current.replace(/(^|\n)cli_auth_credentials_store\s*=\s*"[^"]*"/, '$1cli_auth_credentials_store = "file"')
+      : `${current.replace(/\s*$/, "")}\ncli_auth_credentials_store = "file"\n`;
+    if (next !== current) writeFileSync(configPath, next, { encoding: "utf8", mode: 0o600 });
   }
   chmodSync(configPath, 0o600);
   return configPath;
+}
+
+export function prepareCodexProfileAuthentication({
+  codexHome,
+  sharedAuthPath = join(homedir(), ".codex", "auth.json"),
+} = {}) {
+  invariant(typeof codexHome === "string" && codexHome.trim(), "codex_home_required");
+  const profileHome = resolve(codexHome);
+  const configPath = ensureProfileDirectory(profileHome);
+  const authPath = join(profileHome, "auth.json");
+  const sharedPath = sharedAuthPath ? resolve(sharedAuthPath) : null;
+
+  if (!existsSync(authPath) && sharedPath && existsSync(sharedPath)) {
+    symlinkSync(sharedPath, authPath);
+  }
+
+  const shared = existsSync(authPath)
+    && lstatSync(authPath).isSymbolicLink()
+    && resolve(profileHome, readlinkSync(authPath)) === sharedPath;
+  return { configPath, authPath, shared, sharedAuthPath: sharedPath };
 }
 
 function privateSkillDirectories(root) {
@@ -202,6 +241,7 @@ export class CodexAppServerClient {
     this.requestTimeoutMs = requestTimeoutMs;
     this.turnTimeoutMs = turnTimeoutMs;
     this.clientVersion = clientVersion;
+    this.sharedAuthPath = join(homedir(), ".codex", "auth.json");
     this.accessModeStore = accessModeStore;
     this.child = null;
     this.reader = null;
@@ -215,7 +255,7 @@ export class CodexAppServerClient {
   async start() {
     if (this.initialized && this.child) return;
     invariant(existsSync(this.binaryPath), "codex_binary_not_found");
-    ensureProfileDirectory(this.codexHome);
+    prepareCodexProfileAuthentication({ codexHome: this.codexHome, sharedAuthPath: this.sharedAuthPath });
     installPrivateSkills({ privateContextRoot: this.privateContextRoot, codexHome: this.codexHome });
     mkdirSync(this.workspaceDir, { recursive: true, mode: 0o700 });
 
