@@ -1040,6 +1040,13 @@ import { firestorePaths } from '../services/firestorePaths';
 import { Area, PulsoContextNode, Session } from '../types/pulso.types';
 import { sessionsService } from '../services/sessionsService';
 import { pulsoCoreConversation } from '../services/pulsoCoreConversation';
+import {
+  activeCoreAreas,
+  activeCoreSessions,
+  coreAreaToVisibleArea,
+  coreSessionToContextNode,
+  type PulsoVisibleArea,
+} from '../services/pulsoCoreShellAdapter';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
 import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
 import type { PulsoLiveMessage } from '../services/pulsoCoreClient';
@@ -1499,6 +1506,7 @@ export default function LivePage() {
   const router = useRouter();
   const coreDesktopEnabled = React.useMemo(() => pulsoCoreConversation.isAvailable(), []);
   const [coreReady, setCoreReady] = React.useState(false);
+  const [coreAreas, setCoreAreas] = React.useState<PulsoVisibleArea[]>([]);
   const [coreMessagesByContext, setCoreMessagesByContext] = React.useState<Record<string, Message[]>>({});
   const [state, setState] = React.useState<any>(null);
   // The shell is intentionally visible from the first render. Data hydration
@@ -1684,7 +1692,78 @@ export default function LivePage() {
   }, []);
 
   React.useEffect(() => {
-    const isFirestore = !coreDesktopEnabled && pulsoService.getDataMode() === 'firestore';
+    if (coreDesktopEnabled) {
+      let cancelled = false;
+      const hydrateCoreTopology = async () => {
+        setSessionsLoaded(false);
+        setCoreReady(false);
+        try {
+          let topology = await pulsoCoreConversation.listTopology();
+          if (topology.areas.length === 0 && topology.sessions.length === 0) {
+            await pulsoCoreConversation.ensureTopology(
+              AREA_ORDER.map((id, index) => ({
+                id,
+                nome: AREA_NAMES[id] || id.replace('area_', ''),
+                glifo: AREA_GLYPHS[id] || '○',
+                ordem: index,
+              })),
+              DEFAULT_SESSIONS.map(session => ({
+                id: session.id,
+                areaId: session.areaId || AREA_ORDER[0],
+                titulo: session.label,
+              })),
+            );
+            topology = await pulsoCoreConversation.listTopology();
+          }
+          if (cancelled) return;
+          const visibleAreas = activeCoreAreas(topology.areas);
+          const visibleSessions = activeCoreSessions(topology.sessions);
+          if (visibleAreas.length === 0 || visibleSessions.length === 0) {
+            throw new Error('O banco do Core não devolveu áreas e sessões ativas.');
+          }
+          setCoreAreas(visibleAreas);
+          setSessions(visibleSessions);
+          setState((previous: any) => ({
+            ...(previous || {}),
+            allRoutines: previous?.allRoutines || [],
+            allAgents: previous?.allAgents || [],
+            allLogs: previous?.allLogs || [],
+            allAreas: visibleAreas.map(area => ({
+              id: area.id,
+              name: area.name,
+              status: 'active',
+              order: area.order,
+            })),
+            allRequests: previous?.allRequests || [],
+            allSources: previous?.allSources || [],
+            allTasks: previous?.allTasks || [],
+          }));
+          setError(null);
+          setSessionsLoaded(true);
+          setCoreReady(true);
+          void invoke('desktop_boot_probe', {
+            payload: JSON.stringify({
+              stage: 'core_visible_topology',
+              activeAreas: visibleAreas.length,
+              activeSessions: visibleSessions.length,
+              totalAreas: topology.areas.length,
+              totalSessions: topology.sessions.length,
+            }),
+          }).catch(() => undefined);
+        } catch (coreError: any) {
+          if (cancelled) return;
+          console.error('[PULSO_CORE_TOPOLOGY_FAILED]', coreError);
+          setSessions([LOADING_PLACEHOLDER_NODE]);
+          setSessionsLoaded(true);
+          setCoreReady(false);
+          setError(`O PULSO Core não conseguiu abrir suas áreas e sessões: ${coreError?.message || String(coreError)}`);
+        }
+      };
+      void hydrateCoreTopology();
+      return () => { cancelled = true; };
+    }
+
+    const isFirestore = pulsoService.getDataMode() === 'firestore';
 
     if (!isFirestore) {
       // Non-Firestore mode: use DEFAULT_SESSIONS directly
@@ -2216,27 +2295,41 @@ export default function LivePage() {
       counter++;
     }
 
-    const createdSession = await sessionsService.createSession({
-      id: contextId,
-      label,
-      areaId,
-    }).catch(err => {
-      console.error('Failed to create session:', err);
-      return null;
-    });
-
-    if (!createdSession) return false;
-
-    const newNode = sessionToContextNode(createdSession);
-    if (pulsoService.getDataMode() !== 'firestore') {
-      const list = await sessionsService.getAll();
-      setSessions(list.map(session => sessionToContextNode(session)));
+    let newNode: PulsoContextNode;
+    if (coreDesktopEnabled) {
+      const createdSession = await pulsoCoreConversation.createSession({
+        id: contextId,
+        titulo: label,
+        areaId,
+      }).catch(err => {
+        console.error('[PULSO_CORE_CREATE_SESSION_FAILED]', err);
+        setError(`Não consegui criar a sessão no Core: ${err?.message || String(err)}`);
+        return null;
+      });
+      if (!createdSession) return false;
+      newNode = coreSessionToContextNode(createdSession);
+      setSessions(previous => [...previous.filter(node => node.contextId !== newNode.contextId), newNode]);
+    } else {
+      const createdSession = await sessionsService.createSession({
+        id: contextId,
+        label,
+        areaId,
+      }).catch(err => {
+        console.error('Failed to create session:', err);
+        return null;
+      });
+      if (!createdSession) return false;
+      newNode = sessionToContextNode(createdSession);
+      if (pulsoService.getDataMode() !== 'firestore') {
+        const list = await sessionsService.getAll();
+        setSessions(list.map(session => sessionToContextNode(session)));
+      }
     }
     setActiveContextNode(newNode);
     setSecondaryContextIds([]);
     setFocusedPaneContextId(newNode.contextId);
     return true;
-  }, [allContextNodes]);
+  }, [allContextNodes, coreDesktopEnabled]);
 
   const handleApplySessionModel = React.useCallback(async (
     contextId: string,
@@ -2259,6 +2352,7 @@ export default function LivePage() {
   }, [sessions]);
 
   const dynamicAreas = React.useMemo(() => {
+    if (coreDesktopEnabled) return coreAreas;
     const list: Array<{ id: string; name: string; order: number }> = [];
 
     // Add all static base areas in order
@@ -2289,7 +2383,7 @@ export default function LivePage() {
     // Sort by order
     list.sort((a, b) => a.order - b.order);
     return list;
-  }, [state?.allAreas]);
+  }, [coreAreas, coreDesktopEnabled, state?.allAreas]);
 
   const mapCoreMessages = React.useCallback((items: readonly PulsoLiveMessage[], contextId: string): Message[] => (
     items.map(item => ({
@@ -2300,41 +2394,6 @@ export default function LivePage() {
       contextId,
     }))
   ), []);
-
-  const coreTopologyFingerprintRef = React.useRef('');
-  React.useEffect(() => {
-    if (!coreDesktopEnabled || !sessionsLoaded) return;
-    const visibleSessions = sessions.filter(session => session.contextId !== LOADING_PLACEHOLDER_NODE.contextId);
-    const fingerprint = JSON.stringify({
-      areas: dynamicAreas.map(area => area.id),
-      sessions: visibleSessions.map(session => [session.contextId, session.areaId, session.label]),
-    });
-    if (coreTopologyFingerprintRef.current === fingerprint) return;
-    let cancelled = false;
-    pulsoCoreConversation.ensureTopology(
-      dynamicAreas.map(area => ({
-        id: area.id,
-        nome: area.name,
-        glifo: AREA_GLYPHS[area.id] || '○',
-        ordem: area.order,
-      })),
-      visibleSessions.map(session => ({
-        id: session.contextId,
-        areaId: session.areaId,
-        titulo: session.label,
-      }))
-    ).then(() => {
-      if (cancelled) return;
-      coreTopologyFingerprintRef.current = fingerprint;
-      setCoreReady(true);
-    }).catch(error => {
-      if (!cancelled) {
-        setCoreReady(false);
-        setError(`Core indisponível: ${error?.message || String(error)}`);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [coreDesktopEnabled, dynamicAreas, sessions, sessionsLoaded]);
 
   React.useEffect(() => {
     if (!coreDesktopEnabled || !coreReady) return;
@@ -3304,15 +3363,10 @@ export default function LivePage() {
   React.useEffect(() => {
     if (coreDesktopEnabled) {
       setLoading(false);
-      setState({
-        allRoutines: [],
-        allAgents: [],
-        allLogs: [],
-        allAreas: [],
-        allRequests: [],
-        allSources: [],
-        allTasks: [],
-      });
+      setState((previous: any) => previous || ({
+        allRoutines: [], allAgents: [], allLogs: [], allAreas: [],
+        allRequests: [], allSources: [], allTasks: [],
+      }));
       return;
     }
     let cancelled = false;
@@ -4877,6 +4931,86 @@ export default function LivePage() {
     voiceStateRef.current = 'transcribing';
     setVoiceState('transcribing');
 
+    if (coreDesktopEnabled) {
+      if (!coreReady) {
+        setContextTyping(target.contextId, false);
+        throw new Error('O PULSO Core ainda está iniciando as áreas e sessões reais.');
+      }
+      const assistantMessageId = `lotus-core-presence-${requestId}`;
+      const presenceNarrator = new PresenceProgressNarrator();
+      const updateStreamingMessage = (streamedText: string) => {
+        const nextMessage: Message = {
+          id: assistantMessageId,
+          sender: 'lotus',
+          text: streamedText,
+          timestamp: new Date(),
+          contextId: target.contextId,
+        };
+        const upsert = (items: Message[]) => {
+          const index = items.findIndex(item => item.id === assistantMessageId);
+          if (index === -1) return [...items, nextMessage];
+          const next = [...items];
+          next[index] = { ...next[index], text: streamedText };
+          return next;
+        };
+        setMessages(upsert);
+        setCoreMessagesByContext(previous => ({
+          ...previous,
+          [target.contextId]: upsert(previous[target.contextId] || []),
+        }));
+      };
+
+      try {
+        voiceStateRef.current = 'waiting_lotus';
+        setVoiceState('waiting_lotus');
+        const controller = new AbortController();
+        coreAbortControllersRef.current.set(target.contextId, controller);
+        const result = await pulsoCoreConversation.streamTurn({
+          sessionId: target.contextId,
+          text: cleanText,
+          idempotencyKey: requestId,
+          signal: controller.signal,
+          onDelta: (_delta, accumulatedText) => {
+            updateStreamingMessage(accumulatedText);
+            const spokenChunk = presenceNarrator.acceptAccumulatedResponse(accumulatedText);
+            if (spokenChunk) voiceSessionControllerRef.current?.notifyPresenceCheckpoint(spokenChunk);
+          },
+        });
+        const mapped = mapCoreMessages(result.messages, target.contextId);
+        setCoreMessagesByContext(previous => ({ ...previous, [target.contextId]: mapped }));
+        setMessages(previous => [
+          previous.find(message => message.id === 'welcome') || {
+            id: 'welcome', sender: 'lotus',
+            text: 'olá fê. sou a lótus. sintonizei a central viva do pulso. como posso te auxiliar a orientar e comandar a nossa operação hoje?',
+            timestamp: new Date(),
+          },
+          ...previous.filter(message => message.id !== 'welcome' && message.contextId !== target.contextId),
+          ...mapped,
+        ]);
+        setLastSentRequestsByContext(previous => ({ ...previous, [target.contextId]: requestId }));
+        return {
+          requestId,
+          responseText: presenceNarrator.finalRemainder(result.run.accumulatedText)
+            || result.run.accumulatedText,
+        };
+      } catch (coreError: any) {
+        setMessages(previous => [
+          ...previous.filter(message => message.id !== assistantMessageId),
+          {
+            id: `lotus-core-presence-error-${requestId}`,
+            sender: 'lotus',
+            text: `o Modo Presença não conseguiu concluir este turno no Core: ${coreError?.message || 'erro desconhecido'}.`,
+            timestamp: new Date(),
+            contextId: target.contextId,
+          },
+        ]);
+        throw coreError;
+      } finally {
+        coreAbortControllersRef.current.delete(target.contextId);
+        setContextTyping(target.contextId, false);
+      }
+    }
+
     try {
       const created = await createPulsoConversationRequest(cleanText, {
         mode: 'presence',
@@ -4908,7 +5042,7 @@ export default function LivePage() {
     } finally {
       setContextTyping(target.contextId, false);
     }
-  }, [activeContextNode, contextStatesMap, createPulsoConversationRequest]);
+  }, [activeContextNode, contextStatesMap, coreDesktopEnabled, coreReady, createPulsoConversationRequest, mapCoreMessages]);
 
   const handlePresenceUiIntent = React.useCallback((input: string): LocalPresenceFastPathResult => {
     if (!isMesaOpen || !isMesaDismissUtterance(input)) return { handled: false };
@@ -6275,6 +6409,9 @@ ${data.transcription}`, {
   return (
     <div 
       onClick={() => presenceMode && exitPresenceMode()}
+      data-pulso-core-ready={coreDesktopEnabled ? String(coreReady) : undefined}
+      data-pulso-core-visible-areas={coreDesktopEnabled ? String(coreAreas.length) : undefined}
+      data-pulso-core-visible-sessions={coreDesktopEnabled ? String(sessions.filter(session => session.contextId !== LOADING_PLACEHOLDER_NODE.contextId).length) : undefined}
       className={`theme-her fixed inset-0 pb-[env(safe-area-inset-bottom)] w-full flex flex-col justify-between py-6 px-4 md:px-8 overflow-hidden font-sans text-[#fbf9f5] transition-all duration-500 ${
         presenceMode ? 'cursor-pointer' : ''
       }`}
@@ -6676,14 +6813,27 @@ ${data.transcription}`, {
                       .replace(/-+/g, '-');
                     const areaId = `area_${slug}`;
                     try {
-                      await areasService.saveArea({
-                        id: areaId,
-                        name: rawName,
-                        slug,
-                        status: 'active',
-                        order: dynamicAreas.length,
-                        type: 'personal',
-                      });
+                      if (coreDesktopEnabled) {
+                        const createdArea = await pulsoCoreConversation.createArea({
+                          id: areaId,
+                          nome: rawName,
+                          glifo: '○',
+                          ordem: dynamicAreas.length,
+                        });
+                        setCoreAreas(previous => [
+                          ...previous.filter(area => area.id !== createdArea.id),
+                          coreAreaToVisibleArea(createdArea),
+                        ].sort((left, right) => left.order - right.order));
+                      } else {
+                        await areasService.saveArea({
+                          id: areaId,
+                          name: rawName,
+                          slug,
+                          status: 'active',
+                          order: dynamicAreas.length,
+                          type: 'personal',
+                        });
+                      }
                       setState((prev: any) => {
                         if (!prev) return prev;
                         const existing = prev.allAreas || [];

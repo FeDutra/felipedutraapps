@@ -337,7 +337,7 @@ test('connected strictly requires ok=true, live present, and health present; mis
   assert.equal(timeoutSnapshot.errorCode, 'BRIDGE_TIMEOUT');
 });
 
-test('Structural and visual non-regression: PulsoCoreCanary is sr-only output and /pulso/live page preserves layout', () => {
+test('canário permanece diagnóstico e a superfície visível adota topologia e Presença do Core', () => {
   const canarySource = readFileSync(
     path.join(repoRoot, 'src', 'apps', 'pulso', 'components', 'PulsoCoreCanary.tsx'),
     'utf8'
@@ -357,6 +357,17 @@ test('Structural and visual non-regression: PulsoCoreCanary is sr-only output an
     liveRouteSource,
     /<div className="theme-her h-\[100dvh\] overflow-hidden" aria-label="Abrindo Pulso" \/>/
   );
+
+  const livePageSource = readFileSync(
+    path.join(repoRoot, 'src', 'apps', 'pulso', 'pages', 'LivePage.tsx'),
+    'utf8'
+  );
+  assert.match(livePageSource, /pulsoCoreConversation\.listTopology\(\)/);
+  assert.match(livePageSource, /activeCoreAreas\(topology\.areas\)/);
+  assert.match(livePageSource, /activeCoreSessions\(topology\.sessions\)/);
+  assert.match(livePageSource, /data-pulso-core-visible-areas=/);
+  assert.match(livePageSource, /data-pulso-core-visible-sessions=/);
+  assert.match(livePageSource, /if \(coreDesktopEnabled\) \{[\s\S]*pulsoCoreConversation\.streamTurn\(\{/);
 });
 
 test('Desktop packaged entry renders HOME at the immutable Tauri root', () => {

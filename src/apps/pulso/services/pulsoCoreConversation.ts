@@ -4,7 +4,9 @@ import {
   type PulsoCoreClient,
   type PulsoCreateAreaParams,
   type PulsoCreateSessionParams,
+  type PulsoLiveArea,
   type PulsoLiveMessage,
+  type PulsoLiveSession,
 } from './pulsoCoreClient';
 
 export class PulsoCoreConversationError extends Error {
@@ -34,6 +36,11 @@ export interface StreamTurnResult {
   messages: readonly PulsoLiveMessage[];
 }
 
+export interface PulsoCoreTopology {
+  readonly areas: readonly PulsoLiveArea[];
+  readonly sessions: readonly PulsoLiveSession[];
+}
+
 const terminal = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -57,6 +64,36 @@ export class PulsoCoreConversation {
     if (!result.ok) {
       throw new PulsoCoreConversationError(result.error.code, result.error.message);
     }
+  }
+
+  async listTopology(): Promise<PulsoCoreTopology> {
+    const [areas, sessions] = await Promise.all([
+      this.client.listAreas(),
+      this.client.listSessions(),
+    ]);
+    if (!areas.ok) {
+      throw new PulsoCoreConversationError(areas.error.code, areas.error.message);
+    }
+    if (!sessions.ok) {
+      throw new PulsoCoreConversationError(sessions.error.code, sessions.error.message);
+    }
+    return { areas: areas.result, sessions: sessions.result };
+  }
+
+  async createArea(params: PulsoCreateAreaParams): Promise<PulsoLiveArea> {
+    const result = await this.client.createArea(params);
+    if (!result.ok) {
+      throw new PulsoCoreConversationError(result.error.code, result.error.message);
+    }
+    return result.result;
+  }
+
+  async createSession(params: PulsoCreateSessionParams): Promise<PulsoLiveSession> {
+    const result = await this.client.createSession(params);
+    if (!result.ok) {
+      throw new PulsoCoreConversationError(result.error.code, result.error.message);
+    }
+    return result.result;
   }
 
   async selectSession(areaId: string, sessionId: string): Promise<readonly PulsoLiveMessage[]> {

@@ -136,3 +136,32 @@ test('streamTurn propaga cancelamento ao Core antes de encerrar', async () => {
   assert.equal(cancelled, true);
   assert.equal(result.run.status, 'cancelled');
 });
+
+test('listTopology adota todas as áreas e sessões canônicas do Core', async () => {
+  const areas = Array.from({ length: 21 }, (_, index) => ({
+    id: `area-${index}`,
+    nome: `Área ${index}`,
+    glifo: '○',
+    ordem: index,
+    estado: index === 20 ? 'archived' : 'active',
+    createdAt: '2026-11-03T00:00:00.000Z',
+    updatedAt: '2026-11-03T00:00:00.000Z',
+  }));
+  const sessions = Array.from({ length: 176 }, (_, index) => ({
+    id: `session-${index}`,
+    areaId: `area-${index % 20}`,
+    titulo: `Sessão ${index}`,
+    identityId: 'lotus',
+    estado: 'active',
+    createdAt: '2026-11-03T00:00:00.000Z',
+    updatedAt: '2026-11-03T00:00:00.000Z',
+  }));
+  const conversation = new PulsoCoreConversation({
+    isAvailable: () => true,
+    listAreas: async () => success(areas),
+    listSessions: async () => success(sessions),
+  });
+  const topology = await conversation.listTopology();
+  assert.equal(topology.areas.length, 21);
+  assert.equal(topology.sessions.length, 176);
+});

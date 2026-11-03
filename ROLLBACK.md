@@ -1207,3 +1207,20 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 4. Registrar novamente o bundle restaurado no LaunchServices e abri-lo duas vezes, sem coexistir com outra variante do Core.
 5. Manter o SQLite atual e todos os dados do Core; rollback de aplicativo não autoriza rollback de dados.
 6. Se a limpeza de catálogo precisar ser revertida, registrar novamente um bundle arquivado pelo seu caminho explícito; não duplicá-lo em `/Applications`.
+
+---
+# Next Preview adota o Core visível · 03/11/2026
+
+- **Falha corrigida:** a casca visual carregava `DEFAULT_SESSIONS` e áreas estáticas enquanto o Core real permanecia como canário invisível. Isso fazia o MacBook exibir conteýo ultrapassado e impedia uma prova honesta de abertura no iMac.
+- **Fonte canônica:** a navegação da Preview passa a usar `live.areas.list` e `live.sessions.list`; nenhuma falha pode ser ocultada pela lista padrão.
+- **Presença:** o turno de voz da Preview passa pelo `live.turn.start` do Core e preserva a narração progressiva, em vez de criar pedido no runtime legado.
+- **Diagnóstico:** fronteiras React registram falhas de abertura em `desktop-boot-probe.log`, sem alterar o SQLite.
+- **Dados:** esta mudança não migra, substitui nem apaga `pulso-core.sqlite`.
+
+## Reversão
+
+1. Encerrar somente `PULSO Next Preview.app` e seus sidecars.
+2. Restaurar o bundle oficial anterior preservado imediatamente antes da promoção.
+3. Manter o SQLite vivo, identidades, seleção ativa e Chaves atuais.
+4. Registrar novamente o bundle restaurado no LaunchServices.
+5. Se a interface anterior voltar a exibir sessões padrão, tratar isso como rollback visual conhecido, não como recuperação dos dados do Core.
