@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { localActions } from './localActions';
-import { classifyPresenceWork, PresenceWorkKind } from '../presence/PresenceWorkRouter';
+import { classifyPresenceWork, type PresenceWorkKind } from '../presence/PresenceWorkRouter';
 
 export interface LocalPresenceFastPathResult {
   handled: boolean;

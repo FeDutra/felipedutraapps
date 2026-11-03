@@ -1,19 +1,15 @@
 import { TTSAdapter } from '../TTSAdapter';
-import {
-  GeminiLiveClient,
-  GeminiLiveState,
-  PresenceAudioReceipt,
-} from './GeminiLiveClient';
+import { GeminiLiveClient } from './GeminiLiveClient';
+import type { GeminiLiveState, PresenceAudioReceipt } from './GeminiLiveClient';
 import { getGeminiLiveConfig } from './PresenceTransport';
-import { executeLocalPresenceFastPath, LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
+import { executeLocalPresenceFastPath } from '../actions/localPresenceFastPath';
+import type { LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
 import type { PresenceRoutingDecision } from '../presence/PresenceCognitiveRouter';
-import { classifyPresenceWork, PresenceWorkDecision } from '../presence/PresenceWorkRouter';
+import { classifyPresenceWork } from '../presence/PresenceWorkRouter';
+import type { PresenceWorkDecision } from '../presence/PresenceWorkRouter';
 import { encodePcmWav } from './pcmWav';
-import {
-  PresenceNarrationKind,
-  PresenceTurnEvent,
-  PresenceTurnMachine,
-} from './PresenceTurnMachine';
+import { PresenceTurnMachine } from './PresenceTurnMachine';
+import type { PresenceNarrationKind, PresenceTurnEvent } from './PresenceTurnMachine';
 import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from './presenceOralText';
 
 export type VoiceSessionState =
@@ -55,6 +51,8 @@ export interface PresenceNarrationContext {
   turnId?: string;
   requestId?: string;
   kind?: PresenceNarrationKind;
+  /** A máquina de turno já concedeu esta narração ao chamador. */
+  claimAlreadyMade?: boolean;
 }
 
 interface QueuedPresenceNarration {
@@ -823,7 +821,7 @@ export class VoiceSessionController {
       ?? undefined;
 
     const narrationKind = context.kind ?? 'result';
-    if (turnId && narrationKind !== 'acknowledgement') {
+    if (turnId && narrationKind !== 'acknowledgement' && !context.claimAlreadyMade) {
       const result = this.advanceTurn({
         type: narrationKind === 'checkpoint' ? 'checkpoint_received' : 'result_received',
         turnId,
@@ -872,12 +870,16 @@ export class VoiceSessionController {
     const next = this.localNarrationQueue.shift();
     if (!next) {
       this.log('SESSION_RETURNED_TO_LISTENING');
-      this.startListeningLoop();
+      // No transporte Gemini o microfone e o loop de escuta pertencem ao
+      // GeminiLiveClient. Iniciar aqui o gravador turn-based abriria uma
+      // segunda captura sobre a sessão contínua.
+      if (!this.geminiLiveClient?.isConnected()) this.startListeningLoop();
       return;
     }
 
     const turnId = next.context.turnId;
-    if (!this.stream) {
+    const geminiConnected = this.geminiLiveClient?.isConnected() ?? false;
+    if (!this.stream && !geminiConnected) {
       if (turnId) this.advanceTurn({ type: 'turn_interrupted', turnId });
       this.localNarrationQueue = [];
       return;
@@ -903,6 +905,12 @@ export class VoiceSessionController {
       this.log('ASSISTANT_AUDIO_ENDED');
       this.isAssistantSpeaking = false;
       this.localNarrationActive = false;
+      if (turnId && next.context.kind !== 'acknowledgement') {
+        this.geminiLiveClient?.endExternalNarration(
+          turnId,
+          next.context.kind === 'result' ? 'result' : 'checkpoint',
+        );
+      }
       if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
       next.onEnd?.();
       this.drainLocalNarrationQueue();
@@ -911,6 +919,9 @@ export class VoiceSessionController {
     void this.ttsAdapter.speak(
         next.text,
         () => {
+          if (turnId && next.context.kind !== 'acknowledgement') {
+            this.geminiLiveClient?.beginExternalNarration(turnId);
+          }
           this.assistantSpeechStartMs = Date.now();
           this.log('ASSISTANT_AUDIO_STARTED');
           next.onStart?.();
@@ -1121,18 +1132,11 @@ export class VoiceSessionController {
 
     const oralText = toPresenceCheckpointSpeech(checkpointText);
     if (!oralText) return false;
-    if (this.geminiLiveClient?.isConnected()) {
-      const accepted = this.geminiLiveClient.sendCheckpointText(oralText, turnId);
-      if (accepted) {
-        this.advanceTurn({ type: 'narration_started', turnId, kind: 'checkpoint' });
-      }
-      return accepted;
-    }
-
     void this.speakAssistant(oralText, undefined, undefined, {
       turnId,
       requestId,
       kind: 'checkpoint',
+      claimAlreadyMade: true,
     });
     return true;
   }
@@ -1148,19 +1152,14 @@ export class VoiceSessionController {
     this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
     const oralText = toPresenceResultSpeech(resultText);
     if (!oralText) return false;
-    if (!this.geminiLiveClient?.isConnected()) {
-      void this.speakAssistant(oralText, undefined, undefined, {
-        turnId,
-        requestId,
-        kind: 'result',
-      });
-      this.config.onPresenceWorkChange?.(false);
-      return true;
-    }
-    const accepted = this.geminiLiveClient.sendResultText(oralText, turnId);
-    if (accepted) this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
-    if (accepted) this.config.onPresenceWorkChange?.(false);
-    return accepted;
+    void this.speakAssistant(oralText, undefined, undefined, {
+      turnId,
+      requestId,
+      kind: 'result',
+      claimAlreadyMade: true,
+    });
+    this.config.onPresenceWorkChange?.(false);
+    return true;
   }
 
   public isGeminiLiveActive() {

@@ -67,7 +67,9 @@ export type PresenceAudioReceiptPhase =
   | 'canonical_routing_fallback'
   | 'canonical_request_created'
   | 'canonical_dispatch_failed'
-  | 'canonical_result_received';
+  | 'canonical_result_received'
+  | 'external_narration_started'
+  | 'external_narration_finished';
 
 export interface PresenceAudioReceipt {
   sessionId: string;
@@ -185,6 +187,7 @@ export class GeminiLiveClient {
    */
   private narrationQueue: NarrationItem[] = [];
   private narrationInFlight: NarrationItem | null = null;
+  private externalNarrationActive = false;
   /** O chat pode produzir muitos eventos; a voz precisa de marcos, não de logs. */
   private deferredCheckpointText: string | null = null;
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1201,6 +1204,48 @@ export class GeminiLiveClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  /**
+   * Reserva o alto-falante para uma narração canônica feita pelo TTS local.
+   *
+   * O Gemini continua sendo o transporte de entrada e a presença imediata,
+   * mas não recebe checkpoints/resultados como novos turnos artificiais. Isso
+   * torna o relay audível de forma determinística e mantém o microfone fechado
+   * antes do primeiro frame local, evitando que a PULSO escute a própria voz.
+   */
+  public beginExternalNarration(turnId = this.activeTurnId) {
+    if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
+    this.pauseDeepWorkPulse();
+    this.externalNarrationActive = true;
+    this.captureFramesSuppressedUntil = Number.MAX_SAFE_INTEGER;
+    this.receipt('external_narration_started', { turnId });
+    this.setState('speaking');
+    return true;
+  }
+
+  public endExternalNarration(
+    turnId = this.activeTurnId,
+    kind: Exclude<NarrationKind, 'acknowledgement'> = 'checkpoint',
+  ) {
+    if (!turnId || turnId !== this.activeTurnId || !this.externalNarrationActive) return false;
+    this.externalNarrationActive = false;
+    this.captureFramesSuppressedUntil = Date.now() + GeminiLiveClient.OUTPUT_ECHO_TAIL_MS;
+    this.receipt('external_narration_finished', { turnId });
+
+    if (kind === 'result') {
+      this.awaitingResult = false;
+      this.stopDeepWorkPulse();
+    } else {
+      this.resumeDeepWorkPulse();
+    }
+
+    if (this.listeningResumeTimer) clearTimeout(this.listeningResumeTimer);
+    this.listeningResumeTimer = setTimeout(() => {
+      this.listeningResumeTimer = null;
+      if (!this.closedByUser && !this.externalNarrationActive) this.setState('listening');
+    }, GeminiLiveClient.OUTPUT_ECHO_TAIL_MS + 5);
+    return true;
+  }
+
   public stop() {
     this.closedByUser = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -1231,6 +1276,7 @@ export class GeminiLiveClient {
     this.echoTranscriptSuppressedForCurrentGuard = false;
     this.narrationQueue = [];
     this.narrationInFlight = null;
+    this.externalNarrationActive = false;
     this.teardownMic();
     this.flushPlayback();
     if (this.playbackContext) {

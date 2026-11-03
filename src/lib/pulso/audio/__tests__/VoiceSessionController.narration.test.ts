@@ -31,7 +31,7 @@ async function createController() {
       completions.push(() => onEnd?.());
     },
   };
-  (controller as any).stream = {};
+  (controller as any).stream = { getTracks: () => [] };
   (controller as any).turnMachine.dispatch({ type: 'session_started' });
   (controller as any).turnMachine.dispatch({ type: 'turn_opened', turnId: 'turn-1' });
   (controller as any).turnMachine.dispatch({
@@ -85,6 +85,32 @@ test('resultado canônico também é narrado no transporte local em forma oral',
   ), true);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(spoken, ['Fechado A correção foi instalada. O relatório integral permanece no chat.']);
+});
+
+test('relay canônico usa Kokoro mesmo com Gemini conectado e fecha o microfone durante a fala', async () => {
+  const { controller, spoken, completions } = await createController();
+  (controller as any).stream = null;
+  const lifecycle: string[] = [];
+  (controller as any).geminiLiveClient = {
+    isConnected: () => true,
+    beginExternalNarration: () => {
+      lifecycle.push('begin');
+      return true;
+    },
+    endExternalNarration: (_turnId: string, kind: string) => {
+      lifecycle.push(`end:${kind}`);
+      return true;
+    },
+  };
+
+  assert.equal(controller.notifyPresenceCheckpoint('localizei a candidatura correta', 'request-1'), true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(spoken, ['localizei a candidatura correta']);
+  assert.deepEqual(lifecycle, ['begin']);
+
+  completions.shift()?.();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(lifecycle, ['begin', 'end:checkpoint']);
 });
 
 test('confirmação vinculada não conclui o turno antes do resultado', async () => {

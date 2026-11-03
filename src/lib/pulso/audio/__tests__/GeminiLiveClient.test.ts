@@ -100,6 +100,29 @@ test('resultado de turno antigo é descartado sem falar', () => {
   assert.equal(sent.length, 0);
 });
 
+test('narração local fecha a captura Gemini até a cauda acústica terminar', () => {
+  const { client, states } = createHarness();
+
+  assert.equal(client.beginExternalNarration('turn-current'), true);
+  const during = client as unknown as {
+    captureFramesSuppressedUntil: number;
+    externalNarrationActive: boolean;
+  };
+  assert.equal(during.externalNarrationActive, true);
+  assert.equal(during.captureFramesSuppressedUntil, Number.MAX_SAFE_INTEGER);
+  assert.equal(states.at(-1), 'speaking');
+
+  assert.equal(client.endExternalNarration('turn-current', 'result'), true);
+  const after = client as unknown as {
+    awaitingResult: boolean;
+    captureFramesSuppressedUntil: number;
+    externalNarrationActive: boolean;
+  };
+  assert.equal(after.externalNarrationActive, false);
+  assert.equal(after.awaitingResult, false);
+  assert.ok(after.captureFramesSuppressedUntil > Date.now());
+});
+
 test('interrupção limpa áudio e fila do turno sem reaproveitar fala antiga', async () => {
   const { client, sent, states } = createHarness();
   Object.assign(client, {
