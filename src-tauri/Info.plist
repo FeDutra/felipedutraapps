@@ -6,5 +6,7 @@
     <string>O PULSO necessita de acesso ao microfone para capturar e transcrever seus comandos de voz e ditado.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>O PULSO necessita de acesso à transcrição de voz para converter seus comandos de voz em texto.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>O PULSO necessita de acesso à automação para executar ações locais autorizadas por você.</string>
 </dict>
 </plist>

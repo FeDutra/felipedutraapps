@@ -61,6 +61,21 @@ jobs:
           --bundles app
           --config src-tauri/tauri.canary.conf.json
 
+      - name: Sign Alpha capabilities and verify macOS policy
+        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/PULSO Next Preview.app"
+          codesign --force --deep --sign - --entitlements src-tauri/Entitlements.plist "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          entitlements="$(codesign -d --entitlements :- "$app" 2>&1)"
+          grep -q 'com.apple.security.device.audio-input' <<<"$entitlements"
+          grep -q 'com.apple.security.automation.apple-events' <<<"$entitlements"
+          ! grep -q 'com.apple.security.app-sandbox' <<<"$entitlements"
+          /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$app/Contents/Info.plist" >/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' "$app/Contents/Info.plist" >/dev/null
+
       - name: Generate release provenance manifest
         if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.')) }}
         shell: bash

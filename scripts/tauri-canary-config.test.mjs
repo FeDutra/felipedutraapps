@@ -32,6 +32,8 @@ function mergeTauriConfig(base, patch) {
 const basePath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
 const canaryPath = path.join(repoRoot, 'src-tauri', 'tauri.canary.conf.json');
 const capabilityPath = path.join(repoRoot, 'src-tauri', 'capabilities', 'default.json');
+const entitlementPath = path.join(repoRoot, 'src-tauri', 'Entitlements.plist');
+const infoPlistPath = path.join(repoRoot, 'src-tauri', 'Info.plist');
 
 test('Base tauri.conf.json preserves canonical PULSO identity', () => {
   const baseConfig = JSON.parse(readFileSync(basePath, 'utf8'));
@@ -95,6 +97,17 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   assert.equal(capability.permissions.includes('core:default'), true);
 });
 
+test('Desktop bundle declares microphone and Automation capabilities without App Sandbox', () => {
+  const entitlements = readFileSync(entitlementPath, 'utf8');
+  const infoPlist = readFileSync(infoPlistPath, 'utf8');
+
+  assert.match(entitlements, /com\.apple\.security\.device\.audio-input/);
+  assert.match(entitlements, /com\.apple\.security\.automation\.apple-events/);
+  assert.doesNotMatch(entitlements, /com\.apple\.security\.app-sandbox/);
+  assert.match(infoPlist, /NSMicrophoneUsageDescription/);
+  assert.match(infoPlist, /NSAppleEventsUsageDescription/);
+});
+
 test('Production Desktop build compiles the HOME natively at the default Tauri root', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const prepareScript = readFileSync(
@@ -139,4 +152,8 @@ test('Alpha CI publishes the isolated app bundle without depending on fragile DM
   assert.match(workflow, /Contents\/Resources\/resources\/web\/pulso\/live\/index\.html/);
   assert.match(intelWorkflow, /Contents\/Resources\/resources\/web\/index\.html/);
   assert.match(intelWorkflow, /Contents\/Resources\/resources\/web\/pulso\/live\/index\.html/);
+  assert.match(workflow, /codesign --force --deep --sign - --entitlements src-tauri\/Entitlements\.plist/);
+  assert.match(intelWorkflow, /codesign --force --deep --sign - --entitlements src-tauri\/Entitlements\.plist/);
+  assert.match(workflow, /com\.apple\.security\.device\.audio-input/);
+  assert.match(workflow, /com\.apple\.security\.automation\.apple-events/);
 });
