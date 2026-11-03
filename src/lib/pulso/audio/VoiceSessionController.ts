@@ -1,6 +1,6 @@
 import { TTSAdapter } from '../TTSAdapter';
 import { GeminiLiveClient } from './GeminiLiveClient';
-import type { GeminiLiveState, PresenceAudioReceipt } from './GeminiLiveClient';
+import type { GeminiLiveState, GeminiNarrationReceipt, PresenceAudioReceipt } from './GeminiLiveClient';
 import { getGeminiLiveConfig } from './PresenceTransport';
 import { executeLocalPresenceFastPath } from '../actions/localPresenceFastPath';
 import type { LocalPresenceFastPathResult } from '../actions/localPresenceFastPath';
@@ -44,6 +44,8 @@ export interface VoiceSessionConfig {
    * de voz; pedidos e ferramentas seguem pelo fluxo canônico da Lótus.
    */
   useGeminiLive?: boolean;
+  /** No modo auto, Kokoro assume somente se o Gemini falhar antes do áudio começar. */
+  allowGeminiNarrationFallback?: boolean;
   getGeminiAccessToken?: () => Promise<string | null>;
 }
 
@@ -62,6 +64,12 @@ interface QueuedPresenceNarration {
   onEnd?: () => void;
 }
 
+interface ManualReadingCallbacks {
+  onStart?: () => void;
+  onEnd?: () => void;
+  text: string;
+}
+
 const PRESENCE_AUDIO_RECEIPTS_STORAGE_KEY = 'pulso_presence_audio_receipts_v1';
 const MAX_PRESENCE_AUDIO_RECEIPTS = 120;
 
@@ -72,7 +80,7 @@ Regra mais importante: você NÃO tem acesso a nenhuma informação real, ferram
 Seu papel tem três partes:
 1. Ao ouvir o microfone, responda imediatamente com UMA frase curta de presença. Se for uma saudação puramente social, responda naturalmente. Se houver pedido simples, confirme a ação concreta (por exemplo: “vou olhar sua agenda”). Se o pedido exigir análise, pesquisa, síntese ou decisão, diga apenas “Só um instante, vou olhar isso com cuidado.” Não forneça fatos, resultados ou conteúdo substantivo nessa primeira fala. Nunca diga que não consegue fazer algo, não cite limitações, não prometa prazo e não repita o pedido inteiro. A PULSO encaminha a fala ao executor correto em paralelo.
 2. Quando receber uma mensagem começando com "[CONFIRMAÇÃO]", diga UMA frase curta, concreta e adulta confirmando que começou. Não responda ao pedido, não cite limitações, não infantilize, não seja efusiva, não prometa prazo e não repita o pedido inteiro.
-3. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre só a mudança concreta de fase, em uma frase, e volte a esperar sem soar como se tivesse terminado.
+3. Quando receber uma mensagem começando com "[RESULTADO]", é a resposta real — narre o conteúdo dela pro Fê de forma breve, natural e conversacional (resuma, não leia literalmente, sem listas nem markdown). Se receber uma mensagem começando com "[CHECKPOINT]", é uma atualização no meio de um processo longo — narre só a mudança concreta de fase, em uma frase, e volte a esperar sem soar como se tivesse terminado. Quando receber "[LEITURA]", leia fielmente o texto em voz natural, sem comentar, resumir, introduzir ou responder ao conteúdo.
 
 Para saudações puramente sociais (oi, tudo bem, obrigado, tchau) sem pedido nenhum, pode responder naturalmente sem esperar resultado.
 Ritmo é parte da sua personalidade: checkpoint é exceção, não batida de relógio. Nunca narre atualizações técnicas em sequência nem transforme cada passo interno em fala. Depois de um checkpoint, fique em silêncio produtivo até haver resultado, bloqueio ou nova mudança relevante.
@@ -126,6 +134,7 @@ export class VoiceSessionController {
   private readonly turnMachine = new PresenceTurnMachine();
   private localNarrationQueue: QueuedPresenceNarration[] = [];
   private localNarrationActive = false;
+  private readonly manualReadingCallbacks = new Map<string, ManualReadingCallbacks>();
 
   private claimGeminiTurn(turnId: string) {
     if (this.stopped || turnId !== this.activeGeminiTurnId) return false;
@@ -885,13 +894,6 @@ export class VoiceSessionController {
       return;
     }
 
-    if (turnId) {
-      this.advanceTurn({
-        type: 'narration_started',
-        turnId,
-        kind: next.context.kind ?? 'result',
-      });
-    }
     this.localNarrationActive = true;
     this.transition('speaking');
     this.log('TTS_REQUEST_STARTED', { kind: next.context.kind ?? 'result', turnId });
@@ -899,6 +901,7 @@ export class VoiceSessionController {
     this.assistantSpeechStartMs = Date.now();
 
     let settled = false;
+    let playbackStarted = false;
     const finishNarration = () => {
       if (settled) return;
       settled = true;
@@ -911,7 +914,7 @@ export class VoiceSessionController {
           next.context.kind === 'result' ? 'result' : 'checkpoint',
         );
       }
-      if (turnId) this.advanceTurn({ type: 'narration_finished', turnId });
+      if (turnId && playbackStarted) this.advanceTurn({ type: 'narration_finished', turnId });
       next.onEnd?.();
       this.drainLocalNarrationQueue();
     };
@@ -919,6 +922,14 @@ export class VoiceSessionController {
     void this.ttsAdapter.speak(
         next.text,
         () => {
+          playbackStarted = true;
+          if (turnId) {
+            this.advanceTurn({
+              type: 'narration_started',
+              turnId,
+              kind: next.context.kind ?? 'result',
+            });
+          }
           if (turnId && next.context.kind !== 'acknowledgement') {
             this.geminiLiveClient?.beginExternalNarration(turnId);
           }
@@ -933,6 +944,99 @@ export class VoiceSessionController {
       console.warn('Erro ao reproduzir TTS:', error);
       finishNarration();
     });
+  }
+
+  private handleGeminiNarrationStarted(narration: GeminiNarrationReceipt) {
+    if (narration.kind === 'reading') {
+      this.manualReadingCallbacks.get(narration.id)?.onStart?.();
+      return;
+    }
+    this.advanceTurn({
+      type: 'narration_started',
+      turnId: narration.turnId,
+      kind: narration.kind,
+    });
+  }
+
+  private handleGeminiNarrationFinished(narration: GeminiNarrationReceipt) {
+    if (narration.kind === 'reading') {
+      const callbacks = this.manualReadingCallbacks.get(narration.id);
+      this.manualReadingCallbacks.delete(narration.id);
+      callbacks?.onEnd?.();
+      return;
+    }
+    this.advanceTurn({ type: 'narration_finished', turnId: narration.turnId });
+  }
+
+  private fallbackGeminiNarration(
+    narration: GeminiNarrationReceipt & { reason: string },
+  ) {
+    this.log('GEMINI_NARRATION_FALLBACK', {
+      id: narration.id,
+      kind: narration.kind,
+      reason: narration.reason,
+    });
+
+    if (!this.config.allowGeminiNarrationFallback) {
+      if (narration.kind === 'reading') {
+        const callbacks = this.manualReadingCallbacks.get(narration.id);
+        this.manualReadingCallbacks.delete(narration.id);
+        callbacks?.onEnd?.();
+      }
+      this.config.onError('A voz Gemini não conseguiu iniciar. O fallback local está desativado neste modo.');
+      return;
+    }
+
+    if (narration.kind === 'reading') {
+      const callbacks = this.manualReadingCallbacks.get(narration.id);
+      if (!callbacks) return;
+      this.geminiLiveClient?.beginExternalReading();
+      void this.ttsAdapter.speak(
+        callbacks.text,
+        callbacks.onStart,
+        () => {
+          this.geminiLiveClient?.endExternalReading();
+          this.manualReadingCallbacks.delete(narration.id);
+          callbacks.onEnd?.();
+        },
+        undefined,
+        { fallbackToNative: false },
+      ).catch(() => {
+        this.geminiLiveClient?.endExternalReading();
+        this.manualReadingCallbacks.delete(narration.id);
+        callbacks.onEnd?.();
+      });
+      return;
+    }
+
+    void this.speakAssistant(narration.text, undefined, undefined, {
+      turnId: narration.turnId,
+      kind: narration.kind,
+      claimAlreadyMade: true,
+    });
+  }
+
+  public readText(
+    text: string,
+    narrationId: string,
+    onStart?: () => void,
+    onEnd?: () => void,
+  ) {
+    const normalized = this.ttsAdapter.normalizeTextForSpeech(text);
+    if (!normalized || !this.geminiLiveClient?.isReady()) return false;
+    this.manualReadingCallbacks.set(narrationId, { text: normalized, onStart, onEnd });
+    if (this.geminiLiveClient.sendReadingText(normalized, narrationId)) return true;
+    this.manualReadingCallbacks.delete(narrationId);
+    return false;
+  }
+
+  public cancelReading(narrationId: string) {
+    this.ttsAdapter.cancel();
+    const cancelled = this.geminiLiveClient?.cancelNarration(narrationId) ?? false;
+    const callbacks = this.manualReadingCallbacks.get(narrationId);
+    this.manualReadingCallbacks.delete(narrationId);
+    callbacks?.onEnd?.();
+    return cancelled || Boolean(callbacks);
   }
 
   // ---- Modo experimental Gemini Live ----
@@ -966,6 +1070,18 @@ export class VoiceSessionController {
         } else {
           this.config.onTextReceived('', text);
         }
+      },
+      onNarrationStarted: (narration) => {
+        if (this.stopped) return;
+        this.handleGeminiNarrationStarted(narration);
+      },
+      onNarrationFinished: (narration) => {
+        if (this.stopped) return;
+        this.handleGeminiNarrationFinished(narration);
+      },
+      onNarrationUnavailable: (narration) => {
+        if (this.stopped) return;
+        this.fallbackGeminiNarration(narration);
       },
       onError: (message) => {
         if (this.stopped) return;
@@ -1022,11 +1138,15 @@ export class VoiceSessionController {
             this.recordLocalInteractionInBackground(userText, localResult);
             this.config.onPresenceWorkChange?.(false);
             const disposition = this.advanceTurn({ type: 'result_received', turnId });
-            if (
-              disposition.decision === 'narrate'
-              && this.geminiLiveClient?.sendResultText(localResult.responseText, turnId)
-            ) {
-              this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
+            if (disposition.decision === 'narrate') {
+              const accepted = this.geminiLiveClient?.sendResultText(localResult.responseText, turnId);
+              if (!accepted && this.config.allowGeminiNarrationFallback) {
+                void this.speakAssistant(localResult.responseText, undefined, undefined, {
+                  turnId,
+                  kind: 'result',
+                  claimAlreadyMade: true,
+                });
+              }
             }
             return;
           }
@@ -1038,11 +1158,15 @@ export class VoiceSessionController {
               this.recordLocalInteractionInBackground(userText, quickResult);
               this.config.onPresenceWorkChange?.(false);
               const disposition = this.advanceTurn({ type: 'result_received', turnId });
-              if (
-                disposition.decision === 'narrate'
-                && this.geminiLiveClient?.sendResultText(quickResult.responseText, turnId)
-              ) {
-                this.advanceTurn({ type: 'narration_started', turnId, kind: 'result' });
+              if (disposition.decision === 'narrate') {
+                const accepted = this.geminiLiveClient?.sendResultText(quickResult.responseText, turnId);
+                if (!accepted && this.config.allowGeminiNarrationFallback) {
+                  void this.speakAssistant(quickResult.responseText, undefined, undefined, {
+                    turnId,
+                    kind: 'result',
+                    claimAlreadyMade: true,
+                  });
+                }
               }
               return;
             }
@@ -1132,6 +1256,8 @@ export class VoiceSessionController {
 
     const oralText = toPresenceCheckpointSpeech(checkpointText);
     if (!oralText) return false;
+    if (this.geminiLiveClient?.sendCheckpointText(oralText, turnId)) return true;
+    if (!this.config.allowGeminiNarrationFallback && this.geminiLiveClient) return false;
     void this.speakAssistant(oralText, undefined, undefined, {
       turnId,
       requestId,
@@ -1152,12 +1278,16 @@ export class VoiceSessionController {
     this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
     const oralText = toPresenceResultSpeech(resultText);
     if (!oralText) return false;
-    void this.speakAssistant(oralText, undefined, undefined, {
-      turnId,
-      requestId,
-      kind: 'result',
-      claimAlreadyMade: true,
-    });
+    const accepted = this.geminiLiveClient?.sendResultText(oralText, turnId) ?? false;
+    if (!accepted) {
+      if (!this.config.allowGeminiNarrationFallback && this.geminiLiveClient) return false;
+      void this.speakAssistant(oralText, undefined, undefined, {
+        turnId,
+        requestId,
+        kind: 'result',
+        claimAlreadyMade: true,
+      });
+    }
     this.config.onPresenceWorkChange?.(false);
     return true;
   }
@@ -1178,6 +1308,8 @@ export class VoiceSessionController {
     this.clearDeepFallbackCheckpoint();
     this.localNarrationQueue = [];
     this.localNarrationActive = false;
+    for (const callbacks of this.manualReadingCallbacks.values()) callbacks.onEnd?.();
+    this.manualReadingCallbacks.clear();
 
     if (this.geminiLiveClient) {
       this.geminiLiveClient.stop();

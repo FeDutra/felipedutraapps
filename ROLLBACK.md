@@ -1,3 +1,25 @@
+# Rollback — Gemini principal com Kokoro como fallback (03/11/2026)
+
+- Baseline instalada no iMac: `985d540c`.
+- Baseline de código desta frente: `a5e7178b` na branch
+  `fix/presence-relay-voice-20261103`; essa candidata não foi instalada.
+- Escopo: manter Gemini Live como voz principal da Presença, do progresso, do
+  resultado final e da leitura manual; usar Kokoro apenas quando a rota Gemini
+  recusar, desconectar ou exceder o limite de início de reprodução.
+- A gravação comum, o spool, o STT, o runtime OpenClaw, o Firestore e as
+  credenciais não são alterados.
+
+## Reversão
+
+1. Encerrar somente a PULSO e seus processos `kokoro_runner`.
+2. Restaurar o bundle datado preservado antes da instalação como
+   `/Applications/PULSO.app`.
+3. Reabrir somente a PULSO; não reiniciar relay, Gateway, Firestore ou o Mac.
+4. Se apenas a nova política automática falhar, selecionar temporariamente a
+   rota local no menu de voz e manter o bundle para diagnóstico.
+
+---
+
 # Rollback — barreira acústica do Modo Presença (02/11/2026)
 
 - Baseline instalada no iMac: `1102166b`.

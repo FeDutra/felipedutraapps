@@ -13,6 +13,7 @@ async function createController() {
     onStateChange: () => undefined,
     onTextReceived: () => undefined,
     onError: () => undefined,
+    allowGeminiNarrationFallback: true,
     activeContextNode: { contextId: 'ctx', areaId: 'area', chatId: 'chat' },
     handleSendMessage: async () => null,
   });
@@ -87,12 +88,13 @@ test('resultado canônico também é narrado no transporte local em forma oral',
   assert.deepEqual(spoken, ['Fechado A correção foi instalada. O relatório integral permanece no chat.']);
 });
 
-test('relay canônico usa Kokoro mesmo com Gemini conectado e fecha o microfone durante a fala', async () => {
+test('relay canônico prioriza Gemini e só concede Kokoro quando o áudio não começa', async () => {
   const { controller, spoken, completions } = await createController();
   (controller as any).stream = null;
   const lifecycle: string[] = [];
   (controller as any).geminiLiveClient = {
     isConnected: () => true,
+    sendCheckpointText: () => true,
     beginExternalNarration: () => {
       lifecycle.push('begin');
       return true;
@@ -104,6 +106,17 @@ test('relay canônico usa Kokoro mesmo com Gemini conectado e fecha o microfone 
   };
 
   assert.equal(controller.notifyPresenceCheckpoint('localizei a candidatura correta', 'request-1'), true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(spoken, []);
+  assert.deepEqual(lifecycle, []);
+
+  (controller as any).fallbackGeminiNarration({
+    id: 'checkpoint-turn-1',
+    kind: 'checkpoint',
+    text: 'localizei a candidatura correta',
+    turnId: 'turn-1',
+    reason: 'audio_start_timeout',
+  });
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(spoken, ['localizei a candidatura correta']);
   assert.deepEqual(lifecycle, ['begin']);

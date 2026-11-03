@@ -5,7 +5,12 @@ import { GeminiLiveClient, type GeminiLiveConfig } from '../GeminiLiveClient.ts'
 
 const originalWebSocket = globalThis.WebSocket;
 
-type HarnessCallbacks = Pick<GeminiLiveConfig, 'onUserTurnReady' | 'onTranscript'>;
+type HarnessCallbacks = Pick<GeminiLiveConfig,
+  | 'onUserTurnReady'
+  | 'onTranscript'
+  | 'onNarrationStarted'
+  | 'onNarrationFinished'
+  | 'onNarrationUnavailable'>;
 
 function createHarness(callbacks: Partial<HarnessCallbacks> = {}) {
   const sent: string[] = [];
@@ -98,6 +103,56 @@ test('resultado de turno antigo é descartado sem falar', () => {
   const { client, sent } = createHarness();
   assert.equal(client.sendResultText('Não deve falar.', 'turn-old'), false);
   assert.equal(sent.length, 0);
+});
+
+test('Gemini reivindica a narração somente quando o primeiro áudio começa', async () => {
+  const started: string[] = [];
+  const unavailable: string[] = [];
+  const { client } = createHarness({
+    onNarrationStarted: narration => started.push(narration.id),
+    onNarrationUnavailable: narration => unavailable.push(narration.id),
+  });
+  Object.assign(client, { enqueuePlayback: (_chunk: string, onStart?: () => void) => onStart?.() });
+
+  assert.equal(client.sendResultText('Resultado real.', 'turn-current'), true);
+  assert.deepEqual(started, []);
+
+  await handleMessage(client, {
+    serverContent: {
+      modelTurn: { parts: [{ inlineData: { data: 'AA==' } }] },
+    },
+  });
+
+  assert.equal(started.length, 1);
+  assert.match(started[0], /^result_turn-current_/);
+  assert.deepEqual(unavailable, []);
+});
+
+test('Kokoro só recebe a concessão quando o turno termina sem áudio Gemini', async () => {
+  const started: string[] = [];
+  const unavailable: Array<{ id: string; reason: string }> = [];
+  const { client } = createHarness({
+    onNarrationStarted: narration => started.push(narration.id),
+    onNarrationUnavailable: narration => unavailable.push({ id: narration.id, reason: narration.reason }),
+  });
+
+  assert.equal(client.sendResultText('Resultado real.', 'turn-current'), true);
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+
+  assert.deepEqual(started, []);
+  assert.equal(unavailable.length, 1);
+  assert.match(unavailable[0].id, /^result_turn-current_/);
+  assert.equal(unavailable[0].reason, 'turn_completed_without_audio');
+});
+
+test('leitura manual usa marcador próprio e a mesma fila Gemini', () => {
+  const { client, sent } = createHarness();
+  Object.assign(client, { setupReady: true });
+
+  assert.equal(client.sendReadingText('Texto para ler.', 'reading-message-1'), true);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /\[LEITURA\] Texto para ler\./);
+  assert.equal(client.cancelNarration('reading-message-1'), true);
 });
 
 test('narração local fecha a captura Gemini até a cauda acústica terminar', () => {

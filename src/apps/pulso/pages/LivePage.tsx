@@ -968,6 +968,7 @@ import { SummaryCards } from '../../../components/pulso/SummaryCards';
 import { intentRouter } from '../../../lib/pulso/llm/IntentRouter';
 import { localActions } from '../../../lib/pulso/actions/localActions';
 import { VoiceSessionController, VoiceSessionState } from '../../../lib/pulso/audio/VoiceSessionController';
+import { PreferredVoiceNarrator } from '../../../lib/pulso/audio/PreferredVoiceNarrator';
 import {
   getPresenceDeviceId,
   PresenceTransportPreference,
@@ -2443,50 +2444,38 @@ export default function LivePage() {
 
   // TTS instantiation
   const [ttsAdapter] = React.useState(() => new TTSAdapter());
+  const [preferredVoiceNarrator] = React.useState(() => new PreferredVoiceNarrator({
+    ttsAdapter,
+    getAccessToken: async () => {
+      const currentUser = await authService.ensurePulsoAuthReady();
+      return currentUser.getIdToken();
+    },
+  }));
   const [ttsPrefs, setTtsPrefs] = React.useState<TTSPreferences>(() => ttsAdapter.getPreferences());
-  const [availableVoices, setAvailableVoices] = React.useState<SpeechSynthesisVoice[]>([]);
   const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
   const [presenceTransport, setPresenceTransport] = React.useState<PresenceTransportPreference>(() => readPresenceTransportPreference());
-  const [kokoroEndpoint, setKokoroEndpoint] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      return safeStorageGet('pulso_tts_kokoro_endpoint') || 'http://127.0.0.1:8880/v1/audio/speech';
-    }
-    return 'http://127.0.0.1:8880/v1/audio/speech';
-  });
 
   React.useEffect(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-    const loadVoices = () => {
-      const voices = ttsAdapter.getPortugueseVoices();
-      setAvailableVoices(voices);
-      
-      // Auto-update prefs if standard voice selected is empty but we have voices loaded
-      const currentPrefs = ttsAdapter.getPreferences();
-      if (!currentPrefs.voiceURI && voices.length > 0) {
-        const defVoice = ttsAdapter.getDefaultPortugueseVoice();
-        if (defVoice) {
-          const updated = {
-            ...currentPrefs,
-            voiceURI: defVoice.voiceURI,
-            voiceName: defVoice.name,
-            voiceLang: defVoice.lang
-          };
-          setTtsPrefs(updated);
-          ttsAdapter.updatePreferences(updated);
-        }
-      }
+    if (ttsPrefs.ttsProvider === 'local_kokoro_sidecar' || ttsPrefs.ttsProvider === 'kokoro_http') return;
+    const tauriWindow = window as Window & {
+      __TAURI__?: unknown;
+      __TAURI_INTERNALS__?: unknown;
     };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    
-    return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
+    const isDesktop = typeof window !== 'undefined' && (
+      window.location.protocol === 'tauri:'
+      || window.location.protocol === 'file:'
+      || Boolean(tauriWindow.__TAURI__)
+      || Boolean(tauriWindow.__TAURI_INTERNALS__)
+    );
+    const updated: TTSPreferences = {
+      ...ttsPrefs,
+      ttsProvider: isDesktop ? 'local_kokoro_sidecar' : 'kokoro_http',
     };
-  }, [ttsAdapter]);
+    setTtsPrefs(updated);
+    ttsAdapter.updatePreferences(updated);
+  }, [ttsAdapter, ttsPrefs]);
+
+  React.useEffect(() => () => preferredVoiceNarrator.cancel(), [preferredVoiceNarrator]);
 
   const [copiedResultId, setCopiedResultId] = React.useState<string | null>(null);
   const [registeringForId, setRegisteringForId] = React.useState<string | null>(null);
@@ -2959,43 +2948,61 @@ export default function LivePage() {
 
   const handleSpeakText = React.useCallback((playbackId: string, text: string) => {
     if (playingMsgId === playbackId) {
+      voiceSessionControllerRef.current?.cancelReading(playbackId);
+      preferredVoiceNarrator.cancel();
       ttsAdapter.cancel();
       setPlayingMsgId(null);
       setPlayingState('stopped');
     } else {
+      if (playingMsgId) voiceSessionControllerRef.current?.cancelReading(playingMsgId);
+      preferredVoiceNarrator.cancel();
       ttsAdapter.cancel();
       setPlayingMsgId(playbackId);
       setPlayingState('preparing');
-      ttsAdapter.speak(
+      const onStart = () => {
+        setPlayingMsgId(prev => {
+          if (prev === playbackId) setPlayingState('playing');
+          return prev;
+        });
+      };
+      const onEnd = () => {
+        setPlayingMsgId(prev => {
+          if (prev === playbackId) {
+            setPlayingState('stopped');
+            return null;
+          }
+          return prev;
+        });
+      };
+      const onPreparing = () => {
+        setPlayingMsgId(prev => {
+          if (prev === playbackId) setPlayingState('preparing');
+          return prev;
+        });
+      };
+
+      const activePresence = voiceSessionControllerRef.current;
+      if (activePresence?.readText(text, playbackId, onStart, onEnd)) return;
+
+      if (presenceTransport === 'turn_based') {
+        void ttsAdapter.speak(
+          text,
+          onStart,
+          onEnd,
+          onPreparing,
+          { fallbackToNative: false },
+        );
+        return;
+      }
+
+      preferredVoiceNarrator.speak(
         text,
-        () => {
-          setPlayingMsgId(prev => {
-            if (prev === playbackId) {
-              setPlayingState('playing');
-            }
-            return prev;
-          });
-        },
-        () => {
-          setPlayingMsgId(prev => {
-            if (prev === playbackId) {
-              setPlayingState('stopped');
-              return null;
-            }
-            return prev;
-          });
-        },
-        () => {
-          setPlayingMsgId(prev => {
-            if (prev === playbackId) {
-              setPlayingState('preparing');
-            }
-            return prev;
-          });
-        }
+        playbackId,
+        { onStart, onEnd, onPreparing },
+        { allowKokoroFallback: presenceTransport === 'auto' },
       );
     }
-  }, [playingMsgId, ttsAdapter]);
+  }, [playingMsgId, preferredVoiceNarrator, presenceTransport, ttsAdapter]);
 
   const handleHearClick = React.useCallback((msg: Message) => {
     handleSpeakText(msg.id, msg.text);
@@ -3881,10 +3888,26 @@ export default function LivePage() {
               playPresenceSoundCue('speak_start');
               voiceStateRef.current = 'speaking';
               setVoiceState('speaking');
-              ttsAdapter.speak(responseText, () => {}, () => {
+              const onEnd = () => {
                 voiceStateRef.current = 'idle';
                 setVoiceState('idle');
-              });
+              };
+              if (presenceTransport === 'turn_based') {
+                void ttsAdapter.speak(
+                  responseText,
+                  () => {},
+                  onEnd,
+                  undefined,
+                  { fallbackToNative: false },
+                );
+              } else {
+                preferredVoiceNarrator.speak(
+                  responseText,
+                  `proactive_${requestId}`,
+                  { onEnd },
+                  { allowKokoroFallback: presenceTransport === 'auto' },
+                );
+              }
             }
           });
         },
@@ -3899,7 +3922,7 @@ export default function LivePage() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [db, markContextAsRead]);
+  }, [db, markContextAsRead, preferredVoiceNarrator, presenceTransport, ttsAdapter]);
 
   const createPulsoConversationRequest = React.useCallback(async (
     input: string,
@@ -5575,6 +5598,7 @@ ${data.transcription}`, {
       controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
+        allowGeminiNarrationFallback: presenceTransport === 'auto',
         getGeminiAccessToken: async () => {
           const currentUser = await authService.ensurePulsoAuthReady();
           return currentUser.getIdToken();
@@ -7993,7 +8017,7 @@ ${data.transcription}`, {
 
             <div className="space-y-3">
               <div className="flex flex-col gap-0.5">
-                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">conversa no modo presença</label>
+                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">estratégia de voz</label>
                 <select
                   value={presenceTransport}
                   onChange={(e) => {
@@ -8003,64 +8027,26 @@ ${data.transcription}`, {
                   }}
                   className="pulso-select w-full"
                 >
-                  <option value="gemini_live" className="bg-[#121212]">gemini live — priorizar baixa latência</option>
-                  <option value="turn_based" className="bg-[#121212]">local — openclaw + kokoro</option>
+                  <option value="auto" className="bg-[#121212]">gemini + fallback local — recomendada</option>
+                  <option value="gemini_live" className="bg-[#121212]">somente gemini</option>
+                  <option value="turn_based" className="bg-[#121212]">somente local — kokoro</option>
                 </select>
                 <span className="text-[8px] text-[#fbf9f5]/40 leading-relaxed block mt-1">
-                  O Gemini conduz ritmo, escuta e narração. Memória, decisões e ferramentas continuam na Lótus/OpenClaw.
+                  No modo recomendado, Gemini é a voz principal na Presença, no progresso, no resultado e na leitura. Kokoro só assume se a fala Gemini não chegar a começar.
                 </span>
               </div>
 
               <div className="flex flex-col gap-0.5">
-                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">provedor de voz</label>
-                <select
-                  value={ttsPrefs.ttsProvider}
-                  onChange={(e) => {
-                    const provider = e.target.value as any;
-                    const newPrefs = { ...ttsPrefs, ttsProvider: provider };
-                    setTtsPrefs(newPrefs);
-                    ttsAdapter.updatePreferences(newPrefs);
-                  }}
-                  className="pulso-select w-full"
-                >
-                  <option value="browser_native" className="bg-[#121212]">nativo do navegador</option>
-                  <option value="local_kokoro_sidecar" className="bg-[#121212]">sidecar nativo (pf_dora)</option>
-                  <option value="kokoro_http" className="bg-[#121212]">kokoro http (oficial)</option>
-                  <option value="local_kokoro" className="bg-[#121212]">kokoro-fastapi (beta)</option>
-                  <option value="cloud_google" disabled className="bg-[#121212]">google cloud tts (indisponível)</option>
-                </select>
+                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">voz principal</label>
+                <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5">
+                  <div className="text-[11px] text-white/85">Gemini · Kore</div>
+                  <div className="text-[8px] text-white/35 mt-0.5">voz em nuvem · português do Brasil</div>
+                </div>
               </div>
 
-              {ttsPrefs.ttsProvider === 'browser_native' ? (
-                <div className="flex flex-col gap-0.5">
-                  <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">voz selecionada</label>
-                  <select
-                    value={ttsPrefs.voiceURI}
-                    onChange={(e) => {
-                      const selected = availableVoices.find(v => v.voiceURI === e.target.value);
-                      if (selected) {
-                        const newPrefs = { ...ttsPrefs, voiceURI: selected.voiceURI, voiceName: selected.name, voiceLang: selected.lang };
-                        setTtsPrefs(newPrefs);
-                        ttsAdapter.updatePreferences(newPrefs);
-                      }
-                    }}
-                    className="pulso-select w-full"
-                  >
-                    {availableVoices.length === 0 ? (
-                      <option className="bg-[#121212]">nenhuma voz pt-br encontrada</option>
-                    ) : (
-                      availableVoices.map((v, i) => (
-                        <option key={i} value={v.voiceURI} className="bg-[#121212]">
-                          {v.name} ({v.lang})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2.5">
                   <div className="flex flex-col gap-0.5">
-                    <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">voz selecionada (kokoro)</label>
+                    <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">fallback local · kokoro</label>
                     <select
                       value={['pf_dora', 'pf_dora(0.70)+af_bella(0.30)', 'pf_dora(0.70)+af_sarah(0.30)'].includes(ttsPrefs.voiceName) ? ttsPrefs.voiceName : ttsPrefs.voiceName === '' ? 'pf_dora(0.70)+af_bella(0.30)' : 'custom'}
                       onChange={(e) => {
@@ -8078,7 +8064,7 @@ ${data.transcription}`, {
                       <option value="custom" className="bg-[#121212]">outra voz (escrever abaixo)...</option>
                     </select>
                     <span className="text-[8px] text-[#fbf9f5]/40 leading-relaxed block mt-1">
-                      nota: vozes híbridas misturam a fonética pt-br com a expressividade us da Kokoro.
+                      Esta voz só entra se a Gemini estiver indisponível ou não iniciar o áudio. Nunca toca por cima dela.
                     </span>
                   </div>
 
@@ -8099,26 +8085,11 @@ ${data.transcription}`, {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">endpoint kokoro http</label>
-                    <input
-                      type="text"
-                      value={kokoroEndpoint}
-                      placeholder="http://127.0.0.1:8880/v1/audio/speech"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setKokoroEndpoint(val);
-                        localStorage.setItem('pulso_tts_kokoro_endpoint', val);
-                      }}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/20 transition-colors"
-                    />
-                  </div>
                 </div>
-              )}
 
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">
-                  <span>velocidade (rate)</span>
+                  <span>velocidade do fallback</span>
                   <span>{ttsPrefs.rate.toFixed(1)}x</span>
                 </div>
                 <input
@@ -8137,32 +8108,9 @@ ${data.transcription}`, {
                 />
               </div>
 
-              {ttsPrefs.ttsProvider === 'browser_native' && (
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">
-                    <span>tom (pitch)</span>
-                    <span>{ttsPrefs.pitch.toFixed(1)}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="1.5"
-                    step="0.1"
-                    value={ttsPrefs.pitch}
-                    onChange={(e) => {
-                      const pitch = parseFloat(e.target.value);
-                      const newPrefs = { ...ttsPrefs, pitch };
-                      setTtsPrefs(newPrefs);
-                      ttsAdapter.updatePreferences(newPrefs);
-                    }}
-                    className="pulso-slider"
-                  />
-                </div>
-              )}
-
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">
-                  <span>volume</span>
+                  <span>volume do fallback</span>
                   <span>{Math.round(ttsPrefs.volume * 100)}%</span>
                 </div>
                 <input
@@ -8212,40 +8160,13 @@ ${data.transcription}`, {
             <button 
               onClick={() => {
                 if (playingMsgId === 'test') {
+                  voiceSessionControllerRef.current?.cancelReading('test');
+                  preferredVoiceNarrator.cancel();
                   ttsAdapter.cancel();
                   setPlayingMsgId(null);
                   setPlayingState('stopped');
                 } else {
-                  setPlayingMsgId('test');
-                  setPlayingState('preparing');
-                  ttsAdapter.speak(
-                    "oi, fê. esta é uma voz de teste da lótus rodando na vps. o setup do next.js e o deploy foram concluídos.",
-                    () => {
-                      setPlayingMsgId(prev => {
-                        if (prev === 'test') {
-                          setPlayingState('playing');
-                        }
-                        return prev;
-                      });
-                    },
-                    () => {
-                      setPlayingMsgId(prev => {
-                        if (prev === 'test') {
-                          setPlayingState('stopped');
-                          return null;
-                        }
-                        return prev;
-                      });
-                    },
-                    () => {
-                      setPlayingMsgId(prev => {
-                        if (prev === 'test') {
-                          setPlayingState('preparing');
-                        }
-                        return prev;
-                      });
-                    }
-                  );
+                  handleSpeakText('test', 'Oi, Fê. Esta é a voz da Lótus. A Gemini fala primeiro; se ela não estiver disponível, a voz local assume sem sobreposição.');
                 }
               }}
               className="w-full text-center py-2 border border-white/20 rounded-full text-[9px] font-bold text-white/75 hover:text-white hover:border-white/40 transition-colors lowercase bg-transparent cursor-pointer outline-none font-sans"
