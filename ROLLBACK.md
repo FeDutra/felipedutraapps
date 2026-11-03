@@ -1189,3 +1189,21 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Transportes:** o mesmo contrato vale para Gemini Live e narrador local; quando o Gemini não está conectado, o resultado canônico também é narrado pela fila local.
 - **Reversão de código:** reverter o commit desta alteração e remover `presenceOralText.ts` restaura a narração literal anterior.
 - **Instalação:** nenhuma Preview é instalada por este commit isolado. Quando houver promoção futura, preservar o bundle e o SQLite vivos antes da troca.
+
+---
+# PULSO Next Preview oficial · permissões, Presença e consolidação · 03/11/2026
+
+- **Baseline de código:** `cd664808` (`fix/core-presence-parity-20261103`).
+- **Baseline instalada:** preservar o bundle vigente de `PULSO Next Preview.app` em cada Mac antes da promoção.
+- **Dados vivos:** nunca substituir ou apagar `~/Library/Application Support/com.felipedutraapps.pulso.next-preview/`; em especial, preservar `pulso-core.sqlite`, identidade, seleção ativa e credenciais no Chaves.
+- **Escopo:** assinar o bundle Intel com microfone e Apple Events, sem App Sandbox; manter Gemini/Kore como voz principal e Kokoro/Dora pt-BR como contingência; comprovar a projeção integral das áreas e sessões; consolidar somente `PULSO.app` e `PULSO Next Preview.app` como aplicativos oficiais.
+- **Variantes antigas:** desregistrar referências antigas do LaunchServices/Spotlight e arquivar de modo recuperável; não apagar bases, históricos ou rollbacks canônicos.
+
+## Reversão
+
+1. Encerrar somente `PULSO Next Preview.app` e seus sidecars.
+2. Mover o bundle promovido para o arquivo datado da operação.
+3. Restaurar o bundle anterior preservado em `/Applications/PULSO Next Preview.app`.
+4. Registrar novamente o bundle restaurado no LaunchServices e abri-lo duas vezes, sem coexistir com outra variante do Core.
+5. Manter o SQLite atual e todos os dados do Core; rollback de aplicativo não autoriza rollback de dados.
+6. Se a limpeza de catálogo precisar ser revertida, registrar novamente um bundle arquivado pelo seu caminho explícito; não duplicá-lo em `/Applications`.
