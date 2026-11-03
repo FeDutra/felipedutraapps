@@ -1049,7 +1049,7 @@ import {
 } from '../services/pulsoCoreShellAdapter';
 import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
 import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
-import type { PulsoLiveMessage } from '../services/pulsoCoreClient';
+import { waitForTauriInvoke, type PulsoLiveMessage } from '../services/pulsoCoreClient';
 import dynamic from 'next/dynamic';
 import { useMeetingRecorder } from '../hooks/useMeetingRecorder';
 const AtelieWorkspace = dynamic(() => import('../components/AtelieWorkspace'), {
@@ -1504,7 +1504,20 @@ export type UnifiedVoiceState =
 
 export default function LivePage() {
   const router = useRouter();
-  const coreDesktopEnabled = React.useMemo(() => pulsoCoreConversation.isAvailable(), []);
+  // A bridge do Tauri pode ser injetada alguns milissegundos depois do
+  // primeiro render. Memorizar apenas a leitura síncrona desse instante fazia
+  // o Next Preview inteiro cair silenciosamente na rota Firestore legada —
+  // apesar de o Core e os sidecars já estarem vivos logo em seguida.
+  //
+  // No bundle Desktop, a intenção de produto é inequívoca: o Core é a
+  // autoridade. A disponibilidade física da bridge é aguardada de forma
+  // limitada durante a hidratação, em vez de decidir o modo para sempre no
+  // primeiro frame.
+  const coreDesktopExpected = process.env.NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '1';
+  const coreDesktopEnabled = React.useMemo(
+    () => coreDesktopExpected || pulsoCoreConversation.isAvailable(),
+    [coreDesktopExpected],
+  );
   const [coreReady, setCoreReady] = React.useState(false);
   const [coreAreas, setCoreAreas] = React.useState<PulsoVisibleArea[]>([]);
   const [coreMessagesByContext, setCoreMessagesByContext] = React.useState<Record<string, Message[]>>({});
@@ -1698,6 +1711,15 @@ export default function LivePage() {
         setSessionsLoaded(false);
         setCoreReady(false);
         try {
+          if (!pulsoCoreConversation.isAvailable()) {
+            const invoke = await waitForTauriInvoke(globalThis, {
+              timeoutMs: 5_000,
+              intervalMs: 25,
+            });
+            if (!invoke) {
+              throw new Error('A bridge nativa do PULSO Core não ficou disponível no tempo esperado.');
+            }
+          }
           let topology = await pulsoCoreConversation.listTopology();
           if (topology.areas.length === 0 && topology.sessions.length === 0) {
             await pulsoCoreConversation.ensureTopology(

@@ -367,6 +367,10 @@ test('canário permanece diagnóstico e a superfície visível adota topologia e
   assert.match(livePageSource, /activeCoreSessions\(topology\.sessions\)/);
   assert.match(livePageSource, /data-pulso-core-visible-areas=/);
   assert.match(livePageSource, /data-pulso-core-visible-sessions=/);
+  assert.match(livePageSource, /NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '1'/);
+  assert.match(livePageSource, /coreDesktopExpected \|\| pulsoCoreConversation\.isAvailable\(\)/);
+  assert.match(livePageSource, /waitForTauriInvoke\(globalThis, \{/);
+  assert.match(livePageSource, /timeoutMs: 5_000/);
   assert.match(livePageSource, /if \(coreDesktopEnabled\) \{[\s\S]*pulsoCoreConversation\.streamTurn\(\{/);
   assert.match(livePageSource, /stage: 'gemini_access_token_ready'/);
   assert.match(livePageSource, /geminiLiveActive: controller\.isGeminiLiveActive\(\)/);
