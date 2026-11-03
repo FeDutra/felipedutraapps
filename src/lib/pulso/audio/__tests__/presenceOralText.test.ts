@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from '../presenceOralText.ts';
+import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from '../presenceOralText';
 
 test('checkpoint narra só a primeira mudança concreta e remove infraestrutura', () => {
   assert.equal(

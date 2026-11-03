@@ -28,8 +28,8 @@ function clampWords(value: string, maxWords: number) {
 }
 
 /**
- * Projeta texto público para fala. Não consulta outro modelo, não inventa
- * andamento e não substitui a resposta integral preservada no chat.
+ * Produz uma projeção oral fiel do texto público. Não consulta modelo, não
+ * inventa conteúdo e não altera a resposta integral preservada no chat.
  */
 export function toPresenceCheckpointSpeech(value: string) {
   const clean = cleanSurfaceText(value);

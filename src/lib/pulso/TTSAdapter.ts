@@ -26,8 +26,9 @@ const STORAGE_KEY = 'pulso_tts_preferences';
 const MIGRATION_KEY = 'pulso_tts_migration_v1_kokoro_default';
 const DESKTOP_SIDECAR_MIGRATION_KEY = 'pulso_tts_migration_v2_desktop_sidecar';
 const DESKTOP_LEGACY_NATIVE_MIGRATION_KEY = 'pulso_tts_migration_v3_desktop_no_legacy_native';
+const PORTUGUESE_ONLY_MIGRATION_KEY = 'pulso_tts_migration_v4_portuguese_only';
 const EXPLICIT_NATIVE_CHOICE_KEY = 'pulso_tts_browser_native_explicit';
-const DEFAULT_KOKORO_VOICE = 'pf_dora(0.70)+af_bella(0.30)';
+const DEFAULT_KOKORO_VOICE = 'pf_dora';
 const KOKORO_REMOTE_ENDPOINT = 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
 
 const ensureDesktopKokoroSidecar = async (): Promise<void> => {
@@ -49,7 +50,9 @@ const isKokoroVoiceExpression = (voice: string) => (
 );
 
 const resolveKokoroVoice = (voice: string) => (
-  isKokoroVoiceExpression(voice) ? voice : DEFAULT_KOKORO_VOICE
+  voice === DEFAULT_KOKORO_VOICE && isKokoroVoiceExpression(voice)
+    ? voice
+    : DEFAULT_KOKORO_VOICE
 );
 
 // O runner local empacotado usa kokoro-onnx diretamente e aceita apenas um
@@ -145,6 +148,15 @@ export class TTSAdapter {
         localStorage.setItem(DESKTOP_LEGACY_NATIVE_MIGRATION_KEY, '1');
       }
 
+      // A voz de contingência da PULSO é sempre a brasileira pf_dora.
+      // Versões anteriores permitiam blends com vozes inglesas, que podiam
+      // reaparecer quando a síntese caía do sidecar para o serviço remoto.
+      if (!localStorage.getItem(PORTUGUESE_ONLY_MIGRATION_KEY)) {
+        this.preferences.voiceName = DEFAULT_KOKORO_VOICE;
+        this.preferences.voiceLang = 'pt-BR';
+        localStorage.setItem(PORTUGUESE_ONLY_MIGRATION_KEY, '1');
+      }
+
       if (isKokoroProvider(this.preferences.ttsProvider)) {
         this.preferences.voiceName = resolveKokoroVoice(this.preferences.voiceName);
       }
@@ -200,20 +212,26 @@ export class TTSAdapter {
       );
       const rate = this.preferences.rate;
 
+      const isLocalSidecar = this.preferences.ttsProvider === 'local_kokoro_sidecar';
       let endpoint = getKokoroEndpoint();
-      if (this.preferences.ttsProvider === 'local_kokoro' || this.preferences.ttsProvider === 'local_kokoro_sidecar') {
+      if (this.preferences.ttsProvider === 'local_kokoro') {
         endpoint = 'http://127.0.0.1:14321/v1/audio/speech';
+      } else if (isLocalSidecar) {
+        endpoint = 'http://127.0.0.1:14321';
       }
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'kokoro',
-          input: payloadText,
-          voice: voice,
-          response_format: 'mp3',
-          speed: rate
-        })
+        body: JSON.stringify(isLocalSidecar
+          ? { text: payloadText, voice, speed: rate, lang: 'pt-br' }
+          : {
+              model: 'kokoro',
+              input: payloadText,
+              voice,
+              response_format: 'mp3',
+              speed: rate,
+              lang: 'pt-br',
+            })
       });
 
       if (response.ok) {

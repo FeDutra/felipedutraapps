@@ -14,7 +14,7 @@ export interface PresenceWorkDecision {
   kind: PresenceWorkKind;
   normalizedUtterance: string;
   reason: string;
-  localAction?: 'open_app' | 'play_music';
+  localAction?: 'open_app' | 'play_music' | 'read_clock';
   target?: string;
   spokenTarget?: string;
   quickReadCapability?: PresenceQuickReadCapability;
@@ -109,6 +109,19 @@ function resolveMusicRequest(input: string) {
     .trim();
   if (!query || /\b(?:e depois|e tambem)\b/.test(query)) return null;
   return query;
+}
+
+function resolveClockRead(input: string) {
+  const unwrapped = stripLeadingWrappers(input);
+  if (/^(?:que horas? sao|que hora e|qual e a hora|qual e o horario)(?: agora)?$/.test(unwrapped)
+    || /^(?:que hora es|que horas son|cual es la hora)(?: ahora)?$/.test(unwrapped)) {
+    return 'clock_time';
+  }
+  if (/^(?:que dia e hoje|qual(?: e)? a data de hoje|qual(?: e)? o dia de hoje)$/.test(unwrapped)
+    || /^(?:que dia es hoy|cual es la fecha de hoy)$/.test(unwrapped)) {
+    return 'clock_date';
+  }
+  return null;
 }
 
 function isSocialOnly(input: string) {
@@ -243,6 +256,17 @@ export function classifyPresenceWork(input: string, referenceDate = new Date()):
       localAction: 'play_music',
       target: musicQuery,
       spokenTarget: musicQuery,
+    };
+  }
+
+  const clockRead = resolveClockRead(normalizedUtterance);
+  if (clockRead) {
+    return {
+      kind: 'local_reflex',
+      normalizedUtterance,
+      reason: 'local_clock_read',
+      localAction: 'read_clock',
+      target: clockRead,
     };
   }
 

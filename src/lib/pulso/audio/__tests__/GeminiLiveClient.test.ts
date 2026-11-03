@@ -5,7 +5,13 @@ import { GeminiLiveClient, type GeminiLiveConfig } from '../GeminiLiveClient.ts'
 
 const originalWebSocket = globalThis.WebSocket;
 
-type HarnessCallbacks = Pick<GeminiLiveConfig, 'onUserTurnReady' | 'onTranscript'>;
+type HarnessCallbacks = Pick<GeminiLiveConfig,
+  | 'onUserTurnReady'
+  | 'onTranscript'
+  | 'onAudioReceipt'
+  | 'onNarrationStarted'
+  | 'onNarrationFinished'
+  | 'onNarrationUnavailable'>;
 
 function createHarness(callbacks: Partial<HarnessCallbacks> = {}) {
   const sent: string[] = [];
@@ -63,10 +69,144 @@ test('resultado espera a confirmação terminar e só então entra na fila de vo
   assert.match(sent[0], /\[RESULTADO\] Resultado pronto\./);
 });
 
+test('fim tardio da confirmação libera checkpoint audível e resultado canônicos', async () => {
+  const receiptPhases: string[] = [];
+  const started: string[] = [];
+  const { client, sent, states } = createHarness({
+    onAudioReceipt: receipt => receiptPhases.push(receipt.phase),
+    onNarrationStarted: narration => started.push(narration.kind),
+  });
+  Object.assign(client, {
+    narrationInFlight: null,
+    pendingSources: 0,
+    turnCompletePending: false,
+    outputEchoGuardUntil: 0,
+    lastNarrationCompletedAt: Date.now() - 7_000,
+    enqueuePlayback: (_chunk: string, onStart?: () => void) => onStart?.(),
+  });
+
+  // Reproduz o iMac físico: o último buffer da confirmação já acabou e só
+  // depois chega `turnComplete`. Antes da correção, a trava permanecia ativa
+  // para sempre e o chat/MESA avançavam sem qualquer voz posterior.
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+
+  const afterAck = client as unknown as { turnCompletePending: boolean };
+  assert.equal(afterAck.turnCompletePending, false);
+  assert.equal(states.at(-1), 'listening');
+  Object.assign(client, { lastNarrationCompletedAt: Date.now() - 7_000 });
+
+  assert.equal(client.sendCheckpointText('Localizei a conversa correta.', 'turn-current'), true);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(sent.length, 1);
+  // Checkpoint preserva sua semântica interna, mas usa a rota literal que o
+  // alto-falante já provou audível no WKWebView físico.
+  assert.match(sent[0], /\[LEITURA\] Localizei a conversa correta\./);
+  assert.ok(receiptPhases.includes('checkpoint_narration_dispatched'));
+
+  await handleMessage(client, {
+    serverContent: { modelTurn: { parts: [{ inlineData: { data: 'AA==' } }] } },
+  });
+  assert.deepEqual(started, ['checkpoint']);
+  assert.ok(receiptPhases.includes('checkpoint_narration_started'));
+
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+  assert.equal(client.sendResultText('As últimas mensagens são estas.', 'turn-current'), true);
+  assert.equal(sent.length, 2);
+  assert.match(sent[1], /\[RESULTADO\] As últimas mensagens são estas\./);
+});
+
 test('resultado de turno antigo é descartado sem falar', () => {
   const { client, sent } = createHarness();
   assert.equal(client.sendResultText('Não deve falar.', 'turn-old'), false);
   assert.equal(sent.length, 0);
+});
+
+test('Gemini reivindica a narração somente quando o primeiro áudio começa', async () => {
+  const started: string[] = [];
+  const unavailable: string[] = [];
+  const { client } = createHarness({
+    onNarrationStarted: narration => started.push(narration.id),
+    onNarrationUnavailable: narration => unavailable.push(narration.id),
+  });
+  Object.assign(client, { enqueuePlayback: (_chunk: string, onStart?: () => void) => onStart?.() });
+
+  assert.equal(client.sendResultText('Resultado real.', 'turn-current'), true);
+  assert.deepEqual(started, []);
+
+  await handleMessage(client, {
+    serverContent: {
+      modelTurn: { parts: [{ inlineData: { data: 'AA==' } }] },
+    },
+  });
+
+  assert.equal(started.length, 1);
+  assert.match(started[0], /^result_turn-current_/);
+  assert.deepEqual(unavailable, []);
+});
+
+test('Kokoro só recebe a concessão quando o turno termina sem áudio Gemini', async () => {
+  const started: string[] = [];
+  const unavailable: Array<{ id: string; reason: string }> = [];
+  const { client } = createHarness({
+    onNarrationStarted: narration => started.push(narration.id),
+    onNarrationUnavailable: narration => unavailable.push({ id: narration.id, reason: narration.reason }),
+  });
+
+  assert.equal(client.sendResultText('Resultado real.', 'turn-current'), true);
+  await handleMessage(client, { serverContent: { turnComplete: true } });
+
+  assert.deepEqual(started, []);
+  assert.equal(unavailable.length, 1);
+  assert.match(unavailable[0].id, /^result_turn-current_/);
+  assert.equal(unavailable[0].reason, 'turn_completed_without_audio');
+});
+
+test('leitura manual usa marcador próprio e a mesma fila Gemini', () => {
+  const { client, sent } = createHarness();
+  Object.assign(client, { setupReady: true });
+
+  assert.equal(client.sendReadingText('Texto para ler.', 'reading-message-1'), true);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /\[LEITURA\] Texto para ler\./);
+  assert.equal(client.cancelNarration('reading-message-1'), true);
+});
+
+test('narração local fecha a captura Gemini até a cauda acústica terminar', () => {
+  const { client, states } = createHarness();
+
+  assert.equal(client.beginExternalNarration('turn-current'), true);
+  const during = client as unknown as {
+    captureFramesSuppressedUntil: number;
+    externalNarrationActive: boolean;
+  };
+  assert.equal(during.externalNarrationActive, true);
+  assert.equal(during.captureFramesSuppressedUntil, Number.MAX_SAFE_INTEGER);
+  assert.equal(states.at(-1), 'speaking');
+
+  assert.equal(client.endExternalNarration('turn-current', 'result'), true);
+  const after = client as unknown as {
+    awaitingResult: boolean;
+    captureFramesSuppressedUntil: number;
+    externalNarrationActive: boolean;
+  };
+  assert.equal(after.externalNarrationActive, false);
+  assert.equal(after.awaitingResult, false);
+  assert.ok(after.captureFramesSuppressedUntil > Date.now());
+});
+
+test('fila Gemini fica bloqueada enquanto o fallback local detém o alto-falante', async () => {
+  const { client, sent } = createHarness();
+  assert.equal(client.beginExternalNarration('turn-current'), true);
+
+  assert.equal(client.sendCheckpointText('Segundo marco.', 'turn-current'), true);
+  Object.assign(client, { lastNarrationCompletedAt: Date.now() - 20_000 });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(sent.length, 0);
+
+  assert.equal(client.endExternalNarration('turn-current', 'checkpoint'), true);
+  await new Promise(resolve => setTimeout(resolve, 900));
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /Segundo marco\./);
 });
 
 test('interrupção limpa áudio e fila do turno sem reaproveitar fala antiga', async () => {
@@ -108,6 +248,7 @@ test('setup reduz a espera de silêncio sem usar VAD agressivo', () => {
   assert.equal(setup.realtimeInputConfig.automaticActivityDetection.disabled, false);
   assert.equal(setup.realtimeInputConfig.automaticActivityDetection.prefixPaddingMs, 40);
   assert.equal(setup.realtimeInputConfig.automaticActivityDetection.silenceDurationMs, 600);
+  assert.deepEqual(setup.inputAudioTranscription.languageCodes, ['pt-BR']);
 });
 
 test('pedido operacional toca a confirmação autônoma e entra uma vez no fluxo canônico', async () => {
@@ -124,7 +265,7 @@ test('pedido operacional toca a confirmação autônoma e entra uma vez no fluxo
 
   await handleMessage(client, {
     serverContent: {
-      inputTranscription: { text: 'Quais são meus compromissos de hoje?' },
+      inputTranscription: { text: 'Quais são meus compromissos de hoje?', finished: true },
       modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
       turnComplete: true,
     },
@@ -152,7 +293,7 @@ test('saudação também entra no fluxo canônico e não duplica a resposta fala
 
   await handleMessage(client, {
     serverContent: {
-      inputTranscription: { text: 'Oi, bom dia. Tudo bem? E você?' },
+      inputTranscription: { text: 'Oi, bom dia. Tudo bem? E você?', finished: true },
       modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
       turnComplete: true,
     },
@@ -166,7 +307,7 @@ test('saudação também entra no fluxo canônico e não duplica a resposta fala
   assert.equal(client.completeResultSilently(turns[0].turnId), false);
 });
 
-test('transcrição tardia ainda fecha o turno e entra no fluxo canônico', async () => {
+test('transcrição tardia final ainda fecha o turno e entra no fluxo canônico', async () => {
   const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
   const { client } = createHarness({
     onUserTurnReady: (turn) => turns.push(turn),
@@ -179,11 +320,177 @@ test('transcrição tardia ainda fecha o turno e entra no fluxo canônico', asyn
   await handleMessage(client, { serverContent: { turnComplete: true } });
   await new Promise(resolve => setTimeout(resolve, 140));
   await handleMessage(client, {
-    serverContent: { inputTranscription: { text: 'Verifique minha agenda.' } },
+    serverContent: { inputTranscription: { text: 'Verifique minha agenda.', finished: true } },
   });
-  await new Promise(resolve => setTimeout(resolve, 900));
+  await new Promise(resolve => setTimeout(resolve, 140));
 
   assert.equal(turns.length, 1);
   assert.equal(turns[0].userText, 'Verifique minha agenda.');
   assert.equal(turns[0].socialOnly, false);
+});
+
+test('turnComplete não publica fragmento provisório antes de finished', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'De.', finished: false },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.equal(turns.length, 0, 'fragmento provisório não pode virar mensagem');
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: ' Que horas são agora?', finished: true },
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'De. Que horas são agora?');
+});
+
+test('modelo antigo sem finished usa fallback lento sem perder o turno', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Abra o calendário.' },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.equal(turns.length, 0);
+  await new Promise(resolve => setTimeout(resolve, 1_500));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Abra o calendário.');
+});
+
+test('voz reproduzida fecha a captura e não pode criar um turno de eco', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const played: string[] = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: 'turn-finished',
+    awaitingResult: true,
+    inputTurnClosed: true,
+    pendingUserTranscript: '',
+    enqueuePlayback: (chunk: string) => played.push(chunk),
+  });
+
+  const internals = client as unknown as {
+    armOutputEchoGuard: (playbackEndsAtMs: number) => void;
+    outputEchoGuardUntil: number;
+    captureFramesSuppressedUntil: number;
+  };
+  internals.armOutputEchoGuard(Date.now() + 300);
+  assert.ok(internals.captureFramesSuppressedUntil >= internals.outputEchoGuardUntil);
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Iniciando.', finished: true },
+      modelTurn: { parts: [{ inlineData: { data: 'AAE=' } }] },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 0, 'a voz da própria PULSO não pode voltar como fala humana');
+  assert.equal(played.length, 0, 'a resposta ao eco também precisa ser descartada');
+
+  internals.outputEchoGuardUntil = Date.now() - 1;
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Agora sou eu.', finished: true },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Agora sou eu.');
+});
+
+test('barreira de captura é armada antes do primeiro frame tocar no alto-falante', () => {
+  const { client } = createHarness();
+  let guardedWhenPlaybackStarted = false;
+  const source = {
+    buffer: null as unknown,
+    connect: () => undefined,
+    start: () => {
+      const snapshot = client as unknown as { captureFramesSuppressedUntil: number };
+      guardedWhenPlaybackStarted = snapshot.captureFramesSuppressedUntil > Date.now();
+    },
+    stop: () => undefined,
+    disconnect: () => undefined,
+    onended: null as null | (() => void),
+  };
+  const fakeContext = {
+    currentTime: 10,
+    state: 'running',
+    destination: {},
+    createBuffer: (_channels: number, length: number, sampleRate: number) => ({
+      duration: length / sampleRate,
+      copyToChannel: () => undefined,
+    }),
+    createBufferSource: () => source,
+  };
+  Object.assign(client, {
+    ensurePlaybackContext: () => fakeContext,
+    playbackContext: fakeContext,
+    nextPlaybackTime: 10,
+  });
+
+  (client as unknown as { enqueuePlayback: (base64: string) => void }).enqueuePlayback('AAE=');
+
+  assert.equal(guardedWhenPlaybackStarted, true);
+  (client as unknown as { flushPlayback: () => void }).flushPlayback();
+});
+
+test('barreira de eco deixa a transcrição humana já aberta terminar', async () => {
+  const turns: Array<{ turnId: string; userText: string; socialOnly: boolean }> = [];
+  const { client } = createHarness({
+    onUserTurnReady: (turn) => turns.push(turn),
+  });
+  Object.assign(client, {
+    activeTurnId: null,
+    awaitingResult: false,
+  });
+
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: 'Que dia', finished: false },
+    },
+  });
+  (client as unknown as { armOutputEchoGuard: (playbackEndsAtMs: number) => void })
+    .armOutputEchoGuard(Date.now() + 300);
+  await handleMessage(client, {
+    serverContent: {
+      inputTranscription: { text: ' é hoje?', finished: true },
+      turnComplete: true,
+    },
+  });
+  await new Promise(resolve => setTimeout(resolve, 140));
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].userText, 'Que dia é hoje?');
 });

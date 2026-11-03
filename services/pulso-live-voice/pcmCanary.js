@@ -87,7 +87,7 @@ async function main() {
               languageCode: 'pt-BR',
             },
           },
-          inputAudioTranscription: {},
+          inputAudioTranscription: { languageCodes: ['pt-BR'] },
           outputAudioTranscription: {},
         },
       }));
