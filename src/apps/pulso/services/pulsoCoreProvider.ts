@@ -6,6 +6,15 @@ import {
 } from './pulsoCoreClient';
 
 const STORAGE_KEY = 'pulso_core_provider_v1';
+export const PULSO_CANONICAL_PROVIDER_CONFIG: PulsoProviderConfig = Object.freeze({
+  providerId: 'codex-fe',
+  adapterKind: 'codex_subscription',
+  displayName: 'Fe · ChatGPT',
+  model: 'gpt-6.1-sol',
+  endpoint: null,
+  allowExternalNetwork: true,
+  profileId: 'fe-pessoal',
+});
 const isLocalAdapter = (adapterKind: PulsoProviderConfig['adapterKind']): boolean => (
   adapterKind === 'local' || adapterKind === 'ollama'
 );
@@ -83,8 +92,7 @@ export const pulsoCoreProvider = Object.freeze({
   },
 
   async restore(): Promise<boolean> {
-    const config = this.readSavedConfig();
-    if (!config) return false;
+    const config = this.readSavedConfig() || PULSO_CANONICAL_PROVIDER_CONFIG;
     await this.configure(config);
     return true;
   },

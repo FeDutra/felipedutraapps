@@ -1721,6 +1721,14 @@ export default function LivePage() {
           if (visibleAreas.length === 0 || visibleSessions.length === 0) {
             throw new Error('O banco do Core não devolveu áreas e sessões ativas.');
           }
+          try {
+            await pulsoCoreProvider.restore();
+          } catch (providerError: any) {
+            throw new Error(
+              `As áreas e sessões abriram, mas a inteligência do Core não iniciou: ${providerError?.message || String(providerError)}`
+            );
+          }
+          if (cancelled) return;
           setCoreAreas(visibleAreas);
           setSessions(visibleSessions);
           setState((previous: any) => ({
@@ -1748,6 +1756,7 @@ export default function LivePage() {
               activeSessions: visibleSessions.length,
               totalAreas: topology.areas.length,
               totalSessions: topology.sessions.length,
+              providerReady: true,
             }),
           }).catch(() => undefined);
         } catch (coreError: any) {
@@ -2638,14 +2647,6 @@ export default function LivePage() {
   const [isTtsSettingsOpen, setIsTtsSettingsOpen] = React.useState(false);
   const [presenceTransport, setPresenceTransport] = React.useState<PresenceTransportPreference>(() => readPresenceTransportPreference());
   const [isCoreProviderSettingsOpen, setIsCoreProviderSettingsOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!coreDesktopEnabled) return;
-    pulsoCoreProvider.restore().catch(() => {
-      // A ausência de configuração é um estado legítimo: a conversa permanece
-      // soberana e awaiting_provider até Fe escolher o motor cognitivo.
-    });
-  }, [coreDesktopEnabled]);
 
   React.useEffect(() => {
     const providerIsValid = ttsPrefs.ttsProvider === 'local_kokoro_sidecar' || ttsPrefs.ttsProvider === 'kokoro_http';

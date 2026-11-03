@@ -329,6 +329,10 @@ export interface PulsoConversationRun {
   readonly resumedFromRunId: string | null;
   readonly providerId: string | null;
   readonly model: string | null;
+  readonly failure: Readonly<{
+    readonly code?: string;
+    readonly message?: string;
+  }> | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly completedAt: string | null;

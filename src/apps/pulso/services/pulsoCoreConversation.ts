@@ -172,6 +172,13 @@ export class PulsoCoreConversation {
       if (!polled.result.done) await sleep(interval);
     }
 
+    if (run.status === 'failed') {
+      throw new PulsoCoreConversationError(
+        run.failure?.code || 'TURN_FAILED',
+        run.failure?.message || 'O provider do PULSO Core falhou antes de concluir a resposta.'
+      );
+    }
+
     const messages = await this.listMessages(options.sessionId);
     return { run, messages };
   }

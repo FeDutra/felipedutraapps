@@ -45,9 +45,33 @@ const run = (status, accumulatedText = '') => ({
   resumedFromRunId: null,
   providerId: 'provider-openai',
   model: 'gpt-5-mini',
+  failure: null,
   createdAt: '2026-10-20T00:00:00.000Z',
   updatedAt: '2026-10-20T00:00:01.000Z',
   completedAt: status === 'completed' ? '2026-10-20T00:00:01.000Z' : null,
+});
+
+test('streamTurn expõe falha terminal do provider em vez de encerrar em silêncio', async () => {
+  const failedRun = {
+    ...run('failed'),
+    failure: {
+      code: 'routing_failed',
+      message: 'provider_adapter_not_registered:codex-fe',
+    },
+    completedAt: '2026-10-20T00:00:01.000Z',
+  };
+  const client = {
+    isAvailable: () => true,
+    startTurn: async () => success({ runId: 'run-1', run: run('queued') }),
+    pollTurn: async () => success({ run: failedRun, envelopes: [], done: true }),
+  };
+  const conversation = new PulsoCoreConversation(client);
+  await assert.rejects(
+    conversation.streamTurn({ sessionId: 'session-1', text: 'oi', idempotencyKey: 'idem-failed' }),
+    error => error instanceof PulsoCoreConversationError
+      && error.code === 'routing_failed'
+      && /provider_adapter_not_registered/.test(error.message)
+  );
 });
 
 test('streamTurn entrega deltas temporais e retorna histórico canônico concluído', async () => {
