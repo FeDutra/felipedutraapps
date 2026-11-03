@@ -955,3 +955,14 @@ Baseline: `c46012ea` (`origin/main`).
 3. não reiniciar `pulso-live-voice.service`, pois o relay não muda;
 4. preservar todos os registros de voz já gravados no Firestore;
 5. manter MacBook e iPhone fora da reversão desta etapa.
+# PULSO Web · Core continuity canary (03/11/2026)
+
+- Candidate branch: `feat/pulso-core-web-20261103`
+- Purpose: make the installed iPhone web app and `/pulso` open the canonical
+  `/pulso/live/` conversation surface while keeping the web runtime on
+  Firestore + OpenClaw.
+- Rollback source: the Firebase Hosting release immediately preceding this
+  candidate, plus Git commit `122025308427eaf213ed4234198a67000ff7e844`.
+- Rollback procedure: use `firebase hosting:rollback` for site
+  `felipedutraapps`, or rebuild/deploy the commit above if a source rollback is
+  required. This release does not modify Firestore documents or Functions.

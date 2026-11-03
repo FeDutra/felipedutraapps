@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Leaf, CheckCircle2, Home, ArrowRight, User, Settings, Sparkles, Activity } from 'lucide-react';
+import { Leaf, CheckCircle2, ArrowRight, User, Settings, Sparkles, Activity } from 'lucide-react';
 import GlassCard from '@/shared/components/GlassCard';
 
 export default function EdenCentral() {
@@ -15,15 +15,24 @@ export default function EdenCentral() {
 
     const checkIsTauri = () => {
       if (typeof window === 'undefined') return false;
+      const runtimeWindow = window as Window & {
+        __TAURI__?: unknown;
+        __TAURI_INTERNALS__?: unknown;
+      };
       return (
         window.location.protocol === 'tauri:' ||
         window.location.protocol === 'file:' ||
-        !!(window as any).__TAURI__ ||
-        !!(window as any).__TAURI_INTERNALS__
+        Boolean(runtimeWindow.__TAURI__) ||
+        Boolean(runtimeWindow.__TAURI_INTERNALS__)
       );
     };
 
-    if (checkIsTauri()) {
+    const isInstalledWebApp = typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches
+      || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
+    );
+
+    if (checkIsTauri() || isInstalledWebApp) {
       router.replace('/pulso/live/');
     }
   }, [router]);

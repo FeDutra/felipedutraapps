@@ -8,6 +8,8 @@ import { AuthGate } from '@/apps/pulso/components/auth/AuthGate';
 import { authService } from '@/shared/services/authService';
 import { User } from 'firebase/auth';
 
+const PULSO_BUILD_REVISION = process.env.NEXT_PUBLIC_PULSO_BUILD_REVISION || 'local';
+
 export const PULSO_NAV_GROUPS = [
   {
     label: 'PULSO',
@@ -91,7 +93,11 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
   const isOrbLab = cleanPathname === '/pulso/orb-lab';
 
   return (
-    <div className={`min-h-screen ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]' : 'bg-[#b8283e]'} text-[#fbf9f5] w-full selection:bg-white/20 flex flex-col xl:flex-row overflow-x-hidden relative`}>
+    <div
+      data-pulso-build-revision={PULSO_BUILD_REVISION}
+      data-pulso-runtime="web-continuity"
+      className={`min-h-screen ${pulsoTheme === 'black' ? 'bg-[#0f0f0f]' : 'bg-[#b8283e]'} text-[#fbf9f5] w-full selection:bg-white/20 flex flex-col xl:flex-row overflow-x-hidden relative`}
+    >
       {/* Watermark centralizado de fundo (Lótus) */}
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 md:w-[600px] md:h-[600px] rounded-full border border-white/5 bg-white/2 pointer-events-none watermark-layout-anim -z-10" />
 
