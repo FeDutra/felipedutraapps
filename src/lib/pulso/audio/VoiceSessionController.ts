@@ -151,7 +151,7 @@ export class VoiceSessionController {
     const isTauri = this.isTauriRuntime();
     this.ttsAdapter.updatePreferences({
       ttsProvider: isTauri ? 'local_kokoro_sidecar' : 'kokoro_http',
-      voiceName: 'pf_dora(0.70)+af_bella(0.30)',
+      voiceName: 'pf_dora',
       voiceLang: 'pt-BR',
       rate: 0.95,
       pitch: 1,
@@ -930,7 +930,11 @@ export class VoiceSessionController {
               kind: next.context.kind ?? 'result',
             });
           }
-          if (turnId && next.context.kind !== 'acknowledgement') {
+          if (
+            turnId
+            && next.context.kind !== 'acknowledgement'
+            && !next.context.claimAlreadyMade
+          ) {
             this.geminiLiveClient?.beginExternalNarration(turnId);
           }
           this.assistantSpeechStartMs = Date.now();
@@ -1008,6 +1012,11 @@ export class VoiceSessionController {
       });
       return;
     }
+
+    // A concessão do alto-falante acontece antes da síntese local, não no
+    // primeiro frame. Isso fecha a janela em que o Gemini podia liberar a
+    // próxima fala enquanto o Kokoro ainda estava preparando o mesmo item.
+    if (!this.geminiLiveClient?.beginExternalNarration(narration.turnId)) return;
 
     void this.speakAssistant(narration.text, undefined, undefined, {
       turnId: narration.turnId,

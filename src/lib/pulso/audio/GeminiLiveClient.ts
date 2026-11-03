@@ -1191,6 +1191,7 @@ export class GeminiLiveClient {
 
   /** Envia uma fala pendente somente quando a fala anterior já terminou. */
   private flushNarrationQueue() {
+    if (this.externalNarrationActive) return;
     if (this.narrationInFlight || this.turnCompletePending || this.pendingSources > 0) return;
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const next = this.narrationQueue.shift();
@@ -1397,6 +1398,7 @@ export class GeminiLiveClient {
    */
   public beginExternalNarration(turnId = this.activeTurnId) {
     if (!turnId || turnId !== this.activeTurnId || !this.awaitingResult) return false;
+    if (this.externalNarrationActive) return true;
     this.pauseDeepWorkPulse();
     this.externalNarrationActive = true;
     this.captureFramesSuppressedUntil = Number.MAX_SAFE_INTEGER;
@@ -1406,6 +1408,7 @@ export class GeminiLiveClient {
   }
 
   public beginExternalReading() {
+    if (this.externalNarrationActive) return;
     this.pauseDeepWorkPulse();
     this.externalNarrationActive = true;
     this.captureFramesSuppressedUntil = Number.MAX_SAFE_INTEGER;
@@ -1422,7 +1425,11 @@ export class GeminiLiveClient {
     if (this.listeningResumeTimer) clearTimeout(this.listeningResumeTimer);
     this.listeningResumeTimer = setTimeout(() => {
       this.listeningResumeTimer = null;
-      if (!this.closedByUser && !this.externalNarrationActive) this.setState('listening');
+      if (!this.closedByUser && !this.externalNarrationActive) {
+        this.setState('listening');
+        this.flushNarrationQueue();
+        this.scheduleDeferredCheckpoint();
+      }
     }, GeminiLiveClient.OUTPUT_ECHO_TAIL_MS + 5);
   }
 
@@ -1445,7 +1452,11 @@ export class GeminiLiveClient {
     if (this.listeningResumeTimer) clearTimeout(this.listeningResumeTimer);
     this.listeningResumeTimer = setTimeout(() => {
       this.listeningResumeTimer = null;
-      if (!this.closedByUser && !this.externalNarrationActive) this.setState('listening');
+      if (!this.closedByUser && !this.externalNarrationActive) {
+        this.setState('listening');
+        this.flushNarrationQueue();
+        this.scheduleDeferredCheckpoint();
+      }
     }, GeminiLiveClient.OUTPUT_ECHO_TAIL_MS + 5);
     return true;
   }

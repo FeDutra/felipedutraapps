@@ -194,6 +194,21 @@ test('narração local fecha a captura Gemini até a cauda acústica terminar', 
   assert.ok(after.captureFramesSuppressedUntil > Date.now());
 });
 
+test('fila Gemini fica bloqueada enquanto o fallback local detém o alto-falante', async () => {
+  const { client, sent } = createHarness();
+  assert.equal(client.beginExternalNarration('turn-current'), true);
+
+  assert.equal(client.sendCheckpointText('Segundo marco.', 'turn-current'), true);
+  Object.assign(client, { lastNarrationCompletedAt: Date.now() - 20_000 });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(sent.length, 0);
+
+  assert.equal(client.endExternalNarration('turn-current', 'checkpoint'), true);
+  await new Promise(resolve => setTimeout(resolve, 900));
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /Segundo marco\./);
+});
+
 test('interrupção limpa áudio e fila do turno sem reaproveitar fala antiga', async () => {
   const { client, sent, states } = createHarness();
   Object.assign(client, {

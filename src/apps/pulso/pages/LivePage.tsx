@@ -2456,7 +2456,9 @@ export default function LivePage() {
   const [presenceTransport, setPresenceTransport] = React.useState<PresenceTransportPreference>(() => readPresenceTransportPreference());
 
   React.useEffect(() => {
-    if (ttsPrefs.ttsProvider === 'local_kokoro_sidecar' || ttsPrefs.ttsProvider === 'kokoro_http') return;
+    const providerIsValid = ttsPrefs.ttsProvider === 'local_kokoro_sidecar' || ttsPrefs.ttsProvider === 'kokoro_http';
+    const voiceIsCanonical = ttsPrefs.voiceName === 'pf_dora' && ttsPrefs.voiceLang === 'pt-BR';
+    if (providerIsValid && voiceIsCanonical) return;
     const tauriWindow = window as Window & {
       __TAURI__?: unknown;
       __TAURI_INTERNALS__?: unknown;
@@ -2469,7 +2471,11 @@ export default function LivePage() {
     );
     const updated: TTSPreferences = {
       ...ttsPrefs,
-      ttsProvider: isDesktop ? 'local_kokoro_sidecar' : 'kokoro_http',
+      ttsProvider: providerIsValid
+        ? ttsPrefs.ttsProvider
+        : (isDesktop ? 'local_kokoro_sidecar' : 'kokoro_http'),
+      voiceName: 'pf_dora',
+      voiceLang: 'pt-BR',
     };
     setTtsPrefs(updated);
     ttsAdapter.updatePreferences(updated);
@@ -8052,48 +8058,13 @@ ${data.transcription}`, {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2.5">
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">fallback local · kokoro</label>
-                    <select
-                      value={['pf_dora', 'pf_dora(0.70)+af_bella(0.30)', 'pf_dora(0.70)+af_sarah(0.30)'].includes(ttsPrefs.voiceName) ? ttsPrefs.voiceName : ttsPrefs.voiceName === '' ? 'pf_dora(0.70)+af_bella(0.30)' : 'custom'}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const newVoiceName = val === 'custom' ? '' : val;
-                        const newPrefs = { ...ttsPrefs, voiceName: newVoiceName };
-                        setTtsPrefs(newPrefs);
-                        ttsAdapter.updatePreferences(newPrefs);
-                      }}
-                      className="pulso-select w-full"
-                    >
-                      <option value="pf_dora(0.70)+af_bella(0.30)" className="bg-[#121212]">lótus híbrida bella (fem pt-br + us - recomendada)</option>
-                      <option value="pf_dora(0.70)+af_sarah(0.30)" className="bg-[#121212]">lótus híbrida sarah (fem pt-br + us - samantha style)</option>
-                      <option value="pf_dora" className="bg-[#121212]">pf_dora (fem pt-br - padrão pura)</option>
-                      <option value="custom" className="bg-[#121212]">outra voz (escrever abaixo)...</option>
-                    </select>
-                    <span className="text-[8px] text-[#fbf9f5]/40 leading-relaxed block mt-1">
-                      Esta voz só entra se a Gemini estiver indisponível ou não iniciar o áudio. Nunca toca por cima dela.
-                    </span>
-                  </div>
-
-                  {!['pf_dora', 'pf_dora(0.70)+af_bella(0.30)', 'pf_dora(0.70)+af_sarah(0.30)'].includes(ttsPrefs.voiceName) && ttsPrefs.voiceName !== '' && (
-                    <div className="flex flex-col gap-0.5 animate-fade-in">
-                      <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">nome da voz customizada</label>
-                      <input
-                        type="text"
-                        value={ttsPrefs.voiceName}
-                        placeholder="Ex: pm_alex, af_sarah"
-                        onChange={(e) => {
-                          const newPrefs = { ...ttsPrefs, voiceName: e.target.value };
-                          setTtsPrefs(newPrefs);
-                          ttsAdapter.updatePreferences(newPrefs);
-                        }}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/20 transition-colors lowercase"
-                      />
-                    </div>
-                  )}
-
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">fallback local · kokoro</label>
+                <div className="rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5">
+                  <div className="text-[11px] text-white/85">Dora · português do Brasil</div>
+                  <div className="text-[8px] text-white/35 mt-0.5">entra somente se a Gemini não iniciar a fala</div>
                 </div>
+              </div>
 
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[9px] font-bold tracking-widest text-[#fbf9f5]/45 uppercase">

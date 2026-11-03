@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { resolveKokoroVoiceForProvider } from '../../TTSAdapter';
 
-test('sidecar local reduz blend ponderado a um voice id suportado', () => {
+test('sidecar local rejeita blend e fixa a voz brasileira canônica', () => {
   assert.equal(
     resolveKokoroVoiceForProvider(
       'local_kokoro_sidecar',
@@ -13,13 +13,13 @@ test('sidecar local reduz blend ponderado a um voice id suportado', () => {
   );
 });
 
-test('serviço remoto preserva a expressão ponderada', () => {
+test('serviço remoto também rejeita blend com voz inglesa', () => {
   assert.equal(
     resolveKokoroVoiceForProvider(
       'kokoro_http',
       'pf_dora(0.70)+af_bella(0.30)',
     ),
-    'pf_dora(0.70)+af_bella(0.30)',
+    'pf_dora',
   );
 });
 
