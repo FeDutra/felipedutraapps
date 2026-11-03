@@ -1214,6 +1214,7 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 - **Falha corrigida:** a casca visual carregava `DEFAULT_SESSIONS` e áreas estáticas enquanto o Core real permanecia como canário invisível. Isso fazia o MacBook exibir conteýo ultrapassado e impedia uma prova honesta de abertura no iMac.
 - **Fonte canônica:** a navegação da Preview passa a usar `live.areas.list` e `live.sessions.list`; nenhuma falha pode ser ocultada pela lista padrão.
 - **Presença:** o turno de voz da Preview passa pelo `live.turn.start` do Core e preserva a narração progressiva, em vez de criar pedido no runtime legado.
+- **Gemini:** uma Preview nova pode iniciar uma sessão Firebase anônima local para obter o token curto do Gemini Live, sem popup e sem compartilhar o armazenamento WebView da PULSO estável.
 - **Diagnóstico:** fronteiras React registram falhas de abertura em `desktop-boot-probe.log`, sem alterar o SQLite.
 - **Dados:** esta mudança não migra, substitui nem apaga `pulso-core.sqlite`.
 

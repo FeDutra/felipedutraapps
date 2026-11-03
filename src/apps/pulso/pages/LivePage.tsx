@@ -5935,8 +5935,25 @@ ${data.transcription}`, {
         activeContextNode,
         useGeminiLive,
         getGeminiAccessToken: async () => {
-          const currentUser = await authService.ensurePulsoAuthReady();
-          return currentUser.getIdToken();
+          try {
+            const currentUser = await authService.ensurePulsoAuthReady();
+            const token = await currentUser.getIdToken();
+            void invoke('desktop_boot_probe', {
+              payload: JSON.stringify({
+                stage: 'gemini_access_token_ready',
+                anonymous: currentUser.isAnonymous,
+              }),
+            }).catch(() => undefined);
+            return token;
+          } catch (tokenError: any) {
+            void invoke('desktop_boot_probe', {
+              payload: JSON.stringify({
+                stage: 'gemini_access_token_failed',
+                message: tokenError?.message || String(tokenError),
+              }),
+            }).catch(() => undefined);
+            throw tokenError;
+          }
         },
         onStateChange: (newState) => {
           setVoiceState(newState);
@@ -5944,6 +5961,13 @@ ${data.transcription}`, {
         },
         onError: (err) => {
           setVoiceError(err);
+          void invoke('desktop_boot_probe', {
+            payload: JSON.stringify({
+              stage: 'presence_controller_error',
+              transport: presenceTransport,
+              message: err,
+            }),
+          }).catch(() => undefined);
         },
         onPresenceWorkChange: (working) => {
           setPresenceWorkActive(working);
@@ -5970,8 +5994,17 @@ ${data.transcription}`, {
       }
 
       await controller.start(syncAudioCtx);
+      void invoke('desktop_boot_probe', {
+        payload: JSON.stringify({
+          stage: 'presence_controller_started',
+          transport: presenceTransport,
+          requestedGeminiLive: useGeminiLive,
+          geminiLiveActive: controller.isGeminiLiveActive(),
+          coreDesktopEnabled,
+        }),
+      }).catch(() => undefined);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, coreDesktopEnabled, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;

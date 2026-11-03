@@ -16,6 +16,13 @@ import { auth, isFirebaseConfigured } from "../lib/firebase/client";
 
 const googleProvider = isFirebaseConfigured ? new GoogleAuthProvider() : null;
 
+const isTauriRuntime = () => typeof window !== 'undefined' && (
+  window.location.protocol === 'tauri:'
+  || window.location.protocol === 'file:'
+  || !!(window as any).__TAURI__
+  || !!(window as any).__TAURI_INTERNALS__
+);
+
 const isTauriDev = 
   process.env.NODE_ENV === "development" &&
   typeof window !== "undefined" &&
@@ -173,6 +180,14 @@ export const authService = {
     // Fast path: user already available
     if (auth.currentUser) return auth.currentUser;
 
+    // A fresh sovereign Desktop bundle has isolated WebView storage and may
+    // not have inherited the stable app's Firebase session. Gemini Live still
+    // needs a short-lived ID token, so establish it locally without a popup.
+    if (isTauriRuntime()) {
+      const result = await signInAnonymously(auth);
+      return result.user;
+    }
+
     // Slow path: wait for onAuthStateChanged to fire once (handles cold loads)
     return new Promise((resolve, reject) => {
       let resolved = false;
@@ -200,4 +215,3 @@ export const authService = {
     });
   }
 };
-

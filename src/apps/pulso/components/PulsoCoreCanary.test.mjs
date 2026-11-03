@@ -368,6 +368,14 @@ test('canário permanece diagnóstico e a superfície visível adota topologia e
   assert.match(livePageSource, /data-pulso-core-visible-areas=/);
   assert.match(livePageSource, /data-pulso-core-visible-sessions=/);
   assert.match(livePageSource, /if \(coreDesktopEnabled\) \{[\s\S]*pulsoCoreConversation\.streamTurn\(\{/);
+  assert.match(livePageSource, /stage: 'gemini_access_token_ready'/);
+  assert.match(livePageSource, /geminiLiveActive: controller\.isGeminiLiveActive\(\)/);
+
+  const authSource = readFileSync(
+    path.join(repoRoot, 'src', 'shared', 'services', 'authService.ts'),
+    'utf8'
+  );
+  assert.match(authSource, /if \(isTauriRuntime\(\)\) \{[\s\S]*signInAnonymously\(auth\)/);
 });
 
 test('Desktop packaged entry renders HOME at the immutable Tauri root', () => {
