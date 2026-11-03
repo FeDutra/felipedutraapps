@@ -1252,6 +1252,10 @@ export class VoiceSessionController {
         ?? undefined;
     const disposition = this.advanceTurn({ type: 'checkpoint_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
+    this.geminiLiveClient?.recordCanonicalReceipt?.('canonical_checkpoint_received', {
+      turnId,
+      requestId,
+    });
     this.clearDeepFallbackCheckpoint();
 
     const oralText = toPresenceCheckpointSpeech(checkpointText);

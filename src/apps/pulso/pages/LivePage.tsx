@@ -3465,15 +3465,23 @@ export default function LivePage() {
             // canônico é originRequestId, não o id do documento derivado.
             const originRequestId = req.meta?.originRequestId || req.openclawResult?.meta?.originRequestId || req.originRequestId || req.id;
             const progressTimeMs = req.clientCreatedAtMs || safeGetTime(req.requestedAt) || safeGetTime(req.createdAt) || safeGetTime(req.updatedAt) || 0;
+            const progressText = (req.text || req.message || '').trim();
+            // O runtime atualiza o mesmo documento `progress_*_live` ao
+            // mudar de fase. Deduplicar apenas pelo id silenciava todos os
+            // marcos depois do primeiro. A identidade audível precisa incluir
+            // também o conteúdo vigente do checkpoint.
+            const progressNarrationKey = `${req.id}:${progressText}`;
             const canNarrateProgress = voiceModeRef.current === 'presence'
               && voiceReplyRequestsRef.current.has(originRequestId)
               && (progressTimeMs === 0 || progressTimeMs > presenceSessionStartTimeRef.current)
-              && !narratedPresenceProgressRef.current.has(req.id);
+              && !narratedPresenceProgressRef.current.has(progressNarrationKey);
             if (canNarrateProgress) {
-              const progressText = (req.text || req.message || '').trim();
               if (progressText && presenceController?.notifyPresenceCheckpoint(progressText, originRequestId)) {
-                narratedPresenceProgressRef.current.add(req.id);
-                console.log('[PULSO_PRESENCE_CHECKPOINT_NARRATED]', { requestId: req.id });
+                narratedPresenceProgressRef.current.add(progressNarrationKey);
+                console.log('[PULSO_PRESENCE_CHECKPOINT_ADMITTED]', {
+                  requestId: req.id,
+                  originRequestId,
+                });
               }
             }
           }

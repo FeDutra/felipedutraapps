@@ -72,6 +72,10 @@ export type PresenceAudioReceiptPhase =
   | 'canonical_routing_fallback'
   | 'canonical_request_created'
   | 'canonical_dispatch_failed'
+  | 'canonical_checkpoint_received'
+  | 'checkpoint_narration_dispatched'
+  | 'checkpoint_narration_started'
+  | 'checkpoint_narration_unavailable'
   | 'canonical_result_received'
   | 'external_narration_started'
   | 'external_narration_finished';
@@ -292,6 +296,7 @@ export class GeminiLiveClient {
       | 'canonical_routing_fallback'
       | 'canonical_request_created'
       | 'canonical_dispatch_failed'
+      | 'canonical_checkpoint_received'
       | 'canonical_result_received'>,
     details: Pick<PresenceAudioReceipt, 'turnId' | 'requestId' | 'failureStage' | 'failureCode'> = {},
   ) {
@@ -1200,10 +1205,18 @@ export class GeminiLiveClient {
     const marker = next.kind === 'result'
       ? '[RESULTADO]'
       : next.kind === 'checkpoint'
-        ? '[CHECKPOINT]'
+        // A rota `[LEITURA]` já é comprovadamente audível no app físico.
+        // O texto do checkpoint já chega oralizado e curto; pedir ao modelo
+        // que o "resuma" de novo com `[CHECKPOINT]` podia produzir frames de
+        // áudio sem fala inteligível. Mantemos `kind=checkpoint` para ciclo,
+        // prioridade e fallback, mas usamos a instrução literal de voz.
+        ? '[LEITURA]'
         : next.kind === 'reading'
           ? '[LEITURA]'
           : '[CONFIRMAÇÃO]';
+    if (next.kind === 'checkpoint') {
+      this.receipt('checkpoint_narration_dispatched', { turnId: next.turnId });
+    }
     this.ws.send(JSON.stringify({
       clientContent: {
         turns: [{
@@ -1225,6 +1238,9 @@ export class GeminiLiveClient {
     this.narrationAudioStarted = true;
     if (this.narrationStartTimer) clearTimeout(this.narrationStartTimer);
     this.narrationStartTimer = null;
+    if (this.narrationInFlight.kind === 'checkpoint') {
+      this.receipt('checkpoint_narration_started', { turnId: this.narrationInFlight.turnId });
+    }
     this.config.onNarrationStarted?.(this.narrationInFlight);
   }
 
@@ -1236,6 +1252,12 @@ export class GeminiLiveClient {
     this.narrationInFlight = null;
     this.discardNarrationAudioUntilTurnComplete = true;
     this.flushPlayback();
+    if (failed.kind === 'checkpoint') {
+      this.receipt('checkpoint_narration_unavailable', {
+        turnId: failed.turnId,
+        failureCode: reason,
+      });
+    }
     this.config.onNarrationUnavailable?.({ ...failed, reason });
     return true;
   }

@@ -8,6 +8,7 @@ const originalWebSocket = globalThis.WebSocket;
 type HarnessCallbacks = Pick<GeminiLiveConfig,
   | 'onUserTurnReady'
   | 'onTranscript'
+  | 'onAudioReceipt'
   | 'onNarrationStarted'
   | 'onNarrationFinished'
   | 'onNarrationUnavailable'>;
@@ -68,14 +69,20 @@ test('resultado espera a confirmação terminar e só então entra na fila de vo
   assert.match(sent[0], /\[RESULTADO\] Resultado pronto\./);
 });
 
-test('fim tardio da confirmação libera checkpoint e resultado canônicos', async () => {
-  const { client, sent, states } = createHarness();
+test('fim tardio da confirmação libera checkpoint audível e resultado canônicos', async () => {
+  const receiptPhases: string[] = [];
+  const started: string[] = [];
+  const { client, sent, states } = createHarness({
+    onAudioReceipt: receipt => receiptPhases.push(receipt.phase),
+    onNarrationStarted: narration => started.push(narration.kind),
+  });
   Object.assign(client, {
     narrationInFlight: null,
     pendingSources: 0,
     turnCompletePending: false,
     outputEchoGuardUntil: 0,
     lastNarrationCompletedAt: Date.now() - 7_000,
+    enqueuePlayback: (_chunk: string, onStart?: () => void) => onStart?.(),
   });
 
   // Reproduz o iMac físico: o último buffer da confirmação já acabou e só
@@ -91,7 +98,16 @@ test('fim tardio da confirmação libera checkpoint e resultado canônicos', asy
   assert.equal(client.sendCheckpointText('Localizei a conversa correta.', 'turn-current'), true);
   await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(sent.length, 1);
-  assert.match(sent[0], /\[CHECKPOINT\] Localizei a conversa correta\./);
+  // Checkpoint preserva sua semântica interna, mas usa a rota literal que o
+  // alto-falante já provou audível no WKWebView físico.
+  assert.match(sent[0], /\[LEITURA\] Localizei a conversa correta\./);
+  assert.ok(receiptPhases.includes('checkpoint_narration_dispatched'));
+
+  await handleMessage(client, {
+    serverContent: { modelTurn: { parts: [{ inlineData: { data: 'AA==' } }] } },
+  });
+  assert.deepEqual(started, ['checkpoint']);
+  assert.ok(receiptPhases.includes('checkpoint_narration_started'));
 
   await handleMessage(client, { serverContent: { turnComplete: true } });
   assert.equal(client.sendResultText('As últimas mensagens são estas.', 'turn-current'), true);
