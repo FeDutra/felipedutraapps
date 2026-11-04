@@ -1348,6 +1348,28 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
     }
   }
 
+  async listModels() {
+    const response = await this.#invokeOllama({ path: "/api/tags", method: "GET" });
+    if (!response.ok || response.status >= 400) {
+      throw new Error(`ollama_models_http_${response.status}:${response.text ?? ""}`);
+    }
+    const models = Array.isArray(response.json?.models) ? response.json.models : [];
+    return models
+      .filter(item => item && typeof item.name === "string" && item.name.trim())
+      .map(item => ({
+        id: item.name,
+        name: item.name,
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        local: true,
+        size: Number(item.size) || null,
+        modifiedAt: item.modified_at ?? null,
+        family: item.details?.family ?? null,
+        parameterSize: item.details?.parameter_size ?? null,
+        quantizationLevel: item.details?.quantization_level ?? null,
+      }));
+  }
+
   #body(request, stream) {
     return {
       model: request?.model ?? this.defaultModel,

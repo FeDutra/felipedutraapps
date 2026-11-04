@@ -726,7 +726,11 @@ export class PulsoDesktopBridge {
           endpoint: params.endpoint ?? null,
           capabilities: params.capabilities || ["chat", "stream"],
           enabled: params.enabled !== false,
-          metadata: params.metadata || {},
+          metadata: {
+            ...(params.metadata || {}),
+            adapterKind,
+            defaultModel: params.model || null,
+          },
           secretRef,
         };
         const command = this.controlPlane.get("provider", providerId)
@@ -737,7 +741,7 @@ export class PulsoDesktopBridge {
           idempotencyKey: params.idempotencyKey || null,
         });
         this.controlPlane.router.attachAdapter(providerId, adapter);
-        if (params.model) {
+        if (params.model && params.bind !== false) {
           this.controlPlane.router.setBinding({
             scope: params.scope || { type: "system", scopeId: null },
             primary: { providerId, model: params.model },
@@ -750,6 +754,75 @@ export class PulsoDesktopBridge {
         };
         this.secretResolver.assertZeroLeakage(result);
         return result;
+      }
+      case "provider.catalog": {
+        await this.initialize();
+        const providers = this.controlPlane.list("providers");
+        const bindings = this.controlPlane.list("bindings");
+        const models = [];
+        for (const provider of providers) {
+          if (provider.enabled === false) continue;
+          const adapter = this.controlPlane.router.getAdapter(provider.providerId);
+          if (!adapter) continue;
+          if (typeof adapter.listModels === "function") {
+            try {
+              const listed = await adapter.listModels();
+              for (const model of Array.isArray(listed) ? listed : []) {
+                models.push({ ...model, providerId: provider.providerId });
+              }
+            } catch (error) {
+              models.push({
+                id: provider.metadata?.defaultModel ?? null,
+                name: provider.metadata?.defaultModel ?? null,
+                providerId: provider.providerId,
+                unavailable: true,
+                availabilityReason: this.secretResolver.redactError(error, provider.secretRef).message,
+              });
+            }
+          } else if (provider.metadata?.defaultModel) {
+            models.push({
+              id: provider.metadata.defaultModel,
+              name: provider.metadata.defaultModel,
+              providerId: provider.providerId,
+              local: provider.kind === "local",
+            });
+          }
+        }
+        const result = { providers, models: models.filter(model => model.id), bindings };
+        this.secretResolver.assertZeroLeakage(result);
+        return result;
+      }
+      case "provider.select": {
+        await this.initialize();
+        const providerId = String(params.providerId || "").trim();
+        const model = String(params.model || "").trim();
+        const scope = params.scope || { type: "system", scopeId: null };
+        if (!providerId || !model) {
+          const error = new Error("providerId and model are required");
+          error.code = "INVALID_PARAMS";
+          throw error;
+        }
+        const provider = this.controlPlane.get("provider", providerId);
+        const adapter = this.controlPlane.router.getAdapter(providerId);
+        if (!provider || !adapter || provider.enabled === false) {
+          const error = new Error("provider_adapter_not_configured:" + providerId);
+          error.code = "PROVIDER_NOT_CONFIGURED";
+          throw error;
+        }
+        if (typeof adapter.listModels === "function") {
+          const installed = await adapter.listModels();
+          if (!installed.some(item => item.id === model || item.name === model)) {
+            const error = new Error("requested_model_not_installed:" + model);
+            error.code = "MODEL_NOT_INSTALLED";
+            throw error;
+          }
+        }
+        const binding = this.controlPlane.router.setBinding({
+          scope,
+          primary: { providerId, model },
+          fallbackChain: [],
+        }, { idempotencyKey: params.idempotencyKey || null });
+        return { binding, provider, fallbackEnabled: false };
       }
       case "provider.test": {
         await this.initialize();

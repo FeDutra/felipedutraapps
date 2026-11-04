@@ -19,6 +19,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'runtime.stop',
   'control.command',
   'provider.configure',
+  'provider.catalog',
   'provider.select',
   'provider.test',
   'provider.remove',
@@ -396,6 +397,34 @@ export interface PulsoProviderHealth {
   readonly detail: string;
   readonly authSource?: Readonly<Record<string, unknown>>;
   readonly error?: Readonly<{ readonly code?: string; readonly message?: string }>;
+}
+
+export interface PulsoProviderCatalogModel {
+  readonly id: string;
+  readonly name: string;
+  readonly providerId: string;
+  readonly adapterKind?: string;
+  readonly local?: boolean;
+  readonly size?: number | null;
+  readonly modifiedAt?: string | null;
+  readonly family?: string | null;
+  readonly parameterSize?: string | null;
+  readonly quantizationLevel?: string | null;
+  readonly unavailable?: boolean;
+  readonly availabilityReason?: string | null;
+}
+
+export interface PulsoProviderBinding {
+  readonly scope: Readonly<{ readonly type: string; readonly scopeId: string | null }>;
+  readonly scopeKey: string;
+  readonly primary: Readonly<{ readonly providerId: string; readonly model: string }>;
+  readonly fallbackChain: readonly Readonly<{ readonly providerId: string; readonly model: string }>[];
+}
+
+export interface PulsoProviderCatalog {
+  readonly providers: readonly Readonly<Record<string, unknown>>[];
+  readonly models: readonly PulsoProviderCatalogModel[];
+  readonly bindings: readonly PulsoProviderBinding[];
 }
 
 export interface PulsoAccessModeReceipt {
@@ -779,15 +808,33 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
 
     configureProvider(
       params: PulsoProviderConfig,
+      options: { bind?: boolean; scope?: { type: 'system' | 'session' | 'agent' | 'task'; scopeId: string | null } } = {},
       requestId?: string
     ): Promise<PulsoCoreResult<Readonly<Record<string, unknown>>>> {
       return request<Readonly<Record<string, unknown>>>('provider.configure', {
         ...params,
         kind: params.adapterKind === 'local' || params.adapterKind === 'ollama' ? 'local' : 'model',
-        scope: { type: 'system', scopeId: null },
         capabilities: ['chat', 'stream'],
         enabled: true,
+        bind: options.bind !== false,
+        scope: options.scope || { type: 'system', scopeId: null },
       }, requestId);
+    },
+
+    listProviderCatalog(requestId?: string): Promise<PulsoCoreResult<PulsoProviderCatalog>> {
+      return request<PulsoProviderCatalog>('provider.catalog', {}, requestId);
+    },
+
+    selectProvider(
+      params: {
+        providerId: string;
+        model: string;
+        scope: { type: 'system' | 'session' | 'agent' | 'task'; scopeId: string | null };
+        idempotencyKey?: string;
+      },
+      requestId?: string
+    ): Promise<PulsoCoreResult<Readonly<{ binding: PulsoProviderBinding; provider: Readonly<Record<string, unknown>>; fallbackEnabled: false }>>> {
+      return request('provider.select', { ...params }, requestId);
     },
 
     testProvider(

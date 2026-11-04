@@ -130,6 +130,7 @@ interface SessionModelSelectorProps {
   models: PulsoModelCatalogEntry[];
   providers: PulsoProviderCatalogEntry[];
   onApply: (selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number; authProfileId?: string }) => Promise<void>;
+  onRefresh?: () => Promise<void>;
 }
 
 const providerMark = (provider: string) => {
@@ -241,7 +242,7 @@ const profileSecondaryLabel = (profile?: PulsoProfileEntry) => {
   return profile.type === 'oauth' ? 'OAuth' : profile.type;
 };
 
-function SessionModelSelector({ session, models, providers, onApply }: SessionModelSelectorProps) {
+function SessionModelSelector({ session, models, providers, onApply, onRefresh }: SessionModelSelectorProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [provider, setProvider] = React.useState(session.selectedModelProvider || '');
   const [modelId, setModelId] = React.useState(session.selectedModelId || '');
@@ -260,11 +261,13 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
     [defaultModel, modelId, models, session.selectedModelId, session.selectedModelProvider],
   );
   const installedProviderIds = React.useMemo(
-    () => Array.from(new Set([
-      ...PROVIDER_CATALOG_FALLBACK.map(item => item.id),
-      ...providers.filter(item => item.configured !== false).map(item => item.id),
-      ...models.map(model => model.provider),
-    ])),
+    () => {
+      const liveIds = Array.from(new Set([
+        ...providers.filter(item => item.configured !== false).map(item => item.id),
+        ...models.map(model => model.provider),
+      ]));
+      return liveIds.length > 0 ? liveIds : PROVIDER_CATALOG_FALLBACK.map(item => item.id);
+    },
     [models, providers],
   );
   const draftProvider = provider || activeModel?.provider || installedProviderIds[0] || '';
@@ -323,6 +326,9 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
     setAuthProfileId(session.selectedAuthProfileId || '');
     setSwitchError('');
     setIsOpen(true);
+    void onRefresh?.().catch(error => {
+      setSwitchError(error instanceof Error ? error.message : 'Não foi possível atualizar os modelos locais.');
+    });
   };
 
   const applySelection = async () => {
@@ -1047,7 +1053,11 @@ import {
   coreSessionToContextNode,
   type PulsoVisibleArea,
 } from '../services/pulsoCoreShellAdapter';
-import { pulsoCoreProvider } from '../services/pulsoCoreProvider';
+import {
+  bindingForCoreSession,
+  pulsoCoreProvider,
+  toPulsoCoreSelectorCatalog,
+} from '../services/pulsoCoreProvider';
 import { PulsoCoreProviderPanel } from '../components/PulsoCoreProviderPanel';
 import { waitForTauriInvoke, type PulsoLiveMessage } from '../services/pulsoCoreClient';
 import dynamic from 'next/dynamic';
@@ -1598,6 +1608,37 @@ export default function LivePage() {
   const [modelCatalog, setModelCatalog] = React.useState<PulsoModelCatalogEntry[]>(MODEL_CATALOG_FALLBACK);
   const [providerCatalog, setProviderCatalog] = React.useState<PulsoProviderCatalogEntry[]>(PROVIDER_CATALOG_FALLBACK);
   const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
+
+  const refreshCoreProviderCatalog = React.useCallback(async () => {
+    if (!coreDesktopEnabled) return;
+    const coreProviderCatalog = await pulsoCoreProvider.catalog();
+    const selectorCatalog = toPulsoCoreSelectorCatalog(coreProviderCatalog);
+    setModelCatalog(selectorCatalog.models.map(model => ({
+      ...model,
+      contextWindows: [...model.contextWindows],
+      thinkingLevels: [...model.thinkingLevels],
+      tags: [...model.tags],
+    })));
+    setProviderCatalog(selectorCatalog.providers.map(provider => ({
+      ...provider,
+      profiles: [...provider.profiles],
+    })));
+    setSessions(previous => previous.map(session => {
+      const binding = bindingForCoreSession(coreProviderCatalog, session.contextId);
+      if (!binding) return session;
+      const selectedModel = selectorCatalog.models.find(model => (
+        model.provider === binding.primary.providerId && model.id === binding.primary.model
+      ));
+      return {
+        ...session,
+        selectedModelProvider: binding.primary.providerId,
+        selectedModelId: binding.primary.model,
+        selectedModelName: selectedModel?.name || binding.primary.model,
+        selectedThinkingLevel: selectedModel?.thinkingDefault || 'medium',
+        modelContextTokens: selectedModel?.contextWindow || 0,
+      };
+    }));
+  }, [coreDesktopEnabled]);
   const [isAtelieActive, setIsAtelieActive] = React.useState(false);
   const [isEstudioActive, setIsEstudioActive] = React.useState(false);
   const [isMesaOpen, setIsMesaOpen] = React.useState(false);
@@ -1751,8 +1792,34 @@ export default function LivePage() {
             );
           }
           if (cancelled) return;
+          const coreProviderCatalog = await pulsoCoreProvider.catalog();
+          const selectorCatalog = toPulsoCoreSelectorCatalog(coreProviderCatalog);
+          const sessionsWithModelState = visibleSessions.map(session => {
+            const binding = bindingForCoreSession(coreProviderCatalog, session.contextId);
+            const selectedModel = binding
+              ? selectorCatalog.models.find(model => model.provider === binding.primary.providerId && model.id === binding.primary.model)
+              : null;
+            return binding ? {
+              ...session,
+              selectedModelProvider: binding.primary.providerId,
+              selectedModelId: binding.primary.model,
+              selectedModelName: selectedModel?.name || binding.primary.model,
+              selectedThinkingLevel: selectedModel?.thinkingDefault || 'medium',
+              modelContextTokens: selectedModel?.contextWindow || 0,
+            } : session;
+          });
           setCoreAreas(visibleAreas);
-          setSessions(visibleSessions);
+          setModelCatalog(selectorCatalog.models.map(model => ({
+            ...model,
+            contextWindows: [...model.contextWindows],
+            thinkingLevels: [...model.thinkingLevels],
+            tags: [...model.tags],
+          })));
+          setProviderCatalog(selectorCatalog.providers.map(provider => ({
+            ...provider,
+            profiles: [...provider.profiles],
+          })));
+          setSessions(sessionsWithModelState);
           setState((previous: any) => ({
             ...(previous || {}),
             allRoutines: previous?.allRoutines || [],
@@ -2367,6 +2434,33 @@ export default function LivePage() {
     selection: { provider: string; modelId: string; modelName: string; thinkingLevel: string; contextWindow: number; authProfileId?: string },
   ) => {
     const targetSession = sessions.find(session => session.contextId === contextId);
+    if (coreDesktopEnabled) {
+      if (!targetSession) throw new Error('Sessão canônica não encontrada no PULSO Core.');
+      const binding = await pulsoCoreProvider.selectForSession(
+        contextId,
+        selection.provider,
+        selection.modelId,
+      );
+      if (
+        binding.primary.providerId !== selection.provider
+        || binding.primary.model !== selection.modelId
+        || binding.fallbackChain.length !== 0
+      ) {
+        throw new Error('O Core não confirmou o provider e o modelo escolhidos.');
+      }
+      const confirmed = {
+        selectedModelProvider: binding.primary.providerId,
+        selectedModelId: binding.primary.model,
+        selectedModelName: selection.modelName,
+        selectedThinkingLevel: selection.thinkingLevel,
+        modelContextTokens: selection.contextWindow,
+        modelStateUpdatedAt: new Date().toISOString(),
+      };
+      setSessions(previous => previous.map(session => (
+        session.contextId === contextId ? { ...session, ...confirmed } : session
+      )));
+      return;
+    }
     if (!targetSession?.openclawSessionKey) throw new Error('Sessão sem vínculo com o OpenClaw.');
     const request = await lotusOpenClawClient.switchSessionModel({
       contextId,
@@ -2375,12 +2469,13 @@ export default function LivePage() {
       openclawSessionKey: targetSession.openclawSessionKey,
       selection,
     });
+    if (!request) throw new Error('A OpenClaw não devolveu confirmação da troca.');
     const confirmed = (request.openclawResult as any)?.meta?.sessionModelState;
     if (!confirmed?.selectedModelId) throw new Error('O OpenClaw não confirmou o modelo ativo.');
     setSessions(previous => previous.map(session => (
       session.contextId === contextId ? { ...session, ...confirmed } : session
     )));
-  }, [sessions]);
+  }, [coreDesktopEnabled, sessions]);
 
   const dynamicAreas = React.useMemo(() => {
     if (coreDesktopEnabled) return coreAreas;
@@ -7931,6 +8026,7 @@ ${data.transcription}`, {
             models={modelCatalog}
             providers={providerCatalog}
             onApply={(selection) => handleApplySessionModel(sendTargetContextNode.contextId, selection)}
+            onRefresh={coreDesktopEnabled ? refreshCoreProviderCatalog : undefined}
           />
 
           <ExecutionTargetSelector

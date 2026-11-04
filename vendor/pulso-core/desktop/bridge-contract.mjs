@@ -7,6 +7,7 @@ export const BRIDGE_METHODS = Object.freeze([
   'runtime.stop',
   'control.command',
   'provider.configure',
+  'provider.catalog',
   'provider.select',
   'provider.test',
   'provider.remove',

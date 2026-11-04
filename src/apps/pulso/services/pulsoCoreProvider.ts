@@ -2,6 +2,8 @@ import {
   pulsoCoreClient,
   resolveTauriInvoke,
   type PulsoProviderConfig,
+  type PulsoProviderCatalog,
+  type PulsoProviderBinding,
   type PulsoProviderHealth,
 } from './pulsoCoreClient';
 
@@ -15,6 +17,15 @@ export const PULSO_CANONICAL_PROVIDER_CONFIG: PulsoProviderConfig = Object.freez
   allowExternalNetwork: true,
   profileId: 'fe-pessoal',
 });
+export const PULSO_LOCAL_PROVIDER_CONFIG: PulsoProviderConfig = Object.freeze({
+  providerId: 'ollama-local',
+  adapterKind: 'ollama',
+  displayName: 'iMac · modelos locais',
+  model: 'gemma4:26b',
+  endpoint: 'http://127.0.0.1:11434',
+  allowExternalNetwork: false,
+  profileId: null,
+});
 const isLocalAdapter = (adapterKind: PulsoProviderConfig['adapterKind']): boolean => (
   adapterKind === 'local' || adapterKind === 'ollama'
 );
@@ -27,6 +38,85 @@ export interface PulsoProviderSecretReceipt {
   readonly configured: boolean;
   readonly secretRef?: string | null;
 }
+
+export interface PulsoCoreSelectorModel {
+  readonly id: string;
+  readonly name: string;
+  readonly provider: string;
+  readonly contextWindow: number;
+  readonly contextWindows: readonly never[];
+  readonly contextWindowDefault: string;
+  readonly reasoning: boolean;
+  readonly thinkingLevels: readonly Readonly<{ id: string; label: string }>[];
+  readonly thinkingDefault: string;
+  readonly tags: readonly string[];
+  readonly available: boolean;
+  readonly availabilityReason?: string;
+}
+
+export interface PulsoCoreSelectorProvider {
+  readonly id: string;
+  readonly displayName: string;
+  readonly configured: boolean;
+  readonly availability: 'available' | 'unavailable';
+  readonly availabilityReason?: string;
+  readonly authStatus: string;
+  readonly modelCount: number;
+  readonly profiles: readonly never[];
+}
+
+const localModelLabel = (model: string): string => {
+  if (model === 'gemma4:26b') return 'Gemma 4 · 26B';
+  if (model === 'SparkLLM/Spark-X2.6-4B:latest') return 'Spark X2.6 · 4B';
+  return model.replace(/:latest$/i, '');
+};
+
+export const toPulsoCoreSelectorCatalog = (catalog: PulsoProviderCatalog): Readonly<{
+  models: readonly PulsoCoreSelectorModel[];
+  providers: readonly PulsoCoreSelectorProvider[];
+}> => {
+  const models = catalog.models.map(model => ({
+    id: model.id,
+    name: localModelLabel(model.id),
+    provider: model.providerId,
+    contextWindow: 32_768,
+    contextWindows: [] as const,
+    contextWindowDefault: '',
+    reasoning: model.local === true,
+    thinkingLevels: model.local === true
+      ? [{ id: 'on', label: 'raciocínio local' }] as const
+      : [{ id: 'medium', label: 'médio' }] as const,
+    thinkingDefault: model.local === true ? 'on' : 'medium',
+    tags: model.id === PULSO_LOCAL_PROVIDER_CONFIG.model ? ['local', 'recommended'] : (model.local ? ['local'] : []),
+    available: model.unavailable !== true,
+    ...(model.availabilityReason ? { availabilityReason: model.availabilityReason } : {}),
+  }));
+  const providers = catalog.providers.map(provider => {
+    const providerId = String(provider.providerId || '');
+    const providerModels = models.filter(model => model.provider === providerId);
+    const unavailable = providerModels.length > 0 && providerModels.every(model => !model.available);
+    return {
+      id: providerId,
+      displayName: String(provider.displayName || providerId),
+      configured: provider.enabled !== false,
+      availability: unavailable ? 'unavailable' as const : 'available' as const,
+      ...(unavailable ? { availabilityReason: providerModels[0]?.availabilityReason || 'provider_unavailable' } : {}),
+      authStatus: provider.kind === 'local' ? 'local' : 'configured',
+      modelCount: providerModels.length,
+      profiles: [] as const,
+    };
+  }).filter(provider => provider.id && provider.modelCount > 0);
+  return Object.freeze({ models, providers });
+};
+
+export const bindingForCoreSession = (
+  catalog: PulsoProviderCatalog,
+  sessionId: string,
+): PulsoProviderBinding | null => (
+  catalog.bindings.find(binding => binding.scope?.type === 'session' && binding.scope.scopeId === sessionId)
+  || catalog.bindings.find(binding => ['system', 'global'].includes(binding.scope?.type) && binding.scope.scopeId === null)
+  || null
+);
 
 const nativeInvoke = async <T>(command: string, args: Record<string, unknown>): Promise<T> => {
   const invoke = resolveTauriInvoke();
@@ -61,7 +151,11 @@ export const pulsoCoreProvider = Object.freeze({
     }
   },
 
-  async configure(configInput: PulsoProviderConfig, secret?: string): Promise<PulsoProviderSecretReceipt> {
+  async configure(
+    configInput: PulsoProviderConfig,
+    secret?: string,
+    options: { bind?: boolean; save?: boolean } = {},
+  ): Promise<PulsoProviderSecretReceipt> {
     const config = validateConfig(configInput);
     let receipt: PulsoProviderSecretReceipt = {
       providerId: config.providerId,
@@ -83,9 +177,9 @@ export const pulsoCoreProvider = Object.freeze({
       if (!receipt.configured) throw new Error('Credencial ausente no Keychain do macOS.');
     }
 
-    const configured = await pulsoCoreClient.configureProvider(config);
+    const configured = await pulsoCoreClient.configureProvider(config, { bind: options.bind !== false });
     if (!configured.ok) throw new Error(configured.error.message);
-    if (typeof window !== 'undefined') {
+    if (options.save !== false && typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     }
     return receipt;
@@ -93,8 +187,33 @@ export const pulsoCoreProvider = Object.freeze({
 
   async restore(): Promise<boolean> {
     const config = this.readSavedConfig() || PULSO_CANONICAL_PROVIDER_CONFIG;
-    await this.configure(config);
+    await this.configure(config, undefined, { bind: true, save: false });
+    await this.configure(PULSO_LOCAL_PROVIDER_CONFIG, undefined, { bind: false, save: false });
     return true;
+  },
+
+  async catalog(): Promise<PulsoProviderCatalog> {
+    const result = await pulsoCoreClient.listProviderCatalog();
+    if (!result.ok) throw new Error(result.error.message);
+    return result.result;
+  },
+
+  async selectForSession(
+    sessionId: string,
+    providerId: string,
+    model: string,
+  ): Promise<PulsoProviderBinding> {
+    const result = await pulsoCoreClient.selectProvider({
+      providerId,
+      model,
+      scope: { type: 'session', scopeId: sessionId },
+      idempotencyKey: `provider-select:${sessionId}:${providerId}:${model}`,
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    if (result.result.fallbackEnabled !== false || result.result.binding.fallbackChain.length !== 0) {
+      throw new Error('O Core não confirmou a seleção exclusiva do modelo solicitado.');
+    }
+    return result.result.binding;
   },
 
   async test(providerId: string): Promise<PulsoProviderHealth> {
