@@ -79,7 +79,7 @@ export const toPulsoCoreSelectorCatalog = (catalog: PulsoProviderCatalog): Reado
     id: model.id,
     name: localModelLabel(model.id),
     provider: model.providerId,
-    contextWindow: 32_768,
+    contextWindow: model.local === true ? 8_192 : 32_768,
     contextWindows: [] as const,
     contextWindowDefault: '',
     reasoning: model.local === true,

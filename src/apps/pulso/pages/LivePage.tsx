@@ -273,6 +273,7 @@ function SessionModelSelector({ session, models, providers, onApply, onRefresh }
   const draftProvider = provider || activeModel?.provider || installedProviderIds[0] || '';
   const providerState = providers.find(item => item.id === draftProvider)
     || PROVIDER_CATALOG_FALLBACK.find(item => item.id === draftProvider);
+  const isLocalProvider = providerState?.authStatus === 'local';
   const providerModels = React.useMemo(
     () => models.filter(model => model.provider === draftProvider),
     [draftProvider, models],
@@ -418,6 +419,15 @@ function SessionModelSelector({ session, models, providers, onApply, onRefresh }
                   {panelProfileCaption}
                 </span>
               </div>
+              {isLocalProvider && (
+                <div className="mt-2.5 border-t border-white/[0.06] pt-2.5">
+                  <p className="text-[9px] text-white/65">execução local no iMac · sem conta externa</p>
+                  <p className="mt-1 text-[7px] tracking-[0.1em] uppercase text-white/25">
+                    {providerState?.modelCount || 0} modelos captados do Ollama
+                  </p>
+                </div>
+              )}
+              {!isLocalProvider && <>
               <p className="mt-1.5 text-[9px] text-white/60">
                 {profileDisplayName(panelProfile)}
                 {profileSecondaryLabel(panelProfile) ? ` · ${profileSecondaryLabel(panelProfile)}` : ''}
@@ -454,6 +464,7 @@ function SessionModelSelector({ session, models, providers, onApply, onRefresh }
               {!(providerState?.usageWindows || []).length && (
                 <p className="mt-1.5 text-[7px] leading-relaxed text-white/22">Cota não informada pelo provider. O provider permanece visível.</p>
               )}
+              </>}
             </div>
 
             <div className="flex flex-col gap-1 mb-4">
