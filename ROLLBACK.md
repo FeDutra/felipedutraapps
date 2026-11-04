@@ -1225,3 +1225,19 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 3. Manter o SQLite vivo, identidades, seleção ativa e Chaves atuais.
 4. Registrar novamente o bundle restaurado no LaunchServices.
 5. Se a interface anterior voltar a exibir sessões padrão, tratar isso como rollback visual conhecido, não como recuperação dos dados do Core.
+
+---
+# Seletor local honesto, cancelamento real e tema preto · 04/11/2026
+
+- **Falhas corrigidas:** a Gemma era vinculada no Core, mas o cabeçalho mantinha GPT; o modo local nascia com raciocínio profundo, ocultando a primeira resposta por minutos; `PARAR` cancelava o turno sem abortar o HTTP do Ollama; o tema preto persistia a preferência sem aplicar as classes no documento.
+- **Novo contrato:** seleção atualiza sessão e contexto ativo; modelo local nasce em modo `rápido`, com `raciocínio local` como escolha explícita e persistida no binding; cancelamento propaga `AbortSignal` até o fetch do Ollama; o estado de processamento nomeia modelo e máquina; tema preto aplica e restaura classes reais.
+- **Dados vivos:** não apagar nem substituir `pulso-core.sqlite`. Antes da promoção, criar backup consistente e preservar o bundle instalado como rollback datado.
+- **Assinatura:** destrancar automaticamente o Chaves dedicado usando sua referência local protegida `0600`; Fe não fornece senha técnica. Preservar entitlements e provar `codesign --verify --deep --strict`.
+
+## Reversão
+
+1. Encerrar somente `PULSO Next Preview.app` e seus sidecars.
+2. Restaurar o bundle datado preservado imediatamente antes desta promoção.
+3. Manter o SQLite vivo, bindings de provider e modelos Ollama instalados.
+4. Registrar o bundle restaurado no LaunchServices e provar abertura fria.
+5. O rollback visual reintroduz as limitações conhecidas: cabeçalho GPT obsoleto após troca, raciocínio local obrigatório, cancelamento sem aborto HTTP e tema preto incompleto.

@@ -287,6 +287,7 @@ export class LiveConversationService {
         turnId: runId,
         input: { modality: "text", text: humanMessage.texto },
         messages: history,
+        think: route.binding?.metadata?.thinkingLevel === "on",
         signal: controller.signal
       });
 

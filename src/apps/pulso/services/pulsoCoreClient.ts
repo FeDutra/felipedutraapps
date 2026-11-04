@@ -419,6 +419,7 @@ export interface PulsoProviderBinding {
   readonly scopeKey: string;
   readonly primary: Readonly<{ readonly providerId: string; readonly model: string }>;
   readonly fallbackChain: readonly Readonly<{ readonly providerId: string; readonly model: string }>[];
+  readonly metadata?: Readonly<{ readonly thinkingLevel?: string; readonly [key: string]: unknown }>;
 }
 
 export interface PulsoProviderCatalog {
@@ -829,6 +830,7 @@ export function createPulsoCoreClient(options: PulsoCoreClientOptions = {}) {
       params: {
         providerId: string;
         model: string;
+        thinkingLevel?: string;
         scope: { type: 'system' | 'session' | 'agent' | 'task'; scopeId: string | null };
         idempotencyKey?: string;
       },

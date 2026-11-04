@@ -238,7 +238,7 @@ export class PulsoDesktopBridge {
       return new OllamaModelAdapter({
         ...common,
         secretRef: null,
-        think: params.think ?? true,
+        think: params.think ?? false,
       });
     }
     if (localAdapter) {
@@ -821,6 +821,9 @@ export class PulsoDesktopBridge {
           scope,
           primary: { providerId, model },
           fallbackChain: [],
+          metadata: {
+            thinkingLevel: params.thinkingLevel === "on" ? "on" : "off",
+          },
         }, { idempotencyKey: params.idempotencyKey || null });
         return { binding, provider, fallbackEnabled: false };
       }

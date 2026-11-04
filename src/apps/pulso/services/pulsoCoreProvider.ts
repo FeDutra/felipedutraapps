@@ -84,9 +84,12 @@ export const toPulsoCoreSelectorCatalog = (catalog: PulsoProviderCatalog): Reado
     contextWindowDefault: '',
     reasoning: model.local === true,
     thinkingLevels: model.local === true
-      ? [{ id: 'on', label: 'raciocínio local' }] as const
+      ? [
+          { id: 'off', label: 'rápido' },
+          { id: 'on', label: 'raciocínio local' },
+        ] as const
       : [{ id: 'medium', label: 'médio' }] as const,
-    thinkingDefault: model.local === true ? 'on' : 'medium',
+    thinkingDefault: model.local === true ? 'off' : 'medium',
     tags: model.id === PULSO_LOCAL_PROVIDER_CONFIG.model ? ['local', 'recommended'] : (model.local ? ['local'] : []),
     available: model.unavailable !== true,
     ...(model.availabilityReason ? { availabilityReason: model.availabilityReason } : {}),
@@ -202,12 +205,14 @@ export const pulsoCoreProvider = Object.freeze({
     sessionId: string,
     providerId: string,
     model: string,
+    thinkingLevel = 'off',
   ): Promise<PulsoProviderBinding> {
     const result = await pulsoCoreClient.selectProvider({
       providerId,
       model,
+      thinkingLevel,
       scope: { type: 'session', scopeId: sessionId },
-      idempotencyKey: `provider-select:${sessionId}:${providerId}:${model}`,
+      idempotencyKey: `provider-select:${sessionId}:${providerId}:${model}:${thinkingLevel}`,
     });
     if (!result.ok) throw new Error(result.error.message);
     if (result.result.fallbackEnabled !== false || result.result.binding.fallbackChain.length !== 0) {

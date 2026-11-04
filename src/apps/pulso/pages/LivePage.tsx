@@ -566,12 +566,16 @@ function SessionModelSelector({ session, models, providers, onApply, onRefresh }
               disabled={!draftModel || draftModel.available === false || providerState?.quotaExhausted || isSaving || (orderedProfiles.length > 0 && usableProfiles.length === 0)}
               className="w-full py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] disabled:opacity-30 text-[8px] tracking-[0.18em] uppercase text-white border border-white/10 cursor-pointer transition-colors"
             >
-              {isSaving ? 'confirmando no OpenClaw…' : 'usar nesta conversa'}
+              {isSaving ? (isLocalProvider ? 'confirmando no PULSO Core…' : 'confirmando no OpenClaw…') : 'usar nesta conversa'}
             </button>
             {switchError ? (
               <p className="text-[7px] leading-relaxed text-rose-200/65 mt-2.5">A troca não foi aplicada: {modelSwitchErrorLabel(switchError)}</p>
             ) : (
-              <p className="text-[7px] leading-relaxed text-white/20 mt-2.5">O painel só fecha depois que o OpenClaw confirmar o modelo ativo nesta conversa.</p>
+              <p className="text-[7px] leading-relaxed text-white/20 mt-2.5">
+                {isLocalProvider
+                  ? 'O painel só fecha depois que o PULSO Core confirmar o modelo ativo nesta conversa.'
+                  : 'O painel só fecha depois que o OpenClaw confirmar o modelo ativo nesta conversa.'}
+              </p>
             )}
           </div>
         </>,
@@ -1972,18 +1976,23 @@ export default function LivePage() {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    const updateThemeColor = () => {
-      const currentTheme = safeStorageGet('pulso-theme') || 'orange';
+    const applyTheme = (event?: Event) => {
+      const requestedTheme = event instanceof CustomEvent ? String(event.detail || '') : '';
+      const currentTheme = requestedTheme || safeStorageGet('pulso-theme') || 'orange';
+      const blackTheme = currentTheme === 'black';
+      document.body.classList.toggle('pulso-theme-black', blackTheme);
+      document.documentElement.classList.toggle('pulso-theme-black-preload', blackTheme);
       let metaTheme = document.querySelector('meta[name="theme-color"]');
       if (!metaTheme) {
         metaTheme = document.createElement('meta');
         metaTheme.setAttribute('name', 'theme-color');
         document.head.appendChild(metaTheme);
       }
-      metaTheme.setAttribute('content', currentTheme === 'black' ? '#0f0f0f' : '#b8283e');
+      metaTheme.setAttribute('content', blackTheme ? '#0f0f0f' : '#b8283e');
     };
-    window.addEventListener('pulso-theme-change', updateThemeColor);
-    return () => window.removeEventListener('pulso-theme-change', updateThemeColor);
+    applyTheme();
+    window.addEventListener('pulso-theme-change', applyTheme);
+    return () => window.removeEventListener('pulso-theme-change', applyTheme);
   }, []);
 
   React.useEffect(() => {
@@ -2451,6 +2460,7 @@ export default function LivePage() {
         contextId,
         selection.provider,
         selection.modelId,
+        selection.thinkingLevel,
       );
       if (
         binding.primary.providerId !== selection.provider
@@ -2470,6 +2480,9 @@ export default function LivePage() {
       setSessions(previous => previous.map(session => (
         session.contextId === contextId ? { ...session, ...confirmed } : session
       )));
+      setActiveContextNode(previous => (
+        previous.contextId === contextId ? { ...previous, ...confirmed } : previous
+      ));
       return;
     }
     if (!targetSession?.openclawSessionKey) throw new Error('Sessão sem vínculo com o OpenClaw.');
@@ -2486,6 +2499,9 @@ export default function LivePage() {
     setSessions(previous => previous.map(session => (
       session.contextId === contextId ? { ...session, ...confirmed } : session
     )));
+    setActiveContextNode(previous => (
+      previous.contextId === contextId ? { ...previous, ...confirmed } : previous
+    ));
   }, [coreDesktopEnabled, sessions]);
 
   const dynamicAreas = React.useMemo(() => {
@@ -6641,7 +6657,13 @@ ${data.transcription}`, {
           <span className="w-1 h-1 rounded-full bg-[#fbf9f5] opacity-50 select-none shrink-0" />
           
           <span className="text-[9px] font-light tracking-[0.1em] text-[#fbf9f5]/40 lowercase shrink-0">
-            {(voiceState === 'presence_listening' || voiceState === 'recording_once') ? 'ouvindo...' : isTyping ? 'processando...' : 'conectada'}
+            {(voiceState === 'presence_listening' || voiceState === 'recording_once')
+              ? 'ouvindo...'
+              : isTyping
+                ? (activeContextNode.selectedModelProvider === 'ollama-local'
+                    ? `${activeContextNode.selectedModelName || activeContextNode.selectedModelId || 'modelo local'} · ${activeContextNode.selectedThinkingLevel === 'on' ? 'raciocinando' : 'respondendo'} no iMac...`
+                    : 'processando...')
+                : 'conectada'}
           </span>
         </div>
         
@@ -6649,9 +6671,9 @@ ${data.transcription}`, {
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              const current = localStorage.getItem('pulso-theme') || 'orange';
+              const current = safeStorageGet('pulso-theme') || 'orange';
               const next = current === 'black' ? 'orange' : 'black';
-              localStorage.setItem('pulso-theme', next);
+              safeStorageSet('pulso-theme', next);
               window.dispatchEvent(new CustomEvent('pulso-theme-change', { detail: next }));
             }}
             className="text-xs font-light tracking-widest text-[#fbf9f5]/80 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"

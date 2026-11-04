@@ -33,7 +33,15 @@ export async function defaultHttpTransport(request) {
   }
 
   const controller = new AbortController();
+  const externalSignal = request.signal ?? null;
+  const abortFromExternal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const cleanup = () => {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", abortFromExternal);
+  };
   let ownershipTransferredToStream = false;
 
   try {
@@ -56,7 +64,7 @@ export async function defaultHttpTransport(request) {
         ok: response.ok,
         headers: Object.fromEntries(response.headers.entries()),
         body: response.body,
-        frames: iterateSseFramesFromStream(response.body, () => clearTimeout(timer))
+        frames: iterateSseFramesFromStream(response.body, cleanup)
       };
     }
 
@@ -78,9 +86,7 @@ export async function defaultHttpTransport(request) {
       json: parsedJson
     };
   } finally {
-    if (!ownershipTransferredToStream) {
-      clearTimeout(timer);
-    }
+    if (!ownershipTransferredToStream) cleanup();
   }
 }
 
@@ -204,7 +210,15 @@ export async function defaultNdjsonTransport(request) {
   }
 
   const controller = new AbortController();
+  const externalSignal = request.signal ?? null;
+  const abortFromExternal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const cleanup = () => {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", abortFromExternal);
+  };
   let ownershipTransferredToStream = false;
   try {
     const response = await fetch(url, {
@@ -221,7 +235,7 @@ export async function defaultNdjsonTransport(request) {
         status: response.status,
         ok: response.ok,
         headers: Object.fromEntries(response.headers.entries()),
-        frames: iterateNdjsonFramesFromStream(response.body, () => clearTimeout(timer))
+        frames: iterateNdjsonFramesFromStream(response.body, cleanup)
       };
     }
     const text = await response.text();
@@ -235,7 +249,7 @@ export async function defaultNdjsonTransport(request) {
       json
     };
   } finally {
-    if (!ownershipTransferredToStream) clearTimeout(timer);
+    if (!ownershipTransferredToStream) cleanup();
   }
 }
 
@@ -1294,17 +1308,18 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
     // Keep model reasoning in Ollama's dedicated `message.thinking` channel.
     // The adapter deliberately never forwards that channel to the user-visible
     // PULSO stream; only `message.content` becomes a model delta.
-    this.think = options.think ?? true;
+    this.think = options.think ?? false;
     this.architecture = options.architecture ?? "x86_64-neutral";
   }
 
-  async #invokeOllama({ path, method = "POST", body = null, stream = false }) {
+  async #invokeOllama({ path, method = "POST", body = null, stream = false, signal = null }) {
     return await this.ollamaTransport({
       url: this.buildUrl(path),
       method,
       headers: { "content-type": "application/json", accept: stream ? "application/x-ndjson" : "application/json" },
       body,
       stream,
+      signal,
       timeoutMs: this.timeoutMs,
       allowExternalNetwork: this.allowExternalNetwork
     });
@@ -1389,7 +1404,7 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
   async complete(request) {
     try {
       const body = this.#body(request, false);
-      const response = await this.#invokeOllama({ path: "/api/chat", body, stream: false });
+      const response = await this.#invokeOllama({ path: "/api/chat", body, stream: false, signal: request?.signal });
       if (!response.ok || response.status >= 400) {
         throw new Error(`ollama_chat_http_${response.status}:${response.text ?? ""}`);
       }
@@ -1422,7 +1437,7 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
   async *stream(request) {
     try {
       const body = this.#body(request, true);
-      const response = await this.#invokeOllama({ path: "/api/chat", body, stream: true });
+      const response = await this.#invokeOllama({ path: "/api/chat", body, stream: true, signal: request?.signal });
       if (!response.ok || response.status >= 400) {
         throw new Error(`ollama_stream_http_${response.status}:${response.text ?? ""}`);
       }
