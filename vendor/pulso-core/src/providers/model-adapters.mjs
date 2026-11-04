@@ -1287,7 +1287,7 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
       allowExternalNetwork: options.allowExternalNetwork ?? false,
       secretResolver: options.secretResolver,
       transport: options.transport ?? defaultHttpTransport,
-      timeoutMs: options.timeoutMs ?? 120000,
+      timeoutMs: options.timeoutMs ?? 600000,
       clock: options.clock
     });
     this.ollamaTransport = options.ollamaTransport ?? defaultNdjsonTransport;
@@ -1378,7 +1378,10 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
       think: request?.think ?? this.think,
       options: {
         temperature: request?.temperature ?? 0,
-        num_predict: request?.maxTokens ?? 512
+        num_predict: request?.maxTokens ?? 512,
+        // Keep one stable local profile. Changing num_ctx forces Ollama to
+        // reload the model and cost another 45–60 seconds on the Intel iMac.
+        num_ctx: request?.contextWindow ?? 8192
       }
     };
   }

@@ -106,3 +106,11 @@ test('seletor desktop chama o Core antes da rota legada da OpenClaw', () => {
   assert.match(handler, /pulsoCoreProvider\.selectForSession[\s\S]*lotusOpenClawClient\.switchSessionModel/);
   assert.match(handler, /binding\.fallbackChain/);
 });
+
+test('adapter Ollama mantém contexto estável e não mata uma resposta fria em 120 segundos', () => {
+  const adapterSource = readFileSync(new URL('../vendor/pulso-core/src/providers/model-adapters.mjs', import.meta.url), 'utf8');
+  const bridgeSource = readFileSync(new URL('../vendor/pulso-core/desktop/bridge.mjs', import.meta.url), 'utf8');
+  assert.match(adapterSource, /timeoutMs: options\.timeoutMs \?\? 600000/);
+  assert.match(adapterSource, /num_ctx: request\?\.contextWindow \?\? 8192/);
+  assert.match(bridgeSource, /localAdapter \? 600_000 : 15_000/);
+});

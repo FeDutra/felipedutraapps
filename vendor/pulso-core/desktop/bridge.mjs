@@ -230,7 +230,7 @@ export class PulsoDesktopBridge {
       // The transport timeout covers the whole streamed response, not only the
       // connection handshake. Local models can legitimately spend longer
       // reasoning while remaining healthy and responsive on loopback.
-      timeoutMs: params.timeoutMs ?? (localAdapter ? 120_000 : 15_000),
+      timeoutMs: params.timeoutMs ?? (localAdapter ? 600_000 : 15_000),
     };
     if (adapterKind === "openai") return new OpenAIModelAdapter(common);
     if (adapterKind === "anthropic") return new AnthropicModelAdapter(common);
