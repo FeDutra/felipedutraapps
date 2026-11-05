@@ -199,23 +199,32 @@ test('assinatura ChatGPT entrega catálogo e intensidades anunciados pelo provid
 
 test('providers por API consultam o catálogo vivo da conta em vez de limitar o seletor a defaults fixos', async () => {
   const secretResolver = new SecretRefResolver({ env: { PULSO_PROVIDER_CATALOG_TEST_SECRET: 'test-secret' } });
+  const openaiRequests = [];
   const openai = new OpenAIModelAdapter({
     id: 'openai-fe',
     secretRef: 'env:PULSO_PROVIDER_CATALOG_TEST_SECRET',
     secretResolver,
     allowExternalNetwork: true,
-    transport: async requestInput => ({
-      status: 200,
-      ok: true,
-      json: {
-        data: [
-          { id: 'gpt-5.2' },
-          { id: 'gpt-4.1-mini' },
-          { id: 'text-embedding-3-large' },
-        ],
-      },
-      requestInput,
-    }),
+    transport: async requestInput => {
+      openaiRequests.push(requestInput);
+      return {
+        status: 200,
+        ok: true,
+        json: requestInput.url.endsWith('/models')
+          ? {
+              data: [
+                { id: 'gpt-5.2' },
+                { id: 'gpt-4.1-mini' },
+                { id: 'text-embedding-3-large' },
+              ],
+            }
+          : {
+              id: 'chatcmpl-test', model: 'gpt-5.2',
+              choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+            },
+      };
+    },
   });
   const openaiModels = await openai.listModels();
   assert.deepEqual(openaiModels.map(model => model.id), ['gpt-4.1-mini', 'gpt-5.2']);
@@ -223,28 +232,41 @@ test('providers por API consultam o catálogo vivo da conta em vez de limitar o 
     'low', 'medium', 'high',
   ]);
   assert.deepEqual(openaiModels.find(model => model.id === 'gpt-4.1-mini').thinkingLevels.map(level => level.id), ['off']);
+  await openai.complete({ model: 'gpt-5.2', prompt: 'teste', reasoningEffort: 'high' });
+  assert.equal(openaiRequests.at(-1).body.reasoning_effort, 'high');
 
+  const anthropicRequests = [];
   const anthropic = new AnthropicModelAdapter({
     id: 'anthropic-fe',
     secretRef: 'env:PULSO_PROVIDER_CATALOG_TEST_SECRET',
     secretResolver,
     allowExternalNetwork: true,
-    transport: async requestInput => ({
-      status: 200,
-      ok: true,
-      json: {
-        data: [
-          { id: 'claude-sonnet-4-5', display_name: 'Claude Sonnet 4.5', created_at: '2026-01-01T00:00:00Z' },
-          { id: 'claude-3-5-haiku-latest', display_name: 'Claude 3.5 Haiku' },
-        ],
-      },
-      requestInput,
-    }),
+    transport: async requestInput => {
+      anthropicRequests.push(requestInput);
+      return {
+        status: 200,
+        ok: true,
+        json: requestInput.url.endsWith('/models')
+          ? {
+              data: [
+                { id: 'claude-sonnet-4-5', display_name: 'Claude Sonnet 4.5', created_at: '2026-01-01T00:00:00Z' },
+                { id: 'claude-3-5-haiku-latest', display_name: 'Claude 3.5 Haiku' },
+              ],
+            }
+          : {
+              id: 'msg-test', model: 'claude-sonnet-4-5',
+              content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            },
+      };
+    },
   });
   const anthropicModels = await anthropic.listModels();
   assert.deepEqual(anthropicModels.map(model => model.id), ['claude-sonnet-4-5', 'claude-3-5-haiku-latest']);
   assert.deepEqual(anthropicModels[0].thinkingLevels.map(level => level.id), ['off', 'adaptive']);
   assert.deepEqual(anthropicModels[1].thinkingLevels.map(level => level.id), ['off']);
+  await anthropic.complete({ model: 'claude-sonnet-4-5', prompt: 'teste', reasoningEffort: 'adaptive' });
+  assert.deepEqual(anthropicRequests.at(-1).body.thinking, { type: 'adaptive' });
 });
 
 test('tema preto aplica classes reais ao documento e restaura preferência salva', () => {

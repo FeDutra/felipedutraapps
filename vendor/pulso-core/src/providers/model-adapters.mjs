@@ -565,6 +565,16 @@ export class OpenAIModelAdapter extends BaseProtocolModelAdapter {
     const authSource = this.getAuthSource();
     try {
       const secret = this.resolveRuntimeSecret();
+      const bodyPayload = {
+        model,
+        messages,
+        temperature: request?.temperature ?? 0,
+        max_tokens: request?.maxTokens ?? 512,
+        stream: false
+      };
+      if (request?.reasoningEffort && request.reasoningEffort !== "off") {
+        bodyPayload.reasoning_effort = request.reasoningEffort;
+      }
       const response = await this.invokeTransport({
         url: this.buildUrl("/v1/models"),
         method: "GET",
@@ -676,6 +686,16 @@ export class OpenAIModelAdapter extends BaseProtocolModelAdapter {
       const model = request?.model ?? this.defaultModel;
       const messages = normalizeMessages(request);
 
+      const bodyPayload = {
+        model,
+        messages,
+        temperature: request?.temperature ?? 0,
+        max_tokens: request?.maxTokens ?? 512,
+        stream: false
+      };
+      if (request?.reasoningEffort && request.reasoningEffort !== "off") {
+        bodyPayload.reasoning_effort = request.reasoningEffort;
+      }
       const response = await this.invokeTransport({
         url: this.buildUrl("/v1/chat/completions"),
         method: "POST",
@@ -683,13 +703,7 @@ export class OpenAIModelAdapter extends BaseProtocolModelAdapter {
           "content-type": "application/json",
           authorization: `Bearer ${secret}`
         },
-        body: {
-          model,
-          messages,
-          temperature: request?.temperature ?? 0,
-          max_tokens: request?.maxTokens ?? 512,
-          stream: false
-        }
+        body: bodyPayload
       });
 
       if (response.status >= 400) {
@@ -737,6 +751,16 @@ export class OpenAIModelAdapter extends BaseProtocolModelAdapter {
       const model = request?.model ?? this.defaultModel;
       const messages = normalizeMessages(request);
 
+      const bodyPayload = {
+        model,
+        messages,
+        temperature: request?.temperature ?? 0,
+        max_tokens: request?.maxTokens ?? 512,
+        stream: true
+      };
+      if (request?.reasoningEffort && request.reasoningEffort !== "off") {
+        bodyPayload.reasoning_effort = request.reasoningEffort;
+      }
       const response = await this.invokeStreamTransport({
         url: this.buildUrl("/v1/chat/completions"),
         method: "POST",
@@ -745,13 +769,7 @@ export class OpenAIModelAdapter extends BaseProtocolModelAdapter {
           accept: "text/event-stream",
           authorization: `Bearer ${secret}`
         },
-        body: {
-          model,
-          messages,
-          temperature: request?.temperature ?? 0,
-          max_tokens: request?.maxTokens ?? 512,
-          stream: true
-        }
+        body: bodyPayload
       });
 
       if (response.status >= 400) {
@@ -978,6 +996,9 @@ export class AnthropicModelAdapter extends BaseProtocolModelAdapter {
       if (systemMessages.length > 0) {
         bodyPayload.system = systemMessages.join("\n");
       }
+      if (request?.reasoningEffort === "adaptive") {
+        bodyPayload.thinking = { type: "adaptive" };
+      }
 
       const response = await this.invokeTransport({
         url: this.buildUrl("/v1/messages"),
@@ -1047,6 +1068,9 @@ export class AnthropicModelAdapter extends BaseProtocolModelAdapter {
       };
       if (systemMessages.length > 0) {
         bodyPayload.system = systemMessages.join("\n");
+      }
+      if (request?.reasoningEffort === "adaptive") {
+        bodyPayload.thinking = { type: "adaptive" };
       }
 
       const response = await this.invokeStreamTransport({
