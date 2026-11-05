@@ -30,6 +30,10 @@ export interface VoiceSessionConfig {
   onError: (error: string) => void;
   /** Mantém a Orbe viva visualmente enquanto o cérebro da Lótus trabalha. */
   onPresenceWorkChange?: (working: boolean) => void;
+  /** Recibo nativo do caminho de voz, sem conteúdo falado. */
+  onTelemetry?: (stage: string, details?: Record<string, unknown>) => void;
+  /** Sinais sonoros são opt-in; nunca devem contaminar a primeira escuta. */
+  soundCuesEnabled?: boolean;
   activeContextNode: { contextId: string; areaId: string; chatId: string };
   handleSendMessage: (text: string, options: {
     originMode: 'presence';
@@ -116,6 +120,9 @@ export class VoiceSessionController {
   private hasSpoken: boolean = false;
   private animationFrameId: number | null = null;
   private vadState = createPresenceVadState();
+  private vadFrameCount = 0;
+  private vadLastTelemetryAt = 0;
+  private pcmWatchdogTimeout: ReturnType<typeof setTimeout> | null = null;
   
   // Players e controles
   private activeAudio: HTMLAudioElement | null = null;
@@ -263,6 +270,10 @@ export class VoiceSessionController {
     console.log(`[${tag}]`, details ? JSON.stringify(details) : '');
   }
 
+  private telemetry(stage: string, details?: Record<string, unknown>) {
+    this.config.onTelemetry?.(stage, details);
+  }
+
   private persistAudioReceipt(receipt: PresenceAudioReceipt) {
     this.log('PRESENCE_AUDIO_RECEIPT', receipt);
     if (typeof window === 'undefined') return;
@@ -307,7 +318,7 @@ export class VoiceSessionController {
    * Toca um aviso sonoro (Cue) usando Web Audio API.
    */
   private playSoundCue(type: 'start_listening' | 'sent' | 'response_arrived' | 'error') {
-    if (!this.audioContext) return;
+    if (!this.audioContext || !this.config.soundCuesEnabled) return;
     try {
       const ctx = this.audioContext;
       const osc = ctx.createOscillator();
@@ -416,6 +427,11 @@ export class VoiceSessionController {
       }
       this.stream = micStream;
       this.log('MIC_OPENED');
+      const track = micStream.getAudioTracks()[0];
+      this.telemetry('presence_mic_opened', {
+        muted: track?.muted ?? null,
+        readyState: track?.readyState ?? null,
+      });
 
       if (passedAudioContext) {
         this.audioContext = passedAudioContext;
@@ -451,13 +467,16 @@ export class VoiceSessionController {
         this.pcmSampleRate = this.audioContext.sampleRate;
         this.pcmProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
         this.pcmProcessor.onaudioprocess = (event) => {
-          if (this.state !== 'presence_listening' && this.state !== 'user_speaking') return;
           const input = event.inputBuffer.getChannelData(0);
-          this.pcmChunks.push(new Float32Array(input));
+          if (this.state === 'presence_listening' || this.state === 'user_speaking') {
+            this.pcmChunks.push(new Float32Array(input));
+          }
+          this.processVadSamples(input, 'pcm');
         };
         source.connect(this.pcmProcessor);
         this.pcmProcessor.connect(gainNode);
         this.log('PCM_WAV_CAPTURE_READY', { sampleRate: this.pcmSampleRate });
+        this.telemetry('presence_pcm_ready', { sampleRate: this.pcmSampleRate });
       }
 
       this.log('VAD_READY');
@@ -517,6 +536,94 @@ export class VoiceSessionController {
     return retry;
   }
 
+  private processVadSamples(samples: Float32Array, source: 'pcm' | 'analyser') {
+    if (
+      this.state !== 'presence_listening'
+      && this.state !== 'user_speaking'
+      && this.state !== 'speaking'
+    ) return;
+
+    if (source === 'pcm' && this.pcmWatchdogTimeout) {
+      clearTimeout(this.pcmWatchdogTimeout);
+      this.pcmWatchdogTimeout = null;
+    }
+
+    const vad = analyzePresenceAudio(samples, this.vadState, this.hasSpoken);
+    this.vadState = vad.state;
+    this.vadFrameCount += 1;
+
+    const now = Date.now();
+    if (this.vadFrameCount === 1 || now - this.vadLastTelemetryAt >= 1000) {
+      this.vadLastTelemetryAt = now;
+      this.telemetry('presence_audio_frame', {
+        source,
+        rms: Number(vad.rms.toFixed(6)),
+        peak: Number(vad.peak.toFixed(6)),
+        noiseFloor: Number(vad.noiseFloor.toFixed(6)),
+        threshold: Number(vad.threshold.toFixed(6)),
+        state: this.state,
+      });
+    }
+
+    if (vad.speech) {
+      if (this.isAssistantSpeaking && now - this.assistantSpeechStartMs > 1200) {
+        this.interruptAssistant();
+        return;
+      }
+
+      if (this.state === 'presence_listening') {
+        if (!this.hasSpoken) {
+          this.hasSpoken = true;
+          this.activeTurnBasedTurnId = this.createVoiceTurnId();
+          this.advanceTurn({ type: 'turn_opened', turnId: this.activeTurnBasedTurnId });
+          this.log('VAD_SPEECH_START');
+          this.telemetry('presence_vad_speech_start', {
+            source,
+            rms: Number(vad.rms.toFixed(6)),
+            threshold: Number(vad.threshold.toFixed(6)),
+          });
+          this.transition('user_speaking');
+        }
+        this.silenceStart = now;
+      } else if (this.state === 'user_speaking') {
+        this.silenceStart = now;
+      }
+      return;
+    }
+
+    if (this.hasSpoken && this.silenceStart > 0 && now - this.silenceStart > 1100) {
+      this.log('VAD_SPEECH_END');
+      this.telemetry('presence_vad_speech_end', { source });
+      this.finalizeUserTurn();
+    }
+  }
+
+  private startAnalyserVadLoop() {
+    const analyser = this.analyser;
+    if (!analyser || !this.audioContext) return;
+    analyser.fftSize = 1024;
+    const timeData = new Float32Array(analyser.fftSize);
+
+    const checkSilence = () => {
+      if (this.stopped) return;
+      if (
+        this.state !== 'presence_listening'
+        && this.state !== 'speaking'
+        && this.state !== 'user_speaking'
+      ) {
+        this.animationFrameId = requestAnimationFrame(checkSilence);
+        return;
+      }
+
+      analyser.getFloatTimeDomainData(timeData);
+      this.processVadSamples(timeData, 'analyser');
+      this.animationFrameId = requestAnimationFrame(checkSilence);
+    };
+
+    if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+    this.animationFrameId = requestAnimationFrame(checkSilence);
+  }
+
   /**
    * Começa o loop de gravação contínuo e detecção de silêncio (VAD).
    */
@@ -574,75 +681,26 @@ export class VoiceSessionController {
     this.hasSpoken = false;
     this.silenceStart = 0;
     this.vadState = createPresenceVadState();
+    this.vadFrameCount = 0;
+    this.vadLastTelemetryAt = 0;
     this.mediaRecorder.start(250);
+    this.telemetry('presence_listening', {
+      vadSource: this.pcmProcessor ? 'pcm' : 'analyser',
+      sampleRate: this.pcmSampleRate,
+    });
 
-    // VAD (checkSilence) usando time domain (RMS)
-    const analyser = this.analyser;
-    const ctx = this.audioContext;
-    const stream = this.stream;
-    if (analyser && ctx) {
-      analyser.fftSize = 1024;
-      const bufferLength = analyser.fftSize;
-      const timeData = new Float32Array(bufferLength);
-
-      const checkSilence = () => {
-        if (this.state !== 'presence_listening' && this.state !== 'speaking' && this.state !== 'user_speaking') {
-          this.animationFrameId = requestAnimationFrame(checkSilence);
-          return;
-        }
-
-        analyser.getFloatTimeDomainData(timeData);
-        const vad = analyzePresenceAudio(timeData, this.vadState, this.hasSpoken);
-        this.vadState = vad.state;
-
-        // Print debug VAD de sinal em tempo real
-        if (Math.random() < 0.05) { // throttled print
-          console.log("[VAD_RMS_DEBUG]", {
-            rms: vad.rms,
-            peak: vad.peak,
-            noiseFloor: vad.noiseFloor,
-            threshold: vad.threshold,
-            ctxState: ctx.state,
-            streamActive: stream.active,
-            trackMuted: stream.getAudioTracks()[0]?.muted,
-            trackReadyState: stream.getAudioTracks()[0]?.readyState
-          });
-        }
-
-        if (vad.speech) {
-          // Interrompe assistente se estiver falando (Barge-in)
-          // Mas impede interrupção nos primeiros 1200ms de reprodução (evita eco inicial e falsas interrupções de início de frase)
-          if (this.isAssistantSpeaking && (Date.now() - this.assistantSpeechStartMs) > 1200) {
-            this.interruptAssistant();
-            return;
-          }
-
-          if (this.state === 'presence_listening') {
-            if (!this.hasSpoken) {
-              this.hasSpoken = true;
-              this.activeTurnBasedTurnId = this.createVoiceTurnId();
-              this.advanceTurn({ type: 'turn_opened', turnId: this.activeTurnBasedTurnId });
-              this.log('VAD_SPEECH_START');
-              this.transition('user_speaking');
-            }
-            this.silenceStart = Date.now();
-          } else if (this.state === 'user_speaking') {
-            this.silenceStart = Date.now();
-          }
-        } else {
-          // Uma pausa natural encerra o turno sem impor a demora de um chat gravado.
-          if (this.hasSpoken && this.silenceStart > 0 && Date.now() - this.silenceStart > 1100) {
-            this.log('VAD_SPEECH_END');
-            this.finalizeUserTurn();
-            return;
-          }
-        }
-
-        this.animationFrameId = requestAnimationFrame(checkSilence);
-      };
-
-      if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = requestAnimationFrame(checkSilence);
+    // No desktop, o mesmo PCM usado para o WAV dirige o VAD. Se o WebKit
+    // deixar o ScriptProcessor sem quadros, o analyser assume explicitamente.
+    if (this.pcmWatchdogTimeout) clearTimeout(this.pcmWatchdogTimeout);
+    if (this.pcmProcessor) {
+      this.pcmWatchdogTimeout = setTimeout(() => {
+        this.pcmWatchdogTimeout = null;
+        if (this.stopped || this.vadFrameCount > 0) return;
+        this.telemetry('presence_pcm_stalled_fallback', {});
+        this.startAnalyserVadLoop();
+      }, 1500);
+    } else {
+      this.startAnalyserVadLoop();
     }
 
     // Timeout máximo de segurança (60 segundos)
@@ -665,6 +723,10 @@ export class VoiceSessionController {
     this.advanceTurn({ type: 'turn_closed', turnId: this.activeTurnBasedTurnId });
     this.advanceTurn({ type: 'transcription_started', turnId: this.activeTurnBasedTurnId });
     this.log('USER_TURN_FINALIZED');
+    this.telemetry('presence_turn_finalized', {
+      pcmChunks: this.pcmChunks.length,
+      sampleRate: this.pcmSampleRate,
+    });
     this.transition('transcribing');
     if (this.maxRecordTimeout) clearTimeout(this.maxRecordTimeout);
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
@@ -709,6 +771,7 @@ export class VoiceSessionController {
    */
   private async processUserSpeech(blob: Blob, turnId: string | null) {
     this.log('STT_REQUEST_STARTED');
+    this.telemetry('presence_stt_started', { bytes: blob.size, mimeType: blob.type });
     
     try {
       const isTauriEnv = this.isTauriRuntime();
@@ -740,6 +803,11 @@ export class VoiceSessionController {
         engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
         durationMs: data.durationMs,
       });
+      this.telemetry('presence_stt_finished', {
+        textLength: userText.trim().length,
+        engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
+        durationMs: data.durationMs ?? null,
+      });
 
       if (userText.trim().length === 0) {
         // Nada foi ouvido, reinicia loop de escuta
@@ -761,6 +829,9 @@ export class VoiceSessionController {
       const localResult = await this.executeImmediatePresenceAction(userText);
       if (this.stopped) return;
       if (localResult?.handled && localResult.responseText) {
+        this.telemetry('presence_local_response_ready', {
+          responseLength: localResult.responseText.length,
+        });
         this.recordLocalInteractionInBackground(userText, localResult);
         await this.speakAssistant(localResult.responseText, undefined, undefined, {
           turnId: turnId ?? undefined,
@@ -809,6 +880,7 @@ export class VoiceSessionController {
 
     } catch (err: any) {
       this.log('VOICE_SESSION_ERROR', err.message || err);
+      this.telemetry('presence_voice_error', { message: err.message || String(err) });
       this.advanceTurn({ type: 'turn_failed', turnId: turnId ?? undefined });
       this.playSoundCue('error');
       this.startListeningLoop();
@@ -1336,6 +1408,8 @@ export class VoiceSessionController {
 
     if (this.maxRecordTimeout) clearTimeout(this.maxRecordTimeout);
     if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+    if (this.pcmWatchdogTimeout) clearTimeout(this.pcmWatchdogTimeout);
+    this.pcmWatchdogTimeout = null;
 
     this.isAssistantSpeaking = false;
 

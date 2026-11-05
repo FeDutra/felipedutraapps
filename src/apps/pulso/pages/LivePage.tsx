@@ -2922,7 +2922,7 @@ export default function LivePage() {
     reported?: boolean;
   }>>({});
 
-  const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(true);
+  const [presenceSoundCuesEnabled, setPresenceSoundCuesEnabled] = React.useState(false);
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
 
   const focusComposer = React.useCallback(() => {
@@ -6095,6 +6095,12 @@ ${data.transcription}`, {
       const controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
+        soundCuesEnabled: presenceSoundCuesEnabled,
+        onTelemetry: (stage, details = {}) => {
+          void invoke('desktop_boot_probe', {
+            payload: JSON.stringify({ stage, ...details }),
+          }).catch(() => undefined);
+        },
         getGeminiAccessToken: async () => {
           try {
             const currentUser = await authService.ensurePulsoAuthReady();
@@ -6165,7 +6171,7 @@ ${data.transcription}`, {
         }),
       }).catch(() => undefined);
     }
-  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, coreDesktopEnabled, handlePresenceCanonicalMessage, presenceTransport, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
+  }, [presenceMode, exitPresenceMode, isSpeechRecognitionSupported, activeContextNode, coreDesktopEnabled, handlePresenceCanonicalMessage, presenceTransport, presenceSoundCuesEnabled, recordLocalPresenceFastPath, handlePresenceUiIntent, routePresenceInput]);
 
   const handleSplitOrbPointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasSplitChats || typeof window === 'undefined') return;
