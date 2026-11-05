@@ -93,7 +93,7 @@ export function isLocalModelAdapter(adapter) {
 }
 
 export function localModelContextBudget(_model, { thinkingLevel = "off" } = {}) {
-  if (/^qwen3(?::|-)/i.test(String(_model ?? ""))) {
+  if (/^(?:qwen3:4b(?:$|:)|qwen3-hermes-)/i.test(String(_model ?? ""))) {
     return Object.freeze({ inputTokenLimit: 512, systemTokenLimit: 256 });
   }
   return thinkingLevel === "on"

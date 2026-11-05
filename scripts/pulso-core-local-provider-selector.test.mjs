@@ -174,11 +174,12 @@ test('histórico longo usa orçamento interativo local sem perder identidade nem
   assert.match(conversationSource, /localModelContextBudget\(route\.primary\.model, \{ thinkingLevel: selectedThinkingLevel \}\)/);
   assert.deepEqual(localModelContextBudget('gemma4:26b'), { inputTokenLimit: 512, systemTokenLimit: 256 });
   assert.deepEqual(localModelContextBudget('SparkLLM/Spark-X2.6-4B:latest'), { inputTokenLimit: 512, systemTokenLimit: 256 });
-  assert.deepEqual(localModelContextBudget('qwen3:8b', { thinkingLevel: 'on' }), { inputTokenLimit: 512, systemTokenLimit: 256 });
-  assert.deepEqual(localModelThinkingProfile('qwen3:8b'), {
+  assert.deepEqual(localModelContextBudget('qwen3:4b', { thinkingLevel: 'on' }), { inputTokenLimit: 512, systemTokenLimit: 256 });
+  assert.deepEqual(localModelThinkingProfile('qwen3:4b'), {
     levels: [{ id: 'on', label: 'raciocínio local · experimental' }],
     defaultLevel: 'on',
   });
+  assert.deepEqual(localModelThinkingProfile('qwen3:8b').levels.map(level => level.id), ['off', 'on']);
   assert.deepEqual(localModelThinkingProfile('gemma4:26b').levels.map(level => level.id), ['off', 'on']);
 });
 

@@ -1645,7 +1645,7 @@ export function stripLocalThinkingContent(value) {
 }
 
 export function localModelThinkingProfile(model) {
-  const forcedReasoning = /^qwen3(?::|-)/i.test(String(model ?? ""));
+  const forcedReasoning = /^(?:qwen3:4b(?:$|:)|qwen3-hermes-)/i.test(String(model ?? ""));
   return forcedReasoning
     ? Object.freeze({
         levels: Object.freeze([{ id: "on", label: "raciocínio local · experimental" }]),
