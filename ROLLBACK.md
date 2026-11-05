@@ -1258,3 +1258,20 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 3. manter o SQLite, os áudios recuperáveis e os diretórios privados atuais;
 4. se necessário, restaurar apenas as preferências de Presença/TTS da baseline, sem apagar o restante do armazenamento WebView;
 5. não tocar em credenciais, Keychain, PULSO normal ou PULSO Next Preview que não tenham sido promovidos por esta operação.
+
+---
+# Detecção adaptativa da fala na Core · 05/11/2026
+
+- **Escopo isolado:** somente `PULSO Next Preview.app`; a PULSO normal permanece no bundle anterior restaurado.
+- **Falha corrigida:** o microfone interno entregava fala real abaixo do limiar RMS fixo `0.015`, por isso a Orbe reagia ao áudio sem abrir nem encerrar um turno.
+- **Novo contrato:** a Core lê amostras em ponto flutuante, calibra o piso de ruído, exige dois quadros para abrir o turno e usa um limiar menor para sustentar a frase.
+- **Sidecar:** chamadas simultâneas de aquecimento e reprodução não podem iniciar dois processos Kokoro.
+- **Limite conhecido:** esta mudança recupera escuta e fechamento do turno; não declara `pf_dora` como voz aprovada nem resolve a autorização do Gemini Live.
+
+## Reversão
+
+1. encerrar somente `PULSO Next Preview.app` e seus sidecars pelo caminho exato;
+2. mover a candidata para um caminho datado de falha;
+3. restaurar o bundle anterior preservado imediatamente antes da promoção;
+4. manter `pulso-core.sqlite`, preferências, identidade e gravações atuais;
+5. não alterar `/Applications/PULSO.app`.

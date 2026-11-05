@@ -11,6 +11,7 @@ import { encodePcmWav } from './pcmWav';
 import { PresenceTurnMachine } from './PresenceTurnMachine';
 import type { PresenceNarrationKind, PresenceTurnEvent } from './PresenceTurnMachine';
 import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from './presenceOralText';
+import { analyzePresenceAudio, createPresenceVadState } from './presenceVad';
 
 export type VoiceSessionState =
   | 'idle'
@@ -114,6 +115,7 @@ export class VoiceSessionController {
   private silenceStart: number = 0;
   private hasSpoken: boolean = false;
   private animationFrameId: number | null = null;
+  private vadState = createPresenceVadState();
   
   // Players e controles
   private activeAudio: HTMLAudioElement | null = null;
@@ -571,6 +573,7 @@ export class VoiceSessionController {
 
     this.hasSpoken = false;
     this.silenceStart = 0;
+    this.vadState = createPresenceVadState();
     this.mediaRecorder.start(250);
 
     // VAD (checkSilence) usando time domain (RMS)
@@ -578,9 +581,9 @@ export class VoiceSessionController {
     const ctx = this.audioContext;
     const stream = this.stream;
     if (analyser && ctx) {
-      analyser.fftSize = 256;
+      analyser.fftSize = 1024;
       const bufferLength = analyser.fftSize;
-      const timeData = new Uint8Array(bufferLength);
+      const timeData = new Float32Array(bufferLength);
 
       const checkSilence = () => {
         if (this.state !== 'presence_listening' && this.state !== 'speaking' && this.state !== 'user_speaking') {
@@ -588,18 +591,17 @@ export class VoiceSessionController {
           return;
         }
 
-        analyser.getByteTimeDomainData(timeData);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          const value = (timeData[i] - 128) / 128;
-          sum += value * value;
-        }
-        const rms = Math.sqrt(sum / bufferLength);
+        analyser.getFloatTimeDomainData(timeData);
+        const vad = analyzePresenceAudio(timeData, this.vadState, this.hasSpoken);
+        this.vadState = vad.state;
 
         // Print debug VAD de sinal em tempo real
         if (Math.random() < 0.05) { // throttled print
           console.log("[VAD_RMS_DEBUG]", {
-            rms,
+            rms: vad.rms,
+            peak: vad.peak,
+            noiseFloor: vad.noiseFloor,
+            threshold: vad.threshold,
             ctxState: ctx.state,
             streamActive: stream.active,
             trackMuted: stream.getAudioTracks()[0]?.muted,
@@ -607,8 +609,7 @@ export class VoiceSessionController {
           });
         }
 
-        // Se o usuário falou (threshold RMS de 0.015)
-        if (rms > 0.015) {
+        if (vad.speech) {
           // Interrompe assistente se estiver falando (Barge-in)
           // Mas impede interrupção nos primeiros 1200ms de reprodução (evita eco inicial e falsas interrupções de início de frase)
           if (this.isAssistantSpeaking && (Date.now() - this.assistantSpeechStartMs) > 1200) {

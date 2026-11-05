@@ -45,6 +45,18 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
         return Ok("ready".to_string());
     }
 
+    // A interface pode pedir warmup e reprodução quase ao mesmo tempo. Sem
+    // serialização, as duas chamadas enxergam a porta fechada e sobem dois
+    // runners. O lock cobre a decisão e a janela curta de inicialização.
+    let sidecar_state = app.state::<KokoroSidecarState>();
+    let mut sidecar_process = sidecar_state
+        .0
+        .lock()
+        .map_err(|_| "Kokoro sidecar state is unavailable".to_string())?;
+    if kokoro_is_ready() {
+        return Ok("ready".to_string());
+    }
+
     let resource_dir = app
         .path()
         .resource_dir()
@@ -74,7 +86,7 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn(async move {
         while receiver.recv().await.is_some() {}
     });
-    *app.state::<KokoroSidecarState>().0.lock().unwrap() = Some(child);
+    *sidecar_process = Some(child);
 
     for _ in 0..40 {
         if kokoro_is_ready() {
@@ -83,6 +95,9 @@ fn ensure_kokoro_sidecar(app: tauri::AppHandle) -> Result<String, String> {
         std::thread::sleep(Duration::from_millis(100));
     }
 
+    if let Some(child) = sidecar_process.take() {
+        let _ = child.kill();
+    }
     Err("Kokoro sidecar did not become ready".to_string())
 }
 
