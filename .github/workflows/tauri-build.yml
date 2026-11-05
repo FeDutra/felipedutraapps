@@ -16,7 +16,11 @@ on:
 jobs:
   build-macos:
     if: ${{ github.event.inputs.target == 'macos' || github.event.inputs.target == 'both' }}
-    runs-on: ${{ (startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.')) && 'macos-15-intel' || 'macos-latest' }}
+    # Both Desktop bundles currently ship Intel-only Core, Codex and Kokoro
+    # sidecars. Cross-compiling the Tauri shell on an arm64 runner does not
+    # make those preparation scripts x64; keep the complete bundle chain on
+    # the Intel runner until an arm64 sidecar matrix exists.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
 
