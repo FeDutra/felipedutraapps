@@ -56,7 +56,9 @@ test('warmup do sidecar usa o contrato local text/voice/speed/lang', async () =>
     return new Response('{}', { status: 200 });
   };
   try {
-    const { TTSAdapter } = await import('../../TTSAdapter');
+    // Keep the explicit extension because this suite runs through Node's
+    // strip-types loader in CI rather than through Vite's resolver.
+    const { TTSAdapter } = await import('../../TTSAdapter.ts');
     const adapter = new TTSAdapter();
     adapter.updatePreferences({
       ttsProvider: 'local_kokoro_sidecar',
