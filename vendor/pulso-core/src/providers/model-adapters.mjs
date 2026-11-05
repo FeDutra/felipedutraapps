@@ -607,6 +607,54 @@ export class OpenAIModelAdapter extends BaseProtocolModelAdapter {
     }
   }
 
+  async listModels() {
+    try {
+      const secret = this.resolveRuntimeSecret();
+      const response = await this.invokeTransport({
+        url: this.buildUrl("/v1/models"),
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${secret}`,
+          accept: "application/json"
+        }
+      });
+      if (response.status >= 400) {
+        throw Object.assign(new Error(`openai_models_http_${response.status}`), {
+          code: `http_${response.status}`
+        });
+      }
+      const excluded = /(?:embedding|moderation|whisper|transcri|tts|audio|realtime|image|dall-e|sora)/i;
+      const data = Array.isArray(response.json?.data) ? response.json.data : [];
+      const models = data
+        .map(item => String(item?.id ?? "").trim())
+        .filter(Boolean)
+        .filter(id => !excluded.test(id))
+        .sort((left, right) => left.localeCompare(right));
+      return models.map(id => {
+        const reasoning = /^(?:o\d|gpt-[56])/i.test(id);
+        return {
+          id,
+          name: id,
+          providerId: this.id,
+          adapterKind: this.adapterKind,
+          local: false,
+          contextWindow: null,
+          reasoning,
+          thinkingLevels: reasoning
+            ? [
+                { id: "low", label: "rápido" },
+                { id: "medium", label: "equilibrado" },
+                { id: "high", label: "profundo" }
+              ]
+            : [{ id: "off", label: "padrão" }],
+          thinkingDefault: reasoning ? "medium" : "off"
+        };
+      });
+    } catch (error) {
+      throw this.sanitizeFailure(error);
+    }
+  }
+
   async complete(request) {
     if (request?.stream === true) {
       const chunks = [];
@@ -849,6 +897,52 @@ export class AnthropicModelAdapter extends BaseProtocolModelAdapter {
       };
       this.secretResolver.assertZeroLeakage(report);
       return report;
+    }
+  }
+
+  async listModels() {
+    try {
+      const secret = this.resolveRuntimeSecret();
+      const response = await this.invokeTransport({
+        url: this.buildUrl("/v1/models"),
+        method: "GET",
+        headers: {
+          "x-api-key": secret,
+          "anthropic-version": this.anthropicVersion,
+          accept: "application/json"
+        }
+      });
+      if (response.status >= 400) {
+        throw Object.assign(new Error(`anthropic_models_http_${response.status}`), {
+          code: `http_${response.status}`
+        });
+      }
+      const data = Array.isArray(response.json?.data) ? response.json.data : [];
+      return data
+        .filter(item => item && typeof item.id === "string" && item.id.trim())
+        .map(item => {
+          const id = item.id.trim();
+          const reasoning = /claude-(?:3-7|4|opus-4|sonnet-4)/i.test(id);
+          return {
+            id,
+            name: item.display_name ?? id,
+            providerId: this.id,
+            adapterKind: this.adapterKind,
+            local: false,
+            contextWindow: item.context_window ?? null,
+            reasoning,
+            thinkingLevels: reasoning
+              ? [
+                  { id: "off", label: "rápido" },
+                  { id: "adaptive", label: "adaptativo" }
+                ]
+              : [{ id: "off", label: "padrão" }],
+            thinkingDefault: reasoning ? "adaptive" : "off",
+            createdAt: item.created_at ?? null
+          };
+        });
+    } catch (error) {
+      throw this.sanitizeFailure(error);
     }
   }
 

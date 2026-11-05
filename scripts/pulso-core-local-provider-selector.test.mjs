@@ -6,9 +6,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createDesktopBridge } from '../vendor/pulso-core/desktop/bridge.mjs';
-import { defaultNdjsonTransport } from '../vendor/pulso-core/src/providers/model-adapters.mjs';
+import {
+  AnthropicModelAdapter,
+  OpenAIModelAdapter,
+  defaultNdjsonTransport,
+} from '../vendor/pulso-core/src/providers/model-adapters.mjs';
 import { CodexSubscriptionAdapter } from '../vendor/pulso-core/src/providers/codex-app-server-adapter.mjs';
 import { compactMessagesForContext, estimateMessageTokens } from '../vendor/pulso-core/src/live/model-context-budget.mjs';
+import { SecretRefResolver } from '../vendor/pulso-core/src/runtime/secret-ref-resolver.mjs';
 
 const request = (requestId, method, params = {}) => ({ requestId, method, params });
 
@@ -190,6 +195,56 @@ test('assinatura ChatGPT entrega catálogo e intensidades anunciados pelo provid
   assert.equal(models[0].contextWindow, 500000);
   assert.equal(models[0].thinkingDefault, 'medium');
   assert.deepEqual(models[0].thinkingLevels.map(level => level.id), ['low', 'medium', 'ultra']);
+});
+
+test('providers por API consultam o catálogo vivo da conta em vez de limitar o seletor a defaults fixos', async () => {
+  const secretResolver = new SecretRefResolver({ env: { PULSO_PROVIDER_CATALOG_TEST_SECRET: 'test-secret' } });
+  const openai = new OpenAIModelAdapter({
+    id: 'openai-fe',
+    secretRef: 'env:PULSO_PROVIDER_CATALOG_TEST_SECRET',
+    secretResolver,
+    allowExternalNetwork: true,
+    transport: async requestInput => ({
+      status: 200,
+      ok: true,
+      json: {
+        data: [
+          { id: 'gpt-5.2' },
+          { id: 'gpt-4.1-mini' },
+          { id: 'text-embedding-3-large' },
+        ],
+      },
+      requestInput,
+    }),
+  });
+  const openaiModels = await openai.listModels();
+  assert.deepEqual(openaiModels.map(model => model.id), ['gpt-4.1-mini', 'gpt-5.2']);
+  assert.deepEqual(openaiModels.find(model => model.id === 'gpt-5.2').thinkingLevels.map(level => level.id), [
+    'low', 'medium', 'high',
+  ]);
+  assert.deepEqual(openaiModels.find(model => model.id === 'gpt-4.1-mini').thinkingLevels.map(level => level.id), ['off']);
+
+  const anthropic = new AnthropicModelAdapter({
+    id: 'anthropic-fe',
+    secretRef: 'env:PULSO_PROVIDER_CATALOG_TEST_SECRET',
+    secretResolver,
+    allowExternalNetwork: true,
+    transport: async requestInput => ({
+      status: 200,
+      ok: true,
+      json: {
+        data: [
+          { id: 'claude-sonnet-4-5', display_name: 'Claude Sonnet 4.5', created_at: '2026-01-01T00:00:00Z' },
+          { id: 'claude-3-5-haiku-latest', display_name: 'Claude 3.5 Haiku' },
+        ],
+      },
+      requestInput,
+    }),
+  });
+  const anthropicModels = await anthropic.listModels();
+  assert.deepEqual(anthropicModels.map(model => model.id), ['claude-sonnet-4-5', 'claude-3-5-haiku-latest']);
+  assert.deepEqual(anthropicModels[0].thinkingLevels.map(level => level.id), ['off', 'adaptive']);
+  assert.deepEqual(anthropicModels[1].thinkingLevels.map(level => level.id), ['off']);
 });
 
 test('tema preto aplica classes reais ao documento e restaura preferência salva', () => {
