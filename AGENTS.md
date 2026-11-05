@@ -35,10 +35,11 @@ Regras invariantes:
 * Ações mecânicas locais não precisam de modelo; interpretação, decisão e
   crítica continuam no orquestrador. Não mova o cérebro para o Mac apenas para
   economizar tokens.
-* Gemini Live é a camada de conversa imediata do modo Presença; OpenClaw é o
-  cérebro canônico. Kokoro é TTS do fluxo turn-based e precisa de fallback
-  explícito entre sidecar local e Kokoro VPS. Vozes nativas Apple são proibidas,
-  inclusive como fallback.
+* O fluxo turn-based local é a rota cotidiana comprovada do modo Presença;
+  OpenClaw/Lótus é o cérebro canônico. Gemini Live permanece experimento
+  explícito e nunca pode bloquear a abertura do microfone local. Kokoro é TTS
+  do fluxo turn-based e precisa de fallback explícito entre sidecar local e
+  Kokoro VPS. Vozes nativas Apple são proibidas, inclusive como fallback.
 * Toda release desktop valida nó offline/online, permissões reais, sidecars,
   fallback de voz e uma prova local reversível. Registre o que não foi testado.
 <!-- END:pulso-local-execution-standard -->

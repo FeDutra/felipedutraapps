@@ -131,6 +131,21 @@ fn write_wav_from_pcm(pcm: &Path, wav: &Path, sample_rate: u32) -> Result<u64, S
     Ok(data_size)
 }
 
+fn read_wav_bytes(directory: &Path, recording_id: &str) -> Result<Vec<u8>, String> {
+    validate_recording_id(recording_id)?;
+    let wav = wav_path(directory, recording_id);
+    let metadata = wav.metadata().map_err(|_| "WAV recuperável indisponível".to_string())?;
+    const MAX_WAV_BYTES: u64 = 512 * 1024 * 1024;
+    if metadata.len() < 44 || metadata.len() > MAX_WAV_BYTES {
+        return Err("WAV recuperável inválido".to_string());
+    }
+    let bytes = fs::read(wav).map_err(|error| error.to_string())?;
+    if bytes.get(0..4) != Some(b"RIFF") || bytes.get(8..12) != Some(b"WAVE") {
+        return Err("arquivo recuperável não é WAV".to_string());
+    }
+    Ok(bytes)
+}
+
 #[tauri::command]
 pub fn voice_recording_begin(
     recording_id: String,
@@ -217,6 +232,15 @@ pub fn voice_recording_finalize(recording_id: String) -> Result<VoiceRecordingAr
 }
 
 #[tauri::command]
+pub fn voice_recording_read_wav(recording_id: String) -> Result<tauri::ipc::Response, String> {
+    let directory = recordings_dir()?;
+    Ok(tauri::ipc::Response::new(read_wav_bytes(
+        &directory,
+        &recording_id,
+    )?))
+}
+
+#[tauri::command]
 pub fn voice_recording_mark(recording_id: String, status: String) -> Result<(), String> {
     validate_recording_id(&recording_id)?;
     const ALLOWED: [&str; 6] = [
@@ -299,6 +323,25 @@ mod tests {
         assert_eq!(&bytes[36..40], b"data");
         assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 6);
         assert_eq!(&bytes[44..], &[0_u8, 0, 255, 127, 0, 128]);
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn reads_only_a_valid_wav_for_the_requested_recording() {
+        let unique = format!("pulso-wav-read-test-{}", now_ms().unwrap());
+        let directory = std::env::temp_dir().join(unique);
+        fs::create_dir_all(&directory).unwrap();
+        let recording_id = "audio_12345678_read";
+        let pcm = pcm_path(&directory, recording_id);
+        let wav = wav_path(&directory, recording_id);
+        fs::write(&pcm, [0_u8, 0, 255, 127]).unwrap();
+        write_wav_from_pcm(&pcm, &wav, 16_000).unwrap();
+
+        let bytes = read_wav_bytes(&directory, recording_id).unwrap();
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert!(read_wav_bytes(&directory, "../../segredo").is_err());
 
         fs::remove_dir_all(directory).unwrap();
     }

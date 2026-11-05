@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveKokoroVoiceForProvider } from '../../TTSAdapter';
+// @ts-expect-error Node's strip-types runner executes the TypeScript source directly.
+import {
+  buildRemoteKokoroPayload,
+  resolveKokoroVoiceForProvider,
+  resolveNativeTtsFallback,
+} from '../../TTSAdapter.ts';
 
 test('sidecar local rejeita blend e fixa a voz brasileira canônica', () => {
   assert.equal(
@@ -21,6 +26,26 @@ test('serviço remoto também rejeita blend com voz inglesa', () => {
     ),
     'pf_dora',
   );
+});
+
+test('fallback remoto declara explicitamente português brasileiro', () => {
+  assert.deepEqual(
+    buildRemoteKokoroPayload('olá', 'pf_dora', 0.95),
+    {
+      model: 'kokoro',
+      input: 'olá',
+      voice: 'pf_dora',
+      response_format: 'mp3',
+      speed: 0.95,
+      lang: 'pt-br',
+    },
+  );
+});
+
+test('desktop nunca degrada silenciosamente para voz nativa', () => {
+  assert.equal(resolveNativeTtsFallback(true), false);
+  assert.equal(resolveNativeTtsFallback(false), true);
+  assert.equal(resolveNativeTtsFallback(true, false), false);
 });
 
 test('warmup do sidecar usa o contrato local text/voice/speed/lang', async () => {

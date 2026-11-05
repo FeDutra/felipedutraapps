@@ -42,24 +42,18 @@ function withWindow(protocol: string, run: (storage: MemoryStorage) => void) {
   }
 }
 
-const LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY = 'pulso_presence_transport_migration_v5_local_progress';
-
-test('restaura Gemini com fallback uma única vez nas instalações desviadas para o narrador local', () => {
+test('migra o estado automático legado para a rota local comprovada', () => {
   withWindow('tauri:', (storage) => {
-    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'turn_based');
-    storage.setItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY, '1');
-    assert.equal(readPresenceTransportPreference(), 'auto');
-    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'auto');
-
-    writePresenceTransportPreference('turn_based');
+    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'auto');
     assert.equal(readPresenceTransportPreference(), 'turn_based');
+    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'turn_based');
   });
 });
 
-test('usa Gemini com fallback local como padrão em uma instalação desktop nova', () => {
+test('usa a rota turn-based como padrão em uma instalação desktop nova', () => {
   withWindow('tauri:', (storage) => {
-    assert.equal(readPresenceTransportPreference(), 'auto');
-    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'auto');
+    assert.equal(readPresenceTransportPreference(), 'turn_based');
+    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'turn_based');
   });
 });
 
@@ -69,16 +63,11 @@ test('mantém a política automática como padrão fora do desktop', () => {
   });
 });
 
-test('preserva auto no desktop e não sobrescreve escolha local explícita', () => {
+test('preserva uma escolha explícita posterior por Gemini Live', () => {
   withWindow('tauri:', (storage) => {
-    // Executa a restauração nova e depois reproduz um estado legado ambíguo.
-    assert.equal(readPresenceTransportPreference(), 'auto');
-    storage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'auto');
-    assert.equal(readPresenceTransportPreference(), 'auto');
-    assert.equal(storage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY), 'auto');
-
-    writePresenceTransportPreference('turn_based');
     assert.equal(readPresenceTransportPreference(), 'turn_based');
+    writePresenceTransportPreference('gemini_live');
+    assert.equal(readPresenceTransportPreference(), 'gemini_live');
   });
 });
 

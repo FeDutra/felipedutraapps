@@ -27,6 +27,7 @@ const MIGRATION_KEY = 'pulso_tts_migration_v1_kokoro_default';
 const DESKTOP_SIDECAR_MIGRATION_KEY = 'pulso_tts_migration_v2_desktop_sidecar';
 const DESKTOP_LEGACY_NATIVE_MIGRATION_KEY = 'pulso_tts_migration_v3_desktop_no_legacy_native';
 const PORTUGUESE_ONLY_MIGRATION_KEY = 'pulso_tts_migration_v4_portuguese_only';
+const DESKTOP_BRAZILIAN_VOICE_MIGRATION_KEY = 'pulso_tts_migration_v5_desktop_brazilian_voice';
 const EXPLICIT_NATIVE_CHOICE_KEY = 'pulso_tts_browser_native_explicit';
 const DEFAULT_KOKORO_VOICE = 'pf_dora';
 const KOKORO_REMOTE_ENDPOINT = 'https://72-62-105-195.nip.io/tts/v1/audio/speech';
@@ -66,9 +67,23 @@ export const resolveKokoroVoiceForProvider = (provider: TTSProvider, voice: stri
   return resolved.match(/^([a-z]{2}_[a-z0-9]+)/i)?.[1] || 'pf_dora';
 };
 
+export const buildRemoteKokoroPayload = (text: string, voice: string, speed: number) => ({
+  model: 'kokoro',
+  input: text,
+  voice,
+  response_format: 'mp3',
+  speed,
+  lang: 'pt-br',
+});
+
+export const resolveNativeTtsFallback = (
+  desktopRuntime: boolean,
+  requested?: boolean,
+) => requested ?? !desktopRuntime;
+
 const DEFAULT_PREFERENCES: TTSPreferences = {
   ttsProvider: 'kokoro_http',
-  voiceName: '',
+  voiceName: DEFAULT_KOKORO_VOICE,
   voiceURI: '',
   voiceLang: 'pt-BR',
   rate: 1.0,
@@ -157,6 +172,19 @@ export class TTSAdapter {
         localStorage.setItem(PORTUGUESE_ONLY_MIGRATION_KEY, '1');
       }
 
+      // A migração v4 podia já estar marcada mesmo quando uma preferência
+      // posterior reintroduzia blend inglês ou voz nativa. No desktop, a rota
+      // aprovada é estritamente brasileira: sidecar local, pf_dora e pt-BR;
+      // se o sidecar falhar, o mesmo contrato segue para o Kokoro remoto.
+      if (isTauriApp() && !localStorage.getItem(DESKTOP_BRAZILIAN_VOICE_MIGRATION_KEY)) {
+        this.preferences.ttsProvider = 'local_kokoro_sidecar';
+        this.preferences.voiceName = DEFAULT_KOKORO_VOICE;
+        this.preferences.voiceURI = '';
+        this.preferences.voiceLang = 'pt-BR';
+        localStorage.removeItem(EXPLICIT_NATIVE_CHOICE_KEY);
+        localStorage.setItem(DESKTOP_BRAZILIAN_VOICE_MIGRATION_KEY, '1');
+      }
+
       if (isKokoroProvider(this.preferences.ttsProvider)) {
         this.preferences.voiceName = resolveKokoroVoice(this.preferences.voiceName);
       }
@@ -174,15 +202,20 @@ export class TTSAdapter {
     const oldProvider = this.preferences.ttsProvider;
     const oldVoice = this.preferences.voiceName;
     this.preferences = { ...this.preferences, ...newPrefs };
+    if (isTauriApp() && !isKokoroProvider(this.preferences.ttsProvider)) {
+      this.preferences.ttsProvider = 'local_kokoro_sidecar';
+      this.preferences.voiceURI = '';
+      this.preferences.voiceLang = 'pt-BR';
+    }
     if (isKokoroProvider(this.preferences.ttsProvider)) {
       this.preferences.voiceName = resolveKokoroVoice(this.preferences.voiceName);
     }
     
     if (persist && typeof window !== 'undefined') {
       try {
-        if (newPrefs.ttsProvider === 'browser_native') {
+        if (!isTauriApp() && newPrefs.ttsProvider === 'browser_native') {
           localStorage.setItem(EXPLICIT_NATIVE_CHOICE_KEY, '1');
-        } else if (newPrefs.ttsProvider && oldProvider === 'browser_native') {
+        } else if (newPrefs.ttsProvider) {
           localStorage.removeItem(EXPLICIT_NATIVE_CHOICE_KEY);
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.preferences));
@@ -634,13 +667,7 @@ export class TTSAdapter {
         const response = await fetch(KOKORO_REMOTE_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'kokoro',
-            input: chunkText,
-            voice: actualVoice,
-            response_format: 'mp3',
-            speed: actualRate
-          }),
+          body: JSON.stringify(buildRemoteKokoroPayload(chunkText, actualVoice, actualRate)),
           signal
         });
         if (!response.ok) {
@@ -657,13 +684,7 @@ export class TTSAdapter {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'kokoro',
-        input: chunkText,
-        voice: actualVoice,
-        response_format: 'mp3',
-        speed: actualRate
-      }),
+      body: JSON.stringify(buildRemoteKokoroPayload(chunkText, actualVoice, actualRate)),
       signal
     });
 
@@ -719,6 +740,7 @@ export class TTSAdapter {
     if (onPreparing) onPreparing();
 
     const isTauri = isTauriApp();
+    const allowNativeFallback = resolveNativeTtsFallback(isTauri, options?.fallbackToNative);
     const isRemoteWeb = typeof window !== 'undefined' && 
       window.location.hostname !== 'localhost' && 
       window.location.hostname !== '127.0.0.1' &&
@@ -897,7 +919,7 @@ export class TTSAdapter {
           if (this.currentAudio === audio) this.currentAudio = null;
           if (!isSessionActive()) return;
 
-          if (options?.fallbackToNative === false) {
+          if (!allowNativeFallback) {
             console.warn('[PULSO_TTS_KOKORO_REQUIRED_PLAYBACK_FAILED]', e);
             clearTimeout(slowTimer);
             onEnd?.();
@@ -914,7 +936,7 @@ export class TTSAdapter {
         if (!isSessionActive()) {
           return;
         }
-        if (options?.fallbackToNative === false) {
+        if (!allowNativeFallback) {
           console.warn('[PULSO_TTS_KOKORO_REQUIRED_GENERATION_FAILED]', err);
           clearTimeout(slowTimer);
           onEnd?.();

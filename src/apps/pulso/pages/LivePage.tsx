@@ -5656,10 +5656,26 @@ export default function LivePage() {
             const artifact = await invoke<RecoverableVoiceRecording>('voice_recording_finalize', { recordingId });
             recordingArtifactPathRef.current = artifact.wavPath;
             activeArtifactPath = artifact.wavPath;
+            const wavPayload = await invoke<ArrayBuffer | Uint8Array | number[]>(
+              'voice_recording_read_wav',
+              { recordingId },
+            );
+            const wavBytes = wavPayload instanceof ArrayBuffer
+              ? new Uint8Array(wavPayload)
+              : wavPayload instanceof Uint8Array
+                ? wavPayload
+                : new Uint8Array(wavPayload);
+            const wavArrayBuffer = wavBytes.buffer.slice(
+              wavBytes.byteOffset,
+              wavBytes.byteOffset + wavBytes.byteLength,
+            ) as ArrayBuffer;
+            audioBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
             durableCaptureReady = true;
             console.log('[PULSO_RECORDING_CAPTURED]', {
               recordingId,
               wavPath: artifact.wavPath,
+              transcriptionMimeType: audioBlob.type,
+              transcriptionBytes: audioBlob.size,
             });
           }
         } catch (error) {

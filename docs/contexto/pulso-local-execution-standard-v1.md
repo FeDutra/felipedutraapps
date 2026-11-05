@@ -63,10 +63,11 @@ ou aplicativo forem realmente necessários.
 
 O caminho diário deve separar **presença imediata** de **trabalho completo**:
 
-1. Gemini Live mantém a sessão de áudio. A resposta autônoma do turno de entrada
-   não é reproduzida: depois da transcrição, a PULSO abre um turno identificado
-   e solicita uma confirmação curta separada.
-2. Pedidos factuais ou operacionais seguem ao fluxo canônico da Lótus.
+1. A rota cotidiana abre o microfone local, transcreve pelo sidecar e cria um
+   turno identificado no fluxo canônico da Lótus.
+2. Gemini Live permanece um experimento explicitamente selecionado. Falha de
+   autenticação no relay fica visível e não redefine nem bloqueia a Presença
+   local.
 3. Ações simples e determinísticas usam despacho direto após classificação de
    risco; tarefas longas recebem confirmação e progresso sem bloquear a voz.
 4. O resultado retorna à mesma sessão e é narrado de forma breve.
@@ -76,7 +77,8 @@ Gemini Live não recebe autoridade paralela sobre Notion, WhatsApp ou o Mac. Ele
 
 ## Voz e fallback
 
-- **Gemini Live:** conversa em tempo real do modo Presença.
+- **Turn-based local:** rota cotidiana e comprovada do modo Presença.
+- **Gemini Live:** experimento explícito de conversa em tempo real.
 - **Kokoro sidecar:** TTS local preferido no app desktop quando saudável.
 - **Kokoro VPS:** fallback de TTS para desktop e rota principal da web.
 - **Voz nativa Apple:** proibida, inclusive como fallback. Falha total deve ficar
@@ -96,7 +98,8 @@ Quando a mudança tocar estas camadas, valide no artefato final:
 4. Captura e controle de interface são testados separadamente.
 5. Operação por mouse/teclado respeita a janela de exclusividade.
 6. Kokoro local responde; se falhar, Kokoro VPS assume; falha total fica visível.
-7. Gemini Live confirma rápido e devolve o pedido ao orquestrador canônico.
+7. A rota turn-based abre microfone, transcreve e devolve o pedido ao
+   orquestrador canônico; Gemini Live possui prova separada quando habilitado.
 8. Nenhuma mensagem, publicação, exclusão, credencial ou decisão financeira é
    executada sem a confirmação exigida.
 9. Cache, rota web, desktop Intel e estado offline/online são verificados.
@@ -109,4 +112,5 @@ Quando a mudança tocar estas camadas, valide no artefato final:
 - Open Design e Kdenlive auditados; render MLT/FFmpeg comprovado.
 - Kokoro VPS saudável. O app desktop instalado contém o sidecar, mas seu build
   não empacotou o modelo e `voices.bin`; por isso a voz local não inicia.
-- Gemini Live via relay VPS já foi validado em uso real, mas continua opt-in.
+- Gemini Live via relay VPS já foi validado em uso real, mas continua opt-in;
+  indisponibilidade do relay não pode retirar a Presença turn-based.

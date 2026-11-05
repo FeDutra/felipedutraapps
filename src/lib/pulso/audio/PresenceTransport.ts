@@ -12,11 +12,7 @@ export function resolvePresenceToggleAction(
 
 export const PRESENCE_TRANSPORT_STORAGE_KEY = 'pulso_presence_transport';
 const PRESENCE_DEVICE_ID_STORAGE_KEY = 'pulso_presence_device_id';
-const GEMINI_DESKTOP_RESTORE_MIGRATION_KEY = 'pulso_presence_transport_migration_v3_gemini_restore';
-const GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY = 'pulso_presence_transport_migration_v4_explicit_gemini';
-const LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY = 'pulso_presence_transport_migration_v5_local_progress';
-const GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY = 'pulso_presence_transport_migration_v6_gemini_canonical_progress';
-const GEMINI_PRIMARY_KOKORO_FALLBACK_MIGRATION_KEY = 'pulso_presence_transport_migration_v7_gemini_primary_kokoro_fallback';
+const TURN_BASED_DESKTOP_RESTORE_MIGRATION_KEY = 'pulso_presence_transport_migration_v8_turn_based_restore';
 
 // NEXT_PUBLIC values are normally inlined by Next during the web build. The
 // Tauri static bundle can lose that replacement at runtime even when the same
@@ -50,77 +46,29 @@ export function readPresenceTransportPreference(): PresenceTransportPreference {
   if (typeof window === 'undefined') return 'auto';
   try {
     const saved = window.localStorage.getItem(PRESENCE_TRANSPORT_STORAGE_KEY);
-
-    // A política aprovada passa a ser explícita: Gemini conduz a experiência;
-    // Kokoro só assume quando a fala Gemini não chega a começar. A migração é
-    // única para não sobrescrever escolhas posteriores por Gemini estrito ou
-    // operação totalmente local.
-    if (
-      isDesktopRuntime()
-      && window.localStorage.getItem(GEMINI_PRIMARY_KOKORO_FALLBACK_MIGRATION_KEY) !== '1'
-    ) {
-      window.localStorage.setItem(GEMINI_PRIMARY_KOKORO_FALLBACK_MIGRATION_KEY, '1');
-      const wasForcedToLocal = window.localStorage.getItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY) === '1';
-      if (saved === null || saved === 'auto' || saved === 'gemini_live' || wasForcedToLocal) {
-        window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'auto');
-        window.localStorage.setItem(GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY, '1');
-        window.localStorage.setItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY, '1');
-        window.localStorage.setItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY, '1');
-        return 'auto';
+    if (isDesktopRuntime()) {
+      // A rota cotidiana comprovada no desktop é a sessão turn-based: abre o
+      // microfone local, transcreve pelo sidecar e entrega o turno ao cérebro
+      // canônico. Gemini Live permanece disponível somente por escolha
+      // explícita; uma falha de autorização no experimento não pode bloquear o
+      // microfone da Presença inteira.
+      if (window.localStorage.getItem(TURN_BASED_DESKTOP_RESTORE_MIGRATION_KEY) !== '1') {
+        window.localStorage.setItem(TURN_BASED_DESKTOP_RESTORE_MIGRATION_KEY, '1');
+        if (saved === null || saved === 'auto') {
+          window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'turn_based');
+          return 'turn_based';
+        }
       }
-    }
-
-    // A migração v5 desviou instalações Tauri para o pipeline local. Esse
-    // pipeline depende de um STT sidecar e retirou a experiência Gemini que já
-    // havia sido aprovada. Restaura uma única vez as instalações afetadas e
-    // mantém qualquer escolha feita depois desta correção.
-    if (
-      isDesktopRuntime()
-      && window.localStorage.getItem(GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY) !== '1'
-    ) {
-      window.localStorage.setItem(GEMINI_CANONICAL_PROGRESS_MIGRATION_KEY, '1');
-      const wasForcedToLocal = window.localStorage.getItem(LOCAL_PROGRESS_NARRATOR_MIGRATION_KEY) === '1';
-      if (wasForcedToLocal || saved === null || saved === 'auto') {
-        window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
-        window.localStorage.setItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY, '1');
-        window.localStorage.setItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY, '1');
-        return 'gemini_live';
-      }
-    }
-
-    // Em 14/10, o desktop foi migrado silenciosamente para turn_based para
-    // investigar a Presença local. A experiência aprovada por Fe era Gemini
-    // Live; restaura uma única vez o transporte correto nos apps Tauri sem
-    // apagar escolhas futuras feitas no seletor.
-    if (
-      isDesktopRuntime()
-      && window.localStorage.getItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY) !== '1'
-    ) {
-      window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
-      window.localStorage.setItem(GEMINI_DESKTOP_RESTORE_MIGRATION_KEY, '1');
-      return 'gemini_live';
-    }
-
-    // `auto` permitia que uma oscilação do Gemini abrisse silenciosamente o
-    // caminho local pós-Gemini que nunca foi aprovado. No desktop, migra uma
-    // única vez esse estado ambíguo para o contrato explícito Gemini. Uma
-    // escolha deliberada por turn_based continua preservada.
-    if (
-      isDesktopRuntime()
-      && window.localStorage.getItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY) !== '1'
-    ) {
-      window.localStorage.setItem(GEMINI_DESKTOP_EXPLICIT_MIGRATION_KEY, '1');
-      if (saved === 'auto' || saved === null) {
-        window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'gemini_live');
-        return 'gemini_live';
-      }
+      if (saved === 'auto' || saved === 'gemini_live' || saved === 'turn_based') return saved;
+      window.localStorage.setItem(PRESENCE_TRANSPORT_STORAGE_KEY, 'turn_based');
+      return 'turn_based';
     }
     if (saved === 'auto' || saved === 'gemini_live' || saved === 'turn_based') return saved;
   } catch {
     // Some desktop WebViews can deny storage while the custom asset origin is
     // being initialized. Presence must still open with its intended default.
   }
-  return 'auto';
+  return isDesktopRuntime() ? 'turn_based' : 'auto';
 }
 
 export function writePresenceTransportPreference(preference: PresenceTransportPreference) {

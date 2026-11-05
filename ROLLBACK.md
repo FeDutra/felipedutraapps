@@ -1241,3 +1241,20 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 3. Manter o SQLite vivo, bindings de provider e modelos Ollama instalados.
 4. Registrar o bundle restaurado no LaunchServices e provar abertura fria.
 5. O rollback visual reintroduz as limitações conhecidas: cabeçalho GPT obsoleto após troca, raciocínio local obrigatório, cancelamento sem aborto HTTP e tema preto incompleto.
+
+---
+# Recuperação de áudio comum, Presença local e voz brasileira · 05/11/2026
+
+- **Baseline:** `49263b8c` (`fix/pulso-provider-capabilities-20261105`).
+- **Áudio comum:** a captura PCM/WAV durável permanece canônica; a mudança só substitui o fragmento MP4 do WebKit pelo WAV já finalizado antes da transcrição.
+- **Presença:** o desktop volta ao transporte `turn_based` como padrão funcional. Gemini Live permanece experimento explícito e não pode impedir a abertura do microfone local.
+- **TTS:** a rota desktop usa somente voz brasileira `pf_dora`, declara `pt-br` também no fallback remoto e não degrada para voz nativa Apple.
+- **Dados:** nenhum áudio bruto, sessão, mensagem, SQLite, preferência privada ou credencial deve ser apagado durante a promoção.
+
+## Reversão
+
+1. encerrar somente o bundle promovido e seus sidecars;
+2. restaurar o bundle datado preservado imediatamente antes da promoção;
+3. manter o SQLite, os áudios recuperáveis e os diretórios privados atuais;
+4. se necessário, restaurar apenas as preferências de Presença/TTS da baseline, sem apagar o restante do armazenamento WebView;
+5. não tocar em credenciais, Keychain, PULSO normal ou PULSO Next Preview que não tenham sido promovidos por esta operação.

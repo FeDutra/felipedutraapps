@@ -35,23 +35,17 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
-      - name: Prepare Kokoro desktop resources
-        if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.')) }}
-        run: npm run pulso:setup
+      - name: Verify sovereign Desktop boundary
+        run: npm run pulso:alpha:verify
+
+      - name: Prepare Core, Kokoro, Intel Node and official Codex sidecars
+        run: npm run pulso:alpha:prepare
 
       - name: Build Tauri app (macOS, x86_64)
         if: ${{ !(startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.')) }}
         run: npm run pulso:app:build -- --target x86_64-apple-darwin
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
-
-      - name: Verify sovereign Desktop boundary
-        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.') }}
-        run: npm run pulso:alpha:verify
-
-      - name: Prepare Alpha Core, Kokoro, Intel Node and official Codex sidecars
-        if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.') }}
-        run: npm run pulso:alpha:prepare
 
       - name: Build isolated Alpha bundle
         if: ${{ startsWith(github.ref_name, 'pulso-desktop-alpha-v0.') || startsWith(github.ref_name, 'feature/pulso-core-v0.') }}

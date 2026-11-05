@@ -20,7 +20,7 @@ use agent::local_machine::{execute_applescript, local_music_play, local_open_url
 use agent::presence_broker::local_presence_read;
 use agent::voice_recording::{
     voice_recording_append, voice_recording_begin, voice_recording_finalize, voice_recording_mark,
-    voice_recording_recover_incomplete,
+    voice_recording_read_wav, voice_recording_recover_incomplete,
 };
 use pulso_core::{
     bridge_request, core_canary_rendered, delete_provider_secret, hydrate_provider_secret,
@@ -293,6 +293,7 @@ pub fn run() {
       voice_recording_begin,
       voice_recording_append,
       voice_recording_finalize,
+      voice_recording_read_wav,
       voice_recording_mark,
       voice_recording_recover_incomplete,
       ensure_kokoro_sidecar,
