@@ -162,8 +162,8 @@ function normalizeReasoningLevels(model) {
     ?? [];
   return (Array.isArray(source) ? source : [])
     .map(item => typeof item === "string" ? { id: item, label: item } : {
-      id: String(item?.effort ?? item?.id ?? "").trim(),
-      label: String(item?.label ?? item?.effort ?? item?.id ?? "").trim(),
+      id: String(item?.reasoningEffort ?? item?.effort ?? item?.id ?? "").trim(),
+      label: String(item?.label ?? item?.reasoningEffort ?? item?.effort ?? item?.id ?? "").trim(),
       description: item?.description ? String(item.description) : null,
     })
     .filter(item => item.id);
@@ -172,7 +172,7 @@ function normalizeReasoningLevels(model) {
 function normalizeCodexModels(payload, providerId, adapterKind) {
   const source = payload?.data ?? payload?.models ?? payload?.items ?? payload ?? [];
   return (Array.isArray(source) ? source : [])
-    .filter(model => model && !["hide", "hidden"].includes(String(model.visibility ?? "").toLowerCase()))
+    .filter(model => model && model.hidden !== true && !["hide", "hidden"].includes(String(model.visibility ?? "").toLowerCase()))
     .map(model => {
       const id = String(model.slug ?? model.id ?? model.model ?? "").trim();
       const thinkingLevels = normalizeReasoningLevels(model);

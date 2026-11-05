@@ -175,14 +175,14 @@ test('assinatura ChatGPT entrega catálogo e intensidades anunciados pelo provid
               display_name: 'GPT-6.1-Sol',
               context_window: 500000,
               default_reasoning_level: 'medium',
-              supported_reasoning_levels: [
-                { effort: 'low', description: 'rápido' },
-                { effort: 'medium', description: 'equilibrado' },
-                { effort: 'ultra', description: 'máximo' },
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'low', description: 'rápido' },
+                { reasoningEffort: 'medium', description: 'equilibrado' },
+                { reasoningEffort: 'ultra', description: 'máximo' },
               ],
               visibility: 'list',
             },
-            { slug: 'hidden-review', display_name: 'Hidden', visibility: 'hide' },
+            { id: 'hidden-review', displayName: 'Hidden', hidden: true },
           ],
         };
       },
