@@ -24,10 +24,15 @@ export function compactMessagesForContext(messages, {
   contextWindow = 8192,
   reservedOutputTokens = 768,
   systemTokenLimit = 3072,
+  inputTokenLimit = null,
   charsPerToken = DEFAULT_CHARS_PER_TOKEN,
 } = {}) {
   const input = Array.isArray(messages) ? messages.filter(Boolean) : [];
-  const inputBudget = Math.max(512, contextWindow - reservedOutputTokens - 128);
+  const modelBudget = Math.max(512, contextWindow - reservedOutputTokens - 128);
+  const boundedInputLimit = Number.isFinite(Number(inputTokenLimit))
+    ? Math.max(512, Number(inputTokenLimit))
+    : modelBudget;
+  const inputBudget = Math.min(modelBudget, boundedInputLimit);
   const systems = input.filter(message => message.role === "system");
   const dialogue = input.filter(message => message.role !== "system");
   const output = [];
@@ -79,9 +84,19 @@ export function compactMessagesForContext(messages, {
     estimatedInputTokens: output.reduce((sum, message) => sum + estimateMessageTokens(message, charsPerToken), 0),
     contextWindow,
     reservedOutputTokens,
+    inputTokenLimit: inputBudget,
   });
 }
 
 export function isLocalModelAdapter(adapter) {
   return adapter?.local === true || adapter?.adapterKind === "ollama" || adapter?.protocol === "ollama_native";
+}
+
+export function localModelContextBudget(_model, { thinkingLevel = "off" } = {}) {
+  if (/^qwen3(?::|-)/i.test(String(_model ?? ""))) {
+    return Object.freeze({ inputTokenLimit: 512, systemTokenLimit: 256 });
+  }
+  return thinkingLevel === "on"
+    ? Object.freeze({ inputTokenLimit: 3072, systemTokenLimit: 1024 })
+    : Object.freeze({ inputTokenLimit: 512, systemTokenLimit: 256 });
 }

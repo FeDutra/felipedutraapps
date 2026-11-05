@@ -1503,18 +1503,24 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
     const models = Array.isArray(response.json?.models) ? response.json.models : [];
     return models
       .filter(item => item && typeof item.name === "string" && item.name.trim())
-      .map(item => ({
-        id: item.name,
-        name: item.name,
-        providerId: this.id,
-        adapterKind: this.adapterKind,
-        local: true,
-        size: Number(item.size) || null,
-        modifiedAt: item.modified_at ?? null,
-        family: item.details?.family ?? null,
-        parameterSize: item.details?.parameter_size ?? null,
-        quantizationLevel: item.details?.quantization_level ?? null,
-      }));
+      .map(item => {
+        const thinking = localModelThinkingProfile(item.name);
+        return {
+          id: item.name,
+          name: item.name,
+          providerId: this.id,
+          adapterKind: this.adapterKind,
+          local: true,
+          size: Number(item.size) || null,
+          modifiedAt: item.modified_at ?? null,
+          family: item.details?.family ?? null,
+          parameterSize: item.details?.parameter_size ?? null,
+          quantizationLevel: item.details?.quantization_level ?? null,
+          reasoning: thinking.levels.some(level => level.id === "on"),
+          thinkingLevels: thinking.levels,
+          thinkingDefault: thinking.defaultLevel,
+        };
+      });
   }
 
   #body(request, stream) {
@@ -1541,7 +1547,7 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
         throw new Error(`ollama_chat_http_${response.status}:${response.text ?? ""}`);
       }
       const payload = response.json ?? {};
-      const text = String(payload.message?.content ?? "");
+      const text = stripLocalThinkingContent(payload.message?.content);
       const result = {
         providerId: this.id,
         adapterKind: this.adapterKind,
@@ -1581,21 +1587,27 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
         const delta = payload?.message?.content;
         if (typeof delta === "string" && delta.length > 0) {
           fullText += delta;
-          const event = {
-            type: "model.delta",
-            kind: "delta",
-            providerId: this.id,
-            adapterKind: this.adapterKind,
-            local: true,
-            model: payload.model ?? body.model,
-            text: delta,
-            delta,
-            index: index++
-          };
-          this.secretResolver.assertZeroLeakage(event);
-          yield event;
         }
       }
+      const visibleText = stripLocalThinkingContent(fullText);
+      if (!visibleText) {
+        const error = new Error("ollama_visible_content_empty");
+        error.code = "OLLAMA_VISIBLE_CONTENT_EMPTY";
+        throw error;
+      }
+      const event = {
+        type: "model.delta",
+        kind: "delta",
+        providerId: this.id,
+        adapterKind: this.adapterKind,
+        local: true,
+        model: finalPayload?.model ?? body.model,
+        text: visibleText,
+        delta: visibleText,
+        index: index++
+      };
+      this.secretResolver.assertZeroLeakage(event);
+      yield event;
       const completed = {
         type: "model.completed",
         kind: "completed",
@@ -1603,13 +1615,13 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
         adapterKind: this.adapterKind,
         local: true,
         model: finalPayload?.model ?? body.model,
-        text: fullText,
-        outputText: fullText,
+        text: visibleText,
+        outputText: visibleText,
         finishReason: finalPayload?.done_reason ?? "stop",
         usage: {
           inputTokens: finalPayload?.prompt_eval_count ?? 0,
-          outputTokens: finalPayload?.eval_count ?? fullText.length,
-          totalTokens: (finalPayload?.prompt_eval_count ?? 0) + (finalPayload?.eval_count ?? fullText.length),
+          outputTokens: finalPayload?.eval_count ?? visibleText.length,
+          totalTokens: (finalPayload?.prompt_eval_count ?? 0) + (finalPayload?.eval_count ?? visibleText.length),
           inputUnits: finalPayload?.prompt_eval_count ?? 0,
           outputUnits: finalPayload?.eval_count ?? fullText.length
         },
@@ -1621,6 +1633,31 @@ export class OllamaModelAdapter extends BaseProtocolModelAdapter {
       throw this.sanitizeFailure(error);
     }
   }
+}
+
+export function stripLocalThinkingContent(value) {
+  let text = String(value ?? "");
+  text = text.replace(/<think>[\s\S]*?<\/think>\s*/gi, "");
+  const orphanClose = text.toLowerCase().lastIndexOf("</think>");
+  if (orphanClose >= 0) text = text.slice(orphanClose + "</think>".length);
+  text = text.replace(/<think>[\s\S]*$/gi, "");
+  return text.trim();
+}
+
+export function localModelThinkingProfile(model) {
+  const forcedReasoning = /^qwen3(?::|-)/i.test(String(model ?? ""));
+  return forcedReasoning
+    ? Object.freeze({
+        levels: Object.freeze([{ id: "on", label: "raciocínio local · experimental" }]),
+        defaultLevel: "on",
+      })
+    : Object.freeze({
+        levels: Object.freeze([
+          { id: "off", label: "rápido" },
+          { id: "on", label: "raciocínio local" },
+        ]),
+        defaultLevel: "off",
+      });
 }
 
 export {

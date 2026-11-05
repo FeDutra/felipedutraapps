@@ -8,7 +8,11 @@ import {
   validateConversationRun
 } from "./live-contracts.mjs";
 import { applyLiveEvent } from "./live-projector.mjs";
-import { compactMessagesForContext, isLocalModelAdapter } from "./model-context-budget.mjs";
+import {
+  compactMessagesForContext,
+  isLocalModelAdapter,
+  localModelContextBudget,
+} from "./model-context-budget.mjs";
 
 const CORE_ACTOR = Object.freeze({ kind: "core", id: "pulso-live-conversation" });
 const HUMAN_ACTOR = Object.freeze({ kind: "human", id: "fe" });
@@ -282,11 +286,15 @@ export class LiveConversationService {
       if (systemPrompt) history.unshift({ role: "system", content: systemPrompt });
       const selectedAdapter = this.router.getAdapter?.(route.primary.providerId) ?? null;
       const localModel = isLocalModelAdapter(selectedAdapter);
+      const selectedThinkingLevel = route.binding?.metadata?.thinkingLevel ?? null;
       const contextWindow = localModel ? 8192 : null;
       if (localModel) {
-        history = compactMessagesForContext(history, { contextWindow }).messages;
+        const localBudget = localModelContextBudget(route.primary.model, { thinkingLevel: selectedThinkingLevel });
+        history = compactMessagesForContext(history, {
+          contextWindow,
+          ...localBudget,
+        }).messages;
       }
-      const selectedThinkingLevel = route.binding?.metadata?.thinkingLevel ?? null;
       const stream = specialistAgentId && this.agentExecutor
         ? null
         : this.router.stream({

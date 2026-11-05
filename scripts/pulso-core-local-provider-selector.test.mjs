@@ -9,10 +9,17 @@ import { createDesktopBridge } from '../vendor/pulso-core/desktop/bridge.mjs';
 import {
   AnthropicModelAdapter,
   OpenAIModelAdapter,
+  OllamaModelAdapter,
   defaultNdjsonTransport,
+  localModelThinkingProfile,
+  stripLocalThinkingContent,
 } from '../vendor/pulso-core/src/providers/model-adapters.mjs';
 import { CodexSubscriptionAdapter } from '../vendor/pulso-core/src/providers/codex-app-server-adapter.mjs';
-import { compactMessagesForContext, estimateMessageTokens } from '../vendor/pulso-core/src/live/model-context-budget.mjs';
+import {
+  compactMessagesForContext,
+  estimateMessageTokens,
+  localModelContextBudget,
+} from '../vendor/pulso-core/src/live/model-context-budget.mjs';
 import { SecretRefResolver } from '../vendor/pulso-core/src/runtime/secret-ref-resolver.mjs';
 
 const request = (requestId, method, params = {}) => ({ requestId, method, params });
@@ -143,7 +150,7 @@ test('modelo local nasce rápido, usa seletor sem texto grande no cabeçalho e p
   assert.match(adapterSource, /signal: request\?\.signal/);
 });
 
-test('histórico longo é compactado antes do Ollama sem perder o turno atual', () => {
+test('histórico longo usa orçamento interativo local sem perder identidade nem turno atual', () => {
   const history = [
     { role: 'system', content: 'identidade '.repeat(2500) },
     ...Array.from({ length: 80 }, (_, index) => ({
@@ -152,14 +159,27 @@ test('histórico longo é compactado antes do Ollama sem perder o turno atual', 
     })),
     { role: 'user', content: 'olá, Lótus' },
   ];
-  const compacted = compactMessagesForContext(history, { contextWindow: 8192 });
+  const fastBudget = localModelContextBudget('gemma4:26b');
+  const compacted = compactMessagesForContext(history, { contextWindow: 8192, ...fastBudget });
   assert.ok(compacted.omittedMessages > 0);
   assert.equal(compacted.messages.at(-1).content, 'olá, Lótus');
-  assert.ok(compacted.estimatedInputTokens < 8192 - 700);
+  assert.ok(compacted.messages.some(message => message.role === 'system'));
+  assert.ok(compacted.estimatedInputTokens <= 512);
+  assert.equal(compacted.inputTokenLimit, 512);
   assert.equal(
     compacted.messages.reduce((total, message) => total + estimateMessageTokens(message), 0),
     compacted.estimatedInputTokens,
   );
+  const conversationSource = readFileSync(new URL('../vendor/pulso-core/src/live/live-conversation-service.mjs', import.meta.url), 'utf8');
+  assert.match(conversationSource, /localModelContextBudget\(route\.primary\.model, \{ thinkingLevel: selectedThinkingLevel \}\)/);
+  assert.deepEqual(localModelContextBudget('gemma4:26b'), { inputTokenLimit: 512, systemTokenLimit: 256 });
+  assert.deepEqual(localModelContextBudget('SparkLLM/Spark-X2.6-4B:latest'), { inputTokenLimit: 512, systemTokenLimit: 256 });
+  assert.deepEqual(localModelContextBudget('qwen3:8b', { thinkingLevel: 'on' }), { inputTokenLimit: 512, systemTokenLimit: 256 });
+  assert.deepEqual(localModelThinkingProfile('qwen3:8b'), {
+    levels: [{ id: 'on', label: 'raciocínio local · experimental' }],
+    defaultLevel: 'on',
+  });
+  assert.deepEqual(localModelThinkingProfile('gemma4:26b').levels.map(level => level.id), ['off', 'on']);
 });
 
 test('assinatura ChatGPT entrega catálogo e intensidades anunciados pelo provider', async () => {
@@ -267,6 +287,32 @@ test('providers por API consultam o catálogo vivo da conta em vez de limitar o 
   assert.deepEqual(anthropicModels[1].thinkingLevels.map(level => level.id), ['off']);
   await anthropic.complete({ model: 'claude-sonnet-4-5', prompt: 'teste', reasoningEffort: 'adaptive' });
   assert.deepEqual(anthropicRequests.at(-1).body.thinking, { type: 'adaptive' });
+});
+
+test('Ollama nunca entrega raciocínio interno misturado ao texto visível', async () => {
+  assert.equal(stripLocalThinkingContent('pensando em segredo\n</think>\n\nCANARY_OK'), 'CANARY_OK');
+  assert.equal(stripLocalThinkingContent('<think>segredo</think> resposta'), 'resposta');
+  const adapter = new OllamaModelAdapter({
+    id: 'ollama-test',
+    endpoint: 'http://127.0.0.1:11434',
+    ollamaTransport: async () => ({
+      ok: true,
+      status: 200,
+      frames: (async function* () {
+        yield { model: 'qwen3:4b', message: { content: 'pensando em segredo' } };
+        yield { model: 'qwen3:4b', message: { content: '\n</think>\n\n' } };
+        yield { model: 'qwen3:4b', message: { content: 'CANARY_OK' }, done: true, eval_count: 3 };
+      })(),
+    }),
+  });
+  const events = [];
+  for await (const event of adapter.stream({ model: 'qwen3:4b', messages: [{ role: 'user', content: 'teste' }], think: false })) {
+    events.push(event);
+  }
+  assert.deepEqual(events.map(event => [event.type, event.text]), [
+    ['model.delta', 'CANARY_OK'],
+    ['model.completed', 'CANARY_OK'],
+  ]);
 });
 
 test('tema preto aplica classes reais ao documento e restaura preferência salva', () => {
