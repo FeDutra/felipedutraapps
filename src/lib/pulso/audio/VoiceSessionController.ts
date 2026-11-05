@@ -560,6 +560,7 @@ export class VoiceSessionController {
         rms: Number(vad.rms.toFixed(6)),
         peak: Number(vad.peak.toFixed(6)),
         noiseFloor: Number(vad.noiseFloor.toFixed(6)),
+        speechReferenceRms: Number(vad.state.speechReferenceRms.toFixed(6)),
         threshold: Number(vad.threshold.toFixed(6)),
         state: this.state,
       });

@@ -1,6 +1,7 @@
 export interface PresenceVadState {
   noiseFloor: number;
   speechFrames: number;
+  speechReferenceRms: number;
 }
 
 export interface PresenceVadSample {
@@ -19,6 +20,7 @@ const clamp = (value: number, minimum: number, maximum: number) => (
 export const createPresenceVadState = (): PresenceVadState => ({
   noiseFloor: 0.0015,
   speechFrames: 0,
+  speechReferenceRms: 0,
 });
 
 export function analyzePresenceAudio(
@@ -42,13 +44,20 @@ export function analyzePresenceAudio(
     ? clamp((previous.noiseFloor * 0.96) + (rms * 0.04), 0.0008, 0.008)
     : previous.noiseFloor;
 
+  const speechReferenceRms = speaking
+    ? Math.max(previous.speechReferenceRms || rms, rms)
+    : 0;
   const threshold = speaking
-    ? Math.max(0.0022, noiseFloor * 1.1)
+    // Depois que a fala abre o turno, o encerramento precisa comparar a
+    // energia atual também com a energia real daquela voz. No iMac, o ruído
+    // contínuo do ambiente fica acima do piso calibrado inicial; usar apenas
+    // `noiseFloor` mantém a sessão eternamente em `user_speaking`.
+    ? Math.max(0.0022, noiseFloor * 1.1, speechReferenceRms * 0.58)
     : clamp((noiseFloor * 1.65) + 0.0006, 0.0035, 0.012);
-  const peakThreshold = speaking
-    ? Math.max(0.01, threshold * 3)
-    : Math.max(0.012, threshold * 3);
-  const candidate = rms >= threshold || peak >= peakThreshold;
+  const peakThreshold = Math.max(0.012, threshold * 3);
+  const candidate = speaking
+    ? rms >= threshold
+    : rms >= threshold || peak >= peakThreshold;
 
   // Dois quadros consecutivos removem estalos sem acrescentar latência
   // perceptível à abertura de um turno humano.
@@ -57,12 +66,16 @@ export function analyzePresenceAudio(
     : Math.max(previous.speechFrames - 1, 0);
   const speech = speaking ? candidate : speechFrames >= 2;
 
+  const nextSpeechReferenceRms = speaking
+    ? speechReferenceRms
+    : (speech ? rms : 0);
+
   return {
     rms,
     peak,
     noiseFloor,
     threshold,
     speech,
-    state: { noiseFloor, speechFrames },
+    state: { noiseFloor, speechFrames, speechReferenceRms: nextSpeechReferenceRms },
   };
 }

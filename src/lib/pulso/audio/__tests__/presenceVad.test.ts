@@ -33,13 +33,29 @@ test('abre turno com fala suave depois de dois quadros', () => {
 });
 
 test('usa limiar de sustentação menor durante a frase', () => {
-  const previous = { noiseFloor: 0.0024, speechFrames: 2 };
+  const previous = { noiseFloor: 0.0024, speechFrames: 2, speechReferenceRms: 0.004 };
   const sample = analyzePresenceAudio(sine(0.004), previous, true);
   assert.equal(sample.speech, true);
 });
 
 test('não aprende fala clara como piso de ruído', () => {
-  const previous = { noiseFloor: 0.002, speechFrames: 0 };
+  const previous = { noiseFloor: 0.002, speechFrames: 0, speechReferenceRms: 0 };
   const sample = analyzePresenceAudio(sine(0.03), previous, false);
   assert.equal(sample.noiseFloor, previous.noiseFloor);
+});
+
+test('encerra a fala quando o ruído contínuo fica acima do piso inicial', () => {
+  let state = createPresenceVadState();
+  for (let frame = 0; frame < 20; frame += 1) {
+    state = analyzePresenceAudio(sine(0.0025), state, false).state;
+  }
+
+  const opening = analyzePresenceAudio(sine(0.024), state, false);
+  const opened = analyzePresenceAudio(sine(0.024), opening.state, false);
+  assert.equal(opened.speech, true);
+
+  const ambient = analyzePresenceAudio(sine(0.0122), opened.state, true);
+  assert.equal(ambient.speech, false);
+  assert.ok(ambient.rms > ambient.noiseFloor * 2);
+  assert.ok(ambient.threshold > ambient.rms);
 });
