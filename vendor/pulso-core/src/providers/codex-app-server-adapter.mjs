@@ -154,6 +154,53 @@ function asError(error, fallback = "codex_app_server_error") {
   return wrapped;
 }
 
+function normalizeReasoningLevels(model) {
+  const source = model?.supported_reasoning_levels
+    ?? model?.supportedReasoningLevels
+    ?? model?.supported_reasoning_efforts
+    ?? model?.supportedReasoningEfforts
+    ?? [];
+  return (Array.isArray(source) ? source : [])
+    .map(item => typeof item === "string" ? { id: item, label: item } : {
+      id: String(item?.effort ?? item?.id ?? "").trim(),
+      label: String(item?.label ?? item?.effort ?? item?.id ?? "").trim(),
+      description: item?.description ? String(item.description) : null,
+    })
+    .filter(item => item.id);
+}
+
+function normalizeCodexModels(payload, providerId, adapterKind) {
+  const source = payload?.data ?? payload?.models ?? payload?.items ?? payload ?? [];
+  return (Array.isArray(source) ? source : [])
+    .filter(model => model && !["hide", "hidden"].includes(String(model.visibility ?? "").toLowerCase()))
+    .map(model => {
+      const id = String(model.slug ?? model.id ?? model.model ?? "").trim();
+      const thinkingLevels = normalizeReasoningLevels(model);
+      const thinkingDefault = String(
+        model.default_reasoning_level
+          ?? model.defaultReasoningLevel
+          ?? model.default_reasoning_effort
+          ?? model.defaultReasoningEffort
+          ?? thinkingLevels[0]?.id
+          ?? "medium"
+      );
+      return {
+        id,
+        name: String(model.display_name ?? model.displayName ?? model.name ?? id),
+        description: model.description ? String(model.description) : null,
+        providerId,
+        adapterKind,
+        local: false,
+        contextWindow: Number(model.context_window ?? model.contextWindow) || null,
+        reasoning: thinkingLevels.length > 0,
+        thinkingLevels,
+        thinkingDefault,
+        serviceTiers: model.service_tiers ?? model.serviceTiers ?? [],
+      };
+    })
+    .filter(model => model.id);
+}
+
 function composeTurnInput(request = {}) {
   const messages = Array.isArray(request.messages) ? request.messages : [];
   const nonSystem = messages.filter(message => message?.role !== "system");
@@ -424,7 +471,7 @@ export class CodexAppServerClient {
     return this.request("model/list", { includeHidden: false });
   }
 
-  async *streamCompletion({ model, systemPrompt = null, input, signal = null } = {}) {
+  async *streamCompletion({ model, systemPrompt = null, input, reasoningEffort = null, signal = null } = {}) {
     await this.start();
     const account = await this.accountRead({ refreshToken: true });
     invariant(account?.account?.type === "chatgpt", "codex_chatgpt_login_required");
@@ -469,6 +516,7 @@ export class CodexAppServerClient {
         threadId,
         input: [{ type: "text", text: input }],
         model: model || null,
+        ...(reasoningEffort ? { effort: reasoningEffort } : {}),
         approvalPolicy: "never",
       }, this.turnTimeoutMs);
       turnId = turnResult?.turn?.id;
@@ -553,6 +601,13 @@ export class CodexSubscriptionAdapter extends ModelProvider {
     });
   }
 
+  async listModels() {
+    const result = await this.client.listModels();
+    const models = normalizeCodexModels(result, this.id, this.adapterKind);
+    this.models = models.map(model => model.id);
+    return models;
+  }
+
   async health() {
     const checkedAt = this.clock();
     try {
@@ -605,6 +660,7 @@ export class CodexSubscriptionAdapter extends ModelProvider {
       model,
       systemPrompt,
       input,
+      reasoningEffort: request.reasoningEffort ?? null,
       signal: request.signal ?? null,
     })) {
       if (event.type === "delta") {

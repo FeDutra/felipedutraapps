@@ -75,25 +75,32 @@ export const toPulsoCoreSelectorCatalog = (catalog: PulsoProviderCatalog): Reado
   models: readonly PulsoCoreSelectorModel[];
   providers: readonly PulsoCoreSelectorProvider[];
 }> => {
-  const models = catalog.models.map(model => ({
-    id: model.id,
-    name: localModelLabel(model.id),
-    provider: model.providerId,
-    contextWindow: model.local === true ? 8_192 : 32_768,
-    contextWindows: [] as const,
-    contextWindowDefault: '',
-    reasoning: model.local === true,
-    thinkingLevels: model.local === true
+  const models = catalog.models.map(model => {
+    const local = model.local === true;
+    const providerThinking = Array.isArray(model.thinkingLevels) && model.thinkingLevels.length > 0
+      ? model.thinkingLevels.map(level => ({ id: String(level.id), label: String(level.label || level.id) }))
+      : null;
+    const thinkingLevels = providerThinking || (local
       ? [
           { id: 'off', label: 'rápido' },
           { id: 'on', label: 'raciocínio local' },
-        ] as const
-      : [{ id: 'medium', label: 'médio' }] as const,
-    thinkingDefault: model.local === true ? 'off' : 'medium',
-    tags: model.id === PULSO_LOCAL_PROVIDER_CONFIG.model ? ['local', 'recommended'] : (model.local ? ['local'] : []),
-    available: model.unavailable !== true,
-    ...(model.availabilityReason ? { availabilityReason: model.availabilityReason } : {}),
-  }));
+        ]
+      : [{ id: 'medium', label: 'médio' }]);
+    return {
+      id: model.id,
+      name: local ? localModelLabel(model.id) : (model.name || model.id),
+      provider: model.providerId,
+      contextWindow: Number(model.contextWindow) || (local ? 8_192 : 32_768),
+      contextWindows: [] as const,
+      contextWindowDefault: '',
+      reasoning: model.reasoning ?? thinkingLevels.length > 1,
+      thinkingLevels,
+      thinkingDefault: model.thinkingDefault || (local ? 'off' : thinkingLevels[0]?.id || 'medium'),
+      tags: model.id === PULSO_LOCAL_PROVIDER_CONFIG.model ? ['local', 'recommended'] : (model.local ? ['local'] : []),
+      available: model.unavailable !== true,
+      ...(model.availabilityReason ? { availabilityReason: model.availabilityReason } : {}),
+    };
+  });
   const providers = catalog.providers.map(provider => {
     const providerId = String(provider.providerId || '');
     const providerModels = models.filter(model => model.provider === providerId);

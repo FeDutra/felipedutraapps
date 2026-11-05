@@ -809,20 +809,31 @@ export class PulsoDesktopBridge {
           error.code = "PROVIDER_NOT_CONFIGURED";
           throw error;
         }
+        let selectedModel = null;
         if (typeof adapter.listModels === "function") {
           const installed = await adapter.listModels();
-          if (!installed.some(item => item.id === model || item.name === model)) {
+          selectedModel = installed.find(item => item.id === model || item.name === model) ?? null;
+          if (!selectedModel) {
             const error = new Error("requested_model_not_installed:" + model);
             error.code = "MODEL_NOT_INSTALLED";
             throw error;
           }
+        }
+        const requestedThinking = String(params.thinkingLevel || selectedModel?.thinkingDefault || "off").trim();
+        const supportedThinking = Array.isArray(selectedModel?.thinkingLevels)
+          ? selectedModel.thinkingLevels.map(item => String(item?.id ?? item))
+          : [];
+        if (supportedThinking.length > 0 && !supportedThinking.includes(requestedThinking)) {
+          const error = new Error("requested_reasoning_level_not_supported:" + requestedThinking);
+          error.code = "REASONING_LEVEL_NOT_SUPPORTED";
+          throw error;
         }
         const binding = this.controlPlane.router.setBinding({
           scope,
           primary: { providerId, model },
           fallbackChain: [],
           metadata: {
-            thinkingLevel: params.thinkingLevel === "on" ? "on" : "off",
+            thinkingLevel: requestedThinking,
           },
         }, { idempotencyKey: params.idempotencyKey || null });
         return { binding, provider, fallbackEnabled: false };

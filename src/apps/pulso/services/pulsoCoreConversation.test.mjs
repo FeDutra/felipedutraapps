@@ -70,7 +70,8 @@ test('streamTurn expõe falha terminal do provider em vez de encerrar em silênc
     conversation.streamTurn({ sessionId: 'session-1', text: 'oi', idempotencyKey: 'idem-failed' }),
     error => error instanceof PulsoCoreConversationError
       && error.code === 'routing_failed'
-      && /provider_adapter_not_registered/.test(error.message)
+      && /não conseguiu concluir esta resposta/.test(error.message)
+      && !/provider_adapter_not_registered/.test(error.message)
   );
 });
 

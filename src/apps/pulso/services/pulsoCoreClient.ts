@@ -412,6 +412,12 @@ export interface PulsoProviderCatalogModel {
   readonly quantizationLevel?: string | null;
   readonly unavailable?: boolean;
   readonly availabilityReason?: string | null;
+  readonly description?: string | null;
+  readonly contextWindow?: number | null;
+  readonly reasoning?: boolean;
+  readonly thinkingLevels?: readonly Readonly<{ readonly id: string; readonly label: string; readonly description?: string | null }>[];
+  readonly thinkingDefault?: string;
+  readonly serviceTiers?: readonly Readonly<Record<string, unknown>>[];
 }
 
 export interface PulsoProviderBinding {

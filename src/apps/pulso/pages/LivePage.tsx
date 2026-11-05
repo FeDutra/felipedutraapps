@@ -6654,17 +6654,6 @@ ${data.transcription}`, {
             </>
           )}
 
-          <span className="w-1 h-1 rounded-full bg-[#fbf9f5] opacity-50 select-none shrink-0" />
-          
-          <span className="text-[9px] font-light tracking-[0.1em] text-[#fbf9f5]/40 lowercase shrink-0">
-            {(voiceState === 'presence_listening' || voiceState === 'recording_once')
-              ? 'ouvindo...'
-              : isTyping
-                ? (activeContextNode.selectedModelProvider === 'ollama-local'
-                    ? `${activeContextNode.selectedModelName || activeContextNode.selectedModelId || 'modelo local'} · ${activeContextNode.selectedThinkingLevel === 'on' ? 'raciocinando' : 'respondendo'} no iMac...`
-                    : 'processando...')
-                : 'conectada'}
-          </span>
         </div>
         
         <div className="flex items-center gap-6">

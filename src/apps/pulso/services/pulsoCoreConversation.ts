@@ -45,6 +45,23 @@ const terminal = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+const presentConversationFailure = (code: string, message: string): string => {
+  const technical = `${code}:${message}`.toLowerCase();
+  if (technical.includes('exceeds the available context') || technical.includes('context size')) {
+    return 'O histórico desta conversa excedeu a janela do modelo selecionado. A PULSO preservou a sessão; tente novamente com o histórico compactado.';
+  }
+  if (technical.includes('request_cancelled') || technical.includes('conversation_cancelled')) {
+    return 'A resposta foi interrompida.';
+  }
+  if (technical.includes('timeout') || technical.includes('turn_timeout')) {
+    return 'O modelo selecionado não começou a responder dentro da janela esperada. Você pode tentar novamente ou escolher outro modelo.';
+  }
+  if (technical.includes('routing_failed') || technical.includes('provider')) {
+    return 'O modelo selecionado não conseguiu concluir esta resposta. A PULSO manteve sua escolha e não trocou de provider silenciosamente.';
+  }
+  return 'O modelo selecionado encontrou uma falha antes de concluir a resposta.';
+};
+
 export class PulsoCoreConversation {
   private readonly client: PulsoCoreClient;
 
@@ -173,9 +190,11 @@ export class PulsoCoreConversation {
     }
 
     if (run.status === 'failed') {
+      const code = run.failure?.code || 'TURN_FAILED';
+      const message = run.failure?.message || 'O provider do PULSO Core falhou antes de concluir a resposta.';
       throw new PulsoCoreConversationError(
-        run.failure?.code || 'TURN_FAILED',
-        run.failure?.message || 'O provider do PULSO Core falhou antes de concluir a resposta.'
+        code,
+        presentConversationFailure(code, message)
       );
     }
 

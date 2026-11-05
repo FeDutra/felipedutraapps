@@ -8,6 +8,7 @@ import {
   validateConversationRun
 } from "./live-contracts.mjs";
 import { applyLiveEvent } from "./live-projector.mjs";
+import { compactMessagesForContext, isLocalModelAdapter } from "./model-context-budget.mjs";
 
 const CORE_ACTOR = Object.freeze({ kind: "core", id: "pulso-live-conversation" });
 const HUMAN_ACTOR = Object.freeze({ kind: "human", id: "fe" });
@@ -274,11 +275,18 @@ export class LiveConversationService {
       const session = this.live.getSession(sessionId);
       const memory = this.memoryProvider ? await this.memoryProvider({ sessionId, input: humanMessage.texto }) : null;
       const systemPrompt = this.identityService?.composeSystemPrompt({ session, memory }) ?? null;
-      const history = this.live.listMessages(sessionId).map(message => ({
+      let history = this.live.listMessages(sessionId).map(message => ({
         role: message.role === "human" ? "user" : message.role,
         content: message.texto
       }));
       if (systemPrompt) history.unshift({ role: "system", content: systemPrompt });
+      const selectedAdapter = this.router.getAdapter?.(route.primary.providerId) ?? null;
+      const localModel = isLocalModelAdapter(selectedAdapter);
+      const contextWindow = localModel ? 8192 : null;
+      if (localModel) {
+        history = compactMessagesForContext(history, { contextWindow }).messages;
+      }
+      const selectedThinkingLevel = route.binding?.metadata?.thinkingLevel ?? null;
       const stream = specialistAgentId && this.agentExecutor
         ? null
         : this.router.stream({
@@ -287,7 +295,9 @@ export class LiveConversationService {
         turnId: runId,
         input: { modality: "text", text: humanMessage.texto },
         messages: history,
-        think: route.binding?.metadata?.thinkingLevel === "on",
+        think: localModel && selectedThinkingLevel === "on",
+        reasoningEffort: localModel ? null : selectedThinkingLevel,
+        contextWindow,
         signal: controller.signal
       });
 

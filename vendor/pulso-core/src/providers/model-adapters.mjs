@@ -503,6 +503,20 @@ class BaseProtocolModelAdapter extends ModelProvider {
     return cap;
   }
 
+  async listModels() {
+    return this.models.filter(Boolean).map(model => ({
+      id: String(model),
+      name: String(model),
+      providerId: this.id,
+      adapterKind: this.adapterKind,
+      local: this.local,
+      contextWindow: null,
+      reasoning: false,
+      thinkingLevels: [{ id: "off", label: "off" }],
+      thinkingDefault: "off",
+    }));
+  }
+
   buildProviderBinding(model, externalResponseId, rawResponseId = null) {
     return validateProviderBinding({
       providerType: "model",
