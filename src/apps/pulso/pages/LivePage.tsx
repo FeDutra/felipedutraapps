@@ -6073,7 +6073,8 @@ ${data.transcription}`, {
     } else {
       const useGeminiLive = shouldUseGeminiLive(
         presenceTransport,
-        typeof window !== 'undefined' ? window.location.search : ''
+        typeof window !== 'undefined' ? window.location.search : '',
+        { desktopCore: coreDesktopEnabled },
       );
 
       if (!useGeminiLive && !isSpeechRecognitionSupported()) {

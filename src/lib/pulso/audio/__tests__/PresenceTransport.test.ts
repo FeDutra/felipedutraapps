@@ -74,6 +74,9 @@ test('preserva uma escolha explícita posterior por Gemini Live', () => {
 test('Gemini usa o relay; local continua explicitamente local', () => {
   assert.equal(shouldUseGeminiLive('gemini_live'), true);
   assert.equal(shouldUseGeminiLive('auto'), true);
+  assert.equal(shouldUseGeminiLive('auto', '', { desktopCore: true }), false);
+  assert.equal(shouldUseGeminiLive('gemini_live', '', { desktopCore: true }), true);
   assert.equal(shouldUseGeminiLive('turn_based'), false);
   assert.equal(shouldUseGeminiLive('gemini_live', '?gemini_live=0'), false);
+  assert.equal(shouldUseGeminiLive('auto', '?gemini_live=1', { desktopCore: true }), true);
 });

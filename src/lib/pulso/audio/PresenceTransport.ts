@@ -80,11 +80,20 @@ export function writePresenceTransportPreference(preference: PresenceTransportPr
   }
 }
 
-export function shouldUseGeminiLive(preference: PresenceTransportPreference, search = '') {
+export function shouldUseGeminiLive(
+  preference: PresenceTransportPreference,
+  search = '',
+  options: { desktopCore?: boolean } = {},
+) {
   const override = new URLSearchParams(search).get('gemini_live');
   if (override === '0') return false;
   if (override === '1') return hasGeminiLiveConfig();
   if (preference === 'turn_based') return false;
+  // No Core desktop, `auto` precisa significar a rota local comprovada.
+  // Gemini Live continua disponível por escolha explícita, mas uma sessão
+  // remota sem autorização nunca pode impedir a abertura do microfone, STT e
+  // roteamento locais da Presença.
+  if (preference === 'auto' && options.desktopCore) return false;
   return hasGeminiLiveConfig();
 }
 
