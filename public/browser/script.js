@@ -1,5 +1,5 @@
 /**
- * PULSO Browser · Desenho Integral v0.1
+ * PULSO Browser · Desenho Integral v0.2
  * Interactive Script
  */
 
@@ -23,13 +23,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const macWindow = document.getElementById("macWindow");
   const sceneNavBtns = document.querySelectorAll(".scene-nav-btn");
   const scenes = document.querySelectorAll(".scene-stage");
-  const themeBtns = document.querySelectorAll("[data-theme-set]");
   const commandOverlay = document.getElementById("commandOverlay");
   const commandInput = document.getElementById("commandInput");
   const commandResults = document.getElementById("commandResults");
   const openCommandBtns = document.querySelectorAll("[data-action='open-command']");
-  const sidePanel = document.getElementById("sidePanel");
-  const togglePanelBtns = document.querySelectorAll("[data-action='toggle-panel']");
+  const sidePanelMesa = document.getElementById("sidePanelMesa");
+  const sidePanelLotus = document.getElementById("sidePanelLotus");
+  const toggleMesaBtns = document.querySelectorAll("[data-action='toggle-mesa']");
+  const toggleLotusBtns = document.querySelectorAll("[data-action='toggle-lotus']");
 
   // 1. Scene Switcher
   function switchScene(sceneId) {
@@ -39,8 +40,10 @@ document.addEventListener("DOMContentLoaded", () => {
     sceneNavBtns.forEach((btn) => {
       if (btn.dataset.scene === sceneId) {
         btn.classList.add("active");
+        btn.setAttribute("aria-current", "page");
       } else {
         btn.classList.remove("active");
+        btn.removeAttribute("aria-current");
       }
     });
 
@@ -55,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Close command overlay on scene change
+    // Close command overlay on scene switch
     hideCommandOverlay();
   }
 
@@ -66,18 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 2. Theme Switcher
-  themeBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const theme = btn.dataset.themeSet;
-      if (theme && macWindow) {
-        macWindow.setAttribute("data-pulso-theme", theme);
-        themeBtns.forEach((tb) => btn === tb ? tb.classList.add("active") : tb.classList.remove("active"));
-      }
-    });
-  });
-
-  // 3. Command Overlay (⌘K / ⌘L)
+  // 2. Command Overlay (⌘K / ⌘L)
   function showCommandOverlay() {
     if (commandOverlay) {
       commandOverlay.style.display = "flex";
@@ -115,9 +107,25 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     });
+
+    items.forEach((item) => {
+      item.addEventListener("click", () => {
+        const targetScene = item.dataset.targetScene;
+        const targetAction = item.dataset.action;
+        if (targetScene) {
+          switchScene(targetScene);
+        } else if (targetAction === "toggle-mesa" && sidePanelMesa) {
+          switchScene("10-mesa");
+        } else if (targetAction === "toggle-lotus" && sidePanelLotus) {
+          switchScene("11-lotus");
+        } else {
+          hideCommandOverlay();
+        }
+      });
+    });
   }
 
-  // 4. Keyboard Shortcuts (⌘K, ⌘L, Esc)
+  // 3. Keyboard Shortcuts (⌘K, ⌘L, Esc)
   document.addEventListener("keydown", (e) => {
     // ⌘K or Ctrl+K -> Command Overlay
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -135,13 +143,13 @@ document.addEventListener("DOMContentLoaded", () => {
       showCommandOverlay();
     }
 
-    // Esc -> Dismiss Overlays / Panels
+    // Esc -> Dismiss Overlays
     if (e.key === "Escape") {
       hideCommandOverlay();
     }
   });
 
-  // 5. Collapsible Sidebar Groups
+  // 4. Collapsible Sidebar Groups
   const groupHeaders = document.querySelectorAll(".group-title");
   groupHeaders.forEach((header) => {
     header.addEventListener("click", () => {
@@ -149,20 +157,29 @@ document.addEventListener("DOMContentLoaded", () => {
       if (itemsContainer) {
         const isHidden = itemsContainer.style.display === "none";
         itemsContainer.style.display = isHidden ? "flex" : "none";
+        const symbolSpan = header.querySelector(".toggle-symbol");
+        if (symbolSpan) {
+          symbolSpan.textContent = isHidden ? "−" : "+";
+        }
       }
     });
   });
 
-  // 6. Lateral Panel Toggle (MESA / Lótus)
-  togglePanelBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (sidePanel) {
-        const isClosed = sidePanel.style.display === "none";
-        sidePanel.style.display = isClosed ? "flex" : "none";
-      }
+  // 5. Lateral Panel Toggle (MESA / Lótus)
+  toggleMesaBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      switchScene("10-mesa");
     });
   });
 
-  // Initialize scene 1
+  toggleLotusBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      switchScene("11-lotus");
+    });
+  });
+
+  // Initialize scene 01-mapa
   switchScene("01-mapa");
 });

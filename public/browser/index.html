@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="theme-color" content="#0f0f0f">
-  <meta name="description" content="Rascunho navegável v0.1 do PULSO Browser para revisão de produto.">
-  <title>PULSO Browser · Desenho integral v0.1</title>
+  <meta name="theme-color" content="#080808">
+  <meta name="description" content="Rascunho navegável v0.2 do PULSO Browser, refinado a partir da PULSO LIVE.">
+  <title>PULSO Browser · Desenho integral v0.2</title>
   <link rel="stylesheet" href="styles.css">
   <script src="script.js" defer></script>
 </head>
@@ -17,19 +17,13 @@
     <div class="prototype-meta">
       <div class="prototype-title">
         <span class="mark">○</span>
-        <span>PULSO Browser · Desenho integral v0.1</span>
-        <span class="badge">DRAFT</span>
+        <span>PULSO Browser · Desenho integral v0.2</span>
+        <span class="badge">DRAFT v0.2</span>
       </div>
       <div class="prototype-controls">
-        <div class="theme-switcher">
-          <span style="color: rgb(255 255 255 / 0.4); text-transform: uppercase; font-size: 10px;">tema:</span>
-          <button class="action-btn active" data-theme-set="carmine">[ carmim ]</button>
-          <button class="action-btn" data-theme-set="ivory">[ marfim ]</button>
-          <button class="action-btn" data-theme-set="black">[ preto ]</button>
-        </div>
-        <div class="quick-actions">
-          <button class="action-btn" data-action="open-command">[ ⌘K comando ]</button>
-        </div>
+        <button class="pulso-action trigger-btn minimal-trigger" data-action="open-command">[ ⌘K comando ]</button>
+        <button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-mesa">[ mesa ]</button>
+        <button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-lotus">[ lótus ]</button>
       </div>
     </div>
 
@@ -57,7 +51,7 @@
   <main class="stage-container">
 
     <!-- 1440 × 900 px macOS Window Frame -->
-    <div class="mac-window" id="macWindow" data-pulso-theme="carmine">
+    <div class="mac-window" id="macWindow">
 
       <!-- Window Titlebar -->
       <div class="mac-titlebar">
@@ -68,7 +62,7 @@
         </div>
         <div class="window-title">PULSO Browser · navegador soberano</div>
         <div class="window-actions">
-          <button class="pulso-action" data-action="open-command">[ ⌘K ]</button>
+          <button class="pulso-action trigger-btn minimal-trigger" data-action="open-command">[ ⌘K ]</button>
         </div>
       </div>
 
@@ -78,17 +72,20 @@
         <!-- Universal Trilho de Contexto (72 px) -->
         <aside class="pulso-rail">
           <div class="rail-top">
-            <div class="rail-mark" title="PULSO Browser">○</div>
+            <div class="rail-mark" title="PULSO Browser (Aplicativo)">○</div>
             <nav class="rail-areas" aria-label="Áreas">
-              <button class="rail-item active" title="PULSO">○</button>
+              <button class="rail-item active" title="Área PULSO">○</button>
               <button class="rail-item" title="Criação">◎</button>
               <button class="rail-item" title="Obras">✦</button>
               <button class="rail-item" title="Casa">⌂</button>
             </nav>
           </div>
           <div class="rail-bottom">
-            <div class="orb-container" title="Presença Lótus">
-              <div class="orb-historical"></div>
+            <!-- Orbe viva da Lótus (Membrana contínua) -->
+            <div class="lotus-orb-container" title="Presença viva da Lótus" data-action="toggle-lotus">
+              <svg class="lotus-orb-svg" viewBox="0 0 100 100" aria-label="Lótus Orbe">
+                <path class="lotus-orb-path" d="M 50 12 C 68 12, 85 28, 85 50 C 85 72, 68 88, 50 88 C 32 88, 15 72, 15 50 C 15 28, 32 12, 50 12 Z" />
+              </svg>
             </div>
             <button class="rail-item" title="Infraestrutura">⌘</button>
           </div>
@@ -100,29 +97,29 @@
           <!-- CENA 01 · MAPA DO SISTEMA -->
           <section class="scene-stage" id="scene-01-mapa" style="flex: 1; display: flex; flex-direction: column; padding: 40px; overflow-y: auto;">
             <header style="margin-bottom: 32px;">
-              <span class="editorial-eyebrow">cena 01 · arquitetura e princípios</span>
+              <span class="editorial-eyebrow">cena 01 · arquitetura e princípios v0.2</span>
               <h1 class="editorial-title">mapa do sistema PULSO Browser</h1>
-              <p class="editorial-lead">da camada autoral ao motor soberano Gecko/Firefox.</p>
+              <p class="editorial-lead">da camada autoral ao motor soberano Gecko/Firefox sob a gramática da PULSO LIVE.</p>
             </header>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 40px;">
               <div style="border: 1px solid var(--border-soft); padding: 24px; border-radius: 8px; background: var(--surface);">
                 <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">substrato preservado (Gecko / Firefox)</h3>
-                <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
-                  <li>· motor de renderização e JS seguro</li>
-                  <li>· isolamento de processos e cookies</li>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 13px; color: var(--fg-2);">
+                  <li>· motor de renderização e JS isolado e seguro</li>
+                  <li>· isolamento de processos, cookies e armazenamento</li>
                   <li>· histórico, downloads e permissões de mídia</li>
                   <li>· ecossistema de extensões e perfis</li>
                 </ul>
               </div>
 
               <div style="border: 1px solid var(--border-soft); padding: 24px; border-radius: 8px; background: var(--surface);">
-                <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">camada autoral PULSO</h3>
-                <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
-                  <li>· janela macOS 1440×900 com trilho lateral 72px</li>
-                  <li>· navegação contextual por Área e Sessão</li>
-                  <li>· comando universal sem topo dominador</li>
-                  <li>· MESA e Lótus em painel lateral translúcido</li>
+                <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">camada autoral PULSO (LIVE Grammar)</h3>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 13px; color: var(--fg-2);">
+                  <li>· janela macOS 1440×900 com campo preto permanente (`#0f0f0f`)</li>
+                  <li>· carmim (`#b8283e`) restrito a foco, seleção viva e ação</li>
+                  <li>· transparências e backdrop blur reais em MESA e Lótus</li>
+                  <li>· orbe contínua e acionadores mínimos `[ ⋯ ]`, `[ mesa ]`</li>
                 </ul>
               </div>
             </div>
@@ -130,27 +127,31 @@
             <div>
               <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">legenda canônica de glifos</h3>
               <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">○</span> <br><span style="font-size: 11px; color: var(--muted);">PULSO / campo</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">◎</span> <br><span style="font-size: 11px; color: var(--muted);">foco ativo</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">◌</span> <br><span style="font-size: 11px; color: var(--muted);">espera / processo</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">✦</span> <br><span style="font-size: 11px; color: var(--muted);">criação / obra</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">⌂</span> <br><span style="font-size: 11px; color: var(--muted);">espaço doméstico</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">⌘</span> <br><span style="font-size: 11px; color: var(--muted);">infraestrutura</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">◇</span> <br><span style="font-size: 11px; color: var(--muted);">módulo / passagem</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">⌁</span> <br><span style="font-size: 11px; color: var(--muted);">fluxo / trânsito</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">＋</span> <br><span style="font-size: 11px; color: var(--muted);">criar / acrescentar</span></div>
-                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">▷</span> <br><span style="font-size: 11px; color: var(--muted);">executar / avançar</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: #ffffff;">○</span> <br><span style="font-size: 11px; color: var(--muted);">PULSO / campo / App</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--pulso-carmine);">◎</span> <br><span style="font-size: 11px; color: var(--muted);">foco ativo</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">◌</span> <br><span style="font-size: 11px; color: var(--muted);">espera / processo</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: #ffffff;">✦</span> <br><span style="font-size: 11px; color: var(--muted);">criação / obra</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">⌂</span> <br><span style="font-size: 11px; color: var(--muted);">espaço doméstico</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">⌘</span> <br><span style="font-size: 11px; color: var(--muted);">infraestrutura</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">◇</span> <br><span style="font-size: 11px; color: var(--muted);">módulo / passagem</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">⌁</span> <br><span style="font-size: 11px; color: var(--muted);">fluxo / trânsito</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">＋</span> <br><span style="font-size: 11px; color: var(--muted);">criar / acrescentar</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px; color: var(--muted);">▷</span> <br><span style="font-size: 11px; color: var(--muted);">executar / avançar</span></div>
               </div>
             </div>
           </section>
 
           <!-- CENA 02 · LIMIAR / NOVA JANELA -->
           <section class="scene-stage" id="scene-02-limiar" style="flex: 1; display: flex; align-items: center; justify-content: center; display: none;">
-            <div style="text-align: center; max-width: 480px;">
-              <div class="orb-historical" style="width: 48px; height: 48px; margin: 0 auto 24px;"></div>
-              <h2 style="font-size: 28px; font-weight: var(--weight-air); margin-bottom: 12px;">PULSO disponível.</h2>
+            <div style="text-align: center; max-width: 480px; position: relative;">
+              <div class="lotus-orb-container" style="width: 64px; height: 64px; margin: 0 auto 24px;">
+                <svg class="lotus-orb-svg" style="width: 56px; height: 56px;" viewBox="0 0 100 100">
+                  <path class="lotus-orb-path" stroke-width="2" d="M 50 12 C 68 12, 85 28, 85 50 C 85 72, 68 88, 50 88 C 32 88, 15 72, 15 50 C 15 28, 32 12, 50 12 Z" />
+                </svg>
+              </div>
+              <h2 style="font-size: 28px; font-weight: var(--weight-air); margin-bottom: 12px; color: #ffffff;">PULSO disponível.</h2>
               <p style="font-size: 14px; color: var(--muted); margin-bottom: 24px;">presença antes de chrome. sem dashboard de atalhos nem poluição visual.</p>
-              <button class="pulso-action" data-action="open-command" style="font-size: 14px;">[ pressione ⌘K ou ⌘L para intenção ]</button>
+              <button class="pulso-action trigger-btn" data-action="open-command" style="font-size: 13px;">[ pressione ⌘K ou ⌘L para intenção ]</button>
             </div>
           </section>
 
@@ -165,7 +166,7 @@
 
               <!-- Group 1: Páginas Fixadas -->
               <div class="sidebar-group">
-                <div class="group-title"><span>páginas fixadas</span> <span>−</span></div>
+                <div class="group-title"><span>páginas fixadas</span> <span class="toggle-symbol">−</span></div>
                 <div class="group-items">
                   <div class="nav-item active">
                     <span class="item-title">Notion · Área PULSO</span>
@@ -184,9 +185,9 @@
 
               <!-- Group 2: Trabalho em Curso -->
               <div class="sidebar-group">
-                <div class="group-title"><span>trabalho em curso</span> <span>−</span></div>
+                <div class="group-title"><span>trabalho em curso</span> <span class="toggle-symbol">−</span></div>
                 <div class="group-items">
-                  <div class="nav-item">
+                  <div class="nav-item unread">
                     <span class="item-title">Arc · navegação contextual</span>
                     <span class="item-domain">arc.net</span>
                   </div>
@@ -203,7 +204,7 @@
 
               <!-- Group 3: Referências -->
               <div class="sidebar-group">
-                <div class="group-title"><span>referências</span> <span>−</span></div>
+                <div class="group-title"><span>referências</span> <span class="toggle-symbol">−</span></div>
                 <div class="group-items">
                   <div class="nav-item">
                     <span class="item-title">MESA · auditoria visual</span>
@@ -225,7 +226,8 @@
                   <span class="url-text">notion.so/pulso/area-pulso</span>
                 </div>
                 <div class="topbar-actions">
-                  <button class="pulso-action">[ compartilhar ]</button>
+                  <button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-mesa">[ mesa ]</button>
+                  <button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-lotus">[ lótus ]</button>
                 </div>
               </div>
               <div class="web-viewport">
@@ -254,8 +256,11 @@
             </aside>
             <main class="pulso-main">
               <div class="pulso-topbar">
-                <div class="topbar-url">🔒 <span class="url-text">pulso.land/browser/anatomia</span></div>
-                <div class="topbar-actions"><button class="pulso-action">[ guardar em referências ]</button></div>
+                <div class="topbar-url"><span class="security-icon">🔒</span> <span class="url-text">pulso.land/browser/anatomia</span></div>
+                <div class="topbar-actions">
+                  <button class="pulso-action trigger-btn minimal-trigger">[ guardar ]</button>
+                  <button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-mesa">[ mesa ]</button>
+                </div>
               </div>
               <div class="web-viewport">
                 <article class="editorial-article">
@@ -294,7 +299,7 @@
               <div class="sidebar-group">
                 <div class="group-title" style="color: var(--fg);"><span>trabalho em curso (3)</span></div>
                 <div class="group-items">
-                  <div class="nav-item active"><span class="item-title">Arc · navegação contextual</span><span class="item-domain">pesquisa de referências</span></div>
+                  <div class="nav-item unread"><span class="item-title">Arc · navegação contextual</span><span class="item-domain">pesquisa de referências</span></div>
                   <div class="nav-item"><span class="item-title">Gecko · browser chrome</span><span class="item-domain">documentação técnica</span></div>
                   <div class="nav-item"><span class="item-title">PULSO · Documento Norte</span><span class="item-domain">rascunho ativo</span></div>
                 </div>
@@ -322,24 +327,24 @@
           <section class="scene-stage" id="scene-08-comando" style="flex: 1; display: flex; position: relative; display: none;">
             <div class="command-overlay" style="display: flex;">
               <div class="command-input-wrapper">
-                <span style="font-size: 18px;">○</span>
+                <span style="font-size: 18px; color: var(--pulso-carmine);">○</span>
                 <input class="command-input" type="text" value="navegador soberano" placeholder="digite URL, busca, Área, Sessão ou comando...">
                 <span style="font-size: 11px; color: var(--muted);">esc para fechar</span>
               </div>
               <div class="command-results">
-                <div class="command-item selected">
+                <div class="command-item selected" data-target-scene="03-navegacao">
                   <div><strong>navegador soberano</strong> <span style="font-size: 11px; color: var(--muted); margin-left: 8px;">Sessão ativa na Área PULSO</span></div>
                   <span class="type">Sessão</span>
                 </div>
-                <div class="command-item">
+                <div class="command-item" data-target-scene="04-materia">
                   <div>Notion · Área PULSO</div>
                   <span class="type">Página Fixada</span>
                 </div>
-                <div class="command-item">
+                <div class="command-item" data-action="toggle-mesa">
                   <div>[ abrir MESA com auditoria visual ]</div>
                   <span class="type">Ação</span>
                 </div>
-                <div class="command-item">
+                <div class="command-item" data-action="toggle-lotus">
                   <div>[ perguntar à Lótus ]</div>
                   <span class="type">Conversa</span>
                 </div>
@@ -351,15 +356,15 @@
           <section class="scene-stage" id="scene-09-split" style="flex: 1; display: flex; display: none;">
             <main class="pulso-main">
               <div class="split-viewport">
-                <div class="split-pane">
-                  <div class="topbar-url" style="margin-bottom: 20px;">🔒 pulso.land/browser/anatomia</div>
-                  <h2>Página A · Anatomia do Navegador</h2>
-                  <p style="margin-top: 12px; color: var(--fg-2);">Análise comparativa da estrutura lateral de navegação.</p>
+                <div class="split-pane active-pane">
+                  <div class="topbar-url" style="margin-bottom: 20px;"><span class="security-icon">🔒</span> pulso.land/browser/anatomia</div>
+                  <h2 style="font-size: 20px; color: #ffffff;">Página A · Anatomia do Navegador</h2>
+                  <p style="margin-top: 12px; color: var(--fg-2); font-size: 14px;">Análise comparativa da estrutura lateral de navegação.</p>
                 </div>
                 <div class="split-pane">
-                  <div class="topbar-url" style="margin-bottom: 20px;">🔒 developer.mozilla.org/gecko</div>
-                  <h2>Página B · Gecko Browser Chrome</h2>
-                  <p style="margin-top: 12px; color: var(--fg-2);">Documentação das APIs de renderização e janelas.</p>
+                  <div class="topbar-url" style="margin-bottom: 20px;"><span class="security-icon">🔒</span> developer.mozilla.org/gecko</div>
+                  <h2 style="font-size: 20px; color: #ffffff;">Página B · Gecko Browser Chrome</h2>
+                  <p style="margin-top: 12px; color: var(--fg-2); font-size: 14px;">Documentação das APIs de renderização e janelas.</p>
                 </div>
               </div>
             </main>
@@ -368,21 +373,29 @@
           <!-- CENA 10 · WEB + MESA -->
           <section class="scene-stage" id="scene-10-mesa" style="flex: 1; display: flex; display: none;">
             <main class="pulso-main">
+              <div class="pulso-topbar">
+                <div class="topbar-url"><span class="security-icon">🔒</span> <span class="url-text">pulso.land/browser/especificacao</span></div>
+                <div class="topbar-actions"><button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-lotus">[ lótus ]</button></div>
+              </div>
               <div class="web-viewport">
                 <span class="editorial-eyebrow">fonte da pesquisa</span>
                 <h1 class="editorial-title">PULSO Browser · Especificação</h1>
-                <p class="editorial-lead">A MESA abre ao lado da web para acolher documentos densos sem destruir o contexto de navegação.</p>
+                <p class="editorial-lead">A MESA abre ao lado da web em uma superfície translúcida com backdrop blur para acolher documentos densos sem destruir o contexto.</p>
               </div>
             </main>
-            <aside class="pulso-panel">
+            <aside class="pulso-panel" id="sidePanelMesa">
               <div class="panel-header">
-                <span class="panel-title">MESA · documento vivo</span>
-                <button class="pulso-action">[ fechar ]</button>
+                <span class="panel-title">[ mesa ] · documento vivo</span>
+                <button class="pulso-action trigger-btn minimal-trigger" data-action="open-command">[ fechar ]</button>
               </div>
               <div class="panel-body">
-                <span style="font-size: 10px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase;">MESA · auditoria visual</span>
-                <h3 style="font-size: 20px; font-weight: var(--weight-presence);">Análise de convergência e hierarquia</h3>
-                <p style="font-size: 13px; color: var(--fg-2); line-height: 1.6;">Registro estruturado com apontamentos de fe, decisões de tipografia, glifos e mapeamento de componentes.</p>
+                <span style="font-size: 10px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase;">MESA · auditoria visual .md</span>
+                <h3 style="font-size: 20px; font-weight: var(--weight-presence); color: #ffffff;">Análise de convergência e hierarquia</h3>
+                <p style="font-size: 13px; color: var(--fg-2); line-height: 1.6;">Registro estruturado com apontamentos de fe, decisões de tipografia, glifos e mapeamento de componentes em markdown.</p>
+                <div style="margin-top: 16px; display: flex; gap: 10px;">
+                  <button class="pulso-action trigger-btn minimal-trigger">[ copiar ]</button>
+                  <button class="pulso-action trigger-btn minimal-trigger">[ baixar .md ]</button>
+                </div>
               </div>
             </aside>
           </section>
@@ -390,15 +403,27 @@
           <!-- CENA 11 · WEB + LÓTUS (CONVERSA DETERMINÍSTICA) -->
           <section class="scene-stage" id="scene-11-lotus" style="flex: 1; display: flex; display: none;">
             <main class="pulso-main">
+              <div class="pulso-topbar">
+                <div class="topbar-url"><span class="security-icon">🔒</span> <span class="url-text">pulso.land/browser/autoria</span></div>
+                <div class="topbar-actions"><button class="pulso-action trigger-btn minimal-trigger" data-action="toggle-mesa">[ mesa ]</button></div>
+              </div>
               <div class="web-viewport">
                 <span class="editorial-eyebrow">pesquisa ativa</span>
                 <h1 class="editorial-title">Navegação e Autoria</h1>
+                <p class="editorial-lead">Leitura realista acompanhada pela presença da Lótus em painel de vidro translúcido.</p>
               </div>
             </main>
-            <aside class="pulso-panel">
+            <aside class="pulso-panel" id="sidePanelLotus">
               <div class="panel-header">
-                <span class="panel-title">Lótus · presença contínua</span>
-                <button class="pulso-action">[ fechar ]</button>
+                <span class="panel-title">
+                  <div class="lotus-orb-container" style="width: 22px; height: 22px;">
+                    <svg class="lotus-orb-svg" style="width: 18px; height: 18px;" viewBox="0 0 100 100">
+                      <path class="lotus-orb-path" stroke-width="3" d="M 50 12 C 68 12, 85 28, 85 50 C 85 72, 68 88, 50 88 C 32 88, 15 72, 15 50 C 15 28, 32 12, 50 12 Z" />
+                    </svg>
+                  </div>
+                  [ lótus ] · presença contínua
+                </span>
+                <button class="pulso-action trigger-btn minimal-trigger" data-action="open-command">[ fechar ]</button>
               </div>
               <div class="panel-body">
                 <div class="chat-conversation">
@@ -410,15 +435,15 @@
                     <span class="sender">Lótus · reorganizando</span>
                     <span class="text">reorganizei a pesquisa na Sessão navegador soberano e abri a auditoria na MESA.</span>
                   </div>
-                  <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px; background: var(--surface);">
-                    <span style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em;">devolutiva</span>
-                    <p style="font-size: 12px; margin-top: 4px;">organizei as fontes na Sessão navegador soberano e deixei a decisão aberta na MESA.</p>
+                  <div class="devolutiva-box">
+                    <span class="label">devolutiva</span>
+                    <p>organizei as fontes na Sessão navegador soberano e deixei a decisão aberta na MESA.</p>
                   </div>
                 </div>
               </div>
               <div class="composer-box">
                 <input class="composer-input" type="text" placeholder="responder à Lótus...">
-                <button class="pulso-action">[ enviar ↗ ]</button>
+                <button class="pulso-action trigger-btn minimal-trigger">[ enviar ↗ ]</button>
               </div>
             </aside>
           </section>
@@ -426,14 +451,14 @@
           <!-- CENA 12 · CONSENTIMENTO E PERMISSÃO -->
           <section class="scene-stage" id="scene-12-permissao" style="flex: 1; display: flex; flex-direction: column; display: none;">
             <main class="pulso-main">
-              <div class="pulso-topbar" style="background-color: var(--surface-warm); border-bottom: 1px solid var(--border);">
+              <div class="pulso-topbar" style="background-color: rgba(184, 40, 62, 0.12); border-bottom: 1px solid var(--pulso-carmine);">
                 <div style="display: flex; align-items: center; gap: 12px; font-size: 13px;">
-                  <span>📷</span>
+                  <span style="color: var(--pulso-carmine);">📷</span>
                   <span><strong>meet.pulso.land</strong> solicita acesso à câmera e microfone</span>
                 </div>
-                <div style="display: flex; gap: 12px;">
-                  <button class="pulso-action">[ permitir ]</button>
-                  <button class="pulso-action">[ recusar ]</button>
+                <div style="display: flex; gap: 10px;">
+                  <button class="pulso-action trigger-btn minimal-trigger active">[ permitir ]</button>
+                  <button class="pulso-action trigger-btn minimal-trigger">[ recusar ]</button>
                 </div>
               </div>
               <div class="web-viewport">
@@ -446,17 +471,17 @@
           <!-- CENA 13 · OFFLINE / ERRO / RETOMADA -->
           <section class="scene-stage" id="scene-13-erro" style="flex: 1; display: flex; align-items: center; justify-content: center; display: none;">
             <div style="text-align: center; max-width: 480px;">
-              <span style="font-size: 32px; color: var(--muted);">◌</span>
-              <h2 style="font-size: 24px; font-weight: var(--weight-presence); margin: 16px 0 8px;">sem conexão com a rede.</h2>
+              <span style="font-size: 32px; color: var(--pulso-carmine);">◌</span>
+              <h2 style="font-size: 24px; font-weight: var(--weight-presence); margin: 16px 0 8px; color: #ffffff;">sem conexão com a rede.</h2>
               <p style="font-size: 14px; color: var(--muted); margin-bottom: 24px;">a matéria local e a MESA permanecem consultáveis offline.</p>
-              <button class="pulso-action">[ tentar novamente ▷ ]</button>
+              <button class="pulso-action trigger-btn minimal-trigger" style="font-size: 13px;">[ tentar novamente ▷ ]</button>
             </div>
           </section>
 
           <!-- CENA 14 · IDENTIDADE DO APLICATIVO -->
           <section class="scene-stage" id="scene-14-icone" style="flex: 1; display: flex; flex-direction: column; padding: 40px; overflow-y: auto; display: none;">
             <h1 class="editorial-title">Identidade do Aplicativo · Glifo ○</h1>
-            <p class="editorial-lead" style="margin-bottom: 32px;">Ícone institucional do PULSO Browser com traço óptico e área de respiro macOS.</p>
+            <p class="editorial-lead" style="margin-bottom: 32px;">Ícone institucional do PULSO Browser (`○`) separado da presença viva da Lótus (`⊙`).</p>
 
             <div class="identity-grid">
               <div class="app-icon-preview">
@@ -491,76 +516,85 @@
           <!-- PRANCHA DE COMPONENTES E ESTADOS (DECISION BOARD) -->
           <section class="scene-stage" id="scene-prancha" style="flex: 1; display: flex; display: none;">
             <div class="prancha-container">
-              <h1 class="prancha-title">Prancha de Decisão · Componentes e Estados</h1>
-              <p class="prancha-subtitle">Anatomia completa de componentes, sinais, estados interativos e microtipografia.</p>
+              <h1 class="prancha-title">Prancha de Decisão · Componentes e Estados v0.2</h1>
+              <p class="prancha-subtitle">Inventário completo da gramática visual portada da PULSO LIVE.</p>
 
               <div class="prancha-grid">
                 <!-- Card 1: Trilho e Ícone -->
                 <div class="prancha-card">
-                  <div class="prancha-card-title">01 · Trilho de Contexto (72px)</div>
+                  <div class="prancha-card-title">01 · Trilho de Contexto (72px) & Glifos</div>
                   <div class="prancha-card-content">
                     <div style="display: flex; gap: 16px; align-items: center;">
-                      <span style="font-size: 20px;">○</span>
-                      <span style="font-size: 18px; color: var(--muted);">◎</span>
-                      <span style="font-size: 18px; color: var(--muted);">✦</span>
+                      <span style="font-size: 20px; color: #ffffff;">○</span>
+                      <span style="font-size: 18px; color: var(--pulso-carmine);">◎</span>
+                      <span style="font-size: 18px; color: #ffffff;">✦</span>
                       <span style="font-size: 18px; color: var(--muted);">⌂</span>
                     </div>
-                    <span style="font-size: 11px; color: var(--muted);">Glifos de área com luminosidade por estado.</span>
+                    <span style="font-size: 11px; color: var(--muted);">Glifo ○ para App; glifos de área com estado carmim.</span>
                   </div>
                 </div>
 
                 <!-- Card 2: Ações em Colchetes -->
                 <div class="prancha-card">
-                  <div class="prancha-card-title">02 · Ações (Sem botões SaaS)</div>
+                  <div class="prancha-card-title">02 · Acionadores Mínimos [ ⋯ ]</div>
                   <div class="prancha-card-content">
-                    <button class="pulso-action">[ abrir MESA ]</button>
-                    <button class="pulso-action">[ voltar ]</button>
-                    <button class="pulso-action">[ enviar ↗ ]</button>
-                    <button class="pulso-action">[ + área ]</button>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                      <button class="pulso-action trigger-btn">[ mesa ]</button>
+                      <button class="pulso-action trigger-btn">[ lótus ]</button>
+                      <button class="pulso-action trigger-btn active">[ ativo ]</button>
+                      <button class="pulso-action trigger-btn">[ enviar ↗ ]</button>
+                    </div>
+                    <span style="font-size: 11px; color: var(--muted);">Sem botões SaaS. Repouso, hover, foco e ativo.</span>
                   </div>
                 </div>
 
                 <!-- Card 3: Devolutiva e Sinal -->
                 <div class="prancha-card">
-                  <div class="prancha-card-title">03 · Sinal e Devolutiva</div>
+                  <div class="prancha-card-title">03 · Sinal Carmim & Seleção Viva</div>
                   <div class="prancha-card-content">
-                    <div style="font-size: 12px; color: var(--muted);">○ validando · 12s</div>
-                    <div style="border: 1px solid var(--border-soft); padding: 10px; border-radius: 6px;">
-                      <span style="font-size: 10px; text-transform: uppercase; color: var(--muted);">devolutiva</span>
-                      <p style="font-size: 12px; margin-top: 4px;">fontes organizadas na MESA.</p>
+                    <div style="font-size: 12px; color: var(--pulso-carmine); font-weight: bold;">● item em foco / unread</div>
+                    <div class="devolutiva-box">
+                      <span class="label">devolutiva</span>
+                      <p>fontes organizadas na MESA com resposta carmim.</p>
                     </div>
                   </div>
                 </div>
 
-                <!-- Card 4: Compositor -->
+                <!-- Card 4: Vidros e Profundidade -->
                 <div class="prancha-card">
-                  <div class="prancha-card-title">04 · Compositor</div>
+                  <div class="prancha-card-title">04 · Vidro & Backdrop Blur Real</div>
                   <div class="prancha-card-content">
-                    <div style="border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                      <input type="text" placeholder="o que precisa ganhar realidade?" style="background: transparent; border: none; font-size: 13px; color: var(--fg); outline: none; width: 100%;">
+                    <div style="background: rgba(8, 8, 8, 0.52); backdrop-filter: blur(28px); border: 1px solid rgba(255,255,255,0.12); padding: 12px; border-radius: 6px;">
+                      <span style="font-size: 11px; color: var(--fg-2);">Translúcido real sobre campo preto, sem placas pretas opacas.</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- Card 5: Tipografia -->
+                <!-- Card 5: Orbe Viva -->
                 <div class="prancha-card">
-                  <div class="prancha-card-title">05 · Pesos Inter</div>
+                  <div class="prancha-card-title">05 · Orbe Canônica Lótus</div>
                   <div class="prancha-card-content">
-                    <div style="font-weight: 200;">200 · bruma (títulos grandes)</div>
-                    <div style="font-weight: 300;">300 · presença (voz dominante)</div>
-                    <div style="font-weight: 400;">400 · âncora (palavra pouse)</div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <div class="lotus-orb-container" style="width: 36px; height: 36px;">
+                        <svg class="lotus-orb-svg" style="width: 32px; height: 32px;" viewBox="0 0 100 100">
+                          <path class="lotus-orb-path" stroke-width="2.5" d="M 50 12 C 68 12, 85 28, 85 50 C 85 72, 68 88, 50 88 C 32 88, 15 72, 15 50 C 15 28, 32 12, 50 12 Z" />
+                        </svg>
+                      </div>
+                      <span style="font-size: 11px; color: var(--muted);">Membrana viva de luz sobre transparência.</span>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Card 6: Temas -->
+                <!-- Card 6: Primitivas de Cor -->
                 <div class="prancha-card">
-                  <div class="prancha-card-title">06 · Primitivas de Cor</div>
+                  <div class="prancha-card-title">06 · Primitivas de Cor v0.2</div>
                   <div class="prancha-card-content">
-                    <div style="display: flex; gap: 8px;">
-                      <div style="width: 24px; height: 24px; background: #B8283E; border-radius: 4px;" title="Carmim #B8283E"></div>
-                      <div style="width: 24px; height: 24px; background: #FBF9F5; border-radius: 4px; border: 1px solid #ccc;" title="Marfim #FBF9F5"></div>
-                      <div style="width: 24px; height: 24px; background: #0F0F0F; border-radius: 4px;" title="Preto #0F0F0F"></div>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                      <div style="width: 28px; height: 28px; background: #0F0F0F; border-radius: 4px; border: 1px solid #333;" title="Preto Permanente #0F0F0F"></div>
+                      <div style="width: 28px; height: 28px; background: #B8283E; border-radius: 4px;" title="Carmim #B8283E"></div>
+                      <div style="width: 28px; height: 28px; background: #FBF9F5; border-radius: 4px;" title="Marfim #FBF9F5"></div>
                     </div>
+                    <span style="font-size: 11px; color: var(--muted);">Preto é campo; Carmim é foco/sinal; Marfim é texto.</span>
                   </div>
                 </div>
               </div>
@@ -572,24 +606,24 @@
         <!-- Universal Floating Command Overlay (⌘K / ⌘L) -->
         <div class="command-overlay" id="commandOverlay" style="display: none;">
           <div class="command-input-wrapper">
-            <span style="font-size: 18px;">○</span>
+            <span style="font-size: 18px; color: var(--pulso-carmine);">○</span>
             <input class="command-input" id="commandInput" type="text" placeholder="digite URL, busca, Área, Sessão ou comando...">
             <span style="font-size: 11px; color: var(--muted);">esc para fechar</span>
           </div>
           <div class="command-results" id="commandResults">
-            <div class="command-item">
+            <div class="command-item selected" data-target-scene="03-navegacao">
               <div><strong>navegador soberano</strong> <span style="font-size: 11px; color: var(--muted); margin-left: 8px;">Sessão ativa na Área PULSO</span></div>
               <span class="type">Sessão</span>
             </div>
-            <div class="command-item">
+            <div class="command-item" data-target-scene="04-materia">
               <div>Notion · Área PULSO</div>
               <span class="type">Página Fixada</span>
             </div>
-            <div class="command-item">
+            <div class="command-item" data-action="toggle-mesa">
               <div>[ abrir MESA com auditoria visual ]</div>
               <span class="type">Ação</span>
             </div>
-            <div class="command-item">
+            <div class="command-item" data-action="toggle-lotus">
               <div>[ perguntar à Lótus ]</div>
               <span class="type">Conversa</span>
             </div>
