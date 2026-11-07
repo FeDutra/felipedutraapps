@@ -12,6 +12,11 @@ import { PresenceTurnMachine } from './PresenceTurnMachine';
 import type { PresenceNarrationKind, PresenceTurnEvent } from './PresenceTurnMachine';
 import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from './presenceOralText';
 import { analyzePresenceAudio, createPresenceVadState } from './presenceVad';
+import {
+  commitSpeechSentences,
+  PlaybackEpoch,
+  SovereignVoiceTrace,
+} from './SovereignVoiceContract';
 
 export type VoiceSessionState =
   | 'idle'
@@ -64,6 +69,8 @@ export interface PresenceNarrationContext {
 
 interface QueuedPresenceNarration {
   text: string;
+  committedSentences: ReadonlyArray<Readonly<{ text: string; index: number }>>;
+  playbackEpoch: number;
   context: PresenceNarrationContext & { turnId?: string };
   onStart?: () => void;
   onEnd?: () => void;
@@ -144,6 +151,8 @@ export class VoiceSessionController {
   private localNarrationQueue: QueuedPresenceNarration[] = [];
   private localNarrationActive = false;
   private readonly manualReadingCallbacks = new Map<string, ManualReadingCallbacks>();
+  private readonly playbackEpoch = new PlaybackEpoch();
+  private readonly voiceTrace = new SovereignVoiceTrace();
 
   private claimGeminiTurn(turnId: string) {
     if (this.stopped || turnId !== this.activeGeminiTurnId) return false;
@@ -245,7 +254,21 @@ export class VoiceSessionController {
     const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2);
-    return `presence-${Date.now()}-${randomId}`;
+    const turnId = `presence-${Date.now()}-${randomId}`;
+    this.voiceTrace.beginTurn(turnId);
+    return turnId;
+  }
+
+  private traceVoice(
+    turnId: string | undefined,
+    phase: Parameters<SovereignVoiceTrace['mark']>[1],
+    details: Parameters<SovereignVoiceTrace['mark']>[3] = {},
+  ) {
+    if (!turnId) return;
+    this.log(
+      'PRESENCE_VOICE_TRACE',
+      this.voiceTrace.mark(turnId, phase, this.playbackEpoch.current(), details),
+    );
   }
 
   private advanceTurn(event: PresenceTurnEvent) {
@@ -723,6 +746,7 @@ export class VoiceSessionController {
     }
     this.advanceTurn({ type: 'turn_closed', turnId: this.activeTurnBasedTurnId });
     this.advanceTurn({ type: 'transcription_started', turnId: this.activeTurnBasedTurnId });
+    this.traceVoice(this.activeTurnBasedTurnId, 'speech_closed');
     this.log('USER_TURN_FINALIZED');
     this.telemetry('presence_turn_finalized', {
       pcmChunks: this.pcmChunks.length,
@@ -746,6 +770,8 @@ export class VoiceSessionController {
       ?? this.activeGeminiTurnId
       ?? undefined;
     this.advanceTurn({ type: 'turn_interrupted', turnId: interruptedTurnId });
+    this.playbackEpoch.advance();
+    this.traceVoice(interruptedTurnId, 'playback_interrupted');
     this.transition('interrupted');
 
     this.isAssistantSpeaking = false;
@@ -809,6 +835,7 @@ export class VoiceSessionController {
         engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
         durationMs: data.durationMs ?? null,
       });
+      this.traceVoice(turnId ?? undefined, 'transcript_final');
 
       if (userText.trim().length === 0) {
         // Nada foi ouvido, reinicia loop de escuta
@@ -834,6 +861,7 @@ export class VoiceSessionController {
           responseLength: localResult.responseText.length,
         });
         this.recordLocalInteractionInBackground(userText, localResult);
+        this.traceVoice(turnId ?? undefined, 'action_outcome_recorded');
         await this.speakAssistant(localResult.responseText, undefined, undefined, {
           turnId: turnId ?? undefined,
           kind: 'result',
@@ -924,8 +952,16 @@ export class VoiceSessionController {
     const normalizedText = text.trim();
     if (!normalizedText) return false;
 
+    const answerId = `${turnId ?? 'unbound'}:${narrationKind}:${Date.now()}`;
+    const committedSentences = commitSpeechSentences(answerId, normalizedText);
+    if (committedSentences.length === 0) return false;
+    this.traceVoice(turnId, 'answer_prepared');
+    this.traceVoice(turnId, 'sentences_committed');
+
     const queued: QueuedPresenceNarration = {
-      text: normalizedText,
+      text: committedSentences.map(sentence => sentence.text).join(' '),
+      committedSentences,
+      playbackEpoch: this.playbackEpoch.current(),
       context: { ...context, turnId },
       onStart,
       onEnd,
@@ -961,6 +997,11 @@ export class VoiceSessionController {
     }
 
     const turnId = next.context.turnId;
+    if (!this.playbackEpoch.accepts(next.playbackEpoch)) {
+      this.log('PRESENCE_STALE_PLAYBACK_DROPPED', { turnId, playbackEpoch: next.playbackEpoch });
+      this.drainLocalNarrationQueue();
+      return;
+    }
     const geminiConnected = this.geminiLiveClient?.isConnected() ?? false;
     if (!this.stream && !geminiConnected) {
       if (turnId) this.advanceTurn({ type: 'turn_interrupted', turnId });
@@ -996,6 +1037,7 @@ export class VoiceSessionController {
     void this.ttsAdapter.speak(
         next.text,
         () => {
+          if (!this.playbackEpoch.accepts(next.playbackEpoch)) return;
           playbackStarted = true;
           if (turnId) {
             this.advanceTurn({
@@ -1013,6 +1055,9 @@ export class VoiceSessionController {
           }
           this.assistantSpeechStartMs = Date.now();
           this.log('ASSISTANT_AUDIO_STARTED');
+          this.traceVoice(turnId, 'playback_started', {
+            sentenceIndex: next.committedSentences[0]?.index,
+          });
           next.onStart?.();
         },
         finishNarration,
@@ -1219,6 +1264,7 @@ export class VoiceSessionController {
           if (!isCurrentTurn()) return;
           if (localResult?.handled && localResult.responseText) {
             this.recordLocalInteractionInBackground(userText, localResult);
+            this.traceVoice(turnId, 'action_outcome_recorded');
             this.config.onPresenceWorkChange?.(false);
             const disposition = this.advanceTurn({ type: 'result_received', turnId });
             if (disposition.decision === 'narrate') {
@@ -1239,6 +1285,7 @@ export class VoiceSessionController {
             if (!isCurrentTurn()) return;
             if (quickResult?.responseText) {
               this.recordLocalInteractionInBackground(userText, quickResult);
+              this.traceVoice(turnId, 'action_outcome_recorded');
               this.config.onPresenceWorkChange?.(false);
               const disposition = this.advanceTurn({ type: 'result_received', turnId });
               if (disposition.decision === 'narrate') {
@@ -1362,6 +1409,7 @@ export class VoiceSessionController {
       : this.activeTurnBasedTurnId ?? this.activeGeminiTurnId ?? undefined;
     const disposition = this.advanceTurn({ type: 'result_received', turnId, requestId });
     if (disposition.decision !== 'narrate' || !turnId) return false;
+    this.traceVoice(turnId, 'action_outcome_recorded', { requestBound: Boolean(requestId) });
     this.geminiLiveClient?.recordCanonicalReceipt('canonical_result_received', { turnId, requestId });
     const oralText = toPresenceResultSpeech(resultText);
     if (!oralText) return false;

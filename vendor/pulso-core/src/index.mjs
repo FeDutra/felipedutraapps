@@ -160,3 +160,13 @@ export {
   validateMessage,
   validateSelection
 } from "./live/live-contracts.mjs";
+
+// Sovereign voice runtime exports
+export { SovereignVoiceRuntime } from "./voice/sovereign-voice-runtime.mjs";
+export {
+  VOICE_NARRATION_KINDS,
+  VOICE_TRACE_PHASES,
+  commitSpeechSentences,
+  validatePreparedAnswer,
+  validateVoiceTracePoint
+} from "./voice/voice-contracts.mjs";

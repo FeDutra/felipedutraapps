@@ -15,6 +15,11 @@ import {
   PRESENCE_INPUT_SAMPLE_RATE,
   PRESENCE_PCM_FRAME_SAMPLES,
 } from './PresenceAudioFrames';
+import {
+  commitSpeechSentences,
+  PlaybackEpoch,
+  SovereignVoiceTrace,
+} from './SovereignVoiceContract';
 
 export type GeminiLiveState =
   | 'idle'
@@ -62,9 +67,13 @@ export type PresenceAudioReceiptPhase =
   | 'first_pcm_frame'
   | 'first_ws_frame'
   | 'input_transcript'
+  | 'transcript_final'
   | 'turn_closed'
+  | 'answer_prepared'
+  | 'sentences_committed'
   | 'first_output_audio'
   | 'playback_started'
+  | 'playback_interrupted'
   | 'output_echo_guard_started'
   | 'echo_transcript_suppressed'
   | 'capture_watchdog_failed'
@@ -84,6 +93,8 @@ export interface PresenceAudioReceipt {
   sessionId: string;
   phase: PresenceAudioReceiptPhase;
   elapsedMs: number;
+  turnElapsedMs?: number;
+  playbackEpoch?: number;
   turnId?: string;
   requestId?: string;
   frameCount?: number;
@@ -113,7 +124,10 @@ export interface GeminiNarrationReceipt {
   turnId: string;
 }
 
-type NarrationItem = GeminiNarrationReceipt;
+interface NarrationItem extends GeminiNarrationReceipt {
+  committedSentences: ReadonlyArray<Readonly<{ text: string; index: number }>>;
+  playbackEpoch: number;
+}
 
 function int16FromBase64(base64: string): Int16Array {
   const binary = atob(base64);
@@ -174,6 +188,8 @@ export class GeminiLiveClient {
   private playbackSources = new Set<AudioBufferSourceNode>();
   private deepWorkPulseSources = new Set<AudioBufferSourceNode>();
   private playbackGeneration = 0;
+  private readonly playbackEpoch = new PlaybackEpoch();
+  private readonly voiceTrace = new SovereignVoiceTrace();
   private firstOutputAudioSeen = false;
   private firstPlaybackStarted = false;
   private transcriptReceiptTurnId: string | null = null;
@@ -277,10 +293,30 @@ export class GeminiLiveClient {
     phase: PresenceAudioReceiptPhase,
     details: Omit<PresenceAudioReceipt, 'sessionId' | 'phase' | 'elapsedMs'> = {},
   ) {
+    const turnId = details.turnId;
+    const playbackEpoch = details.playbackEpoch ?? this.playbackEpoch.current();
+    const tracePhase = phase === 'canonical_dispatch_started'
+      || phase === 'canonical_request_created'
+      || phase === 'canonical_result_received'
+      || phase === 'transcript_final'
+      || phase === 'answer_prepared'
+      || phase === 'sentences_committed'
+      || phase === 'first_output_audio'
+      || phase === 'playback_started'
+      || phase === 'playback_interrupted'
+      ? phase
+      : null;
+    const turnTrace = turnId && tracePhase
+      ? this.voiceTrace.mark(turnId, tracePhase, playbackEpoch, {
+          requestBound: phase === 'canonical_request_created' ? true : undefined,
+        })
+      : null;
     const receipt: PresenceAudioReceipt = {
       sessionId: this.receiptSessionId,
       phase,
       elapsedMs: Date.now() - this.receiptStartedAt,
+      turnElapsedMs: turnTrace?.turnElapsedMs,
+      playbackEpoch,
       ...details,
     };
     if (this.config.onAudioReceipt) {
@@ -297,7 +333,11 @@ export class GeminiLiveClient {
       | 'canonical_request_created'
       | 'canonical_dispatch_failed'
       | 'canonical_checkpoint_received'
-      | 'canonical_result_received'>,
+      | 'canonical_result_received'
+      | 'transcript_final'
+      | 'answer_prepared'
+      | 'sentences_committed'
+      | 'playback_interrupted'>,
     details: Pick<PresenceAudioReceipt, 'turnId' | 'requestId' | 'failureStage' | 'failureCode'> = {},
   ) {
     this.receipt(phase, details);
@@ -505,7 +545,6 @@ export class GeminiLiveClient {
 
       if (sc.interrupted) {
         console.log('[GEMINI_LIVE_INTERRUPTED]');
-        this.flushPlayback();
         // Um barge-in durante a narração de um checkpoint/resultado corta o
         // turno sem nunca mandar turnComplete — sem isso, narrationInFlight
         // ficava preso pra sempre e travava toda fala seguinte (incluindo
@@ -514,8 +553,11 @@ export class GeminiLiveClient {
         const interruptedKind = interruptedNarration?.kind;
         if (interruptedNarration && !this.narrationAudioStarted) {
           this.failNarrationBeforePlayback('interrupted_before_audio');
+        } else {
+          this.flushPlayback('barge_in');
         }
         this.narrationInFlight = null;
+        this.narrationAudioStarted = false;
         if (!interruptedKind) {
           // A resposta espontânea do Gemini foi interrompida, não o pedido do
           // Fê. Fecha o turno a partir da transcrição já recebida ou espera
@@ -733,6 +775,7 @@ export class GeminiLiveClient {
 
     if (userText) {
       const turnId = this.activeTurnId || this.createTurnId();
+      this.receipt('transcript_final', { turnId });
       this.awaitingResult = true;
       this.checkpointSpokenCount = 0;
       this.lastCheckpointSpokenAt = 0;
@@ -753,6 +796,7 @@ export class GeminiLiveClient {
   private beginUserTurn() {
     const turnId = this.createTurnId();
     this.activeTurnId = turnId;
+    this.voiceTrace.beginTurn(turnId);
     this.inputTurnClosed = false;
     this.stopDeepWorkPulse();
     this.awaitingResult = false;
@@ -769,7 +813,7 @@ export class GeminiLiveClient {
       clearTimeout(this.inputTurnFinalizeTimer);
       this.inputTurnFinalizeTimer = null;
     }
-    this.flushPlayback();
+    this.flushPlayback('new_turn');
     this.config.onUserTurnStarted?.(turnId);
   }
 
@@ -1044,6 +1088,7 @@ export class GeminiLiveClient {
   ) {
     const ctx = this.ensurePlaybackContext();
     const generation = this.playbackGeneration;
+    const epoch = this.playbackEpoch.current();
     const pcm16 = int16FromBase64(base64);
 
     const float32 = new Float32Array(pcm16.length);
@@ -1078,7 +1123,7 @@ export class GeminiLiveClient {
     };
     const delayUntilStartMs = Math.max(0, Math.ceil((startTime - ctx.currentTime) * 1_000));
     const confirmPlaybackStart = () => {
-      if (generation !== this.playbackGeneration) return;
+      if (generation !== this.playbackGeneration || !this.playbackEpoch.accepts(epoch)) return;
       markPlaybackStarted();
       onPlaybackStarted?.();
     };
@@ -1105,7 +1150,7 @@ export class GeminiLiveClient {
 
     source.onended = () => {
       this.playbackSources.delete(source);
-      if (generation !== this.playbackGeneration) return;
+      if (generation !== this.playbackGeneration || !this.playbackEpoch.accepts(epoch)) return;
       this.pendingSources--;
       if (this.pendingSources <= 0) {
         this.pendingSources = 0;
@@ -1176,11 +1221,15 @@ export class GeminiLiveClient {
       if (this.narrationQueue.some(item => item.kind === 'result') || this.narrationInFlight?.kind === 'result') return;
       const turnId = this.activeTurnId;
       if (!turnId) return;
+      const committedSentences = commitSpeechSentences(`${turnId}:checkpoint`, text);
+      if (committedSentences.length === 0) return;
       this.narrationQueue.push({
         id: `checkpoint_${turnId}_${Date.now()}`,
         kind: 'checkpoint',
         text,
         turnId,
+        committedSentences,
+        playbackEpoch: this.playbackEpoch.current(),
       });
       this.lastCheckpointSpokenAt = Date.now();
       this.checkpointSpokenCount += 1;
@@ -1196,6 +1245,10 @@ export class GeminiLiveClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const next = this.narrationQueue.shift();
     if (!next) return;
+    if (!this.playbackEpoch.accepts(next.playbackEpoch)) {
+      this.flushNarrationQueue();
+      return;
+    }
     if (next.kind !== 'reading' && next.turnId !== this.activeTurnId) {
       this.flushNarrationQueue();
       return;
@@ -1218,11 +1271,14 @@ export class GeminiLiveClient {
     if (next.kind === 'checkpoint') {
       this.receipt('checkpoint_narration_dispatched', { turnId: next.turnId });
     }
+    const spokenText = next.committedSentences && next.committedSentences.length > 0
+      ? next.committedSentences.map(sentence => sentence.text).join(' ')
+      : next.text;
     this.ws.send(JSON.stringify({
       clientContent: {
         turns: [{
           role: 'user',
-          parts: [{ text: `${marker} ${next.text}` }]
+          parts: [{ text: `${marker} ${spokenText}` }]
         }],
         turnComplete: true
       }
@@ -1252,7 +1308,7 @@ export class GeminiLiveClient {
     this.narrationStartTimer = null;
     this.narrationInFlight = null;
     this.discardNarrationAudioUntilTurnComplete = true;
-    this.flushPlayback();
+    this.flushPlayback(reason === 'interrupted_before_audio' ? 'barge_in' : 'timeout');
     if (failed.kind === 'checkpoint') {
       this.receipt('checkpoint_narration_unavailable', {
         turnId: failed.turnId,
@@ -1263,10 +1319,26 @@ export class GeminiLiveClient {
     return true;
   }
 
-  private flushPlayback() {
+  private flushPlayback(
+    reason: 'barge_in' | 'cancel' | 'timeout' | 'new_turn' | 'stop' = 'barge_in',
+  ) {
     // Barge-in real: cada AudioBufferSourceNode agendado é retido para poder
     // ser interrompido. Apenas zerar o relógio deixa áudio antigo tocando.
+    const hadActiveAudio = this.narrationAudioStarted || this.playbackSources.size > 0;
+    const interruptedTurnId = this.activeTurnId ?? this.narrationInFlight?.turnId ?? undefined;
     this.playbackGeneration += 1;
+    const playbackEpoch = this.playbackEpoch.advance();
+    if (
+      (reason === 'barge_in' || reason === 'cancel')
+      && hadActiveAudio
+      && interruptedTurnId
+    ) {
+      this.receipt('playback_interrupted', {
+        turnId: interruptedTurnId,
+        playbackEpoch,
+      });
+    }
+    this.narrationAudioStarted = false;
     for (const source of this.playbackSources) {
       try { source.stop(); } catch {}
       try { source.disconnect(); } catch {}
@@ -1293,12 +1365,18 @@ export class GeminiLiveClient {
       clearTimeout(this.checkpointTimer);
       this.checkpointTimer = null;
     }
+    const committedSentences = commitSpeechSentences(`${turnId}:result`, resultText);
+    if (committedSentences.length === 0) return false;
+    this.receipt('answer_prepared', { turnId });
+    this.receipt('sentences_committed', { turnId });
     this.narrationQueue = [];
     this.narrationQueue.push({
       id: `result_${turnId}_${Date.now()}`,
       kind: 'result',
       text: resultText,
       turnId,
+      committedSentences,
+      playbackEpoch: this.playbackEpoch.current(),
     });
     this.flushNarrationQueue();
     return true;
@@ -1340,6 +1418,8 @@ export class GeminiLiveClient {
     const queuedCheckpoint = this.narrationQueue.find(item => item.kind === 'checkpoint');
     if (queuedCheckpoint) {
       queuedCheckpoint.text = text;
+      queuedCheckpoint.committedSentences = commitSpeechSentences(`${turnId}:checkpoint`, text);
+      queuedCheckpoint.playbackEpoch = this.playbackEpoch.current();
     } else {
       this.deferredCheckpointText = text;
     }
@@ -1351,12 +1431,15 @@ export class GeminiLiveClient {
     if (!this.setupReady || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     const normalized = text.replace(/\s+/g, ' ').trim();
     if (!normalized) return false;
+    const committedSentences = commitSpeechSentences(narrationId, normalized);
     this.narrationQueue = this.narrationQueue.filter(item => item.kind !== 'reading');
     this.narrationQueue.push({
       id: narrationId,
       kind: 'reading',
       text: normalized,
       turnId: this.activeTurnId || narrationId,
+      committedSentences,
+      playbackEpoch: this.playbackEpoch.current(),
     });
     this.pauseDeepWorkPulse();
     this.flushNarrationQueue();
@@ -1373,11 +1456,11 @@ export class GeminiLiveClient {
     const cancelled = this.narrationInFlight;
     if (this.narrationStartTimer) clearTimeout(this.narrationStartTimer);
     this.narrationStartTimer = null;
+    this.discardNarrationAudioUntilTurnComplete = true;
+    this.flushPlayback('cancel');
     this.narrationInFlight = null;
     this.narrationAudioStarted = false;
     this.narrationCompletionPending = null;
-    this.discardNarrationAudioUntilTurnComplete = true;
-    this.flushPlayback();
     this.config.onNarrationFinished?.(cancelled);
     this.setState('listening');
     return true;
@@ -1499,7 +1582,7 @@ export class GeminiLiveClient {
     this.discardNarrationAudioUntilTurnComplete = false;
     this.externalNarrationActive = false;
     this.teardownMic();
-    this.flushPlayback();
+    this.flushPlayback('stop');
     if (this.playbackContext) {
       this.playbackContext.close().catch(() => {});
       this.playbackContext = null;

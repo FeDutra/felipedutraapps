@@ -1275,3 +1275,32 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
 3. restaurar o bundle anterior preservado imediatamente antes da promoção;
 4. manter `pulso-core.sqlite`, preferências, identidade e gravações atuais;
 5. não alterar `/Applications/PULSO.app`.
+
+---
+# Rollback · Contrato soberano e runtime de voz · 07/11/2026
+
+- **Baseline:** `b91cb2ce` (`fix(core): end presence turns above ambient noise`).
+- **Escopo integrado:**
+  - `src/lib/pulso/audio/SovereignVoiceContract.ts`: compromisso imutável de frases, épocas de reprodução e rastreamento leve de voz sem telemetria de conteúdo.
+  - `src/lib/pulso/audio/GeminiLiveClient.ts` e `src/lib/pulso/audio/VoiceSessionController.ts`: integração das épocas de reprodução, descarte de áudio obsoleto pós barge-in e recibos auditáveis com `playbackEpoch` e `turnElapsedMs`.
+  - `vendor/pulso-core/src/voice/`: contratos de voz soberana (`voice-contracts.mjs`) e runtime event-sourced (`sovereign-voice-runtime.mjs`) com persistência em SQLite WAL local e provider-neutralidade.
+  - `vendor/pulso-core/src/index.mjs`: reexportação do `SovereignVoiceRuntime` e seus contratos.
+  - Testes unitários e de integração em `src/lib/pulso/audio/__tests__/SovereignVoiceContract.test.ts`, `scripts/pulso-core-sovereign-voice-runtime.test.mjs` e `vendor/pulso-core/test/sovereign-voice-runtime.test.mjs`.
+  - Documentação contextual em `docs/contexto/pulso-contrato-soberano-de-voz-v1.md` e `docs/adr/0010-sovereign-voice-runtime.md`.
+- **Garantias preservadas:**
+  - Captura comum de microfone, gravação de áudio WAV durável, VAD adaptativo calibrado, spool de gravação e endpoints STT permanecem inalterados.
+  - Fallbacks de TTS (sidecar Kokoro local / Kokoro VPS) e transporte Gemini Live preservados sem degradação para vozes proibidas.
+  - Nenhuma credencial, serviço persistente, daemon de sistema, dependência externa ou schema SQLite de produção é alterado.
+  - OpenJarvis não é instalado e nenhum componente externo é introduzido.
+
+## Procedimento de Reversão Seletiva
+
+1. Para reverter o commit em branch integrada:
+   `git revert <commit-sovereign-voice>`
+2. Para reverter seletivamente os arquivos sem reverter outros commits:
+   `git checkout b91cb2ce -- src/lib/pulso/audio/GeminiLiveClient.ts src/lib/pulso/audio/VoiceSessionController.ts vendor/pulso-core/src/index.mjs`
+   `rm -f src/lib/pulso/audio/SovereignVoiceContract.ts src/lib/pulso/audio/__tests__/SovereignVoiceContract.test.ts`
+   `rm -rf vendor/pulso-core/src/voice vendor/pulso-core/test/sovereign-voice-runtime.test.mjs scripts/pulso-core-sovereign-voice-runtime.test.mjs`
+   `rm -f docs/contexto/pulso-contrato-soberano-de-voz-v1.md docs/adr/0010-sovereign-voice-runtime.md`
+3. Não há daemons, serviços de sistema ou banco de dados persistente a migrar ou limpar.
+4. Manter `pulso-core.sqlite`, arquivos de áudio em disco e configurações de usuário intactos.
