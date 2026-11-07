@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="theme-color" content="#0f0f0f">
+  <meta name="description" content="Rascunho navegável v0.1 do PULSO Browser para revisão de produto.">
+  <title>PULSO Browser · Desenho integral v0.1</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- Prototype Header & Scene Index Navigation -->
+  <header class="prototype-header">
+    <div class="prototype-meta">
+      <div class="prototype-title">
+        <span class="mark">○</span>
+        <span>PULSO Browser · Desenho integral v0.1</span>
+        <span class="badge">DRAFT</span>
+      </div>
+      <div class="prototype-controls">
+        <div class="theme-switcher">
+          <span style="color: rgb(255 255 255 / 0.4); text-transform: uppercase; font-size: 10px;">tema:</span>
+          <button class="action-btn active" data-theme-set="carmine">[ carmim ]</button>
+          <button class="action-btn" data-theme-set="ivory">[ marfim ]</button>
+          <button class="action-btn" data-theme-set="black">[ preto ]</button>
+        </div>
+        <div class="quick-actions">
+          <button class="action-btn" data-action="open-command">[ ⌘K comando ]</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 14 Mandatory Scenes + Decision Board Index -->
+    <nav class="scene-nav" aria-label="índice de cenas">
+      <button class="scene-nav-btn active" data-scene="01-mapa">01 mapa</button>
+      <button class="scene-nav-btn" data-scene="02-limiar">02 limiar</button>
+      <button class="scene-nav-btn" data-scene="03-navegacao">03 navegação</button>
+      <button class="scene-nav-btn" data-scene="04-materia">04 matéria</button>
+      <button class="scene-nav-btn" data-scene="05-fixadas">05 fixadas</button>
+      <button class="scene-nav-btn" data-scene="06-curso">06 curso</button>
+      <button class="scene-nav-btn" data-scene="07-referencias">07 referências</button>
+      <button class="scene-nav-btn" data-scene="08-comando">08 comando</button>
+      <button class="scene-nav-btn" data-scene="09-split">09 split</button>
+      <button class="scene-nav-btn" data-scene="10-mesa">10 MESA</button>
+      <button class="scene-nav-btn" data-scene="11-lotus">11 Lótus</button>
+      <button class="scene-nav-btn" data-scene="12-permissao">12 permissão</button>
+      <button class="scene-nav-btn" data-scene="13-erro">13 erro</button>
+      <button class="scene-nav-btn" data-scene="14-icone">14 ícone</button>
+      <button class="scene-nav-btn" data-scene="prancha">✦ prancha</button>
+    </nav>
+  </header>
+
+  <!-- Prototype Stage Wrapper -->
+  <main class="stage-container">
+
+    <!-- 1440 × 900 px macOS Window Frame -->
+    <div class="mac-window" id="macWindow" data-pulso-theme="carmine">
+
+      <!-- Window Titlebar -->
+      <div class="mac-titlebar">
+        <div class="window-dots">
+          <span class="dot dot-close"></span>
+          <span class="dot dot-min"></span>
+          <span class="dot dot-max"></span>
+        </div>
+        <div class="window-title">PULSO Browser · navegador soberano</div>
+        <div class="window-actions">
+          <button class="pulso-action" data-action="open-command">[ ⌘K ]</button>
+        </div>
+      </div>
+
+      <!-- Window Workspace Body -->
+      <div class="mac-body">
+
+        <!-- Universal Trilho de Contexto (72 px) -->
+        <aside class="pulso-rail">
+          <div class="rail-top">
+            <div class="rail-mark" title="PULSO Browser">○</div>
+            <nav class="rail-areas" aria-label="Áreas">
+              <button class="rail-item active" title="PULSO">○</button>
+              <button class="rail-item" title="Criação">◎</button>
+              <button class="rail-item" title="Obras">✦</button>
+              <button class="rail-item" title="Casa">⌂</button>
+            </nav>
+          </div>
+          <div class="rail-bottom">
+            <div class="orb-container" title="Presença Lótus">
+              <div class="orb-historical"></div>
+            </div>
+            <button class="rail-item" title="Infraestrutura">⌘</button>
+          </div>
+        </aside>
+
+        <!-- Dynamic Scenes Stage Container -->
+        <div class="scene-stage-wrapper" style="flex: 1; display: flex; overflow: hidden; position: relative;">
+
+          <!-- CENA 01 · MAPA DO SISTEMA -->
+          <section class="scene-stage" id="scene-01-mapa" style="flex: 1; display: flex; flex-direction: column; padding: 40px; overflow-y: auto;">
+            <header style="margin-bottom: 32px;">
+              <span class="editorial-eyebrow">cena 01 · arquitetura e princípios</span>
+              <h1 class="editorial-title">mapa do sistema PULSO Browser</h1>
+              <p class="editorial-lead">da camada autoral ao motor soberano Gecko/Firefox.</p>
+            </header>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 40px;">
+              <div style="border: 1px solid var(--border-soft); padding: 24px; border-radius: 8px; background: var(--surface);">
+                <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">substrato preservado (Gecko / Firefox)</h3>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
+                  <li>· motor de renderização e JS seguro</li>
+                  <li>· isolamento de processos e cookies</li>
+                  <li>· histórico, downloads e permissões de mídia</li>
+                  <li>· ecossistema de extensões e perfis</li>
+                </ul>
+              </div>
+
+              <div style="border: 1px solid var(--border-soft); padding: 24px; border-radius: 8px; background: var(--surface);">
+                <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">camada autoral PULSO</h3>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 14px;">
+                  <li>· janela macOS 1440×900 com trilho lateral 72px</li>
+                  <li>· navegação contextual por Área e Sessão</li>
+                  <li>· comando universal sem topo dominador</li>
+                  <li>· MESA e Lótus em painel lateral translúcido</li>
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              <h3 style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">legenda canônica de glifos</h3>
+              <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">○</span> <br><span style="font-size: 11px; color: var(--muted);">PULSO / campo</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">◎</span> <br><span style="font-size: 11px; color: var(--muted);">foco ativo</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">◌</span> <br><span style="font-size: 11px; color: var(--muted);">espera / processo</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">✦</span> <br><span style="font-size: 11px; color: var(--muted);">criação / obra</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">⌂</span> <br><span style="font-size: 11px; color: var(--muted);">espaço doméstico</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">⌘</span> <br><span style="font-size: 11px; color: var(--muted);">infraestrutura</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">◇</span> <br><span style="font-size: 11px; color: var(--muted);">módulo / passagem</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">⌁</span> <br><span style="font-size: 11px; color: var(--muted);">fluxo / trânsito</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">＋</span> <br><span style="font-size: 11px; color: var(--muted);">criar / acrescentar</span></div>
+                <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px;"><span style="font-size: 18px;">▷</span> <br><span style="font-size: 11px; color: var(--muted);">executar / avançar</span></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- CENA 02 · LIMIAR / NOVA JANELA -->
+          <section class="scene-stage" id="scene-02-limiar" style="flex: 1; display: flex; align-items: center; justify-content: center; display: none;">
+            <div style="text-align: center; max-width: 480px;">
+              <div class="orb-historical" style="width: 48px; height: 48px; margin: 0 auto 24px;"></div>
+              <h2 style="font-size: 28px; font-weight: var(--weight-air); margin-bottom: 12px;">PULSO disponível.</h2>
+              <p style="font-size: 14px; color: var(--muted); margin-bottom: 24px;">presença antes de chrome. sem dashboard de atalhos nem poluição visual.</p>
+              <button class="pulso-action" data-action="open-command" style="font-size: 14px;">[ pressione ⌘K ou ⌘L para intenção ]</button>
+            </div>
+          </section>
+
+          <!-- CENA 03 · ÁREA PULSO / SESSÃO NAVEGADOR -->
+          <section class="scene-stage" id="scene-03-navegacao" style="flex: 1; display: flex; display: none;">
+            <!-- Navigation Sidebar 280px -->
+            <aside class="pulso-sidebar">
+              <div class="sidebar-header">
+                <div class="sidebar-area">Área · PULSO</div>
+                <div class="sidebar-session">navegador soberano</div>
+              </div>
+
+              <!-- Group 1: Páginas Fixadas -->
+              <div class="sidebar-group">
+                <div class="group-title"><span>páginas fixadas</span> <span>−</span></div>
+                <div class="group-items">
+                  <div class="nav-item active">
+                    <span class="item-title">Notion · Área PULSO</span>
+                    <span class="item-domain">notion.so</span>
+                  </div>
+                  <div class="nav-item">
+                    <span class="item-title">Open Design</span>
+                    <span class="item-domain">opendesign.pulso.land</span>
+                  </div>
+                  <div class="nav-item">
+                    <span class="item-title">GitHub · PULSO Browser</span>
+                    <span class="item-domain">github.com</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group 2: Trabalho em Curso -->
+              <div class="sidebar-group">
+                <div class="group-title"><span>trabalho em curso</span> <span>−</span></div>
+                <div class="group-items">
+                  <div class="nav-item">
+                    <span class="item-title">Arc · navegação contextual</span>
+                    <span class="item-domain">arc.net</span>
+                  </div>
+                  <div class="nav-item">
+                    <span class="item-title">Gecko · browser chrome</span>
+                    <span class="item-domain">developer.mozilla.org</span>
+                  </div>
+                  <div class="nav-item">
+                    <span class="item-title">PULSO · Documento Norte</span>
+                    <span class="item-domain">mesa.pulso.land</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group 3: Referências -->
+              <div class="sidebar-group">
+                <div class="group-title"><span>referências</span> <span>−</span></div>
+                <div class="group-items">
+                  <div class="nav-item">
+                    <span class="item-title">MESA · auditoria visual</span>
+                    <span class="item-domain">mesa.pulso.land</span>
+                  </div>
+                  <div class="nav-item">
+                    <span class="item-title">Decisão · protótipo antes de código</span>
+                    <span class="item-domain">notion.so</span>
+                  </div>
+                </div>
+              </div>
+            </aside>
+
+            <!-- Main Area -->
+            <main class="pulso-main">
+              <div class="pulso-topbar">
+                <div class="topbar-url">
+                  <span class="security-icon">🔒</span>
+                  <span class="url-text">notion.so/pulso/area-pulso</span>
+                </div>
+                <div class="topbar-actions">
+                  <button class="pulso-action">[ compartilhar ]</button>
+                </div>
+              </div>
+              <div class="web-viewport">
+                <article class="editorial-article">
+                  <span class="editorial-eyebrow">Notion · Área PULSO</span>
+                  <h1 class="editorial-title">Área PULSO · contexto canônico</h1>
+                  <p class="editorial-lead">o centro de referência e decisões da infraestrutura.</p>
+                </article>
+              </div>
+            </main>
+          </section>
+
+          <!-- CENA 04 · PÁGINA ATIVA (MATÉRIA EDITORIAL REALISTA) -->
+          <section class="scene-stage" id="scene-04-materia" style="flex: 1; display: flex; display: none;">
+            <aside class="pulso-sidebar">
+              <div class="sidebar-header">
+                <div class="sidebar-area">Área · PULSO</div>
+                <div class="sidebar-session">navegador soberano</div>
+              </div>
+              <div class="sidebar-group">
+                <div class="group-title"><span>páginas fixadas</span></div>
+                <div class="group-items">
+                  <div class="nav-item active"><span class="item-title">Anatomia do Navegador</span><span class="item-domain">pulso.land</span></div>
+                </div>
+              </div>
+            </aside>
+            <main class="pulso-main">
+              <div class="pulso-topbar">
+                <div class="topbar-url">🔒 <span class="url-text">pulso.land/browser/anatomia</span></div>
+                <div class="topbar-actions"><button class="pulso-action">[ guardar em referências ]</button></div>
+              </div>
+              <div class="web-viewport">
+                <article class="editorial-article">
+                  <span class="editorial-eyebrow">matéria editorial · pulso.land</span>
+                  <h1 class="editorial-title">A anatomia do navegador soberano: presença antes de chrome.</h1>
+                  <p class="editorial-lead">A web é matéria dentro de uma relação contínua com Área, Sessão, Lótus e MESA. Página e aba não governam a experiência; contexto e intenção governam.</p>
+                  <div class="editorial-body">
+                    <p>O topo do navegador tradicional foi projetado na década de 1990 para alternar documentos estáticos. Com o tempo, acumulou abas horizontais, favoritos, extensões, barras de pesquisa e avisos que destroem o campo de atenção do autor.</p>
+                    <p>No <strong>PULSO Browser</strong>, a estrutura é invertida: a navegação é lateral, contextual e silenciosa. O motor Gecko assegura privacidade e compatibilidade web, enquanto a camada autoral PULSO garante que fe permaneça no centro de suas criações.</p>
+                  </div>
+                </article>
+              </div>
+            </main>
+          </section>
+
+          <!-- CENA 05 · PÁGINAS FIXADAS -->
+          <section class="scene-stage" id="scene-05-fixadas" style="flex: 1; display: flex; display: none;">
+            <aside class="pulso-sidebar">
+              <div class="sidebar-header"><div class="sidebar-area">Área · PULSO</div><div class="sidebar-session">navegador soberano</div></div>
+              <div class="sidebar-group">
+                <div class="group-title" style="color: var(--fg); font-weight: var(--weight-anchor);"><span>páginas fixadas (3)</span></div>
+                <div class="group-items">
+                  <div class="nav-item active"><span class="item-title">Notion · Área PULSO</span><span class="item-domain">permanência diária</span></div>
+                  <div class="nav-item active"><span class="item-title">Open Design</span><span class="item-domain">plataforma de protótipos</span></div>
+                  <div class="nav-item active"><span class="item-title">GitHub · PULSO Browser</span><span class="item-domain">código fonte e builds</span></div>
+                </div>
+              </div>
+            </aside>
+            <main class="pulso-main"><div class="web-viewport"><h2 class="editorial-title">Páginas Fixadas</h2><p class="editorial-lead">Permanência sem grade de favoritos decorativa.</p></div></main>
+          </section>
+
+          <!-- CENA 06 · TRABALHO EM CURSO -->
+          <section class="scene-stage" id="scene-06-curso" style="flex: 1; display: flex; display: none;">
+            <aside class="pulso-sidebar">
+              <div class="sidebar-header"><div class="sidebar-area">Área · PULSO</div><div class="sidebar-session">navegador soberano</div></div>
+              <div class="sidebar-group">
+                <div class="group-title" style="color: var(--fg);"><span>trabalho em curso (3)</span></div>
+                <div class="group-items">
+                  <div class="nav-item active"><span class="item-title">Arc · navegação contextual</span><span class="item-domain">pesquisa de referências</span></div>
+                  <div class="nav-item"><span class="item-title">Gecko · browser chrome</span><span class="item-domain">documentação técnica</span></div>
+                  <div class="nav-item"><span class="item-title">PULSO · Documento Norte</span><span class="item-domain">rascunho ativo</span></div>
+                </div>
+              </div>
+            </aside>
+            <main class="pulso-main"><div class="web-viewport"><h2 class="editorial-title">Trabalho em Curso</h2><p class="editorial-lead">Páginas temporárias de pesquisa com agrupamento por intenção.</p></div></main>
+          </section>
+
+          <!-- CENA 07 · REFERÊNCIAS -->
+          <section class="scene-stage" id="scene-07-referencias" style="flex: 1; display: flex; display: none;">
+            <aside class="pulso-sidebar">
+              <div class="sidebar-header"><div class="sidebar-area">Área · PULSO</div><div class="sidebar-session">navegador soberano</div></div>
+              <div class="sidebar-group">
+                <div class="group-title" style="color: var(--fg);"><span>referências (2)</span></div>
+                <div class="group-items">
+                  <div class="nav-item active"><span class="item-title">MESA · auditoria visual</span><span class="item-domain">arquivo de contexto</span></div>
+                  <div class="nav-item"><span class="item-title">Decisão · protótipo antes de código</span><span class="item-domain">registro histórico</span></div>
+                </div>
+              </div>
+            </aside>
+            <main class="pulso-main"><div class="web-viewport"><h2 class="editorial-title">Referências</h2><p class="editorial-lead">Arquivo contextual preservado para consulta contínua, não histórico bruto de URLs.</p></div></main>
+          </section>
+
+          <!-- CENA 08 · COMANDO UNIVERSAL -->
+          <section class="scene-stage" id="scene-08-comando" style="flex: 1; display: flex; position: relative; display: none;">
+            <div class="command-overlay" style="display: flex;">
+              <div class="command-input-wrapper">
+                <span style="font-size: 18px;">○</span>
+                <input class="command-input" type="text" value="navegador soberano" placeholder="digite URL, busca, Área, Sessão ou comando...">
+                <span style="font-size: 11px; color: var(--muted);">esc para fechar</span>
+              </div>
+              <div class="command-results">
+                <div class="command-item selected">
+                  <div><strong>navegador soberano</strong> <span style="font-size: 11px; color: var(--muted); margin-left: 8px;">Sessão ativa na Área PULSO</span></div>
+                  <span class="type">Sessão</span>
+                </div>
+                <div class="command-item">
+                  <div>Notion · Área PULSO</div>
+                  <span class="type">Página Fixada</span>
+                </div>
+                <div class="command-item">
+                  <div>[ abrir MESA com auditoria visual ]</div>
+                  <span class="type">Ação</span>
+                </div>
+                <div class="command-item">
+                  <div>[ perguntar à Lótus ]</div>
+                  <span class="type">Conversa</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- CENA 09 · SPLIT WEB + WEB -->
+          <section class="scene-stage" id="scene-09-split" style="flex: 1; display: flex; display: none;">
+            <main class="pulso-main">
+              <div class="split-viewport">
+                <div class="split-pane">
+                  <div class="topbar-url" style="margin-bottom: 20px;">🔒 pulso.land/browser/anatomia</div>
+                  <h2>Página A · Anatomia do Navegador</h2>
+                  <p style="margin-top: 12px; color: var(--fg-2);">Análise comparativa da estrutura lateral de navegação.</p>
+                </div>
+                <div class="split-pane">
+                  <div class="topbar-url" style="margin-bottom: 20px;">🔒 developer.mozilla.org/gecko</div>
+                  <h2>Página B · Gecko Browser Chrome</h2>
+                  <p style="margin-top: 12px; color: var(--fg-2);">Documentação das APIs de renderização e janelas.</p>
+                </div>
+              </div>
+            </main>
+          </section>
+
+          <!-- CENA 10 · WEB + MESA -->
+          <section class="scene-stage" id="scene-10-mesa" style="flex: 1; display: flex; display: none;">
+            <main class="pulso-main">
+              <div class="web-viewport">
+                <span class="editorial-eyebrow">fonte da pesquisa</span>
+                <h1 class="editorial-title">PULSO Browser · Especificação</h1>
+                <p class="editorial-lead">A MESA abre ao lado da web para acolher documentos densos sem destruir o contexto de navegação.</p>
+              </div>
+            </main>
+            <aside class="pulso-panel">
+              <div class="panel-header">
+                <span class="panel-title">MESA · documento vivo</span>
+                <button class="pulso-action">[ fechar ]</button>
+              </div>
+              <div class="panel-body">
+                <span style="font-size: 10px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase;">MESA · auditoria visual</span>
+                <h3 style="font-size: 20px; font-weight: var(--weight-presence);">Análise de convergência e hierarquia</h3>
+                <p style="font-size: 13px; color: var(--fg-2); line-height: 1.6;">Registro estruturado com apontamentos de fe, decisões de tipografia, glifos e mapeamento de componentes.</p>
+              </div>
+            </aside>
+          </section>
+
+          <!-- CENA 11 · WEB + LÓTUS (CONVERSA DETERMINÍSTICA) -->
+          <section class="scene-stage" id="scene-11-lotus" style="flex: 1; display: flex; display: none;">
+            <main class="pulso-main">
+              <div class="web-viewport">
+                <span class="editorial-eyebrow">pesquisa ativa</span>
+                <h1 class="editorial-title">Navegação e Autoria</h1>
+              </div>
+            </main>
+            <aside class="pulso-panel">
+              <div class="panel-header">
+                <span class="panel-title">Lótus · presença contínua</span>
+                <button class="pulso-action">[ fechar ]</button>
+              </div>
+              <div class="panel-body">
+                <div class="chat-conversation">
+                  <div class="chat-msg fe">
+                    <span class="sender">fe · agora</span>
+                    <span class="text">o topo do navegador ainda governa a experiência.</span>
+                  </div>
+                  <div class="chat-msg lotus">
+                    <span class="sender">Lótus · reorganizando</span>
+                    <span class="text">reorganizei a pesquisa na Sessão navegador soberano e abri a auditoria na MESA.</span>
+                  </div>
+                  <div style="border: 1px solid var(--border-soft); padding: 12px; border-radius: 6px; background: var(--surface);">
+                    <span style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em;">devolutiva</span>
+                    <p style="font-size: 12px; margin-top: 4px;">organizei as fontes na Sessão navegador soberano e deixei a decisão aberta na MESA.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="composer-box">
+                <input class="composer-input" type="text" placeholder="responder à Lótus...">
+                <button class="pulso-action">[ enviar ↗ ]</button>
+              </div>
+            </aside>
+          </section>
+
+          <!-- CENA 12 · CONSENTIMENTO E PERMISSÃO -->
+          <section class="scene-stage" id="scene-12-permissao" style="flex: 1; display: flex; flex-direction: column; display: none;">
+            <main class="pulso-main">
+              <div class="pulso-topbar" style="background-color: var(--surface-warm); border-bottom: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 13px;">
+                  <span>📷</span>
+                  <span><strong>meet.pulso.land</strong> solicita acesso à câmera e microfone</span>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                  <button class="pulso-action">[ permitir ]</button>
+                  <button class="pulso-action">[ recusar ]</button>
+                </div>
+              </div>
+              <div class="web-viewport">
+                <h1 class="editorial-title">Solicitação contextual de permissão</h1>
+                <p class="editorial-lead">Sem modal genérico central bloqueando o fluxo de trabalho.</p>
+              </div>
+            </main>
+          </section>
+
+          <!-- CENA 13 · OFFLINE / ERRO / RETOMADA -->
+          <section class="scene-stage" id="scene-13-erro" style="flex: 1; display: flex; align-items: center; justify-content: center; display: none;">
+            <div style="text-align: center; max-width: 480px;">
+              <span style="font-size: 32px; color: var(--muted);">◌</span>
+              <h2 style="font-size: 24px; font-weight: var(--weight-presence); margin: 16px 0 8px;">sem conexão com a rede.</h2>
+              <p style="font-size: 14px; color: var(--muted); margin-bottom: 24px;">a matéria local e a MESA permanecem consultáveis offline.</p>
+              <button class="pulso-action">[ tentar novamente ▷ ]</button>
+            </div>
+          </section>
+
+          <!-- CENA 14 · IDENTIDADE DO APLICATIVO -->
+          <section class="scene-stage" id="scene-14-icone" style="flex: 1; display: flex; flex-direction: column; padding: 40px; overflow-y: auto; display: none;">
+            <h1 class="editorial-title">Identidade do Aplicativo · Glifo ○</h1>
+            <p class="editorial-lead" style="margin-bottom: 32px;">Ícone institucional do PULSO Browser com traço óptico e área de respiro macOS.</p>
+
+            <div class="identity-grid">
+              <div class="app-icon-preview">
+                <img src="assets/app-icon.svg" alt="Ícone do Aplicativo" width="160" height="160">
+                <span style="font-size: 12px; color: var(--muted);">ícone de aplicativo macOS (glifo ○)</span>
+              </div>
+
+              <div class="app-icon-preview">
+                <div class="icon-sizes">
+                  <div class="icon-size-box">
+                    <img src="assets/app-icon.svg" width="16" height="16" alt="16px">
+                    <span>16px</span>
+                  </div>
+                  <div class="icon-size-box">
+                    <img src="assets/app-icon.svg" width="32" height="32" alt="32px">
+                    <span>32px</span>
+                  </div>
+                  <div class="icon-size-box">
+                    <img src="assets/app-icon.svg" width="64" height="64" alt="64px">
+                    <span>64px</span>
+                  </div>
+                  <div class="icon-size-box">
+                    <img src="assets/app-icon.svg" width="128" height="128" alt="128px">
+                    <span>128px</span>
+                  </div>
+                </div>
+                <span style="font-size: 12px; color: var(--muted);">escala de representação óptica</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- PRANCHA DE COMPONENTES E ESTADOS (DECISION BOARD) -->
+          <section class="scene-stage" id="scene-prancha" style="flex: 1; display: flex; display: none;">
+            <div class="prancha-container">
+              <h1 class="prancha-title">Prancha de Decisão · Componentes e Estados</h1>
+              <p class="prancha-subtitle">Anatomia completa de componentes, sinais, estados interativos e microtipografia.</p>
+
+              <div class="prancha-grid">
+                <!-- Card 1: Trilho e Ícone -->
+                <div class="prancha-card">
+                  <div class="prancha-card-title">01 · Trilho de Contexto (72px)</div>
+                  <div class="prancha-card-content">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                      <span style="font-size: 20px;">○</span>
+                      <span style="font-size: 18px; color: var(--muted);">◎</span>
+                      <span style="font-size: 18px; color: var(--muted);">✦</span>
+                      <span style="font-size: 18px; color: var(--muted);">⌂</span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--muted);">Glifos de área com luminosidade por estado.</span>
+                  </div>
+                </div>
+
+                <!-- Card 2: Ações em Colchetes -->
+                <div class="prancha-card">
+                  <div class="prancha-card-title">02 · Ações (Sem botões SaaS)</div>
+                  <div class="prancha-card-content">
+                    <button class="pulso-action">[ abrir MESA ]</button>
+                    <button class="pulso-action">[ voltar ]</button>
+                    <button class="pulso-action">[ enviar ↗ ]</button>
+                    <button class="pulso-action">[ + área ]</button>
+                  </div>
+                </div>
+
+                <!-- Card 3: Devolutiva e Sinal -->
+                <div class="prancha-card">
+                  <div class="prancha-card-title">03 · Sinal e Devolutiva</div>
+                  <div class="prancha-card-content">
+                    <div style="font-size: 12px; color: var(--muted);">○ validando · 12s</div>
+                    <div style="border: 1px solid var(--border-soft); padding: 10px; border-radius: 6px;">
+                      <span style="font-size: 10px; text-transform: uppercase; color: var(--muted);">devolutiva</span>
+                      <p style="font-size: 12px; margin-top: 4px;">fontes organizadas na MESA.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 4: Compositor -->
+                <div class="prancha-card">
+                  <div class="prancha-card-title">04 · Compositor</div>
+                  <div class="prancha-card-content">
+                    <div style="border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                      <input type="text" placeholder="o que precisa ganhar realidade?" style="background: transparent; border: none; font-size: 13px; color: var(--fg); outline: none; width: 100%;">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 5: Tipografia -->
+                <div class="prancha-card">
+                  <div class="prancha-card-title">05 · Pesos Inter</div>
+                  <div class="prancha-card-content">
+                    <div style="font-weight: 200;">200 · bruma (títulos grandes)</div>
+                    <div style="font-weight: 300;">300 · presença (voz dominante)</div>
+                    <div style="font-weight: 400;">400 · âncora (palavra pouse)</div>
+                  </div>
+                </div>
+
+                <!-- Card 6: Temas -->
+                <div class="prancha-card">
+                  <div class="prancha-card-title">06 · Primitivas de Cor</div>
+                  <div class="prancha-card-content">
+                    <div style="display: flex; gap: 8px;">
+                      <div style="width: 24px; height: 24px; background: #B8283E; border-radius: 4px;" title="Carmim #B8283E"></div>
+                      <div style="width: 24px; height: 24px; background: #FBF9F5; border-radius: 4px; border: 1px solid #ccc;" title="Marfim #FBF9F5"></div>
+                      <div style="width: 24px; height: 24px; background: #0F0F0F; border-radius: 4px;" title="Preto #0F0F0F"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div> <!-- End Scene Stage Wrapper -->
+
+        <!-- Universal Floating Command Overlay (⌘K / ⌘L) -->
+        <div class="command-overlay" id="commandOverlay" style="display: none;">
+          <div class="command-input-wrapper">
+            <span style="font-size: 18px;">○</span>
+            <input class="command-input" id="commandInput" type="text" placeholder="digite URL, busca, Área, Sessão ou comando...">
+            <span style="font-size: 11px; color: var(--muted);">esc para fechar</span>
+          </div>
+          <div class="command-results" id="commandResults">
+            <div class="command-item">
+              <div><strong>navegador soberano</strong> <span style="font-size: 11px; color: var(--muted); margin-left: 8px;">Sessão ativa na Área PULSO</span></div>
+              <span class="type">Sessão</span>
+            </div>
+            <div class="command-item">
+              <div>Notion · Área PULSO</div>
+              <span class="type">Página Fixada</span>
+            </div>
+            <div class="command-item">
+              <div>[ abrir MESA com auditoria visual ]</div>
+              <span class="type">Ação</span>
+            </div>
+            <div class="command-item">
+              <div>[ perguntar à Lótus ]</div>
+              <span class="type">Conversa</span>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- End Window Workspace Body -->
+    </div> <!-- End macOS Window -->
+  </main>
+
+</body>
+</html>

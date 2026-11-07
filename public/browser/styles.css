@@ -1,0 +1,909 @@
+/* PULSO_FONT_CONTRACT_v014 */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter-variable-latin-ext-v20.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter-variable-latin-v20.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ==========================================================================
+   Design System Tokens · ds-pulso v0.27.0
+   ========================================================================== */
+:root,
+[data-pulso-theme="carmine"] {
+  --pulso-carmine: #b8283e;
+  --pulso-ivory: #fbf9f5;
+  --pulso-black: #0f0f0f;
+
+  --bg: var(--pulso-carmine);
+  --surface: rgb(251 249 245 / 0.08);
+  --surface-warm: rgb(251 249 245 / 0.14);
+  --surface-veil: rgb(251 249 245 / 0.06);
+  --fg: var(--pulso-ivory);
+  --fg-2: rgb(251 249 245 / 0.78);
+  --muted: rgb(251 249 245 / 0.58);
+  --border: rgb(251 249 245 / 0.28);
+  --border-soft: rgb(251 249 245 / 0.16);
+  --accent: var(--pulso-ivory);
+  --accent-on: var(--pulso-carmine);
+
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --weight-air: 200;
+  --weight-presence: 300;
+  --weight-anchor: 400;
+  --weight-signal: 500;
+
+  --blur-veil: 8px;
+  --blur-field: 20px;
+  --blur-presence: 48px;
+
+  --motion-fast: 180ms;
+  --motion-base: 280ms;
+  --duration-context: 520ms;
+  --duration-presence: 7000ms;
+  --ease-standard: cubic-bezier(.22, 1, .36, 1);
+  --ease-gravity: cubic-bezier(.16, 1, .3, 1);
+}
+
+[data-pulso-theme="ivory"] {
+  --bg: var(--pulso-ivory);
+  --surface: rgb(15 15 15 / 0.04);
+  --surface-warm: rgb(15 15 15 / 0.08);
+  --surface-veil: rgb(251 249 245 / 0.85);
+  --fg: var(--pulso-black);
+  --fg-2: rgb(15 15 15 / 0.82);
+  --muted: rgb(15 15 15 / 0.58);
+  --border: rgb(15 15 15 / 0.20);
+  --border-soft: rgb(15 15 15 / 0.12);
+  --accent: var(--pulso-carmine);
+  --accent-on: var(--pulso-ivory);
+}
+
+[data-pulso-theme="black"] {
+  --bg: var(--pulso-black);
+  --surface: rgb(251 249 245 / 0.06);
+  --surface-warm: rgb(251 249 245 / 0.11);
+  --surface-veil: rgb(15 15 15 / 0.82);
+  --fg: var(--pulso-ivory);
+  --fg-2: rgb(251 249 245 / 0.78);
+  --muted: rgb(251 249 245 / 0.58);
+  --border: rgb(251 249 245 / 0.22);
+  --border-soft: rgb(251 249 245 / 0.12);
+  --accent: var(--pulso-carmine);
+  --accent-on: var(--pulso-ivory);
+}
+
+/* ==========================================================================
+   Global Reset & Base Rules
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--pulso-black);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-weight: var(--weight-presence);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+b, strong {
+  font-weight: var(--weight-anchor);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Top Index Header / Controls Bar
+   ========================================================================== */
+.prototype-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background-color: #080808;
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+  padding: 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prototype-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prototype-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.prototype-title .mark {
+  color: var(--pulso-carmine);
+  font-weight: bold;
+}
+
+.prototype-title .badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  color: rgb(255 255 255 / 0.6);
+  letter-spacing: 0.12em;
+}
+
+.prototype-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.theme-switcher, .quick-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-btn {
+  font-size: 12px;
+  font-weight: var(--weight-presence);
+  color: rgb(255 255 255 / 0.65);
+  padding: 3px 8px;
+  transition: color var(--motion-fast);
+}
+
+.action-btn:hover, .action-btn.active {
+  color: var(--pulso-ivory);
+}
+
+.scene-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  padding-top: 4px;
+  border-top: 1px dashed rgb(255 255 255 / 0.1);
+}
+
+.scene-nav-btn {
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.5);
+  padding: 2px 6px;
+  transition: all var(--motion-fast);
+}
+
+.scene-nav-btn:hover {
+  color: var(--pulso-ivory);
+}
+
+.scene-nav-btn.active {
+  color: var(--pulso-ivory);
+  font-weight: var(--weight-anchor);
+  border-bottom: 2px solid var(--pulso-carmine);
+}
+
+/* ==========================================================================
+   Desktop Prototype Stage Wrapper
+   ========================================================================== */
+.stage-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 16px;
+  min-height: calc(100vh - 120px);
+  --review-scale: 1;
+}
+
+/* 1440 x 900 macOS Window Canvas */
+.mac-window {
+  width: 1440px;
+  height: 900px;
+  background-color: var(--bg);
+  color: var(--fg);
+  border-radius: 12px;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7), 0 0 0 1px rgb(255 255 255 / 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: background-color var(--motion-base), color var(--motion-base);
+}
+
+/* macOS Window Titlebar */
+.mac-titlebar {
+  height: 38px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-soft);
+  background-color: rgba(0, 0, 0, 0.12);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.window-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dot-close { background-color: #FF5F56; }
+.dot-min { background-color: #FFBD2E; }
+.dot-max { background-color: #27C93F; }
+
+.window-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.window-actions {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Window Workspace Body */
+.mac-body {
+  flex: 1;
+  display: flex;
+  height: calc(900px - 38px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   1. Trilho de Contexto (72 px)
+   ========================================================================== */
+.pulso-rail {
+  width: 72px;
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  flex-shrink: 0;
+  background-color: var(--surface-veil);
+}
+
+.rail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.rail-mark {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--fg);
+}
+
+.rail-areas {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.rail-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--muted);
+  border-radius: 8px;
+  transition: all var(--motion-fast);
+}
+
+.rail-item:hover, .rail-item.active {
+  color: var(--fg);
+  background-color: var(--surface);
+}
+
+.rail-item.active {
+  border-left: 2px solid var(--fg);
+}
+
+.rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.orb-container {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.orb-historical {
+  width: 24px;
+  height: 24px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  animation: pulso-orb-breathe 7s ease-in-out infinite;
+}
+
+@keyframes pulso-orb-breathe {
+  0%, 100% {
+    border-radius: 50%;
+    transform: scale(1) rotate(0deg);
+  }
+  33% {
+    border-radius: 54% 46% 52% 48% / 48% 53% 47% 52%;
+    transform: scale(1.04) rotate(1.5deg);
+  }
+  66% {
+    border-radius: 47% 53% 48% 52% / 53% 47% 53% 47%;
+    transform: scale(0.96) rotate(-1.5deg);
+  }
+}
+
+/* ==========================================================================
+   2. Painel de Navegação Lateral (280 px)
+   ========================================================================== */
+.pulso-sidebar {
+  width: 280px;
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  background-color: var(--surface);
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  margin-bottom: 24px;
+}
+
+.sidebar-area {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+
+}
+
+.sidebar-session {
+  font-size: 18px;
+  font-weight: var(--weight-presence);
+  margin-top: 4px;
+  color: var(--fg);
+}
+
+.sidebar-group {
+  margin-bottom: 24px;
+}
+
+.group-title {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background-color var(--motion-fast);
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background-color: var(--surface-warm);
+}
+
+.nav-item.active {
+  background-color: var(--surface-warm);
+  border-left: 2px solid var(--fg);
+}
+
+.item-title {
+  font-size: 13px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-domain {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   3. Matéria Web (Flexível)
+   ========================================================================== */
+.pulso-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Minimal Topbar */
+.pulso-topbar {
+  height: 44px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background-color: var(--surface-veil);
+  flex-shrink: 0;
+}
+
+.topbar-url {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.topbar-url .security-icon {
+  font-size: 11px;
+}
+
+.topbar-url .url-text {
+  color: var(--fg-2);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.web-viewport {
+  flex: 1;
+  padding: 40px 60px;
+  overflow-y: auto;
+}
+
+.editorial-article {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.editorial-header {
+  margin-bottom: 36px;
+}
+
+.editorial-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.editorial-title {
+  font-size: 38px;
+  font-weight: var(--weight-air);
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+
+.editorial-lead {
+  font-size: 18px;
+  font-weight: var(--weight-presence);
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+.editorial-body {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Split View Layout */
+.split-viewport {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.split-pane {
+  flex: 1;
+  border-right: 1px solid var(--border-soft);
+  padding: 30px;
+  overflow-y: auto;
+}
+
+.split-pane:last-child {
+  border-right: none;
+}
+
+/* ==========================================================================
+   4. Painel Lateral MESA / Lótus (380–520 px)
+   ========================================================================== */
+.pulso-panel {
+  width: 420px;
+  border-left: 1px solid var(--border-soft);
+  background-color: var(--surface-veil);
+  backdrop-filter: blur(var(--blur-field));
+  -webkit-backdrop-filter: blur(var(--blur-field));
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.panel-header {
+  height: 48px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel-body {
+  flex: 1;
+  padding: 24px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Conversation / Lótus Chat */
+.chat-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-msg .sender {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-msg.fe {
+  align-self: flex-start;
+}
+
+.chat-msg.fe .text {
+  font-size: 15px;
+  color: var(--fg);
+}
+
+.chat-msg.lotus {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+
+.chat-msg.lotus .text {
+  font-size: 14px;
+  color: var(--fg-2);
+}
+
+.composer-box {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.composer-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+/* Universal Command Overlay (⌘K / ⌘L) */
+.command-overlay {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 620px;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: 16px 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.command-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 12px;
+}
+
+.command-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  font-weight: var(--weight-presence);
+  color: var(--fg);
+  outline: none;
+}
+
+.command-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.command-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.command-item:hover, .command-item.selected {
+  background-color: var(--surface-warm);
+}
+
+.command-item .type {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Cena 14: App Identity & Icons
+   ========================================================================== */
+.identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+  padding: 20px;
+}
+
+.app-icon-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  padding: 30px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background-color: var(--surface);
+}
+
+.icon-sizes {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.icon-size-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Prancha de Componentes e Estados (Decision Board)
+   ========================================================================== */
+.prancha-container {
+  padding: 40px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.prancha-title {
+  font-size: 32px;
+  font-weight: var(--weight-air);
+  margin-bottom: 8px;
+}
+
+.prancha-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 40px;
+}
+
+.prancha-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+
+.prancha-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 24px;
+  background-color: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prancha-card-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 8px;
+}
+
+.prancha-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Action Bracket Helpers */
+.pulso-action {
+  font-size: 13px;
+  color: var(--fg);
+  transition: color var(--motion-fast);
+}
+
+.pulso-action:hover {
+  color: var(--accent);
+}
+
+/* Media Queries for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Mobile review keeps the 1440 × 900 composition intact and scales the
+   complete scene instead of inventing a second responsive design. */
+@media (max-width: 767px) {
+  .prototype-header {
+    padding: 10px 12px;
+  }
+
+  .prototype-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .prototype-title {
+    align-items: flex-start;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .prototype-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .scene-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    scrollbar-width: none;
+  }
+
+  .scene-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scene-nav-btn {
+    flex: 0 0 auto;
+  }
+
+  .stage-container {
+    display: block;
+    min-height: 0;
+    padding: 12px 8px;
+    height: calc(900px * var(--review-scale) + 24px);
+  }
+
+  .mac-window {
+    transform: scale(var(--review-scale));
+    transform-origin: top left;
+  }
+}
