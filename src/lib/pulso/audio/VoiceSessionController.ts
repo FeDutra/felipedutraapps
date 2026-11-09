@@ -13,6 +13,10 @@ import type { PresenceNarrationKind, PresenceTurnEvent } from './PresenceTurnMac
 import { toPresenceCheckpointSpeech, toPresenceResultSpeech } from './presenceOralText';
 import { analyzePresenceAudio, createPresenceVadState } from './presenceVad';
 import {
+  DEFAULT_PRESENCE_WAKE_ALIASES,
+  parsePresenceWakeUtterance,
+} from './presenceWakeWord';
+import {
   commitSpeechSentences,
   PlaybackEpoch,
   SovereignVoiceTrace,
@@ -57,6 +61,15 @@ export interface VoiceSessionConfig {
   /** No modo auto, Kokoro assume somente se o Gemini falhar antes do áudio começar. */
   allowGeminiNarrationFallback?: boolean;
   getGeminiAccessToken?: () => Promise<string | null>;
+  /**
+   * Porta local de ativação. Quando habilitada, somente falas iniciadas pela
+   * invocação da Lótus atravessam a fronteira cognitiva.
+   */
+  wakeWord?: {
+    enabled: boolean;
+    aliases?: readonly string[];
+    acknowledgement?: string;
+  };
 }
 
 export interface PresenceNarrationContext {
@@ -824,24 +837,52 @@ export class VoiceSessionController {
 
       const data = await response.json();
       if (this.stopped) return;
-      const userText = data.text || '';
+      const rawUserText = data.text || '';
       this.log('STT_REQUEST_FINISHED', {
-        text: userText,
+        text: rawUserText,
         engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
         durationMs: data.durationMs,
       });
       this.telemetry('presence_stt_finished', {
-        textLength: userText.trim().length,
+        textLength: rawUserText.trim().length,
         engine: data.engine || (isTauriEnv ? 'local' : 'cloud'),
         durationMs: data.durationMs ?? null,
       });
       this.traceVoice(turnId ?? undefined, 'transcript_final');
 
-      if (userText.trim().length === 0) {
+      if (rawUserText.trim().length === 0) {
         // Nada foi ouvido, reinicia loop de escuta
         this.advanceTurn({ type: 'turn_failed', turnId: turnId ?? undefined });
         this.startListeningLoop();
         return;
+      }
+
+      let userText = rawUserText.trim();
+      if (this.config.wakeWord?.enabled) {
+        const wakeMatch = parsePresenceWakeUtterance(
+          userText,
+          this.config.wakeWord.aliases ?? DEFAULT_PRESENCE_WAKE_ALIASES,
+        );
+        if (!wakeMatch.matched) {
+          this.log('PRESENCE_WAKE_WORD_IGNORED', { transcriptLength: userText.length });
+          this.telemetry('presence_wake_word_ignored', { transcriptLength: userText.length });
+          this.advanceTurn({ type: 'turn_failed', turnId: turnId ?? undefined });
+          this.startListeningLoop();
+          return;
+        }
+
+        this.log('PRESENCE_WAKE_WORD_MATCHED', { alias: wakeMatch.matchedAlias });
+        this.telemetry('presence_wake_word_matched', { alias: wakeMatch.matchedAlias });
+        userText = wakeMatch.commandText;
+        if (!userText) {
+          await this.speakAssistant(
+            this.config.wakeWord.acknowledgement || 'Tô aqui, Fê.',
+            undefined,
+            undefined,
+            { turnId: turnId ?? undefined, kind: 'acknowledgement' },
+          );
+          return;
+        }
       }
 
       if (turnId) {

@@ -7,21 +7,7 @@ export default function PulsoRootPage() {
   const router = useRouter();
 
   React.useEffect(() => {
-    const checkIsTauri = () => {
-      if (typeof window === 'undefined') return false;
-      return (
-        window.location.protocol === 'tauri:' ||
-        window.location.protocol === 'file:' ||
-        !!(window as any).__TAURI__ ||
-        !!(window as any).__TAURI_INTERNALS__
-      );
-    };
-
-    if (checkIsTauri()) {
-      router.replace('/pulso/live/');
-    } else {
-      router.replace('/pulso/cockpit/');
-    }
+    router.replace('/pulso/live/');
   }, [router]);
 
   return (

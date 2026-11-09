@@ -1304,3 +1304,14 @@ Baseline: `4c5763a8` (`feature/pulso-core-v0.9-sovereign`).
    `rm -f docs/contexto/pulso-contrato-soberano-de-voz-v1.md docs/adr/0010-sovereign-voice-runtime.md`
 3. Não há daemons, serviços de sistema ou banco de dados persistente a migrar ou limpar.
 4. Manter `pulso-core.sqlite`, arquivos de áudio em disco e configurações de usuário intactos.
+# PULSO Web · Core continuity canary (03/11/2026)
+
+- Candidate branch: `feat/pulso-core-web-20261103`
+- Purpose: make the installed iPhone web app and `/pulso` open the canonical
+  `/pulso/live/` conversation surface while keeping the web runtime on
+  Firestore + OpenClaw.
+- Rollback source: the Firebase Hosting release immediately preceding this
+  candidate, plus Git commit `122025308427eaf213ed4234198a67000ff7e844`.
+- Rollback procedure: use `firebase hosting:rollback` for site
+  `felipedutraapps`, or rebuild/deploy the commit above if a source rollback is
+  required. This release does not modify Firestore documents or Functions.

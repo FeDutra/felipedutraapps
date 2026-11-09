@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" role="img" aria-labelledby="t d">
+  <title id="t">PULSO</title><desc id="d">Círculo fino seguido do nome PULSO em caixa alta espaçada</desc>
+  <circle cx="64" cy="64" r="42" fill="none" stroke="currentColor" stroke-width="4"/>
+  <text x="142" y="79" fill="currentColor" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="300" letter-spacing="15">PULSO</text>
+</svg>

@@ -13,6 +13,15 @@ const IS_PULSO_DESKTOP_BUILD = process.env.NEXT_PUBLIC_PULSO_DESKTOP_BUILD === '
 export default function EdenCentral() {
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark');
+
+    const isInstalledWebApp = typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches
+      || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
+    );
+
+    if (!IS_PULSO_DESKTOP_BUILD && isInstalledWebApp) {
+      window.location.replace('/pulso/live/');
+    }
   }, []);
 
   if (IS_PULSO_DESKTOP_BUILD) {

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
+  <title id="t">Orbe de presença PULSO</title><desc id="d">Anel orgânico, usado como estado vivo e nunca como logotipo</desc>
+  <defs><filter id="g" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="11"/></filter></defs>
+  <path d="M198 55C281 53 344 115 346 198C348 282 285 345 201 346C117 348 53 284 54 201C55 117 116 57 198 55Z" fill="none" stroke="#FBF9F5" stroke-opacity=".22" stroke-width="34" filter="url(#g)"/>
+  <path d="M198 55C281 53 344 115 346 198C348 282 285 345 201 346C117 348 53 284 54 201C55 117 116 57 198 55Z" fill="none" stroke="#FBF9F5" stroke-width="16"/>
+</svg>

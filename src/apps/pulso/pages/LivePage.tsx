@@ -6096,6 +6096,11 @@ ${data.transcription}`, {
       const controller = new VoiceSessionController({
         activeContextNode,
         useGeminiLive,
+        wakeWord: {
+          enabled: !useGeminiLive,
+          aliases: ['Lótus', 'Lotus', 'Lotos'],
+          acknowledgement: 'Tô aqui, Fê.',
+        },
         soundCuesEnabled: presenceSoundCuesEnabled,
         onTelemetry: (stage, details = {}) => {
           void invoke('desktop_boot_probe', {

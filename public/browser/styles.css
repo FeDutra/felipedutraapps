@@ -1,0 +1,1084 @@
+/* PULSO_FONT_CONTRACT_v02 */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter-variable-latin-ext-v20.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter-variable-latin-v20.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ==========================================================================
+   Design System Tokens · ds-pulso v0.2.0 (PULSO LIVE Permanent Black Field)
+   ========================================================================== */
+:root {
+  --pulso-carmine: #b8283e;
+  --pulso-carmine-light: rgba(184, 40, 62, 0.25);
+  --pulso-carmine-glow: rgba(184, 40, 62, 0.55);
+  --pulso-ivory: #fbf9f5;
+  --pulso-black: #0f0f0f;
+  --pulso-black-field: #080808;
+
+  /* Field is PERMANENT BLACK across all scenes */
+  --bg: var(--pulso-black);
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --surface-warm: rgba(255, 255, 255, 0.09);
+  --surface-veil: rgba(12, 12, 12, 0.65);
+
+  /* Glass / Depth Tokens (PULSO LIVE Liquid Glass) */
+  --glass-bg: rgba(8, 8, 8, 0.52);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-hover: rgba(255, 255, 255, 0.22);
+  --glass-shadow: rgba(0, 0, 0, 0.65);
+
+  --fg: var(--pulso-ivory);
+  --fg-2: rgba(251, 249, 245, 0.82);
+  --muted: rgba(251, 249, 245, 0.48);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-soft: rgba(255, 255, 255, 0.07);
+
+  --accent-signal: var(--pulso-carmine);
+  --accent-glow: var(--pulso-carmine-glow);
+
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --weight-air: 200;
+  --weight-presence: 300;
+  --weight-anchor: 400;
+  --weight-signal: 500;
+
+  --blur-veil: 12px;
+  --blur-field: 28px;
+  --blur-presence: 48px;
+
+  --motion-fast: 160ms;
+  --motion-base: 280ms;
+  --duration-context: 420ms;
+  --duration-presence: 9000ms;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-gravity: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   Global Reset & Base Rules
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: #080808;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-weight: var(--weight-presence);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+b, strong {
+  font-weight: var(--weight-anchor);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ==========================================================================
+   Prototype Navigation & Control Bar
+   ========================================================================== */
+.prototype-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background-color: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-soft);
+  padding: 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prototype-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prototype-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.prototype-title .mark {
+  color: var(--pulso-carmine);
+  font-size: 16px;
+}
+
+.prototype-title .badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+}
+
+.prototype-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scene-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.scene-nav-btn {
+  font-size: 11px;
+  font-weight: var(--weight-presence);
+  color: var(--muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: all var(--motion-fast) var(--ease-standard);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.scene-nav-btn:hover {
+  color: var(--fg);
+  background-color: var(--surface);
+}
+
+.scene-nav-btn.active {
+  color: #ffffff;
+  font-weight: var(--weight-anchor);
+  background-color: rgba(184, 40, 62, 0.18);
+  border-color: var(--pulso-carmine);
+  box-shadow: 0 0 10px var(--pulso-carmine-light);
+}
+
+/* ==========================================================================
+   Desktop Prototype Stage Wrapper
+   ========================================================================== */
+.stage-container {
+  --review-scale: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px;
+  min-height: calc(100vh - 120px);
+}
+
+/* 1440 × 900 macOS Window Canvas */
+.mac-window {
+  width: 1440px;
+  height: 900px;
+  background-color: var(--pulso-black);
+  color: var(--fg);
+  border-radius: 12px;
+  box-shadow: 0 32px 120px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: border-color var(--motion-base);
+}
+
+/* macOS Window Titlebar */
+.mac-titlebar {
+  height: 38px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-soft);
+  background-color: rgba(0, 0, 0, 0.4);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.window-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dot-close { background-color: #FF5F56; }
+.dot-min { background-color: #FFBD2E; }
+.dot-max { background-color: #27C93F; }
+
+.window-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.window-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Window Workspace Body */
+.mac-body {
+  flex: 1;
+  display: flex;
+  height: calc(900px - 38px);
+  position: relative;
+  overflow: hidden;
+  background-color: var(--pulso-black);
+}
+
+/* ==========================================================================
+   1. Trilho de Contexto (72 px)
+   ========================================================================== */
+.pulso-rail {
+  width: 72px;
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  flex-shrink: 0;
+  background-color: rgba(10, 10, 10, 0.8);
+  position: relative;
+  z-index: 20;
+}
+
+.rail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.rail-mark {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--fg);
+  cursor: pointer;
+  transition: transform var(--motion-fast);
+}
+
+.rail-mark:hover {
+  transform: scale(1.1);
+}
+
+.rail-areas {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.rail-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--muted);
+  border-radius: 8px;
+  transition: all var(--motion-fast) var(--ease-standard);
+  position: relative;
+}
+
+.rail-item:hover {
+  color: var(--fg);
+  background-color: var(--surface-hover);
+}
+
+.rail-item.active {
+  color: #ffffff;
+  background-color: rgba(184, 40, 62, 0.15);
+  border-left: 2px solid var(--pulso-carmine);
+  box-shadow: inset 0 0 12px rgba(184, 40, 62, 0.2);
+}
+
+.rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+/* ==========================================================================
+   Continuous Orbe Lótus (Lótus Live Organic Membrane)
+   ========================================================================== */
+.lotus-orb-container {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.lotus-orb-svg {
+  width: 36px;
+  height: 36px;
+  overflow: visible;
+}
+
+.lotus-orb-path {
+  fill: none;
+  stroke: rgba(251, 249, 245, 0.9);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 6px rgba(251, 249, 245, 0.4));
+  animation: lotus-orb-breathe 8s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform, stroke-dashoffset;
+}
+
+.lotus-orb-container:hover .lotus-orb-path {
+  stroke: #ffffff;
+  filter: drop-shadow(0 0 12px var(--pulso-carmine-glow));
+}
+
+@keyframes lotus-orb-breathe {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  33% {
+    transform: scale(1.035) rotate(2deg);
+  }
+  66% {
+    transform: scale(0.97) rotate(-2deg);
+  }
+}
+
+/* Short Lens over web content */
+.lotus-radial-lens {
+  position: absolute;
+  inset: -12px;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.02) 55%, transparent 85%);
+  backdrop-filter: blur(12px) saturate(85%);
+  -webkit-backdrop-filter: blur(12px) saturate(85%);
+  opacity: 0.85;
+}
+
+/* ==========================================================================
+   2. Painel de Navegação Lateral (280 px)
+   ========================================================================== */
+.pulso-sidebar {
+  width: 280px;
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  background-color: rgba(12, 12, 12, 0.65);
+  flex-shrink: 0;
+  overflow-y: auto;
+  position: relative;
+  z-index: 15;
+}
+
+.sidebar-header {
+  margin-bottom: 24px;
+}
+
+.sidebar-area {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidebar-session {
+  font-size: 18px;
+  font-weight: var(--weight-presence);
+  margin-top: 4px;
+  color: var(--fg);
+}
+
+.sidebar-group {
+  margin-bottom: 24px;
+}
+
+.group-title {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--motion-fast);
+}
+
+.group-title:hover {
+  color: var(--fg-2);
+}
+
+.group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: all var(--motion-fast) var(--ease-standard);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover {
+  background-color: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-item.active {
+  background-color: rgba(184, 40, 62, 0.12);
+  border-left: 2px solid var(--pulso-carmine);
+  border-color: rgba(184, 40, 62, 0.25);
+  box-shadow: 0 0 12px rgba(184, 40, 62, 0.1);
+}
+
+.nav-item.active .item-title {
+  color: #ffffff;
+  font-weight: var(--weight-anchor);
+}
+
+.nav-item.unread .item-title {
+  color: #ffffff;
+  text-shadow: 0 0 8px var(--pulso-carmine-glow);
+  animation: carmine-pulse 3s ease-in-out infinite;
+}
+
+@keyframes carmine-pulse {
+  0%, 100% {
+    color: #ffffff;
+    text-shadow: 0 0 6px rgba(184, 40, 62, 0.6);
+  }
+  50% {
+    color: var(--pulso-carmine);
+    text-shadow: 0 0 12px rgba(184, 40, 62, 0.9);
+  }
+}
+
+.item-title {
+  font-size: 13px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-domain {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   3. Matéria Web Central (Flexível)
+   ========================================================================== */
+.pulso-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--pulso-black);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Minimal Topbar */
+.pulso-topbar {
+  height: 44px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background-color: rgba(12, 12, 12, 0.7);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.topbar-url {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.topbar-url .security-icon {
+  font-size: 11px;
+  color: #27C93F;
+}
+
+.topbar-url .url-text {
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.web-viewport {
+  flex: 1;
+  padding: 40px 60px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.editorial-article {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.editorial-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.editorial-title {
+  font-size: 38px;
+  font-weight: var(--weight-air);
+  line-height: 1.12;
+  margin-bottom: 16px;
+  color: #ffffff;
+}
+
+.editorial-lead {
+  font-size: 18px;
+  font-weight: var(--weight-presence);
+  color: var(--fg-2);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.editorial-body {
+  font-size: 15px;
+  line-height: 1.7;
+  color: rgba(251, 249, 245, 0.88);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Split View Layout */
+.split-viewport {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.split-pane {
+  flex: 1;
+  border-right: 1px solid var(--border-soft);
+  padding: 32px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.split-pane:last-child {
+  border-right: none;
+}
+
+.split-pane.active-pane {
+  border: 1px solid rgba(251, 249, 245, 0.3);
+  box-shadow: inset 0 0 30px rgba(184, 40, 62, 0.08);
+}
+
+/* ==========================================================================
+   4. Painel Lateral MESA / Lótus Translúcido (380–480 px)
+   ========================================================================== */
+.pulso-panel {
+  width: 440px;
+  border-left: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-field)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-field)) saturate(180%);
+  box-shadow: 0 20px 60px -12px var(--glass-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 30;
+  transition: transform 320ms var(--ease-gravity), opacity 320ms ease;
+}
+
+.panel-header {
+  height: 48px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-soft);
+  background: rgba(10, 10, 10, 0.3);
+}
+
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-body {
+  flex: 1;
+  padding: 24px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Conversation / Lótus Chat */
+.chat-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-msg .sender {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-msg.fe .text {
+  font-size: 15px;
+  color: #ffffff;
+  font-weight: var(--weight-presence);
+}
+
+.chat-msg.lotus {
+  border-left: 2px solid var(--pulso-carmine);
+  padding-left: 14px;
+}
+
+.chat-msg.lotus .text {
+  font-size: 14px;
+  color: var(--fg-2);
+  line-height: 1.6;
+}
+
+.devolutiva-box {
+  border: 1px solid var(--border-soft);
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.devolutiva-box .label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pulso-carmine);
+}
+
+.devolutiva-box p {
+  font-size: 12px;
+  color: var(--fg-2);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.composer-box {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-soft);
+  background: rgba(10, 10, 10, 0.5);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.composer-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.composer-input::placeholder {
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Minimal Trigger Grammar ([ ⋯ ], [ mesa ], [ lótus ], [ ⌘K ])
+   ========================================================================== */
+.pulso-action, .trigger-btn {
+  font-size: 12px;
+  font-family: var(--font-body);
+  font-weight: var(--weight-presence);
+  color: var(--muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: all var(--motion-fast) var(--ease-standard);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.pulso-action:hover, .trigger-btn:hover {
+  color: var(--fg);
+  border-color: rgba(255, 255, 255, 0.15);
+  background-color: var(--surface);
+}
+
+.pulso-action:focus, .trigger-btn:focus {
+  outline: none;
+  color: #ffffff;
+  border-color: var(--pulso-carmine);
+  box-shadow: 0 0 8px var(--pulso-carmine-glow);
+}
+
+.pulso-action.active, .trigger-btn.active {
+  color: #ffffff;
+  background-color: rgba(184, 40, 62, 0.18);
+  border-color: var(--pulso-carmine);
+}
+
+/* Minimal Bracketed Triggers in Topbar */
+.minimal-trigger {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+}
+
+/* ==========================================================================
+   Universal Command Overlay (⌘K / ⌘L)
+   ========================================================================== */
+.command-overlay {
+  position: absolute;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 620px;
+  background: rgba(8, 8, 8, 0.88);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px -12px var(--glass-shadow);
+  padding: 18px 22px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.command-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 12px;
+}
+
+.command-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  font-weight: var(--weight-presence);
+  color: #ffffff;
+  outline: none;
+}
+
+.command-input::placeholder {
+  color: var(--muted);
+}
+
+.command-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.command-item {
+  padding: 10px 14px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+  border: 1px solid transparent;
+}
+
+.command-item:hover, .command-item.selected {
+  background-color: var(--surface-hover);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.command-item.selected {
+  border-left: 2px solid var(--pulso-carmine);
+}
+
+.command-item .type {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Cena 14: App Identity & Icons
+   ========================================================================== */
+.identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+  padding: 20px;
+}
+
+.app-icon-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  padding: 30px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background-color: var(--surface);
+}
+
+.icon-sizes {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.icon-size-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Prancha de Componentes e Estados (Decision Board)
+   ========================================================================== */
+.prancha-container {
+  padding: 40px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.prancha-title {
+  font-size: 32px;
+  font-weight: var(--weight-air);
+  margin-bottom: 8px;
+  color: #ffffff;
+}
+
+.prancha-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 40px;
+}
+
+.prancha-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+.prancha-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 24px;
+  background-color: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prancha-card-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 8px;
+}
+
+.prancha-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ==========================================================================
+   Accessibility & Reduced Motion Directives
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .lotus-orb-path {
+    animation: none !important;
+  }
+  .nav-item.unread .item-title {
+    animation: none !important;
+    color: var(--pulso-carmine) !important;
+  }
+}
+
+/* Reduced Transparency Fallback */
+@media (prefers-reduced-transparency: reduce) {
+  .pulso-panel, .command-overlay {
+    background: #080808 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* A revisão pública preserva a composição autoral de 1440 × 900 e a reduz
+   integralmente em telas pequenas, sem inventar uma segunda interface. */
+@media (max-width: 767px) {
+  .prototype-header {
+    padding: 10px 12px;
+  }
+
+  .prototype-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .prototype-title {
+    align-items: flex-start;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .prototype-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .scene-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    scrollbar-width: none;
+  }
+
+  .scene-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scene-nav-btn {
+    flex: 0 0 auto;
+  }
+
+  .stage-container {
+    display: block;
+    min-height: 0;
+    padding: 12px 8px;
+    height: calc(900px * var(--review-scale) + 24px);
+  }
+
+  .mac-window {
+    transform: scale(var(--review-scale));
+    transform-origin: top left;
+  }
+}
