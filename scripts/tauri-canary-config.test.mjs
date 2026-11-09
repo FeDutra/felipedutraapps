@@ -97,6 +97,18 @@ test('Merged base + tauri.canary.conf.json isolates canary identity, uses the de
   assert.equal(capability.permissions.includes('core:default'), true);
 });
 
+test('Desktop HTTP scope explicitly permits only the local STT transcription endpoint', () => {
+  const capability = JSON.parse(readFileSync(capabilityPath, 'utf8'));
+  const httpPermission = capability.permissions.find(
+    (permission) => permission?.identifier === 'http:default'
+  );
+  const scopedUrls = httpPermission?.allow?.map((entry) => entry.url) ?? [];
+
+  assert.equal(scopedUrls.includes('http://127.0.0.1:14323/transcribe'), true);
+  assert.equal(scopedUrls.includes('http://127.0.0.1:14323/*'), false);
+  assert.equal(scopedUrls.includes('http://127.0.0.1:*'), false);
+});
+
 test('Desktop bundle declares microphone and Automation capabilities without App Sandbox', () => {
   const entitlements = readFileSync(entitlementPath, 'utf8');
   const infoPlist = readFileSync(infoPlistPath, 'utf8');
