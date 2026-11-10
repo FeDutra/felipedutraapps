@@ -2,10 +2,11 @@
 import ArcaDrawer from '../components/ArcaDrawer';
 import { AreaConfigPanel } from '../components/AreaConfigPanel';
 import { MesaPanel } from '../components/MesaPanel';
+import type { MesaArtifact } from '../components/MesaPanel';
 import { BrowserMesaPanel } from '../components/BrowserMesaPanel';
 import { motion } from 'framer-motion';
 import { SecondaryChatPane } from '../components/SecondaryChatPane';
-import { PulsoMessageContent } from '../components/chat/PulsoMessageContent';
+import { PulsoMessageContent, parsePulsoDocument } from '../components/chat/PulsoMessageContent';
 import { useConversationReadingAnchor } from '../hooks/useConversationReadingAnchor';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
@@ -1469,6 +1470,124 @@ export type UnifiedVoiceState =
   | 'thinking'
   | 'interrupted';
 
+interface BrowserNavigationContext {
+  area: string;
+  profile: string;
+  title: string;
+  url: string;
+  folder: string;
+  split: string;
+}
+
+function BrowserLotusLoadingSurface({ context }: { context: BrowserNavigationContext }) {
+  const contextLabel = [context.area, context.folder, context.profile].filter(Boolean).join(' · ');
+  return (
+    <div data-pulso-browser-surface="contextual-lotus-loading" className="theme-her fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#080808] text-[#fbf9f5]">
+      <header className="shrink-0 px-5 pb-3 pt-4">
+        <p className="text-[8px] font-medium uppercase tracking-[0.22em] text-white/25">PULSO · presença contextual</p>
+        <h1 className="mt-1 text-[18px] font-light tracking-[0.08em] text-white/90">LÓTUS</h1>
+        <div className="mt-3 flex min-w-0 items-center gap-2 text-[9px] text-white/45">
+          <span className="h-1 w-1 shrink-0 animate-pulse rounded-full bg-[#b8283e] shadow-[0_0_10px_rgba(184,40,62,0.8)]" />
+          <span className="truncate uppercase tracking-[0.11em]">{contextLabel || 'contexto de navegação'}</span>
+        </div>
+        <p className="mt-1 truncate text-[10px] font-light text-white/28">{context.title || 'navegação sem título'}</p>
+      </header>
+      <div className="mx-5 h-px shrink-0 bg-white/[0.06]" />
+      <main className="flex min-h-0 flex-1 flex-col justify-center px-5 pb-20">
+        <p className="text-[9px] uppercase tracking-[0.2em] text-[#b8283e]/70">lótus · sintonizando</p>
+        <p className="mt-3 max-w-[28ch] text-[12px] font-light leading-5 text-white/38">Estou recuperando a continuidade desta Área sem interromper sua navegação.</p>
+      </main>
+    </div>
+  );
+}
+
+function BrowserMesaSurface({ artifact, context }: { artifact: MesaArtifact | null; context: BrowserNavigationContext }) {
+  const returnToLotus = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('view');
+    window.location.replace(url.href);
+  };
+  return (
+    <div data-pulso-browser-surface="contextual-mesa" className="theme-her fixed inset-0 min-h-0 overflow-hidden bg-[#080808] text-[#fbf9f5]">
+      {artifact ? (
+        <MesaPanel isOpen artifact={artifact} onClose={returnToLotus} onSave={() => undefined} />
+      ) : (
+        <div className="flex h-full flex-col px-5 pb-5 pt-5">
+          <p className="text-[8px] uppercase tracking-[0.22em] text-white/25">PULSO · MESA</p>
+          <h1 className="mt-1 text-[17px] font-light tracking-[0.06em] text-white/88">matéria da Área</h1>
+          <div className="mt-4 h-px bg-white/[0.06]" />
+          <div className="flex flex-1 flex-col justify-center pb-20">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-[#b8283e]/75">{context.area || 'Área atual'}</p>
+            <p className="mt-3 max-w-[30ch] text-[13px] font-light leading-6 text-white/48">Ainda não há documento nesta conversa. Peça à Lótus uma síntese, comparação ou plano e a matéria abrirá aqui.</p>
+            <button type="button" onClick={returnToLotus} className="mt-5 w-fit border-none bg-transparent p-0 text-[9px] uppercase tracking-[0.12em] text-[#d3475d]">[ conversar com lótus ]</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BrowserLotusSurfaceProps {
+  context: BrowserNavigationContext;
+  contextNode: PulsoContextNode;
+  assistantName: string;
+  messages: Message[];
+  inputMessage: string;
+  isTyping: boolean;
+  voiceMode: VoiceMode;
+  voiceState: UnifiedVoiceState;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  onInputChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onSend: () => void;
+  onToggleVoice: () => void;
+  onOpenMesa: (artifact: MesaArtifact) => void;
+}
+
+function BrowserLotusSurface({ context, contextNode, assistantName, messages, inputMessage, isTyping, voiceMode, voiceState, textareaRef, onInputChange, onSend, onToggleVoice, onOpenMesa }: BrowserLotusSurfaceProps) {
+  const [isContextOpen, setIsContextOpen] = React.useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const visibleMessages = React.useMemo(() => messages.filter(message => message.id !== 'welcome').slice(-36), [messages]);
+  React.useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [visibleMessages.length, isTyping]);
+  const contextLabel = [context.area, context.folder, context.profile].filter(Boolean).join(' · ');
+  const voiceActive = voiceMode === 'recording_once' || ['recording_once', 'transcribing', 'submitting'].includes(voiceState);
+  return (
+    <div data-pulso-browser-surface="contextual-lotus" className="theme-her fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#080808] text-[#fbf9f5]">
+      <header className="shrink-0 px-5 pb-3 pt-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0"><p className="text-[8px] font-medium uppercase tracking-[0.22em] text-white/25">PULSO · presença contextual</p><h1 className="mt-1 text-[18px] font-light tracking-[0.08em] text-white/90">LÓTUS</h1></div>
+          <button type="button" onClick={() => window.open('/pulso/live', '_blank', 'noopener,noreferrer')} className="mt-1 border-none bg-transparent p-0 text-[8px] uppercase tracking-[0.12em] text-white/25 hover:text-white/70">[ abrir inteira ↗ ]</button>
+        </div>
+        <div className="mt-3 flex min-w-0 items-center gap-2 text-[9px] text-white/45"><span className="h-1 w-1 shrink-0 rounded-full bg-[#b8283e] shadow-[0_0_10px_rgba(184,40,62,0.8)]" /><span className="truncate uppercase tracking-[0.11em]">{contextLabel || contextNode.label}</span></div>
+        <p className="mt-1 truncate text-[10px] font-light text-white/28">{context.title || 'navegação sem título'}</p>
+      </header>
+      <div className="mx-5 h-px shrink-0 bg-white/[0.06]" />
+      <main ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5 [scrollbar-width:none]">
+        <div className="space-y-6">
+          {visibleMessages.length === 0 && <div className="pt-8 text-left"><p className="text-[9px] uppercase tracking-[0.2em] text-[#b8283e]/80">{assistantName} · presente</p><p className="mt-3 max-w-[30ch] text-[13px] font-light leading-6 text-white/55">Estou nesta Área com você. Posso relacionar a guia, organizar o percurso ou levar matéria para a Mesa.</p></div>}
+          {visibleMessages.map(message => {
+            const isLotus = message.sender === 'lotus';
+            if (message.isProgressUpdate) return <div key={message.id} className="flex items-start gap-2 text-[10px] leading-5 text-white/30"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-white/25" /><span>{message.text}</span></div>;
+            if (!message.text && !message.attachments?.length) return null;
+            return <article key={message.id} data-message-sender={message.sender} className={isLotus ? 'pr-8 text-left' : 'pl-10 text-right'}>
+              <span className="mb-1 block text-[8px] lowercase tracking-[0.15em] text-white/28">{isLotus ? (message.assistantName || 'lótus') : 'fê'}</span>
+              {message.text && <div className="text-[12px] font-light leading-[1.65] text-white/78"><PulsoMessageContent text={message.text} sender={message.sender} contextId={message.contextId || undefined} onOpenMesa={onOpenMesa} /></div>}
+              {message.attachments?.length ? <p className="mt-2 text-[9px] text-white/30">{message.attachments.map(attachment => attachment.name).join(' · ')}</p> : null}
+            </article>;
+          })}
+          {isTyping && <p className="animate-pulse text-[9px] tracking-[0.12em] text-white/25">{assistantName.toLowerCase()} · atravessando…</p>}
+        </div>
+      </main>
+      <footer className="shrink-0 px-5 pb-4 pt-2">
+        {isContextOpen && <div className="mb-3 space-y-1.5 border-l border-[#b8283e]/30 pl-3 text-[9px] font-light leading-4 text-white/35"><p>Área · {context.area || 'não informada'}</p><p>perfil · {context.profile || 'padrão'}</p><p>pasta · {context.folder || 'fora de pasta'}</p><p>divisão · {context.split || 'uma guia'}</p><p className="truncate">endereço · {context.url || 'não compartilhado'}</p></div>}
+        <div className="border-t border-white/[0.08] pt-3">
+          <textarea ref={textareaRef} value={inputMessage} onChange={onInputChange} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSend(); } }} rows={2} spellCheck={false} placeholder="o que atravessamos agora?" className="block max-h-36 min-h-12 w-full resize-none border-none bg-transparent p-0 text-[12px] font-light leading-5 text-white outline-none placeholder:text-white/22" />
+          <div className="mt-2 flex items-center justify-between gap-3"><div className="flex items-center gap-3"><button type="button" onClick={() => setIsContextOpen(value => !value)} className="border-none bg-transparent p-0 text-[8px] uppercase tracking-[0.12em] text-white/25 hover:text-white/65">[ contexto ]</button><button type="button" onClick={onToggleVoice} className={voiceActive ? 'border-none bg-transparent p-0 text-[8px] uppercase tracking-[0.12em] text-[#d3475d]' : 'border-none bg-transparent p-0 text-[8px] uppercase tracking-[0.12em] text-white/25 hover:text-white/65'}>[ {voiceActive ? 'ouvindo' : 'falar'} ]</button></div><button type="button" onClick={onSend} disabled={!inputMessage.trim() || isTyping} className="border-none bg-transparent p-0 text-[8px] uppercase tracking-[0.14em] text-[#d3475d] disabled:text-white/15">[ enviar ↗ ]</button></div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
 
 export default function LivePage() {
   const router = useRouter();
@@ -2320,6 +2439,21 @@ export default function LivePage() {
   const [activeDragItem, setActiveDragItem] = React.useState<{ icon: React.ReactNode; label: string } | null>(null);
 
   const searchParams = useSearchParams();
+  const isBrowserContextualSurface = searchParams?.get('surface') === 'pulso-browser-contextual';
+  const isBrowserMesaSurface = isBrowserContextualSurface && searchParams?.get('view') === 'mesa';
+  const browserNavigationContext = React.useMemo<BrowserNavigationContext>(() => {
+    const read = (key: string, maxLength: number) => (
+      searchParams?.get(key)?.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, maxLength) || ''
+    );
+    return {
+      area: read('area', 80),
+      profile: read('profile', 80),
+      title: read('title', 240),
+      url: read('url', 500),
+      folder: read('folder', 120),
+      split: read('split', 80),
+    };
+  }, [searchParams]);
   const contextSurfaceVariant = searchParams?.get('contextSurface') as 'a' | 'b' | 'c' | null;
   const [isContextSurfaceOpen, setIsContextSurfaceOpen] = React.useState(!!contextSurfaceVariant);
   const activeVariant = contextSurfaceVariant || 'a';
@@ -2329,6 +2463,24 @@ export default function LivePage() {
       setIsContextSurfaceOpen(true);
     }
   }, [contextSurfaceVariant]);
+
+  React.useEffect(() => {
+    if (!isBrowserContextualSurface || !browserNavigationContext.area || !sessionsLoaded) return;
+    const normalizeArea = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^area_/, '').replace(/[^a-z0-9]/g, '');
+    const requestedArea = normalizeArea(browserNavigationContext.area);
+    const exactArea = sessions.filter(session => normalizeArea(session.areaId || '') === requestedArea);
+    const labelMatch = sessions.filter(session => normalizeArea(session.label || '') === requestedArea);
+    const candidates = exactArea.length > 0 ? exactArea : labelMatch;
+    const target = [...candidates].sort((left, right) => {
+      if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+      return safeGetTime(right.lastActivatedAt || right.lastMessageAt || right.updatedAt) - safeGetTime(left.lastActivatedAt || left.lastMessageAt || left.updatedAt);
+    })[0];
+    if (target && target.contextId !== activeContextNode.contextId) {
+      setActiveContextNode(target);
+      setSecondaryContextIds([]);
+      setFocusedPaneContextId(target.contextId);
+    }
+  }, [activeContextNode.contextId, browserNavigationContext.area, isBrowserContextualSurface, sessions, sessionsLoaded]);
 
   const getAreaIcon = (area: any): React.ReactNode => {
     if (!area) return '○';
@@ -4270,6 +4422,7 @@ export default function LivePage() {
     displayText?: string;
     targetContextNode?: PulsoContextNode;
     presenceRouting?: PresenceRoutingDecision;
+    browserContext?: BrowserNavigationContext;
   }) => {
     const originMode = options?.originMode || 'text';
 
@@ -4405,6 +4558,15 @@ export default function LivePage() {
                   matchedTerms: options.presenceRouting.matchedTerms,
                   routerVersion: options.presenceRouting.routerVersion,
                   durationMs: options.presenceRouting.durationMs,
+                },
+              }
+            : {}),
+          ...(options?.browserContext
+            ? {
+                browserNavigation: {
+                  ...options.browserContext,
+                  sharedByUser: true,
+                  sharedAt: new Date().toISOString(),
                 },
               }
             : {}),
@@ -5683,6 +5845,9 @@ ${data.transcription}`, {
 
 
   if (loading) {
+    if (isBrowserContextualSurface) {
+      return <BrowserLotusLoadingSurface context={browserNavigationContext} />;
+    }
     return (
       <div className="theme-her flex flex-col items-center justify-center h-[100dvh] pb-[env(safe-area-inset-bottom)] text-[#fbf9f5]">
         <div className="w-8 h-8 rounded-full border border-[#fbf9f5]/20 border-t-[#fbf9f5] animate-spin mb-4" />
@@ -6008,6 +6173,57 @@ ${data.transcription}`, {
     || (isMesaOpen && !isMesaCollapsed)
     || (isBrowserOpen && !isBrowserCollapsed)
   );
+
+  if (isBrowserContextualSurface) {
+    const latestMesaArtifact = [...currentMessages]
+      .reverse()
+      .map(message => parsePulsoDocument(message.text || '', message.contextId || undefined).artifact)
+      .find((artifact): artifact is MesaArtifact => Boolean(artifact)) || null;
+
+    if (isBrowserMesaSurface) {
+      return <BrowserMesaSurface artifact={latestMesaArtifact} context={browserNavigationContext} />;
+    }
+
+    return (
+      <>
+        <BrowserLotusSurface
+          context={browserNavigationContext}
+          contextNode={sendTargetContextNode}
+          assistantName={sendTargetAssistant.name}
+          messages={currentMessages}
+          inputMessage={inputMessage}
+          isTyping={isTyping}
+          voiceMode={voiceMode}
+          voiceState={voiceState}
+          textareaRef={textareaRef}
+          onInputChange={handleInputChange}
+          onSend={() => {
+            void handleSendMessage(undefined, {
+              targetContextNode: sendTargetContextNode,
+              browserContext: browserNavigationContext,
+            });
+          }}
+          onToggleVoice={toggleRecordingOnce}
+          onOpenMesa={artifact => {
+            setActiveMesaArtifact(artifact);
+            setIsMesaOpen(true);
+          }}
+        />
+        {isMesaOpen && activeMesaArtifact && (
+          <div className="fixed inset-0 z-50 bg-[#080808]">
+            <MesaPanel
+              isOpen
+              artifact={activeMesaArtifact}
+              onClose={() => setIsMesaOpen(false)}
+              onSave={(_id, content) => {
+                setActiveMesaArtifact(previous => previous ? { ...previous, content } : null);
+              }}
+            />
+          </div>
+        )}
+      </>
+    );
+  }
 
 
   return (

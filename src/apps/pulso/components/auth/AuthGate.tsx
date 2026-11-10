@@ -17,6 +17,11 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = React.useState(true);
   const [isFirestore, setIsFirestore] = React.useState(false);
   const [hasConfig, setHasConfig] = React.useState(true);
+  const isBrowserSurface = React.useSyncExternalStore(
+    React.useCallback(() => () => undefined, []),
+    React.useCallback(() => new URLSearchParams(window.location.search).get('surface') === 'pulso-browser-contextual', []),
+    React.useCallback(() => false, []),
+  );
 
   React.useEffect(() => {
     // Check if we are in firestore mode
@@ -49,6 +54,9 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (loading) {
+    if (isBrowserSurface) {
+      return <BrowserAuthState label="lótus · sintonizando sessão" />;
+    }
     return (
       <div className="theme-her min-h-screen overflow-hidden" aria-label="Abrindo Pulso" />
     );
@@ -61,7 +69,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   // If in Firestore mode and no user or anonymous user, show login screen
   if (!user || user.isAnonymous) {
-    return <LoginScreen />;
+    return <LoginScreen compact={isBrowserSurface} />;
   }
 
   // Authenticated
@@ -78,7 +86,26 @@ const checkIsTauri = () => {
   );
 };
 
-const LoginScreen = () => {
+const BrowserAuthState = ({ label, action, onAction, disabled = false }: { label: string; action?: string; onAction?: () => void; disabled?: boolean }) => {
+  const params = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
+  const context = [params.get('area'), params.get('folder'), params.get('profile')].filter(Boolean).join(' · ');
+  return (
+    <div className="fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#080808] px-5 pb-4 pt-4 text-[#fbf9f5]" style={{ backgroundColor: '#080808', color: '#fbf9f5' }}>
+      <p className="text-[8px] font-medium uppercase tracking-[0.22em] text-white/25">PULSO · presença contextual</p>
+      <h1 className="mt-1 text-[18px] font-light tracking-[0.08em] text-white/90">LÓTUS</h1>
+      <div className="mt-3 flex min-w-0 items-center gap-2 text-[9px] text-white/45"><span className="h-1 w-1 shrink-0 animate-pulse rounded-full bg-[#b8283e]" /><span className="truncate uppercase tracking-[0.11em]">{context || 'contexto de navegação'}</span></div>
+      <p className="mt-1 truncate text-[10px] font-light text-white/28">{params.get('title') || 'navegação sem título'}</p>
+      <div className="mt-4 h-px bg-white/[0.06]" />
+      <div className="flex flex-1 flex-col justify-center pb-20">
+        <p className="text-[9px] uppercase tracking-[0.2em] text-[#b8283e]/75">{label}</p>
+        <p className="mt-3 max-w-[30ch] text-[12px] font-light leading-5 text-white/42">A conversa continua protegida. A navegação permanece disponível enquanto a sessão é recuperada.</p>
+        {action && onAction && <button type="button" onClick={onAction} disabled={disabled} className="mt-5 w-fit border-none bg-transparent p-0 text-[9px] uppercase tracking-[0.12em] text-[#d3475d] disabled:text-white/20">[ {action} ]</button>}
+      </div>
+    </div>
+  );
+};
+
+const LoginScreen = ({ compact = false }: { compact?: boolean }) => {
   const [signingIn, setSigningIn] = React.useState(false);
   const [isTauri, setIsTauri] = React.useState(false);
   const [email, setEmail] = React.useState("");
@@ -122,6 +149,10 @@ const LoginScreen = () => {
       setSigningIn(false);
     }
   };
+
+  if (compact) {
+    return <BrowserAuthState label={signingIn ? 'lótus · abrindo sessão' : 'sessão protegida'} action={signingIn ? 'entrando…' : 'entrar na PULSO'} onAction={handleLogin} disabled={signingIn} />;
+  }
 
   return (
     <div className="min-h-screen bg-transparent text-white flex items-center justify-center p-6">
