@@ -2466,6 +2466,7 @@ export default function LivePage() {
 
   React.useEffect(() => {
     if (!isBrowserContextualSurface || !browserNavigationContext.area || !sessionsLoaded) return;
+    let cancelled = false;
     const normalizeArea = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^area_/, '').replace(/[^a-z0-9]/g, '');
     const requestedArea = normalizeArea(browserNavigationContext.area);
     const exactArea = sessions.filter(session => normalizeArea(session.areaId || '') === requestedArea);
@@ -2476,10 +2477,14 @@ export default function LivePage() {
       return safeGetTime(right.lastActivatedAt || right.lastMessageAt || right.updatedAt) - safeGetTime(left.lastActivatedAt || left.lastMessageAt || left.updatedAt);
     })[0];
     if (target && target.contextId !== activeContextNode.contextId) {
-      setActiveContextNode(target);
-      setSecondaryContextIds([]);
-      setFocusedPaneContextId(target.contextId);
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setActiveContextNode(target);
+        setSecondaryContextIds([]);
+        setFocusedPaneContextId(target.contextId);
+      });
     }
+    return () => { cancelled = true; };
   }, [activeContextNode.contextId, browserNavigationContext.area, isBrowserContextualSurface, sessions, sessionsLoaded]);
 
   const getAreaIcon = (area: any): React.ReactNode => {
