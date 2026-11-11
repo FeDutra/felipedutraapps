@@ -53,8 +53,8 @@ jobs:
       - name: Generate release provenance manifest
         shell: bash
         run: |
-          APP_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
-          DMG_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          APP_PATH="$(find src-tauri/target/${{ matrix.target }}/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
+          DMG_PATH="$(find src-tauri/target/${{ matrix.target }}/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
           APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
           APP_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
           APP_SHA256="$(shasum -a 256 "$APP_PATH/Contents/MacOS/$APP_EXECUTABLE" | awk '{print $1}')"
@@ -64,7 +64,7 @@ jobs:
             "release_version=$APP_VERSION" \
             "git_commit=$GITHUB_SHA" \
             "git_ref=$GITHUB_REF" \
-            "target=x86_64-apple-darwin" \
+            "target=${{ matrix.target }}" \
             "app_file=$(basename "$APP_PATH")" \
             "app_executable_sha256=$APP_SHA256" \
             "dmg_file=$(basename "$DMG_PATH")" \
