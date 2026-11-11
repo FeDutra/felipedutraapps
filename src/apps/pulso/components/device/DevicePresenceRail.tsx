@@ -11,7 +11,7 @@ interface DevicePresenceRailProps {
   devices: PulsoDeviceProjection[];
 }
 
-const deviceOrder: PulsoDeviceKey[] = ['imac', 'macbook'];
+const deviceOrder: PulsoDeviceKey[] = ['imac', 'macbook', 'air'];
 
 export function DevicePresenceRail({ devices }: DevicePresenceRailProps) {
   const byKey = React.useMemo(() => new Map(devices.map(device => [device.key, device])), [devices]);

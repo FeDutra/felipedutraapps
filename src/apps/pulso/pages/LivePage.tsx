@@ -1602,7 +1602,7 @@ export default function LivePage() {
   const [windowHeight, setWindowHeight] = React.useState<number>(768);
   const [devicePresence, setDevicePresence] = React.useState<PulsoDeviceProjection[]>([]);
   const [executionTarget, setExecutionTarget] = React.useState<PulsoExecutionTarget>('auto');
-  const [localDeviceOrigin, setLocalDeviceOrigin] = React.useState<'imac' | 'macbook' | null>(null);
+  const [localDeviceOrigin, setLocalDeviceOrigin] = React.useState<'imac' | 'macbook' | 'air' | null>(null);
 
   const selectExecutionTarget = React.useCallback((target: PulsoExecutionTarget) => {
     setExecutionTarget(target);

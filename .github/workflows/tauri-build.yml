@@ -17,6 +17,12 @@ jobs:
   build-macos:
     if: ${{ github.event.inputs.target == 'macos' || github.event.inputs.target == 'both' }}
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
 
@@ -27,10 +33,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Runners macos-latest sao Apple Silicon (arm64), mas o sidecar
-          # kokoro_runner versionado no repo so existe em x86_64. Compilar
-          # mirando x86_64 roda em qualquer Mac via Rosetta 2.
-          targets: x86_64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - name: Install frontend deps
         run: npm ci
@@ -38,8 +41,12 @@ jobs:
       - name: Prepare Kokoro desktop resources
         run: npm run pulso:setup
 
-      - name: Build Tauri app (macOS, x86_64)
-        run: npm run pulso:app:build -- --target x86_64-apple-darwin
+      - name: Prepare Kokoro sidecar for Apple Silicon bundle
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: cp src-tauri/bin/kokoro_runner-x86_64-apple-darwin src-tauri/bin/kokoro_runner-aarch64-apple-darwin
+
+      - name: Build Tauri app (macOS)
+        run: npm run pulso:app:build -- --target ${{ matrix.target }}
         env:
           NEXT_PUBLIC_KOKORO_ENDPOINT: ${{ vars.NEXT_PUBLIC_KOKORO_ENDPOINT }}
 
@@ -68,10 +75,10 @@ jobs:
       - name: Upload macOS build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pulso-macos-build
+          name: pulso-macos-${{ matrix.target }}
           path: |
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
             release-metadata/PULSO-release-manifest.txt
           if-no-files-found: warn
 

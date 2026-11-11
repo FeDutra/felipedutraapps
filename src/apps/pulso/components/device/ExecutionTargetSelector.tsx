@@ -2,6 +2,7 @@ import React from 'react';
 import { DeviceGlyph } from './DeviceGlyphs';
 import {
   isDeviceAvailable,
+  PULSO_DEVICE_IDENTITIES,
   type PulsoDeviceKey,
   type PulsoDeviceProjection,
   type PulsoExecutionTarget,
@@ -14,7 +15,7 @@ interface ExecutionTargetSelectorProps {
   onChange: (target: PulsoExecutionTarget) => void;
 }
 
-const deviceOrder: PulsoDeviceKey[] = ['imac', 'macbook'];
+const deviceOrder: PulsoDeviceKey[] = ['imac', 'macbook', 'air'];
 
 function AutoGlyph({ size = 16 }: { size?: number }) {
   return (
@@ -84,7 +85,7 @@ export function ExecutionTargetSelector({ devices, value, localOrigin, onChange 
                 key={deviceKey}
                 type="button"
                 onClick={() => { onChange(deviceKey); setOpen(false); }}
-                aria-label={`${deviceKey === 'imac' ? 'iMac' : 'MacBook'}: ${available ? 'online' : 'offline'}`}
+                aria-label={`${PULSO_DEVICE_IDENTITIES[deviceKey].accessibleName}: ${available ? 'online' : 'offline'}`}
                 aria-pressed={value === deviceKey}
                 className={`grid h-6 w-6 place-items-center rounded-full border-0 bg-transparent p-0 outline-none transition-[color,filter,opacity,transform] duration-300 ${
                   value === deviceKey
