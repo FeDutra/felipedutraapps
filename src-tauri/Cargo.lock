@@ -82,6 +82,7 @@ dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
  "log",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tauri",

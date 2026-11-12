@@ -72,6 +72,15 @@ interface RecoverableVoiceRecording {
   rawAvailable: boolean;
 }
 
+interface DurableVoiceTranscription {
+  text: string;
+  sourceBytes: number;
+  uploadedBytes: number;
+  durationMs: number;
+  sourceSampleRate: number;
+  uploadedSampleRate: number;
+}
+
 interface PulsoModelCatalogEntry {
   id: string;
   name: string;
@@ -5000,53 +5009,53 @@ export default function LivePage() {
       setVoiceState('transcribing');
       await markRecording('transcribing');
 
-      // A gravação comum e a Presença são produtos de voz distintos.
-      // O áudio do compositor mantém o contrato histórico do PULSO com
-      // pulsoTranscribe/Gemini, inclusive no Tauri. O STT local pertence
-      // somente à Presença e não pode ser exigido para enviar um áudio comum.
-      const endpointUrl = tauri
-        ? 'https://felipedutraapps.web.app/api/pulso/transcribe'
-        : '/api/pulso/transcribe';
-      const requestFetch: typeof fetch = tauri
-        ? (await import('@tauri-apps/plugin-http')).fetch
-        : fetch;
-
-      const transcriptionAbort = new AbortController();
-      const transcriptionTimeout = window.setTimeout(() => transcriptionAbort.abort(), 3 * 60 * 1000);
-      let response: Response | null = null;
-      let lastTranscriptionError: unknown = null;
-      try {
-        // A transcrição não cria mensagens. Repetir o upload do mesmo blob é
-        // seguro e o recordingId continua ligando o bruto durável ao estado
-        // local, sem transformar o serviço de Presença em dependência.
-        for (let attempt = 1; attempt <= 2; attempt += 1) {
-          try {
-            response = await requestFetch(endpointUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': blob.type || 'audio/webm',
-              },
-              body: blob,
-              signal: transcriptionAbort.signal,
-            });
-            if (response.ok || attempt === 2) break;
-            lastTranscriptionError = new Error(`Falha no STT (${response.status})`);
-          } catch (error) {
-            lastTranscriptionError = error;
-            if (attempt === 2) throw error;
+      // No desktop, o WebView nunca mais escolhe o corpo da transcrição. O
+      // comando nativo relê o PCM/WAV fechado pelo mesmo recordingId, valida-o,
+      // reduz uma cópia para 16 kHz e envia esse derivado ao Gemini. O original
+      // permanece intacto e recuperável.
+      let transcribedText = '';
+      if (tauri && mode === 'recording_once' && recordingId) {
+        const data = await invoke<DurableVoiceTranscription>('voice_recording_transcribe', { recordingId });
+        transcribedText = data.text || '';
+        console.log('[PULSO_RECORDING_DURABLE_TRANSCRIBED]', {
+          recordingId,
+          sourceBytes: data.sourceBytes,
+          uploadedBytes: data.uploadedBytes,
+          durationMs: data.durationMs,
+          sourceSampleRate: data.sourceSampleRate,
+          uploadedSampleRate: data.uploadedSampleRate,
+        });
+      } else {
+        const transcriptionAbort = new AbortController();
+        const transcriptionTimeout = window.setTimeout(() => transcriptionAbort.abort(), 3 * 60 * 1000);
+        let response: Response | null = null;
+        let lastTranscriptionError: unknown = null;
+        try {
+          for (let attempt = 1; attempt <= 2; attempt += 1) {
+            try {
+              response = await fetch('/api/pulso/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': blob.type || 'audio/webm' },
+                body: blob,
+                signal: transcriptionAbort.signal,
+              });
+              if (response.ok || attempt === 2) break;
+              lastTranscriptionError = new Error(`Falha no STT (${response.status})`);
+            } catch (error) {
+              lastTranscriptionError = error;
+              if (attempt === 2) throw error;
+            }
+            await new Promise(resolve => window.setTimeout(resolve, 350));
           }
-          await new Promise(resolve => window.setTimeout(resolve, 350));
+        } finally {
+          window.clearTimeout(transcriptionTimeout);
         }
-      } finally {
-        window.clearTimeout(transcriptionTimeout);
+        if (!response?.ok) {
+          throw lastTranscriptionError || new Error('Falha na transcrição');
+        }
+        const data = await response.json();
+        transcribedText = data.text || '';
       }
-
-      if (!response?.ok) {
-        throw lastTranscriptionError || new Error('Falha na transcrição');
-      }
-
-      const data = await response.json();
-      const transcribedText = data.text || '';
       
       if (mode === 'recording_once') {
          if (!transcribedText.trim()) {

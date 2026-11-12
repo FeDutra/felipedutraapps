@@ -17,6 +17,7 @@ use agent::voice_recording::{
   voice_recording_finalize,
   voice_recording_mark,
   voice_recording_recover_incomplete,
+  voice_recording_transcribe,
 };
 
 #[derive(Deserialize)]
@@ -184,7 +185,8 @@ pub fn run() {
       voice_recording_append,
       voice_recording_finalize,
       voice_recording_mark,
-      voice_recording_recover_incomplete
+      voice_recording_recover_incomplete,
+      voice_recording_transcribe
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

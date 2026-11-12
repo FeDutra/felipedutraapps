@@ -1,7 +1,74 @@
 import { onRequest } from "firebase-functions/v2/https";
 
+export interface PcmWavInspection {
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+  dataBytes: number;
+  durationMs: number;
+}
+
+export function inspectPcmWav(buffer: Buffer): PcmWavInspection | null {
+  if (buffer.length < 44
+    || buffer.toString("ascii", 0, 4) !== "RIFF"
+    || buffer.toString("ascii", 8, 12) !== "WAVE") {
+    return null;
+  }
+
+  let offset = 12;
+  let audioFormat = 0;
+  let channels = 0;
+  let sampleRate = 0;
+  let byteRate = 0;
+  let bitsPerSample = 0;
+  let dataBytes = 0;
+  while (offset + 8 <= buffer.length) {
+    const chunkId = buffer.toString("ascii", offset, offset + 4);
+    const chunkSize = buffer.readUInt32LE(offset + 4);
+    const chunkStart = offset + 8;
+    const chunkEnd = chunkStart + chunkSize;
+    if (chunkEnd > buffer.length) return null;
+
+    if (chunkId === "fmt " && chunkSize >= 16) {
+      audioFormat = buffer.readUInt16LE(chunkStart);
+      channels = buffer.readUInt16LE(chunkStart + 2);
+      sampleRate = buffer.readUInt32LE(chunkStart + 4);
+      byteRate = buffer.readUInt32LE(chunkStart + 8);
+      bitsPerSample = buffer.readUInt16LE(chunkStart + 14);
+    } else if (chunkId === "data") {
+      dataBytes = chunkSize;
+    }
+    offset = chunkEnd + (chunkSize % 2);
+  }
+
+  if (audioFormat !== 1
+    || channels !== 1
+    || bitsPerSample !== 16
+    || sampleRate < 8_000
+    || sampleRate > 192_000
+    || byteRate !== sampleRate * channels * (bitsPerSample / 8)
+    || dataBytes <= 0) {
+    return null;
+  }
+  return {
+    sampleRate,
+    channels,
+    bitsPerSample,
+    dataBytes,
+    durationMs: Math.round((dataBytes / byteRate) * 1_000),
+  };
+}
+
+function readHeader(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] || "") : (value || "");
+}
+
 export const pulsoTranscribe = onRequest(
-  { region: "us-central1", secrets: ["GEMINI_API_KEY"] },
+  {
+    region: "us-central1",
+    secrets: ["GEMINI_API_KEY"],
+    timeoutSeconds: 300,
+  },
   async (req, res) => {
     // Enable CORS
     res.set("Access-Control-Allow-Origin", "*");
@@ -19,7 +86,11 @@ export const pulsoTranscribe = onRequest(
         return;
       }
 
-      const mimeType = req.headers["content-type"] || "audio/webm";
+      const mimeType = readHeader(req.headers["content-type"]) || "audio/webm";
+      const baseMimeType = mimeType.split(";")[0].trim().toLowerCase();
+      const userAgent = readHeader(req.headers["user-agent"]).toLowerCase();
+      const audioSource = readHeader(req.headers["x-pulso-audio-source"]);
+      const recordingId = readHeader(req.headers["x-pulso-recording-id"]);
       const buffer = req.rawBody; // In Cloud Functions, raw body is always rawBody Buffer
       
       if (!buffer || buffer.length === 0) {
@@ -27,7 +98,45 @@ export const pulsoTranscribe = onRequest(
         return;
       }
 
-      console.log(`[PULSO_TRANSCRIBE] buffer length: ${buffer.length}, mimeType: ${mimeType}`);
+      // A PULSO desktop possui PCM/WAV durável. Aceitar novamente um blob do
+      // MediaRecorder vindo do WebView reabriria a regressão em que 88 segundos
+      // viraram 53 KB e o modelo recebeu um fragmento sem relação com a fala.
+      if (userAgent.includes("tauri-plugin-http") && audioSource !== "tauri-durable-wav") {
+        res.status(422).json({ error: "durable_wav_required" });
+        return;
+      }
+
+      const isDurableDesktopWav = audioSource === "tauri-durable-wav";
+      const wavInspection = baseMimeType === "audio/wav" || baseMimeType === "audio/x-wav"
+        ? inspectPcmWav(buffer)
+        : null;
+      if (isDurableDesktopWav) {
+        if (!/^[A-Za-z0-9_-]{8,120}$/.test(recordingId)
+          || !wavInspection) {
+          res.status(422).json({ error: "invalid_durable_wav" });
+          return;
+        }
+        const declaredBytes = Number(readHeader(req.headers["x-pulso-audio-bytes"]));
+        const declaredDurationMs = Number(readHeader(req.headers["x-pulso-audio-duration-ms"]));
+        if (!Number.isFinite(declaredBytes)
+          || declaredBytes !== buffer.length
+          || !Number.isFinite(declaredDurationMs)
+          || Math.abs(declaredDurationMs - wavInspection.durationMs) > 250) {
+          res.status(422).json({ error: "durable_wav_manifest_mismatch" });
+          return;
+        }
+      } else if ((baseMimeType === "audio/wav" || baseMimeType === "audio/x-wav") && !wavInspection) {
+        res.status(422).json({ error: "invalid_wav" });
+        return;
+      }
+
+      console.log("[PULSO_TRANSCRIBE] audio accepted", {
+        bytes: buffer.length,
+        mimeType: baseMimeType,
+        source: isDurableDesktopWav ? "tauri-durable-wav" : "web",
+        recordingId: recordingId || null,
+        durationMs: wavInspection?.durationMs || null,
+      });
 
       const base64Audio = buffer.toString("base64");
       const rawKey = process.env.GEMINI_API_KEY;
@@ -45,8 +154,9 @@ Siga rigorosamente as diretrizes abaixo:
 2. **Correção Gramatical:** Ajuste discretamente desvios gramaciais ou erros de concordância típicos de linguagem falada informal, convertendo-os em um português claro, correto e profissional, mantendo o sentido original.
 3. **Remover Disfluências e Hesitações:** Remova gagueiras, vícios de linguagem ("né", "tipo", "hã", "ééé", "então", "tá") e repetições de palavras decorrentes de hesitação.
 4. **Formatação Apropriada:** Escreva números, valores monetários (ex: "R$ 50", "cento e cento e cinquenta") e datas de forma limpa e padronizada. Capitalize nomes próprios e siglas.
-5. **Áudio Sem Fala/Muito Curto:** Se o áudio fornecido não contiver fala humana inteligível em português (como silêncio ou ruídos curtíssimos), retorne EXCLUSIVAMENTE uma string vazia "".
-6. **Saída Limpa:** Retorne EXCLUSIVAMENTE o texto transcrito. Não adicione introduções, aspas, notas de rodapé, explicações ou qualquer outro caractere adicional.`;
+5. **Fidelidade literal:** Nunca complete, deduza, improvise ou crie uma narrativa quando um trecho estiver inaudível. Não use conhecimento geral para preencher lacunas.
+6. **Áudio Sem Fala/Muito Curto:** Se o áudio fornecido não contiver fala humana inteligível em português, estiver truncado ou não permitir transcrição fiel, retorne EXCLUSIVAMENTE uma string vazia "".
+7. **Saída Limpa:** Retorne EXCLUSIVAMENTE o texto transcrito. Não adicione introduções, aspas, notas de rodapé, explicações ou qualquer outro caractere adicional.`;
 
       // Call the Gemini REST API directly, avoiding SDK-auth conflicts
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;

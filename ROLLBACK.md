@@ -1,3 +1,26 @@
+# Rollback — hotfix de áudio durável para Gemini (12/11/2026)
+
+- Baseline instalada nos três Macs: `04005f02` (`0.1.1`).
+- Incidente: no Air, uma gravação nativa íntegra de 87,98 s / 8,45 MB foi
+  substituída, na chamada ao Gemini, por um fragmento WebKit de 53.104 bytes.
+- Escopo do hotfix: o Tauri envia ao Gemini um WAV derivado exclusivamente do
+  PCM durável identificado por `recordingId`; a Function recusa clientes Tauri
+  que tentem enviar blob volátil e valida o contêiner WAV antes do modelo.
+- O WAV/PCM original continua preservado em `Documentos/PULSO/Áudios
+  recuperáveis`. O modo Presença, Kokoro e o Operator Bridge não são alterados.
+
+## Reversão
+
+1. Em cada Mac, encerrar somente a PULSO e seus sidecars, mover o hotfix para
+   um bundle datado e restaurar o bundle `04005f02` preservado na instalação.
+2. Reverter a Function `pulsoTranscribe` para a versão imediatamente anterior
+   apenas se o hotfix bloquear também os clientes web; manter a rejeição de
+   blobs Tauri truncados enquanto qualquer cliente `04005f02` permanecer ativo.
+3. Não apagar PCM, WAV, manifestos, transcrições ou pedidos do incidente.
+4. Não reiniciar Gateway, Operator Bridge ou Macs para reverter este corte.
+
+---
+
 # Rollback — Presença ampliada no iMac (17/10/2026)
 
 - Baseline instalada: `74d028c6`.
