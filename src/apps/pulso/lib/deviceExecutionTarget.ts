@@ -1,4 +1,4 @@
-export type PulsoDeviceKey = 'imac' | 'macbook';
+export type PulsoDeviceKey = 'imac' | 'macbook' | 'air';
 export type PulsoExecutionTarget = 'auto' | PulsoDeviceKey;
 
 export interface PulsoDeviceProjection {
@@ -38,6 +38,10 @@ export const PULSO_DEVICE_IDENTITIES: Record<PulsoDeviceKey, { nodeId: string; a
     nodeId: 'cd9a9e9a737df7280bb62480369e143c61ee9316c80408199754f813c222bba3',
     accessibleName: 'MacBook',
   },
+  air: {
+    nodeId: '413befa9bd1a42760a2f2169e15dfef9a859759c10c2f717d3cb915a1c3e4c28',
+    accessibleName: 'MacBook Air',
+  },
 };
 
 export const DEVICE_PRESENCE_MAX_AGE_MS = 45_000;
@@ -57,7 +61,7 @@ export async function readLocalDeviceOrigin(): Promise<PulsoDeviceOriginStatus> 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const status = await invoke<PulsoDeviceOriginStatus>('local_device_origin_status');
-    if (!status.configured || (status.deviceKey !== 'imac' && status.deviceKey !== 'macbook')) {
+    if (!status.configured || (status.deviceKey !== 'imac' && status.deviceKey !== 'macbook' && status.deviceKey !== 'air')) {
       return { configured: false };
     }
     return status;
@@ -90,7 +94,7 @@ export async function executionTargetEnvelope(
 export function readExecutionTarget(storage?: Storage): PulsoExecutionTarget {
   if (!storage) return 'auto';
   const value = storage.getItem('pulso_execution_target_v1');
-  return value === 'imac' || value === 'macbook' ? value : 'auto';
+  return value === 'imac' || value === 'macbook' || value === 'air' ? value : 'auto';
 }
 
 export function writeExecutionTarget(target: PulsoExecutionTarget, storage?: Storage) {

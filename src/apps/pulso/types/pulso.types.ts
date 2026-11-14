@@ -354,7 +354,7 @@ export interface PulsoRequest {
   };
   executionTarget?: {
     mode: 'auto' | 'device';
-    deviceKey?: 'imac' | 'macbook';
+    deviceKey?: 'imac' | 'macbook' | 'air';
     nodeId?: string;
   };
 

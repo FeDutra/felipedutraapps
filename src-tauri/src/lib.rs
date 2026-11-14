@@ -55,7 +55,7 @@ fn read_device_origin_config(app: &tauri::AppHandle) -> Result<DeviceOriginConfi
     .map_err(|_| "device origin configuration is invalid".to_string())?;
   if config.version != 1
     || config.installation_id.len() < 16
-    || !matches!(config.device_key.as_str(), "imac" | "macbook")
+    || !matches!(config.device_key.as_str(), "imac" | "macbook" | "air")
     || config.private_key_pkcs8_base64.len() < 48
   {
     return Err("device origin configuration is invalid".to_string());

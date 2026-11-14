@@ -87,7 +87,7 @@ function normalizeDevices(value: unknown): PulsoDeviceProjection[] {
   return value.flatMap(item => {
     if (!item || typeof item !== 'object') return [];
     const raw = item as Record<string, unknown>;
-    if (raw.key !== 'imac' && raw.key !== 'macbook') return [];
+    if (raw.key !== 'imac' && raw.key !== 'macbook' && raw.key !== 'air') return [];
     if (typeof raw.nodeId !== 'string' || !raw.nodeId) return [];
     return [{
       key: raw.key,
