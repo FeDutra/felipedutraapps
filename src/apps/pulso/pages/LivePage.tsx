@@ -1129,6 +1129,7 @@ const sessionToContextNode = (session: Session): PulsoContextNode => ({
   label: session.label,
   agentId: session.agentId,
   assistantName: session.assistantName,
+  projectConfig: session.projectConfig,
   archived: session.archived ?? false,
   isDefault: session.isDefault ?? false,
   lastMessageAt: session.lastMessageAt,
@@ -1548,7 +1549,7 @@ function BrowserLotusLoadingSurface({ context }: { context: BrowserNavigationCon
   );
 }
 
-function BrowserMesaSurface({ artifact, context }: { artifact: MesaArtifact | null; context: BrowserNavigationContext }) {
+function BrowserMesaSurface({ artifact, context, assistantName }: { artifact: MesaArtifact | null; context: BrowserNavigationContext; assistantName: string }) {
   const returnToLotus = () => {
     const url = new URL(window.location.href);
     url.searchParams.delete('view');
@@ -1565,8 +1566,8 @@ function BrowserMesaSurface({ artifact, context }: { artifact: MesaArtifact | nu
           <div className="mt-4 h-px bg-white/[0.06]" />
           <div className="flex flex-1 flex-col justify-center pb-20">
             <p className="text-[9px] uppercase tracking-[0.18em] text-[#b8283e]/75">{context.area || 'Área atual'}</p>
-            <p className="mt-3 max-w-[30ch] text-[13px] font-light leading-6 text-white/48">Ainda não há documento nesta conversa. Peça à Lótus uma síntese, comparação ou plano e a matéria abrirá aqui.</p>
-            <button type="button" onClick={returnToLotus} className="mt-5 w-fit border-none bg-transparent p-0 text-[9px] uppercase tracking-[0.12em] text-[#d3475d]">[ conversar com lótus ]</button>
+            <p className="mt-3 max-w-[30ch] text-[13px] font-light leading-6 text-white/48">Ainda não há documento nesta conversa. Peça a {assistantName} uma síntese, comparação ou plano e a matéria abrirá aqui.</p>
+            <button type="button" onClick={returnToLotus} className="mt-5 w-fit border-none bg-transparent p-0 text-[9px] uppercase tracking-[0.12em] text-[#d3475d]">[ conversar com {assistantName.toLowerCase()} ]</button>
           </div>
         </div>
       )}
@@ -1606,7 +1607,7 @@ function BrowserLotusSurface({ context, contextNode, assistantName, messages, in
     <div data-pulso-browser-surface="contextual-lotus" className="theme-her fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#080808] text-[#fbf9f5]">
       <header className="shrink-0 px-5 pb-3 pt-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0"><p className="text-[8px] font-medium uppercase tracking-[0.22em] text-white/25">PULSO · presença contextual</p><h1 className="mt-1 text-[18px] font-light tracking-[0.08em] text-white/90">LÓTUS</h1></div>
+          <div className="min-w-0"><p className="text-[8px] font-medium uppercase tracking-[0.22em] text-white/25">PULSO · presença contextual</p><h1 className="mt-1 text-[18px] font-light tracking-[0.08em] text-white/90">{assistantName.toUpperCase()}</h1></div>
           <button type="button" onClick={() => window.open('/pulso/live', '_blank', 'noopener,noreferrer')} className="mt-1 border-none bg-transparent p-0 text-[8px] uppercase tracking-[0.12em] text-white/25 hover:text-white/70">[ abrir inteira ↗ ]</button>
         </div>
         <div className="mt-3 flex min-w-0 items-center gap-2 text-[9px] text-white/45"><span className="h-1 w-1 shrink-0 rounded-full bg-[#b8283e] shadow-[0_0_10px_rgba(184,40,62,0.8)]" /><span className="truncate uppercase tracking-[0.11em]">{contextLabel || contextNode.label}</span></div>
@@ -2247,6 +2248,22 @@ export default function LivePage() {
     });
     setActiveContextNode(sortedByLatest[0] || sessions[0]);
   }, [sessionsLoaded, sessions]);
+  // The Firestore session document is the authority for runtime routing and
+  // identity. Keep the active node fresh after restoration so a specialist
+  // mapping takes effect without changing chats or recreating history.
+  React.useEffect(() => {
+    if (!sessionsLoaded || sessions.length === 0) return;
+    setActiveContextNode(current => {
+      if (
+        !current.contextId
+        || current.contextId === 'loading'
+        || current.contextId === LOADING_PLACEHOLDER_NODE.contextId
+      ) return current;
+      const fresh = sessions.find(session => session.contextId === current.contextId);
+      return fresh || current;
+    });
+  }, [sessionsLoaded, sessions]);
+
 
   // Persist active session to localStorage whenever it changes.
   // Skip the placeholder node so we never overwrite a valid saved key with the loading state.
@@ -4075,7 +4092,11 @@ export default function LivePage() {
                 ? (AREA_NAMES[session.areaId] || session.areaId.replace('area_', ''))
                 : 'livre';
               try {
-                new window.Notification(`Lótus — [${areaLabel}] ${chatLabel}`, {
+                const assistantIdentity = resolveAssistantIdentity(
+                  session as unknown as Record<string, unknown>,
+                  session?.openclawSessionKey,
+                );
+                new window.Notification(`${assistantIdentity.name} — [${areaLabel}] ${chatLabel}`, {
                   body: responseText || `📎 ${responseAttachments[0]?.name || 'Arquivo'}`,
                   tag: `incoming_${requestId}`,
                 });
@@ -4172,7 +4193,10 @@ export default function LivePage() {
 
     const activeSession = sessions.find(s => s.contextId === (options?.contextId || activeContextNode.contextId));
     const bootstrapStatus = activeSession?.runtimeStatus || 'pending';
-    const runtimeKey = options?.openclawSessionKey || activeContextNode.openclawSessionKey || `agent:main:pulso:${options?.contextId || activeContextNode.contextId}`;
+    const runtimeKey = options?.openclawSessionKey
+      || activeSession?.openclawSessionKey
+      || activeContextNode.openclawSessionKey
+      || `agent:main:pulso:${options?.contextId || activeContextNode.contextId}`;
 
     const lotusPayload: any = {
       requestId: reqId,
@@ -4198,6 +4222,7 @@ export default function LivePage() {
         interface: "pulso" as const,
         deviceId: getPresenceDeviceId(),
         deviceClass: isTauri ? 'desktop_local' : 'web_mobile',
+        projectConfig: activeSession?.projectConfig,
         ...options?.context
       },
       contextWindow: [],
@@ -6241,7 +6266,7 @@ ${data.transcription}`, {
       .find((artifact): artifact is MesaArtifact => Boolean(artifact)) || null;
 
     if (isBrowserMesaSurface) {
-      return <BrowserMesaSurface artifact={latestMesaArtifact} context={browserNavigationContext} />;
+      return <BrowserMesaSurface artifact={latestMesaArtifact} context={browserNavigationContext} assistantName={sendTargetAssistant.name} />;
     }
 
     return (
@@ -6959,7 +6984,7 @@ ${data.transcription}`, {
                       {msg.replyTo && (
                         <div className={`border-l-2 border-white/20 pl-2.5 py-1 mb-1 rounded-r-lg bg-white/5 ${isLotus ? 'text-left' : 'text-left border-l-0 border-r-2 pr-2.5 pl-0 rounded-r-none rounded-l-lg'}`}>
                           <span className="block text-[8px] tracking-widest uppercase text-white/35 font-medium mb-0.5 select-none">
-                            {msg.replyTo.sender === 'lotus' ? 'lótus' : 'fê'}
+                            {msg.replyTo.sender === 'lotus' ? sendTargetAssistant.name.toLowerCase() : 'fê'}
                           </span>
                           <span className="block text-[10px] text-[#fbf9f5]/50 font-light leading-snug line-clamp-2">
                             {msg.replyTo.text.slice(0, 120)}{msg.replyTo.text.length > 120 ? '…' : ''}

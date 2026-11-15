@@ -240,6 +240,27 @@ export interface UserApproval {
   reason?: string;
 }
 
+export interface PulsoProjectReference {
+  id: string;
+  label: string;
+  kind: 'notion' | 'file' | 'web' | 'tool' | 'memory';
+  href?: string;
+  path?: string;
+  authority?: 'canonical' | 'operational' | 'reference';
+}
+
+export interface PulsoProjectConfig {
+  version: string;
+  title: string;
+  summary: string;
+  instructions: string[];
+  direction: string[];
+  links: PulsoProjectReference[];
+  sources: PulsoProjectReference[];
+  tools?: string[];
+  updatedAt: string;
+}
+
 export interface PulsoContextNode {
   areaId: string;
   subareaId: string;
@@ -249,6 +270,7 @@ export interface PulsoContextNode {
   label: string;
   agentId?: string;
   assistantName?: string;
+  projectConfig?: PulsoProjectConfig;
   archived?: boolean;
   isDefault?: boolean;
   lastMessageAt?: Date;
@@ -297,6 +319,8 @@ export interface Session {
   agentId?: string;
   /** Human-facing identity shown inside the conversation. */
   assistantName?: string;
+  /** Canonical project brief injected into every request for this conversation. */
+  projectConfig?: PulsoProjectConfig;
   /** Whether this is a seeded/system session that ships with the platform */
   isDefault?: boolean;
   /** ISO timestamp of last message activity */
