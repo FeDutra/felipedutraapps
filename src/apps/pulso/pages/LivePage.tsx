@@ -1450,6 +1450,56 @@ interface Message {
   originRequestId?: string | null;
 }
 
+type ProgressGroupState = {
+  firstId: string;
+  updates: Message[];
+  hasFinalResponse: boolean;
+  hasInterruptedState: boolean;
+};
+
+function buildProgressGroups(messages: Message[]) {
+  const groups = new Map<string, ProgressGroupState>();
+  const completedRequestIds = new Set<string>();
+
+  messages.forEach(message => {
+    if (message.isProgressUpdate || message.sender !== 'lotus') return;
+    if (message.requestId) completedRequestIds.add(message.requestId);
+    // active_message é um documento derivado. O progresso pertence ao pedido
+    // original, carregado em originRequestId, e não ao id do documento final.
+    if (message.originRequestId) completedRequestIds.add(message.originRequestId);
+  });
+
+  messages.forEach(message => {
+    if (!message.isProgressUpdate) return;
+    const key = message.originRequestId || message.id;
+    const group = groups.get(key);
+    if (group) {
+      group.updates.push(message);
+      group.hasInterruptedState = group.hasInterruptedState || ['error', 'timeout', 'interrupted'].includes(message.phase || '');
+      return;
+    }
+    groups.set(key, {
+      firstId: message.id,
+      updates: [message],
+      hasFinalResponse: completedRequestIds.has(key),
+      hasInterruptedState: ['error', 'timeout', 'interrupted'].includes(message.phase || ''),
+    });
+  });
+
+  return groups;
+}
+
+function collapseProgressMessagesForTimeline(messages: Message[]) {
+  const seenGroups = new Set<string>();
+  return messages.filter(message => {
+    if (!message.isProgressUpdate) return true;
+    const key = message.originRequestId || message.id;
+    if (seenGroups.has(key)) return false;
+    seenGroups.add(key);
+    return true;
+  });
+}
+
 export type VoiceMode = 'off' | 'recording_once' | 'presence' | 'recording_meeting';
 
 export type UnifiedVoiceState =
@@ -1542,8 +1592,13 @@ interface BrowserLotusSurfaceProps {
 
 function BrowserLotusSurface({ context, contextNode, assistantName, messages, inputMessage, isTyping, voiceMode, voiceState, textareaRef, onInputChange, onSend, onToggleVoice, onOpenMesa }: BrowserLotusSurfaceProps) {
   const [isContextOpen, setIsContextOpen] = React.useState(false);
+  const [expandedProgressGroups, setExpandedProgressGroups] = React.useState<Record<string, boolean>>({});
   const scrollRef = React.useRef<HTMLDivElement>(null);
-  const visibleMessages = React.useMemo(() => messages.filter(message => message.id !== 'welcome').slice(-36), [messages]);
+  const progressGroups = React.useMemo(() => buildProgressGroups(messages), [messages]);
+  const visibleMessages = React.useMemo(
+    () => collapseProgressMessagesForTimeline(messages.filter(message => message.id !== 'welcome')).slice(-36),
+    [messages],
+  );
   React.useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [visibleMessages.length, isTyping]);
   const contextLabel = [context.area, context.folder, context.profile].filter(Boolean).join(' · ');
   const voiceActive = voiceMode === 'recording_once' || ['recording_once', 'transcribing', 'submitting'].includes(voiceState);
@@ -1563,7 +1618,33 @@ function BrowserLotusSurface({ context, contextNode, assistantName, messages, in
           {visibleMessages.length === 0 && <div className="pt-8 text-left"><p className="text-[9px] uppercase tracking-[0.2em] text-[#b8283e]/80">{assistantName} · presente</p><p className="mt-3 max-w-[30ch] text-[13px] font-light leading-6 text-white/55">Estou nesta Área com você. Posso relacionar a guia, organizar o percurso ou levar matéria para a Mesa.</p></div>}
           {visibleMessages.map(message => {
             const isLotus = message.sender === 'lotus';
-            if (message.isProgressUpdate) return <div key={message.id} className="flex items-start gap-2 text-[10px] leading-5 text-white/30"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-white/25" /><span>{message.text}</span></div>;
+            if (message.isProgressUpdate) {
+              const progressGroupKey = message.originRequestId || message.id;
+              const group = progressGroups.get(progressGroupKey);
+              if (!group) return null;
+              const isExpanded = expandedProgressGroups[progressGroupKey] ?? !group.hasFinalResponse;
+              return <div key={message.id} className="border-l border-white/10 pl-3">
+                <button
+                  type="button"
+                  onClick={() => setExpandedProgressGroups(previous => ({
+                    ...previous,
+                    [progressGroupKey]: !(previous[progressGroupKey] ?? !group.hasFinalResponse),
+                  }))}
+                  className="flex items-center gap-2 border-none bg-transparent p-0 text-left text-[10px] font-light tracking-wide text-white/35 hover:text-white/60"
+                  aria-expanded={isExpanded}
+                >
+                  <span className={group.hasFinalResponse || group.hasInterruptedState ? 'h-1 w-1 rounded-full bg-white/25' : 'h-1.5 w-1.5 animate-pulse rounded-full bg-[#f59e0b]/65'} />
+                  <span>{group.hasFinalResponse ? 'Processo concluído' : group.hasInterruptedState ? 'Processo interrompido' : 'Em andamento'}</span>
+                  {isExpanded ? <ChevronDown size={12} strokeWidth={1.5} /> : <ChevronRight size={12} strokeWidth={1.5} />}
+                </button>
+                {isExpanded && <div className="mt-2 space-y-2 pb-1">
+                  {group.updates.map(update => <div key={update.id} className="flex items-start gap-2 text-[10px] font-light leading-5 text-white/30">
+                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-white/20" />
+                    <span>{update.text}</span>
+                  </div>)}
+                </div>}
+              </div>;
+            }
             if (!message.text && !message.attachments?.length) return null;
             return <article key={message.id} data-message-sender={message.sender} className={isLotus ? 'pr-8 text-left' : 'pl-10 text-right'}>
               <span className="mb-1 block text-[8px] lowercase tracking-[0.15em] text-white/28">{isLotus ? (message.assistantName || 'lótus') : 'fê'}</span>
@@ -2241,33 +2322,7 @@ export default function LivePage() {
   // progress item during render (findIndex + filter + some). A long chat with
   // relay updates therefore became quadratic precisely while the composer was
   // updating. Build this index once per message change instead.
-  const progressGroups = React.useMemo(() => {
-    const groups = new Map<string, { firstId: string; updates: Message[]; hasFinalResponse: boolean; hasInterruptedState: boolean }>();
-    const completedRequestIds = new Set(
-      currentMessages
-        .filter(message => !message.isProgressUpdate && message.sender === 'lotus' && message.requestId)
-        .map(message => message.requestId as string)
-    );
-
-    currentMessages.forEach(message => {
-      if (!message.isProgressUpdate) return;
-      const key = message.originRequestId || message.id;
-      const group = groups.get(key);
-      if (group) {
-        group.updates.push(message);
-        group.hasInterruptedState = group.hasInterruptedState || ['error', 'timeout', 'interrupted'].includes(message.phase || '');
-      } else {
-        groups.set(key, {
-          firstId: message.id,
-          updates: [message],
-          hasFinalResponse: Boolean(message.originRequestId && completedRequestIds.has(message.originRequestId)),
-          hasInterruptedState: ['error', 'timeout', 'interrupted'].includes(message.phase || ''),
-        });
-      }
-    });
-
-    return groups;
-  }, [currentMessages]);
+  const progressGroups = React.useMemo(() => buildProgressGroups(currentMessages), [currentMessages]);
 
   const [expandedProgressGroups, setExpandedProgressGroups] = React.useState<Record<string, boolean>>({});
 
@@ -3406,6 +3461,7 @@ export default function LivePage() {
             const hasRealResponse = responseText && responseText.trim() !== '';
             const responseAttachments = getAssistantAttachments(req);
             const assistantIdentity = resolveAssistantIdentity(req, activeContextNode.openclawSessionKey);
+            const responseOriginRequestId = req.meta?.originRequestId || req.openclawResult?.meta?.originRequestId || req.originRequestId || req.id;
             
             const isAcceptedStatus = ['success', 'proposal_ready', 'needs_approval', 'needs_clarification'].includes(status || '');
             if (isAcceptedStatus && (hasRealResponse || responseAttachments.length > 0)) {
@@ -3421,6 +3477,7 @@ export default function LivePage() {
                 openclawResult: req.openclawResult || undefined,
                 handoffStatus: req.status,
                 requestId: req.id || undefined,
+                originRequestId: responseOriginRequestId || null,
                 originMode: req.originMode || req.mode,
                 originalCommand: req.summary || req.title || undefined,
                 executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
@@ -3442,7 +3499,7 @@ export default function LivePage() {
                 contextId: req.contextId || null,
                 isProgressUpdate: true,
                 phase: 'interrupted',
-                originRequestId: req.id || null,
+                originRequestId: responseOriginRequestId || null,
               });
             }
           }
@@ -3789,6 +3846,7 @@ export default function LivePage() {
                 openclawResult: req.openclawResult || undefined,
                 handoffStatus: req.status,
                 requestId: req.id || undefined,
+                originRequestId: originRequestId || null,
                 originalCommand: req.summary || req.title || undefined,
                 executedAt: req.executedAt ? (req.executedAt instanceof Date ? req.executedAt.toISOString() : typeof req.executedAt === 'string' ? req.executedAt : req.executedAt.toDate?.().toISOString() || String(req.executedAt)) : undefined,
                 executedBy: req.executedBy || undefined,
@@ -3809,7 +3867,7 @@ export default function LivePage() {
                 contextId: req.contextId || null,
                 isProgressUpdate: true,
                 phase: 'interrupted',
-                originRequestId: req.id || null,
+                originRequestId: originRequestId || null,
               });
             }
           }
