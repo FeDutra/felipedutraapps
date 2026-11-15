@@ -4432,8 +4432,12 @@ export default function LivePage() {
     // pode ser descartado porque a interface ainda está exibindo outro turno
     // como ocupado. A trava de duplicidade vale apenas para envio manual de
     // texto; as entradas de voz seguem com requestId próprio e são enfileiradas.
-    if (originMode === 'text' && (isTyping || isSubmittingRef.current)) {
-      console.warn('Blocked duplicate send: message already processing or submitting.');
+    // Uma conversa ocupada continua aceitando intervenção humana. O worker
+    // encaminha a nova mensagem como steering para o run vivo; bloquear pelo
+    // `isTyping` aqui transformava correções de rumo em silêncio ou fila.
+    // Mantemos apenas a trava curta contra duplo clique do mesmo envio.
+    if (originMode === 'text' && isSubmittingRef.current) {
+      console.warn('Blocked duplicate send: message is already submitting.');
       return;
     }
     
