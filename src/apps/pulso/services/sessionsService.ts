@@ -1,5 +1,5 @@
 import { pulsoRepository } from "./pulsoRepositoryInstance";
-import { Session } from "../types/pulso.types";
+import { PulsoProjectConfig, Session } from "../types/pulso.types";
 
 /**
  * @file sessionsService.ts
@@ -26,16 +26,24 @@ export const sessionsService = {
     subareaId?: string;
     id?: string;
     isDefault?: boolean;
+    agentId?: string;
+    assistantName?: string;
+    openclawSessionKey?: string;
+    projectConfig?: PulsoProjectConfig;
     runtimeStatus?: 'pending' | 'bootstrapping' | 'ready' | 'error' | 'disabled' | 'migrating';
   }): Promise<Session> => {
     const id = data.id || `sess_${Date.now()}`;
-    const openclawSessionKey = `agent:main:pulso:${id}`;
+    const agentId = data.agentId || 'main';
+    const openclawSessionKey = data.openclawSessionKey || `agent:${agentId}:pulso:${id}`;
     return pulsoRepository.saveSession({
       id,
       label: data.label,
       areaId: data.areaId ?? null,
       subareaId: data.subareaId,
       openclawSessionKey,
+      agentId,
+      assistantName: data.assistantName,
+      projectConfig: data.projectConfig,
       isDefault: data.isDefault ?? false,
       runtimeStatus: data.runtimeStatus ?? 'pending',
       errorMessage: null,

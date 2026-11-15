@@ -5,6 +5,7 @@ type AssistantIdentity = {
 
 const AGENT_IDENTITIES: Record<string, AssistantIdentity> = {
   main: { agentId: 'main', name: 'Lótus' },
+  ressonancia: { agentId: 'ressonancia', name: 'RESSONÂNCIA' },
   designer: { agentId: 'designer', name: 'FORMA' },
   audiovisual: { agentId: 'audiovisual', name: 'RITMO' },
   'engenharia-produto': { agentId: 'engenharia-produto', name: 'ESTRUTURA' },
