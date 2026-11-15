@@ -53,9 +53,8 @@ interface SortableChatItemDesktopProps {
 }
 
 // Marcadores do Gateway são mecanismos de proteção de transporte, não
-// conteúdo conversacional. A PULSO nunca deve mostrá-los como se a Lótus os
-// tivesse dito. Quando a resposta original já não veio no payload, indicamos
-// a limitação de forma humana em vez de expor infraestrutura.
+// conteúdo conversacional. A resposta completa é recuperada no runtime via
+// chat.message.get; se um marcador legado escapar, ele não vira mensagem.
 const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too large\]\s*$/i;
 
 const isTauriRuntime = () => typeof window !== 'undefined' && (
@@ -566,9 +565,7 @@ function SessionModelSelector({ session, models, providers, onApply }: SessionMo
 
 function toRenderableConversationText(value: unknown): string {
   const text = typeof value === 'string' ? value : '';
-  if (TECHNICAL_HISTORY_OMISSION.test(text)) {
-    return 'Esta resposta ficou grande demais para ser carregada integralmente neste histórico.';
-  }
+  if (TECHNICAL_HISTORY_OMISSION.test(text)) return '';
   return text;
 }
 
@@ -2245,7 +2242,7 @@ export default function LivePage() {
   // relay updates therefore became quadratic precisely while the composer was
   // updating. Build this index once per message change instead.
   const progressGroups = React.useMemo(() => {
-    const groups = new Map<string, { firstId: string; updates: Message[]; hasFinalResponse: boolean }>();
+    const groups = new Map<string, { firstId: string; updates: Message[]; hasFinalResponse: boolean; hasInterruptedState: boolean }>();
     const completedRequestIds = new Set(
       currentMessages
         .filter(message => !message.isProgressUpdate && message.sender === 'lotus' && message.requestId)
@@ -2258,11 +2255,13 @@ export default function LivePage() {
       const group = groups.get(key);
       if (group) {
         group.updates.push(message);
+        group.hasInterruptedState = group.hasInterruptedState || ['error', 'timeout', 'interrupted'].includes(message.phase || '');
       } else {
         groups.set(key, {
           firstId: message.id,
           updates: [message],
           hasFinalResponse: Boolean(message.originRequestId && completedRequestIds.has(message.originRequestId)),
+          hasInterruptedState: ['error', 'timeout', 'interrupted'].includes(message.phase || ''),
         });
       }
     });
@@ -3433,20 +3432,17 @@ export default function LivePage() {
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-              const errorText = toRenderableConversationText(req.openclawResult?.responseText) || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
-                id: `lotus-${req.id || Math.random()}`,
+                id: `lotus-progress-terminal-${req.id || Math.random()}`,
                 sender: 'lotus',
                 assistantName: assistantIdentity.name,
                 agentId: assistantIdentity.agentId,
-                text: `[${assistantIdentity.name}] ${errorText}`,
+                text: 'A execução foi interrompida antes de produzir uma resposta final. O último andamento acima permanece como o estado confiável deste trabalho.',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-                interpretation: req.interpretation,
-                openclawResult: req.openclawResult || undefined,
-                handoffStatus: req.status,
-                requestId: req.id || undefined,
-                originalCommand: req.summary || req.title || undefined,
-                contextId: req.contextId || null
+                contextId: req.contextId || null,
+                isProgressUpdate: true,
+                phase: 'interrupted',
+                originRequestId: req.id || null,
               });
             }
           }
@@ -3649,8 +3645,8 @@ export default function LivePage() {
             const reqTimeMs = req.clientCreatedAtMs || safeGetTime(req.requestedAt) || safeGetTime(req.createdAt) || safeGetTime(req.updatedAt) || 0;
             
             const isErrorState = (status === 'error' || status === 'timeout');
-            const ttsText = isErrorState ? 'Falha operacional. Nuvem indisponível ou sem cota.' : responseText;
-            const hasSpeakableResponse = (status === 'success' && hasRealResponse) || isErrorState;
+            const ttsText = responseText;
+            const hasSpeakableResponse = status === 'success' && hasRealResponse;
 
             if (hasSpeakableResponse && requestOriginMode === 'presence') {
               const isPresenceActive = voiceModeRef.current === 'presence';
@@ -3803,20 +3799,17 @@ export default function LivePage() {
               });
             } else if (status === 'error' || status === 'timeout') {
               console.log('[PULSO_RENDER_ERROR_STATE]', { requestId: req.id, status });
-              const errorText = toRenderableConversationText(req.openclawResult?.responseText) || req.openclawResult?.error || 'Falha operacional (Nuvem indisponível / Sem quota).';
               chatHistory.push({
-                id: `lotus-${req.id}`,
+                id: `lotus-progress-terminal-${req.id}`,
                 sender: 'lotus',
                 assistantName: assistantIdentity.name,
                 agentId: assistantIdentity.agentId,
-                text: `[${assistantIdentity.name}] ${errorText}`,
+                text: 'A execução foi interrompida antes de produzir uma resposta final. O último andamento acima permanece como o estado confiável deste trabalho.',
                 timestamp: safeConvertToDate(req.updatedAt) || reqTime,
-                interpretation: req.interpretation,
-                openclawResult: req.openclawResult || undefined,
-                handoffStatus: req.status,
-                requestId: req.id || undefined,
-                originalCommand: req.summary || req.title || undefined,
-                contextId: req.contextId || null
+                contextId: req.contextId || null,
+                isProgressUpdate: true,
+                phase: 'interrupted',
+                originRequestId: req.id || null,
               });
             }
           }
@@ -6827,6 +6820,7 @@ ${data.transcription}`, {
 
                   const groupUpdates = group.updates;
                   const hasFinalResponse = group.hasFinalResponse;
+                  const hasInterruptedState = group.hasInterruptedState;
                   const isExpanded = expandedProgressGroups[progressGroupKey] ?? !hasFinalResponse;
 
                   return (
@@ -6844,13 +6838,13 @@ ${data.transcription}`, {
                           className="group flex items-center gap-2 bg-transparent border-none p-0 text-left cursor-pointer outline-none text-[#fbf9f5]/45 hover:text-[#fbf9f5]/70 transition-colors"
                           aria-expanded={isExpanded}
                         >
-                          {hasFinalResponse ? (
+                          {hasFinalResponse || hasInterruptedState ? (
                             <span className="h-1 w-1 rounded-full bg-[#fbf9f5]/25" />
                           ) : (
                             <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]/65 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.35)]" />
                           )}
                           <span className="text-xs font-light tracking-wide">
-                            {hasFinalResponse ? 'Processo concluído' : 'Em andamento'}
+                            {hasFinalResponse ? 'Processo concluído' : hasInterruptedState ? 'Processo interrompido' : 'Em andamento'}
                           </span>
                           <span className="text-[#fbf9f5]/25 transition-transform duration-200">
                             {isExpanded ? <ChevronDown size={13} strokeWidth={1.5} /> : <ChevronRight size={13} strokeWidth={1.5} />}
@@ -6862,7 +6856,7 @@ ${data.transcription}`, {
                             {groupUpdates.map((update, updateIndex) => (
                               <div key={update.id} className="flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
                                 <span className={`mt-[0.45rem] h-1 w-1 shrink-0 rounded-full ${
-                                  !hasFinalResponse && updateIndex === groupUpdates.length - 1
+                                  !hasFinalResponse && !hasInterruptedState && updateIndex === groupUpdates.length - 1
                                     ? 'bg-[#fbf9f5]/55 animate-pulse'
                                     : 'bg-[#fbf9f5]/20'
                                 }`} />

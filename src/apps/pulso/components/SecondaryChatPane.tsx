@@ -3,7 +3,7 @@ import React from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../shared/lib/firebase/client';
 import { firestorePaths } from '../services/firestorePaths';
-import { ArrowDown, X } from 'lucide-react';
+import { ArrowDown, ChevronDown, ChevronRight, X } from 'lucide-react';
 import type { PulsoContextNode } from '../types/pulso.types';
 import type { MesaArtifact } from './MesaPanel';
 import { PulsoMessageContent } from './chat/PulsoMessageContent';
@@ -15,6 +15,9 @@ import { getAssistantResponseText, resolveAssistantIdentity } from '../lib/assis
 interface PaneMessage extends RenderMessage {
   sender: 'user' | 'lotus';
   isProgressUpdate?: boolean;
+  phase?: string | null;
+  originRequestId?: string | null;
+  requestId?: string;
   attachments?: RenderableAttachment[];
 }
 
@@ -36,9 +39,7 @@ const TECHNICAL_HISTORY_OMISSION = /^\s*\[chat\.history omitted: message too lar
 
 function toRenderableConversationText(value: unknown): string {
   const text = typeof value === 'string' ? value : '';
-  return TECHNICAL_HISTORY_OMISSION.test(text)
-    ? 'Esta resposta ficou grande demais para ser carregada integralmente neste histórico.'
-    : text;
+  return TECHNICAL_HISTORY_OMISSION.test(text) ? '' : text;
 }
 
 // Mesma identidade visual do chat principal — sem moldura, sem cabeçalho de
@@ -79,6 +80,7 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
 }) => {
   const [messages, setMessages] = React.useState<PaneMessage[]>([]);
   const [isPending, setIsPending] = React.useState(false);
+  const [expandedProgressGroups, setExpandedProgressGroups] = React.useState<Record<string, boolean>>({});
   const contextAssistant = resolveAssistantIdentity(
     contextNode as unknown as Record<string, unknown>,
     contextNode.openclawSessionKey,
@@ -127,6 +129,8 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
             text: data.text || data.message,
             timestamp,
             isProgressUpdate: true,
+            phase: data.meta?.phase || null,
+            originRequestId: data.meta?.originRequestId || null,
           });
         }
         const responseText = toRenderableConversationText(getAssistantResponseText(data));
@@ -144,8 +148,21 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
             agentId: assistantIdentity.agentId,
             text: responseText,
             timestamp: responseTimestamp,
+            requestId: docSnap.id,
             openclawResult: data.openclawResult,
             attachments: responseAttachments,
+          });
+        } else if (data.status === 'error' || data.status === 'timeout') {
+          items.push({
+            id: `progress-terminal-${docSnap.id}`,
+            sender: 'lotus',
+            assistantName: assistantIdentity.name,
+            agentId: assistantIdentity.agentId,
+            text: 'A execução foi interrompida antes de produzir uma resposta final. O último andamento acima permanece como o estado confiável deste trabalho.',
+            timestamp: data.updatedAt?.toDate ? data.updatedAt.toDate() : timestamp,
+            isProgressUpdate: true,
+            phase: 'interrupted',
+            originRequestId: docSnap.id,
           });
         }
       });
@@ -164,6 +181,33 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
     });
     return () => unsubscribe();
   }, [contextNode.contextId, contextNode.openclawSessionKey]);
+
+  const progressGroups = React.useMemo(() => {
+    const groups = new Map<string, { firstId: string; updates: PaneMessage[]; hasFinalResponse: boolean; hasInterruptedState: boolean }>();
+    const completedRequestIds = new Set(
+      messages
+        .filter(message => !message.isProgressUpdate && message.sender === 'lotus' && message.requestId)
+        .map(message => message.requestId as string)
+    );
+    messages.forEach(message => {
+      if (!message.isProgressUpdate) return;
+      const key = message.originRequestId || message.id;
+      const interrupted = ['error', 'timeout', 'interrupted'].includes(message.phase || '');
+      const group = groups.get(key);
+      if (group) {
+        group.updates.push(message);
+        group.hasInterruptedState = group.hasInterruptedState || interrupted;
+      } else {
+        groups.set(key, {
+          firstId: message.id,
+          updates: [message],
+          hasFinalResponse: Boolean(message.originRequestId && completedRequestIds.has(message.originRequestId)),
+          hasInterruptedState: interrupted,
+        });
+      }
+    });
+    return groups;
+  }, [messages]);
 
   return (
     <div
@@ -198,14 +242,53 @@ export const SecondaryChatPane: React.FC<SecondaryChatPaneProps> = ({
       </div>
 
       <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto no-scrollbar chat-fade-mask px-4 md:px-6 py-6 pt-12 space-y-8">
-        {messages.map((msg) => msg.isProgressUpdate ? (
-          <div key={msg.id} className="flex min-w-0 w-full max-w-full justify-start animate-fade-in py-1">
-            <div className="min-w-0 w-full max-w-[85%] border-l border-white/10 pl-3 flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
-              <span className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-[#fbf9f5]/30" />
-              <span>{msg.text}</span>
+        {messages.map((msg) => msg.isProgressUpdate ? (() => {
+          const progressGroupKey = msg.originRequestId || msg.id;
+          const group = progressGroups.get(progressGroupKey);
+          if (!group || msg.id !== group.firstId) return null;
+          const isExpanded = expandedProgressGroups[progressGroupKey] ?? !group.hasFinalResponse;
+          return (
+            <div key={msg.id} className="flex min-w-0 w-full max-w-full justify-start animate-fade-in py-1">
+              <div className="min-w-0 w-full max-w-[85%] border-l border-white/10 pl-3">
+                <button
+                  type="button"
+                  onClick={() => setExpandedProgressGroups(previous => ({
+                    ...previous,
+                    [progressGroupKey]: !(previous[progressGroupKey] ?? !group.hasFinalResponse),
+                  }))}
+                  className="group flex items-center gap-2 bg-transparent border-none p-0 text-left cursor-pointer outline-none text-[#fbf9f5]/45 hover:text-[#fbf9f5]/70 transition-colors"
+                  aria-expanded={isExpanded}
+                >
+                  {group.hasFinalResponse || group.hasInterruptedState ? (
+                    <span className="h-1 w-1 rounded-full bg-[#fbf9f5]/25" />
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]/65 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.35)]" />
+                  )}
+                  <span className="text-xs font-light tracking-wide">
+                    {group.hasFinalResponse ? 'Processo concluído' : group.hasInterruptedState ? 'Processo interrompido' : 'Em andamento'}
+                  </span>
+                  <span className="text-[#fbf9f5]/25 transition-transform duration-200">
+                    {isExpanded ? <ChevronDown size={13} strokeWidth={1.5} /> : <ChevronRight size={13} strokeWidth={1.5} />}
+                  </span>
+                </button>
+                {isExpanded && (
+                  <div className="mt-2 space-y-2 pb-1">
+                    {group.updates.map((update, updateIndex) => (
+                      <div key={update.id} className="flex items-start gap-2.5 text-xs text-[#fbf9f5]/40 font-light leading-relaxed">
+                        <span className={`mt-[0.45rem] h-1 w-1 shrink-0 rounded-full ${
+                          !group.hasFinalResponse && !group.hasInterruptedState && updateIndex === group.updates.length - 1
+                            ? 'bg-[#fbf9f5]/55 animate-pulse'
+                            : 'bg-[#fbf9f5]/20'
+                        }`} />
+                        <span>{update.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
+          );
+        })() : (
           <div
             key={msg.id}
             data-message-id={msg.id}
