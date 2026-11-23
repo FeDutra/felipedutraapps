@@ -105,7 +105,7 @@ export default function PulsoLayout({ children }: { children: React.ReactNode })
 
       {isLivePage || isBrowserMesa || isPublicAtelie || isOrbLab || isFinancePage ? (
         <main className="flex-1 min-w-0 w-full max-w-full overflow-x-hidden">
-          {isPublicAtelie || isOrbLab ? children : <AuthGate>{children}</AuthGate>}
+          {isPublicAtelie || isOrbLab || isFinancePage ? children : <AuthGate>{children}</AuthGate>}
         </main>
       ) : (
         <>
