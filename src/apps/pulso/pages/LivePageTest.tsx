@@ -1138,6 +1138,43 @@ export default function LivePage() {
   const getAreaIcon = (area: any): React.ReactNode => {
     if (!area) return '○';
     const identifier = (area.slug || area.id || area.name || '').toLowerCase();
+
+    if (identifier.includes('mena')) {
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          className="w-[1.1em] h-[1.1em] inline-block align-middle"
+          style={{ display: 'inline-block' }}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-label="mandala material"
+        >
+          <path d="M19.25 10.25 V4.75 H4.75 V19.25 H19.25 V13.75" />
+          <circle cx="12" cy="12" r="3.25" />
+        </svg>
+      );
+    }
+    if (identifier.includes('agentes')) {
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          className="w-[1.1em] h-[1.1em] inline-block align-middle"
+          style={{ display: 'inline-block' }}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-label="transmutação alquímica"
+        >
+          <path d="M12 4.25 L20 19.25 H4 Z" />
+          <path d="M12 10 L15 15.75 H9 Z" />
+        </svg>
+      );
+    }
     
     if (identifier.includes('despertar')) {
       return (
