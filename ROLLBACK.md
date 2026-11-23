@@ -983,3 +983,8 @@ Baseline 74736716, preservado em branch feat/pluggy-connect-20261123. Mudança i
 
 ## Boxes e sugestões do Nu Empresa
 Baseline1a898773894b. Campos de classificação são opcionais e somente leitura. Publicador e sync preservados em backup com data antes de qualquer mudança; reverter commit desta etapa e restaurar script/última projeção se necessário. Não altera categorias canônicas no Notion.
+
+## Interface de caixa e filtros · 23/11/2026
+Prévia isolada, sem mudar API, dados ou app instalado. Baseline 576454819c72.
+Reverter o commit de interface e rebuildar a mesma prévia. Cópias de segurança
+em /root/.openclaw/data/finance-interface-20261123/rollback. Nenhuma migração.
