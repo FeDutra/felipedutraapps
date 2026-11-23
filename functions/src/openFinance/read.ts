@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {previewOwner} from './preview';
 import {onRequest} from 'firebase-functions/v2/https';
 import {getAuth} from 'firebase-admin/auth';
 import {getFirestore} from 'firebase-admin/firestore';
@@ -13,10 +15,19 @@ export const pulsoFinanceRead=onRequest({region:'us-central1',timeoutSeconds:30}
  if(req.method==='OPTIONS'){res.set('Access-Control-Allow-Methods','POST, OPTIONS');res.set('Access-Control-Allow-Headers','Authorization, Content-Type');res.status(204).end();return;}
  if(req.method!=='POST'){res.status(405).json({error:'method_not_allowed'});return;}
  try{
-  const token=req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];if(!token)throw new OpenFinanceError('authentication_required',401);
-  let user;try{user=await getAuth().verifyIdToken(token,true);}catch{throw new OpenFinanceError('authentication_required',401);}
-  if(user.firebase?.sign_in_provider==='anonymous')throw new OpenFinanceError('authentication_required',401);
-  const doc=await getFirestore().collection('private_finance_projections').doc(user.uid).get();
-  res.status(200).json(readFinanceProjection(doc.exists?doc.data():null,user.uid));
+  const preview=req.headers.authorization?.match(/^FinancePreview (fp1_[A-Za-z0-9_-]{43})$/)?.[1];
+  let ownerUid:string;
+  if(preview){
+   const digest=createHash('sha256').update(preview).digest('hex');
+   const grant=await getFirestore().collection('private_finance_preview_links').doc(digest).get();
+   ownerUid=previewOwner(grant.exists?grant.data():null);
+  }else{
+   const token=req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];if(!token)throw new OpenFinanceError('authentication_required',401);
+   let user;try{user=await getAuth().verifyIdToken(token,true);}catch{throw new OpenFinanceError('authentication_required',401);}
+   if(user.firebase?.sign_in_provider==='anonymous')throw new OpenFinanceError('authentication_required',401);
+   ownerUid=user.uid;
+  }
+  const doc=await getFirestore().collection('private_finance_projections').doc(ownerUid).get();
+  res.status(200).json(readFinanceProjection(doc.exists?doc.data():null,ownerUid));
  }catch(e){const known=e instanceof OpenFinanceError;res.status(known?e.status:500).json({error:known?e.message:'snapshot_unavailable'});}
 });

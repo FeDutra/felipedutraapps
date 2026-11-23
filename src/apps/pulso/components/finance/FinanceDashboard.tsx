@@ -12,22 +12,22 @@ export interface FinanceSnapshot {
 const api=process.env.NEXT_PUBLIC_PULSO_OPEN_FINANCE_API_BASE||'/api/open-finance';
 const money=(n:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n/100);
 const date=(s:string|null)=>s?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(new Date(s)):'não informado';
-export default function FinanceDashboard(){
+export default function FinanceDashboard({previewToken}: {previewToken?:string} = {}){
  const [data,setData]=useState<FinanceSnapshot|null>(null),[hidden,setHidden]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const abort=useRef<AbortController|null>(null);const serial=useRef(0);
  const refresh=useCallback(async()=>{
   const current=++serial.current;abort.current?.abort();const controller=new AbortController();abort.current=controller;setBusy(true);setError('');
   try{
-   const user=authService.getCurrentUser();if(!user||user.isAnonymous)throw Error('authentication_required');
-   const token=await user.getIdToken();
-   const res=await fetch(`${api}/snapshot`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}',signal:controller.signal,cache:'no-store'});
+   let authorization:string;
+   if(previewToken){authorization=`FinancePreview ${previewToken}`;}else{const user=authService.getCurrentUser();if(!user||user.isAnonymous)throw Error('authentication_required');authorization=`Bearer ${await user.getIdToken()}`;}
+   const res=await fetch(`${api}/snapshot`,{method:'POST',headers:{Authorization:authorization,'Content-Type':'application/json'},body:'{}',signal:controller.signal,cache:'no-store'});
    const v=await res.json();if(!res.ok)throw Error(v.error||'snapshot_unavailable');
    if(v.version!==1||!Array.isArray(v.bank?.balances)||!Array.isArray(v.transactions))throw Error('invalid_snapshot');
    if(current===serial.current)setData(v);
-  }catch(e){if(controller.signal.aborted)return;if(current===serial.current)setError(e instanceof Error&&e.message==='snapshot_not_ready'?'A conexão existe; a leitura consolidada ainda não foi publicada.':e instanceof Error&&e.message==='authentication_required'?'Entre na PULSO para consultar o financeiro.':'Não foi possível renovar a leitura. Os dados anteriores, se visíveis, não foram atualizados.');}
+  }catch(e){if(controller.signal.aborted)return;if(current===serial.current)setError(e instanceof Error&&e.message==='preview_access_expired_or_invalid'?'Este acesso privado expirou ou foi revogado.':e instanceof Error&&e.message==='snapshot_not_ready'?'A conexão existe; a leitura consolidada ainda não foi publicada.':e instanceof Error&&e.message==='authentication_required'?'Entre na PULSO para consultar o financeiro.':'Não foi possível renovar a leitura. Os dados anteriores, se visíveis, não foram atualizados.');}
   finally{if(current===serial.current)setBusy(false);}
- },[]);
- useEffect(()=>{void refresh();const focus=()=>{void refresh();};const visible=()=>{if(document.visibilityState==='visible')void refresh();};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',visible);const off=authService.onAuthStateChange(()=>{abort.current?.abort();serial.current++;setData(null);void refresh();});return()=>{abort.current?.abort();serial.current++;off();window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',visible);};},[refresh]);
+ },[previewToken]);
+ useEffect(()=>{void refresh();const focus=()=>{void refresh();};const visible=()=>{if(document.visibilityState==='visible')void refresh();};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',visible);const off=previewToken?()=>{}:authService.onAuthStateChange(()=>{abort.current?.abort();serial.current++;setData(null);void refresh();});return()=>{abort.current?.abort();serial.current++;off();window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',visible);};},[refresh,previewToken]);
  const value=(n:number)=>hidden?'••••':money(n);
  return <section aria-label="Painel financeiro" className="h-full overflow-y-auto px-5 py-8 md:px-10 text-[#fbf9f5] font-light" aria-busy={busy}>
   <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.2em] opacity-40">FINANCEIRO · FAMÍLIA</p><h1 className="mt-2 text-2xl font-light">Leitura do mês</h1></div><div className="flex gap-4 text-xs"><button onClick={()=>setHidden(v=>!v)} aria-pressed={hidden}>[ {hidden?'mostrar':'ocultar'} valores ]</button><button onClick={()=>void refresh()} disabled={busy}>[ {busy?'consultando…':'atualizar ↻'} ]</button></div></header>
