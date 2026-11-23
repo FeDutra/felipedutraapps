@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFinanceProjection} from '../../lib/openFinance/projection.js';
+const p={version:1,month:'2026-11',generatedAt:'2026-11-23T12:00:00Z',collectedAt:'2026-11-23T12:00:00Z',sourceUpdatedAt:'2026-11-23T11:00:00Z',sourceState:'available',coverage:{missing:['Nu Pessoal'],notionComplete:true},bank:{balances:[{accountId:'a',name:'Conta',currency:'BRL',balanceMinor:100}],postedCount:1,inflowMinor:0,outflowMinor:1},notion:{recordCount:1,receivedMinor:0,expenseMinor:1,reimbursementMinor:0,cardPaymentMinor:0,reconciledWithApi:false},reconciliation:{counts:{review_candidate:1},applied:0},transactions:[]};
+test('projection requires stored owner and ready snapshot',()=>{assert.throws(()=>readFinanceProjection(null,'fe'),/not_ready/);assert.throws(()=>readFinanceProjection({ownerUid:'nati',projection:p},'fe'),/owner_mismatch/);});
+test('only whitelisted fields leave backend; freshness recomputed at read time',()=>{const out=readFinanceProjection({ownerUid:'fe',projection:{...p,apiKey:'fixture-secret'}},'fe',new Date('2026-11-25T12:00:00Z'));assert.equal('apiKey' in out,false);assert.equal(out.sourceState,'stale_or_unavailable');});
+test('invalid cents rejected rather than rounded in financial projection',()=>{assert.throws(()=>readFinanceProjection({ownerUid:'fe',projection:{...p,bank:{...p.bank,outflowMinor:0.1}}},'fe'),/invalid_snapshot/);});

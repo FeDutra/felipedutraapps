@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pulsoOpenFinance = void 0;
+const projection_1 = require("./projection");
 const https_1 = require("firebase-functions/v2/https");
 const auth_1 = require("firebase-admin/auth");
 const firestore_1 = require("firebase-admin/firestore");
@@ -40,6 +41,11 @@ exports.pulsoOpenFinance = (0, https_1.onRequest)({ region: 'us-central1', timeo
             throw new core_1.OpenFinanceError('authentication_required', 401);
         }
         (0, core_1.authorizeUser)(user.uid, user.firebase?.sign_in_provider === 'anonymous', process.env.PULSO_FINANCE_ALLOWED_UIDS);
+        if (req.path.replace(/\/$/, '').endsWith('/snapshot')) {
+            const doc = await (0, firestore_1.getFirestore)().collection('private_finance_projections').doc(user.uid).get();
+            res.status(200).json((0, projection_1.readFinanceProjection)(doc.exists ? doc.data() : null, user.uid));
+            return;
+        }
         const service = new core_1.PluggyConnectService({ clientId: process.env.PLUGGY_CLIENT_ID, clientSecret: process.env.PLUGGY_CLIENT_SECRET });
         const db = (0, firestore_1.getFirestore)();
         if (req.path.replace(/\/$/, '').endsWith('/connect-token')) {

@@ -1667,7 +1667,7 @@ function BrowserLotusSurface({ context, contextNode, assistantName, messages, in
 }
 
 
-export default function LivePage() {
+export default function LivePage({financeContextId}: {financeContextId?: string} = {}) {
   const router = useRouter();
   const [state, setState] = React.useState<any>(null);
   // The shell is intentionally visible from the first render. Data hydration
@@ -5904,6 +5904,22 @@ ${data.transcription}`, {
   }, [allRequests, lastSentRequestsByContext, activeContextNode.contextId, isTyping]);
 
 
+  const financeDrafts = React.useRef<Record<string,string>>({});
+  const previousFinanceContext = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!financeContextId) return;
+    const previous=previousFinanceContext.current;
+    if(previous && previous!==financeContextId) financeDrafts.current[previous]=inputMessage;
+    if(previous!==financeContextId) setInputMessage(financeDrafts.current[financeContextId] || '');
+    previousFinanceContext.current=financeContextId;
+  }, [financeContextId]);
+  React.useEffect(() => {
+    if (!financeContextId || activeContextNode.contextId===financeContextId) return;
+    const target=allContextNodes.find(node=>node.contextId===financeContextId);
+    if(target){setSecondaryContextIds([]);setActiveContextNode(target);setFocusedPaneContextId(target.contextId);}
+  }, [financeContextId, allContextNodes, activeContextNode.contextId]);
+  if(financeContextId && activeContextNode.contextId!==financeContextId) return <p className="p-6 text-xs opacity-50">Recuperando a sessão financeira selecionada…</p>;
+
   if (loading) {
     if (isBrowserContextualSurface) {
       return <BrowserLotusLoadingSurface context={browserNavigationContext} />;
@@ -6483,6 +6499,7 @@ ${data.transcription}`, {
                     </button>
                   </div>
                   <div className="flex flex-col gap-6">
+                    <button onClick={() => {setIsHeaderMenuOpen(false);router.push('/pulso/financeiro');}} className="text-left text-[10px] font-light tracking-widest text-white/60 hover:text-white">[ financeiro ↗ ]</button>
                     {/* Mobile-only navigation items */}
                     <button
                       onMouseDown={() => { setIsHeaderMenuOpen(false); setIsEngineeringActive(!isEngineeringActive); if (!isEngineeringActive) { setIsAtelieActive(false); setIsEstudioActive(false); } }}

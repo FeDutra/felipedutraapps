@@ -147,9 +147,25 @@
             "value": "no-cache, no-store, must-revalidate"
           }
         ]
+      },
+      {
+        "source": "/pulso/financeiro{,/**}",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
       }
     ],
     "rewrites": [
+      {
+        "source": "/api/open-finance/snapshot",
+        "function": {
+          "functionId": "pulsoFinanceRead",
+          "region": "us-central1"
+        }
+      },
       {
         "source": "/api/open-finance/**",
         "function": "pulsoOpenFinance"

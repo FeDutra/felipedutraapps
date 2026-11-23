@@ -1,3 +1,4 @@
+import { readFinanceProjection } from './projection';
 import { onRequest } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -19,6 +20,10 @@ export const pulsoOpenFinance = onRequest({region:'us-central1',timeoutSeconds:9
     let user;
     try {user=await getAuth().verifyIdToken(bearer,true);} catch {throw new OpenFinanceError('authentication_required',401);}
     authorizeUser(user.uid,user.firebase?.sign_in_provider==='anonymous',process.env.PULSO_FINANCE_ALLOWED_UIDS);
+    if(req.path.replace(/\/$/,'').endsWith('/snapshot')) {
+      const doc=await getFirestore().collection('private_finance_projections').doc(user.uid).get();
+      res.status(200).json(readFinanceProjection(doc.exists?doc.data():null,user.uid));return;
+    }
     const service=new PluggyConnectService({clientId:process.env.PLUGGY_CLIENT_ID,clientSecret:process.env.PLUGGY_CLIENT_SECRET});
     const db=getFirestore();
     if(req.path.replace(/\/$/,'').endsWith('/connect-token')) {

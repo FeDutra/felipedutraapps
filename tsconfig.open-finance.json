@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "incremental": false },
-  "include": ["next-env.d.ts", "src/apps/pulso/components/finance/OpenFinanceConnect.tsx"],
+  "include": ["next-env.d.ts", "src/apps/pulso/components/finance/OpenFinanceConnect.tsx", "src/apps/pulso/components/finance/FinanceDashboard.tsx"],
   "exclude": ["node_modules", "functions"]
 }

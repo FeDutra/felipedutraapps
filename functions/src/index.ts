@@ -152,3 +152,5 @@ export { correspondenceApi } from "./correspondence";
 export { publicConversationApi } from "./publicConversation";
 export { musicOcreDownloadApi } from "./musicOcreDownloads";
 export { pulsoOpenFinance } from './openFinance';
+
+export { pulsoFinanceRead } from './openFinance/read';

@@ -970,3 +970,7 @@ Baseline: `c46012ea` (`origin/main`).
 ## Pluggy Connect · 23/11/2026
 
 Branch isolada feat/pluggy-connect-20261123, base ba9e9181. Nenhuma publicação, segredo real, consentimento ou dado financeiro alterado. Reverter o commit desta integração para retirar widget, Function e rewrite. Os arquivos de exemplo contêm somente placeholders. Se futuramente houver dados reais em private_finance_connections, preservar até decisão explícita de retenção; reverter código não revoga consentimento no provedor.
+
+## Financeiro composto · 23/11/2026
+Baseline 22fbfa840b9549f80380f18ba49739c55b0f3a45; cópias dos arquivos existentes em /root/.openclaw/data/finance-code-backup-20261123. Marco isolado, sem deploy ou mudanças de credenciais. Reverter apenas o commit financeiro composto; preservar dados privados e não tocar a /live publicada. Novas rotas /pulso/financeiro e /snapshot dependem de publicação/revisão de proveniência; não anunciar instaladas.
+Prévia: expirar/remover somente o canal financeiro temporário; endpoint pulsoFinanceRead é novo e separado dos serviços existentes. Não apagar projeção privada automaticamente. Documento prévio, se existente, fica em projection-before-publish.json junto ao snapshot privado. Sem documento prévio, retirar acesso/endpoint preserva dados para retenção decidida por Fe. Nenhuma escrita de lançamento no Notion ou mudança em job recorrente.
