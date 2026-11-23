@@ -8,7 +8,7 @@ export interface FinanceSnapshot {
  bank:{daily:{date:string;inflowMinor:number;outflowMinor:number}[];balances:{accountId:string;name:string;currency:string;balanceMinor:number}[];postedCount:number;inflowMinor:number;outflowMinor:number};
  notion:{recordCount:number;receivedMinor:number;expenseMinor:number;reimbursementMinor:number;cardPaymentMinor:number;reconciledWithApi:boolean};
  reconciliation:{counts:Record<string,number>;applied:number};commitmentsState:string;
- transactions:{id:string;date:string;description:string;amountMinor:number}[];
+ transactions:{id:string;date:string;description:string;amountMinor:number;accountId?:string;providerCategory?:string;classification?:{category:string;confidence:'alta'|'media'|'baixa';reason:string;source:string;nature:string;confirmed:false}}[];
 }
 const api=process.env.NEXT_PUBLIC_PULSO_OPEN_FINANCE_API_BASE||'/api/open-finance';
 const date=(s:string|null)=>s?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Sao_Paulo'}).format(new Date(s)):'não informado';
@@ -30,12 +30,11 @@ export default function FinanceDashboard({previewToken,active=true}: {previewTok
  useEffect(()=>{const focus=()=>{void refresh();};const visible=()=>{if(document.visibilityState==='visible')void refresh();};window.addEventListener('focus',focus);document.addEventListener('visibilitychange',visible);const off=previewToken?()=>{}:authService.onAuthStateChange(()=>{abort.current?.abort();serial.current++;setData(null);void refresh();});return()=>{abort.current?.abort();serial.current++;off();window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',visible);};},[refresh,previewToken]);
  useEffect(()=>{if(active)void refresh();},[active,refresh]);
  return <section aria-label="Painel financeiro" className="h-full overflow-y-auto px-5 py-8 md:px-10 text-[#fbf9f5] font-light" aria-busy={busy}>
-  <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.2em] opacity-40">FINANCEIRO · FAMÍLIA</p><h1 className="mt-2 text-2xl font-light tracking-tight">Sua vida financeira</h1></div><div className="flex gap-4 text-xs"><button onClick={()=>setHidden(v=>!v)} aria-pressed={hidden}>[ {hidden?'mostrar':'ocultar'} valores ]</button><button onClick={()=>void refresh()} disabled={busy}>[ {busy?'consultando…':'atualizar ↻'} ]</button></div></header>
-  <p className="mt-6 text-xs opacity-55">Meu Pluggy atualiza a cada 24h. Atualizar este painel não força o banco.</p>
+  <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.2em] opacity-40">FINANCEIRO · FAMÍLIA</p><h1 className="mt-2 text-2xl font-light tracking-tight">Financeiro</h1></div><div className="flex gap-4 text-xs"><button onClick={()=>setHidden(v=>!v)} aria-pressed={hidden}>[ {hidden?'mostrar':'ocultar'} valores ]</button><button onClick={()=>void refresh()} disabled={busy}>[ {busy?'consultando…':'atualizar ↻'} ]</button></div></header>
   {error&&<p role="alert" className="mt-4 text-sm text-amber-200">{error}</p>}
   {!data&&!busy&&<p className="mt-10 text-sm opacity-60">Nenhum valor é presumido enquanto a consulta não estiver disponível.</p>}
   {data&&<>
-   <div className="mt-6 text-xs leading-6 opacity-60"><p>Cobertura parcial · {data.month.split('-').reverse().join('/')}</p><p>Fonte bancária: {date(data.sourceUpdatedAt)} · leitura coletada: {date(data.collectedAt)}</p><p>{data.sourceState==='available'?'Fonte disponível na última coleta.':'Fonte desatualizada ou indisponível: não tratar como posição atual.'}</p><details><summary className="cursor-pointer">Ver cobertura das fontes</summary><p>Pendentes de conexão: {data.coverage.missing.join(' · ')||'Nenhuma lacuna declarada.'}</p><p>A ausência de dados não comprova ausência de compromissos.</p></details></div>
+   <details className="mt-4 text-[11px] leading-6 text-[#aaa9a1]"><summary className="cursor-pointer">Cobertura parcial · {data.month.split('-').reverse().join('/')} · fontes e atualização</summary><div className="pt-3"><p>Fonte bancária: {date(data.sourceUpdatedAt)} · coleta: {date(data.collectedAt)}</p><p>{data.sourceState==='available'?'Fonte disponível na última coleta.':'Fonte desatualizada ou indisponível: não tratar como posição atual.'}</p><p>Pendentes de conexão: {data.coverage.missing.join(' · ')||'Nenhuma lacuna declarada.'}</p><p>Meu Pluggy atualiza a cada 24h. Atualizar o painel não força o banco.</p><p>Ausência de dados não comprova ausência de compromissos.</p></div></details>
    <FinanceWorkspace data={data} hidden={hidden}/>
   </>}
  </section>;

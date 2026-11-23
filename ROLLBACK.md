@@ -980,3 +980,6 @@ Baseline 6e8bcc16. Link privado de leitura restrito ao snapshot financeiro, com 
 
 ## Financeiro · referência Copilot · 23/11/2026
 Baseline 74736716, preservado em branch feat/pluggy-connect-20261123. Mudança isolada em feat/finance-copilot-study-20261123. Reverter o commit desta evolução restaura painel anterior sem alterar projeção, função, fontes ou dados. Nenhuma migração. Prévia separada; produção e apps instalados intocados até promoção explícita.
+
+## Boxes e sugestões do Nu Empresa
+Baseline1a898773894b. Campos de classificação são opcionais e somente leitura. Publicador e sync preservados em backup com data antes de qualquer mudança; reverter commit desta etapa e restaurar script/última projeção se necessário. Não altera categorias canônicas no Notion.
