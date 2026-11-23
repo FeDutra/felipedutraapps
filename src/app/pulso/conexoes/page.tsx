@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import OpenFinanceConnect from '@/apps/pulso/components/finance/OpenFinanceConnect';
 import { Globe, Plug, Search, CheckCircle2, ChevronRight, Apple, MessageSquare, Box, Plus, Trash2, X } from 'lucide-react';
 import { db } from '../../../shared/lib/firebase/client';
 import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
@@ -254,6 +255,8 @@ export default function ConexoesPage() {
           O tecido nervoso da PULSO. Gerencie os múltiplos perfis conectados à sua mente.
         </p>
       </header>
+
+      <OpenFinanceConnect />
 
       {/* Novo Modal Minimalista Adicionar Conexão */}
       {isAdding && (

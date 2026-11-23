@@ -3,7 +3,8 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test --experimental-strip-types src/correspondence/correspondence.test.ts src/publicConversation/publicConversation.test.ts src/musicOcreDownloads/musicOcreDownloads.test.ts",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "test:open-finance": "node --test --experimental-strip-types src/openFinance/core.test.ts"
   },
   "engines": {
     "node": "22"

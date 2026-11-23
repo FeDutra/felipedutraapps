@@ -966,3 +966,7 @@ Baseline: `c46012ea` (`origin/main`).
 - Rollback procedure: use `firebase hosting:rollback` for site
   `felipedutraapps`, or rebuild/deploy the commit above if a source rollback is
   required. This release does not modify Firestore documents or Functions.
+
+## Pluggy Connect · 23/11/2026
+
+Branch isolada feat/pluggy-connect-20261123, base ba9e9181. Nenhuma publicação, segredo real, consentimento ou dado financeiro alterado. Reverter o commit desta integração para retirar widget, Function e rewrite. Os arquivos de exemplo contêm somente placeholders. Se futuramente houver dados reais em private_finance_connections, preservar até decisão explícita de retenção; reverter código não revoga consentimento no provedor.

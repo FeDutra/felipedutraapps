@@ -151,3 +151,4 @@ export { pulsoProcessMeeting } from "./processMeeting";
 export { correspondenceApi } from "./correspondence";
 export { publicConversationApi } from "./publicConversation";
 export { musicOcreDownloadApi } from "./musicOcreDownloads";
+export { pulsoOpenFinance } from './openFinance';

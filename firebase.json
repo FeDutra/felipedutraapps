@@ -151,6 +151,10 @@
     ],
     "rewrites": [
       {
+        "source": "/api/open-finance/**",
+        "function": "pulsoOpenFinance"
+      },
+      {
         "source": "/api/pulso/ingest",
         "function": "pulsoIngest"
       },
