@@ -1001,3 +1001,6 @@ Schema anterior e 36 páginas originais em data/finance-sources-20261123/rollbac
 (flow-schema.json) e flow-plan.json antes do preenchimento. Para reverter,
 remover somente a propriedade nova por PATCH data_sources (valor null).
 Nenhum valor, data, status de pagamento ou classificação econômica foi alterado.
+
+## Promoção financeiro e entrada sem Google · 23/11/2026
+Baseline financeiro 461d808c; main local 02d209a3 incorporado sem retirar módulos da candidata. Login usa e-mail/senha já suportados; sessões existentes e regras privadas preservadas. Nenhum provedor Firebase desativado ou credencial alterada. Reverter o commit do AuthGate restaura botão Google. Antes de substituir app preservar bundle instalado com data; restaurar este bundle se a validação nativa falhar. Workflow Intel explícito para iMac; Air permanece intacto nesta promoção.

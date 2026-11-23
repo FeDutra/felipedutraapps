@@ -16,7 +16,7 @@ on:
 jobs:
   build-macos:
     if: ${{ github.event.inputs.target == 'macos' || github.event.inputs.target == 'both' }}
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
 
