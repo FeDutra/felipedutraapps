@@ -25,7 +25,7 @@ export default function FinancePage(){
   </section>}
   {selected&&<div className={`absolute inset-x-0 top-12 bottom-0 md:flex ${listing?'invisible pointer-events-none':''}`}>
    <div className={`finance-conversation relative h-full min-w-0 w-full md:w-1/3 ${panel?'hidden md:block':''}`} style={{transform:'translateZ(0)',contain:'layout paint'}}><LivePage financeContextId={selected}/></div>
-   <div className={`relative h-full min-w-0 w-full md:w-2/3 ${panel?'block':'hidden md:block'}`}><FinanceDashboard/></div>
+   <div className={`relative h-full min-w-0 w-full md:w-2/3 ${panel?'block':'hidden md:block'}`}><FinanceDashboard active={!listing}/></div>
   </div>}
  </div>;
 }

@@ -977,3 +977,6 @@ Prévia: expirar/remover somente o canal financeiro temporário; endpoint pulsoF
 
 ## Prévia sem Google · autorização de Fe
 Baseline 6e8bcc16. Link privado de leitura restrito ao snapshot financeiro, com prazo e revogação em private_finance_preview_links. Não cria identidade Firebase nem concede acesso ao chat, às demais coleções ou escrita. Revogar pelo documento do link (revoked=true) antes de reverter código. Backups em /root/.openclaw/data/finance-passwordless-backup-20261123. Nenhuma credencial bancária alterada.
+
+## Financeiro · referência Copilot · 23/11/2026
+Baseline 74736716, preservado em branch feat/pluggy-connect-20261123. Mudança isolada em feat/finance-copilot-study-20261123. Reverter o commit desta evolução restaura painel anterior sem alterar projeção, função, fontes ou dados. Nenhuma migração. Prévia separada; produção e apps instalados intocados até promoção explícita.
