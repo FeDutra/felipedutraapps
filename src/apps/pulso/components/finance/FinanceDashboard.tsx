@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import FinanceWorkspace from './FinanceWorkspace';
 import {authService} from '@/shared/services/authService';
 export interface FinanceSnapshot {
- version:1;month:string;generatedAt:string;collectedAt:string;sourceUpdatedAt:string|null;sourceState:string;
+ planning?:FinancePlanning;version:1;month:string;generatedAt:string;collectedAt:string;sourceUpdatedAt:string|null;sourceState:string;
  coverage:{state:string;missing:string[];notionComplete:boolean};
  bank:{daily:{date:string;inflowMinor:number;outflowMinor:number}[];balances:{accountId:string;name:string;currency:string;balanceMinor:number}[];postedCount:number;inflowMinor:number;outflowMinor:number};
  notion:{recordCount:number;receivedMinor:number;expenseMinor:number;reimbursementMinor:number;cardPaymentMinor:number;reconciledWithApi:boolean};
@@ -38,4 +38,10 @@ export default function FinanceDashboard({previewToken,active=true}: {previewTok
    <FinanceWorkspace data={data} hidden={hidden}/>
   </>}
  </section>;
+}
+export interface FinancePlanning {
+ version:number;updatedAt:string;state:string;scope:string;coverageNote:string;sourceCounts:Record<string,number>;registeredPayableMinor:number;receivedMinor:number;
+ entries:{id:string;name:string;kind:'payable'|'receivable';amountMinor:number;date:string|null;month:string|null;paid:boolean;review:boolean;sourceUrl:string;note:string}[];
+ budget:{id:string;name:string;amountMinor:number;sourceUrl:string}[];goals:{id:string;name:string;amountMinor:number;sourceUrl:string}[];debts:{id:string;name:string;amountMinor:number;sourceUrl:string}[];
+ issues:{code:string;message:string;sourceUrl:string}[];accountCoverage:{id:string;name:string;sourceUrl:string;state:string}[];
 }

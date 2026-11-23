@@ -988,3 +988,16 @@ Baseline1a898773894b. Campos de classificação são opcionais e somente leitura
 Prévia isolada, sem mudar API, dados ou app instalado. Baseline 576454819c72.
 Reverter o commit de interface e rebuildar a mesma prévia. Cópias de segurança
 em /root/.openclaw/data/finance-interface-20261123/rollback. Nenhuma migração.
+
+## Fontes reais e planejamento · 23/11/2026
+Snapshot e consumidor anteriores preservados em
+/root/.openclaw/data/finance-sources-20261123/rollback.
+Sem migração ou escrita nos lançamentos do Notion. Reverter o commit desta fase,
+rebuildar Functions e publicar somente pulsoFinanceRead; restaurar consumidor
+anterior e projeção privada anterior pelo publicador administrativo. Rebuildar
+mesmo canal privado de Hosting. Não alterar jobs/horários nem aplicativos.
+Metadado Notion: adicionado somente `Papel na projeção` no Painel de Fluxo.
+Schema anterior e 36 páginas originais em data/finance-sources-20261123/rollback
+(flow-schema.json) e flow-plan.json antes do preenchimento. Para reverter,
+remover somente a propriedade nova por PATCH data_sources (valor null).
+Nenhum valor, data, status de pagamento ou classificação econômica foi alterado.
